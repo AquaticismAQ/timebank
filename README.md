@@ -30,6 +30,7 @@ Documentation is currently available in **Chinese only**. English translations w
 | [Blockchain.md](Docs/chinese/Blockchain.md) | 区块链存证方案：定位、合规要求、公链选型、上链数据设计与费用评估 |
 | [OnlineSystem.md](Docs/chinese/OnlineSystem.md) | 线上系统设计：功能模块、架构、数据安全与简略实施计划 |
 | [Legal.md](Docs/chinese/Legal.md) | 法律合规方案：中国法规下区块链应用约束、时间币限制边界与合法化路径 |
+| [AI.md](Docs/chinese/AI.md) | AI 技术应用方案：端侧人脸脱敏、多模态内容审核、图像真实性检测、统计学异常风控与见证者信用评分 |
 
 ### English Docs · 英文文档
 
