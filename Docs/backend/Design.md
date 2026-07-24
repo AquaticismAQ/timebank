@@ -510,3 +510,402 @@ The relevant question is not "is 5,000 students a lot?" but "does any module nee
 
 ---
 
+## Part E · Cross-Cutting Design
+
+## 9. API Layer Conventions
+
+**Response envelope.** `APIContract.md` §2.5–2.6 mandates `{data, meta}` / `{data, page, meta}` / `{error}`. This does not fall out of `ResponseEntity<T>` by default, so it is built deliberately:
+
+- A `ResponseBodyAdvice` (or an explicit `ApiResponse<T>` return type — preferred for clarity) wraps successful payloads.
+- A single `@RestControllerAdvice` maps exceptions to the error envelope: `MethodArgumentNotValidException` → `422 VALIDATION_FAILED` with `fieldErrors`; `OptimisticLockException`/version mismatch → `409 STATE_CONFLICT`; `AccessDeniedException` → `403 FORBIDDEN`; domain `NotFound`/out-of-scope → `404 RESOURCE_NOT_FOUND`.
+- Every response carries `meta.requestId`, propagated from an MDC filter into logs.
+
+**Never expose internals.** Stack traces, SQL, and Hibernate messages never reach the client (`APIContract.md` §9).
+
+**Status transitions are action endpoints.** `POST /projects/{id}/publish`, not `PATCH {status}`. The generic `PATCH` explicitly rejects any attempt to set a status field.
+
+**Enum tolerance.** Adding an enum value is a compatible change; the API never removes or repurposes one within `v1`.
+
+**Sensitive-field suppression.** List responses omit phone numbers, emails, and guardian information by default; detail responses include them only for principals whose permissions allow it, and such access is audited.
+
+## 10. Authentication, Authorization, and Data Scope
+
+Three distinct checks, applied in order:
+
+1. **Authentication** — valid session; otherwise `401 AUTHENTICATION_REQUIRED`.
+2. **Permission code** — `@PreAuthorize("hasAuthority('reviews.decide')")`, sourced from role→permission mappings loaded at login into the security context.
+3. **Data scope** — row-level: a teacher sees only their authorized grades, classes, and projects.
+
+**Data scope must be applied inside the query, not as a post-filter.** Post-filtering leaks existence through pagination counts and is easy to forget on a new endpoint. Implementation: a `DataScopeResolver` produces a scope descriptor (`ALL` | `GRADES(...)` | `CLASSES(...)` | `PROJECTS(...)` | `SELF`) for the current principal and resource, which list queries incorporate as predicates and which detail lookups verify.
+
+**Existence hiding.** Per `APIContract.md` §2.4, an out-of-scope resource returns `404`, not `403` — a teacher must not be able to probe whether a record in another grade exists. `403` is reserved for "you may not perform this action on a resource you can legitimately see."
+
+**Guardian and student self-access** are modelled as the `SELF` scope rather than as special-case code paths.
+
+## 11. Concurrency and Idempotency
+
+Both are contract requirements (`APIContract.md` §2.8) and both are easy to get subtly wrong.
+
+**Optimistic locking.** Every editable entity carries `version` (JPA `@Version`). Update requests include the client's `version` (or `If-Match`). A mismatch raises `409 STATE_CONFLICT` with the current version, so the frontend can show "someone else changed this" rather than silently overwriting — explicitly listed in the acceptance scenarios (§11.10 of the contract).
+
+**Idempotency.** For record creation, review decisions, account adjustments, and import commits:
+
+```text
+Idempotency-Key header + principal + endpoint  →  unique row in `idempotency_record`
+  insert (REQUIRES_NEW) with status=IN_PROGRESS, request fingerprint = SHA-256(canonical body)
+  ├─ insert succeeds       → execute business transaction → store response snapshot, status=DONE
+  ├─ duplicate key, DONE, same fingerprint      → replay stored response (same status + body)
+  ├─ duplicate key, DONE, different fingerprint → 409 STATE_CONFLICT
+  └─ duplicate key, IN_PROGRESS                 → 409 STATE_CONFLICT (request already in flight)
+```
+
+Storing the key in MySQL rather than Redis is what makes "the key was recorded" and "the business write happened" consistent under failure — the reason D1 rejects Redis for this role.
+
+**Ledger serialization.** `SELECT ... FOR UPDATE` on the account row (§D12), keeping concurrent credits from interleaving.
+
+## 12. Domain Invariants
+
+The state machines in `APIContract.md` §3 are implemented as explicit, testable transition tables — not as scattered `if (status == ...)` checks. Each aggregate exposes `canTransition(from, to, actor)` and a single `transition()` entry point that records the change.
+
+**The invariants that must never be violated:**
+
+| # | Invariant |
+| --- | --- |
+| 1 | An account balance changes only via an appended `account_transaction`. No code path updates a balance directly. |
+| 2 | A transaction, once written, is never updated or deleted. Corrections append reversing entries. |
+| 3 | A review decision is an appended event. Changing a decision appends another; history is complete. |
+| 4 | A submitted, reviewed, or credited service record is never physically deleted. Only drafts are deletable. |
+| 5 | Approving a service record performs — atomically — review event, status update, account transaction, progress update, notification. Partial completion is impossible. |
+| 6 | Approving an event proposal atomically creates the official `Project` draft and backfills `approvedProjectId`. An `approved` proposal without a linked project cannot exist. |
+| 7 | A published rule version is immutable. Changes create a new version with an effective time; historical rules remain readable so past decisions stay explicable. |
+| 8 | Progress and credited hours are computed from the rule version in effect at the service date, not the current one. |
+| 9 | The same service cannot be credited twice — enforced by duplicate detection on submission plus idempotency on approval. |
+| 10 | Audit log rows are append-only and unreachable by any admin mutation API. |
+
+**Hours and coins are integers.** Durations are stored as integer **minutes**; coins as integer **centi-coins** (1 coin = 100 units), per review decision Q3 (§22.1). The 0.5-hour minimum unit from `01-TimeBankDesign.md` §8.1 is a *rule* — a 30-minute rounding granularity applied when computing the credited amount — not a constraint on entry and not a floating-point value. The default conversion is 1 hour → 1 coin (60 minutes → 100 centi-coins), configurable in the rules table.
+
+No `double` or `float` appears anywhere in the duration or coin path. `BigDecimal` is unnecessary because every stored quantity is an integer; rounding happens once, explicitly, at crediting time, under a versioned rule — never implicitly through arithmetic.
+
+## 13. Audit, Logging, and Traceability
+
+- **Operation audit** (`audit_log`): actor, permission used, action, resource type/id, before/after summary, reason code, requestId, IP, user agent, timestamp. Written for login, permission changes, review decisions, account changes, rule publication, import/export, and evidence access. Append-only; exposed read-only via `GET /audit-logs`.
+- **Business timeline**: each aggregate exposes `GET /{resource}/{id}/timeline`, derived from its own event/revision tables — this is the user-facing traceability the frontend renders, distinct from the security audit log.
+- **Login logs** (`login_log`): separate resource with its own permission (`securityLogs.read`), per the contract.
+- **Application logs**: structured JSON with `requestId`, `userId`, module, and latency. Never log tokens, session ids, evidence URLs, or full request bodies containing personal data.
+- **Retention**: audit and login logs retained for the full student lifecycle plus a school-defined period (see open question Q7) — with the lifecycle policy in §16.3, since at ~16M combined rows over ten years these are the two largest tables in the system.
+
+**Write-path cost.** Audit logging is on the critical path of every mutation, so at ~60 req/s it must not double the write cost of a request. The audit row is written in the same transaction as the business change (so it cannot be lost or contradicted), but it is a single narrow insert with no secondary-index churn beyond `(resource_type, resource_id)` and `(actor_id, created_at)`. Before/after summaries are stored as compact JSON, not full entity snapshots.
+
+---
+
+## Part F · Extension Seams
+
+## 14. Phase 3 and Phase 4 Readiness
+
+**Current scope is the Phase 2 backend on self-hosted MySQL. Nothing for Phase 3 or Phase 4 is designed or built now** — no POV module, no AI or risk engine, no blockchain attestation, no redemption or borrowing. `03-AutoAudit.md`, `04-Blockchain.md`, and `07-AI.md` remain the references for when those phases are taken up.
+
+The Phase 2 obligation is only to **avoid foreclosing them**, which costs nothing beyond what the system already does for its own reasons:
+
+| Later capability | What Phase 2 already provides | What Phase 2 does *not* build |
+| --- | --- | --- |
+| Feature flags | A `feature_flag` table driving the flags in `/me`; reserved endpoints return `FEATURE_DISABLED` or `404`, and mutations are rejected at the API boundary rather than merely hidden in the UI | Any flagged feature itself |
+| POV (Phase 3) | Service records, review pipeline, and ledger that POV will feed into unchanged | `pov` module, witness/peer/guardian confirmation, Mini Program auth |
+| AI / risk (Phase 3) | An async job mechanism (D5) that advisory scoring can later run on | Any AI port, risk engine, or witness credit scoring |
+| Blockchain attestation | SHA-256 hashes computed on evidence during upload processing (D9), plus immutable review and ledger history — both present for their own reasons | `attestation` table, `AttestationProvider`, evidence-package hashing, signing keys. **Including the local-signature path D** proposed in an earlier draft |
+| Redemption / borrowing (Phase 4) | An immutable ledger that new transaction types extend without schema change | The modules, rules, or transaction types themselves |
+
+The single structural rule carried forward: **later phases extend the existing record, review, and ledger model — they never create a parallel one.** POV produces ordinary `ServiceRecord`s; redemption produces ordinary `AccountTransaction`s. That constraint costs nothing today and is what keeps the extension cheap later.
+
+---
+
+## Part G · Operations
+
+## 15. Security and Compliance
+
+Beyond authentication and authorization (§10):
+
+- **Transport**: HTTPS only, HSTS, TLS terminated at Nginx.
+- **CSRF**: token required on all cookie-authenticated mutations; `Origin`/`Referer` validated against an allowlist.
+- **Rate limiting**: login and password reset at Nginx (centralized across both instances, per-IP and per-account); upload intents and export creation in-process via Bucket4j. The split matters — in-process limits alone would give an attacker double the intended allowance across two instances.
+- **Database exposure**: the self-hosted MySQL and its replica are reachable only from the application subnet, never from the public internet, with credentials distinct per environment.
+- **Password storage**: BCrypt (cost ≥ 10) or Argon2id. Account lockout after repeated failures, with an admin unlock path.
+- **Uploads**: MIME allowlist verified by magic bytes (not the declared header or extension), size caps, AV scanning, and image re-encoding to strip EXIF for non-POV evidence.
+- **Minors' data** (`06-Legal.md`, PIPL): guardian consent recorded as a first-class field; minimum-necessary collection; sensitive contact fields hashed or scope-restricted; exports permission-gated and audited.
+- **Data residency**: all compute, database, object storage, and backups in a mainland-China region.
+- **Secrets**: never in the repository. Environment variables or the cloud provider's secret manager; database and object-storage credentials get the strictest handling.
+- **Non-financial guardrail**: no API exists — now or later — that transfers coins between students or converts them to money. This is a design red line from `06-Legal.md`, not a configuration option.
+
+## 16. Performance, Capacity, and Data Lifecycle
+
+At the corrected scale this section moves from advisory to binding. The system does not need distributed infrastructure, but it does need every query to be deliberate.
+
+### 16.1 Query and Index Discipline
+
+- **Index every filter and sort path** the contract exposes. At minimum: `(student_id, status)`, `(status, submitted_at)`, `(grade_id, academic_year_id)`, `(account_id, created_at)`, `(project_id, status)`, `(assigned_reviewer_id, status)`, `(user_id, is_read)` for the polled unread count.
+- **Composite index order follows the query, not the schema.** Equality columns first, then range/sort columns — verified with `EXPLAIN` against production-sized data, not assumed.
+- **No N+1.** Entity graphs/fetch joins on the write side; explicit SQL projections on the read side. A CI test asserting query counts on the heaviest endpoints is required, not optional.
+- **Pagination is mandatory** on every list, with a hard server-side max page size (e.g. 100). No endpoint may return an unbounded collection.
+- **Deep pagination is bounded.** `OFFSET 50000` over a 1M-row table is a scan; admin list endpoints use keyset (seek) pagination where the contract's `page[number]` semantics permit, or cap the reachable depth and steer users to filters. This must be decided per endpoint during detailed design.
+- **`COUNT(*)` for `totalItems`** is itself a cost on million-row filtered queries. Options per endpoint: exact count (small/filtered result sets), cached count, or approximate count for very large unfiltered admin lists.
+
+### 16.2 Expensive Reads
+
+- **Dashboards** cache for 30–60 s and return `generatedAt` (`APIContract.md` §8).
+- **Statistics and reports** across 5,000 students are aggregated in SQL. Where a report is both expensive and frequently viewed (participation rate, compliance rate by grade), it is **materialized by a scheduled job into a summary table** and served from there, with `generatedAt` exposed so users understand the freshness. Reports are never computed synchronously over the full ledger.
+- **Exports** are always async jobs, streamed to object storage, never built in the request thread.
+- **Progress tracking** is a stored projection updated in the approval transaction, not a recomputation over a student's full history on every page load.
+
+### 16.3 Retention
+
+**Student data is retained for enrolment plus one year after graduation, then deleted** (review decision Q7). There is no summary tier, no archive format, and no restore path.
+
+A single cohort-scoped job, running at **graduation + 1 year**, deletes the student's rows (`service_record`, `account_transaction`, `review`, `case`, `enrollment`, `file`, notifications, student and guardian records) and their evidence objects in object storage.
+
+**Retaining anything longer is a business process, not a system feature.** Before a cohort's purge date, an administrator can produce a cohort report through the **existing export capability** (`POST /exports`, `APIContract.md` §4.13) and file it wherever the school keeps its permanent student records. This deliberately adds nothing to the system: no summary table, no second job, no new retention tier. What the school preserves outside the system is the school's decision.
+
+**Constraints:**
+
+1. **Cohort-scoped, never row-age-scoped.** The purge key is the student's graduation year. A naive "delete rows older than N years" would destroy records for currently enrolled students — a Grade 11 student's Grade 6 records are six years old and must be retained. Getting this wrong is unrecoverable.
+2. **Objects are deleted with their rows.** The job removes evidence files from the bucket in the same pass as the `file` metadata. Deleting only the metadata would leave a bucket of unattributable photographs of minors that nothing records the existence of and nobody can safely reclaim.
+3. **The purge is audited.** Which cohort, when, how many rows, under which policy version — retained after the data is gone, so the school can demonstrate compliance.
+4. **The job must actually run.** PIPL minimum-necessary (`06-Legal.md`) makes deletion an obligation, so a purge that silently fails for years is a compliance failure. It alerts on non-execution.
+5. **Dry-run first.** The job reports what it would delete before any run that deletes, and the first production run is executed deliberately rather than on a timer.
+
+Logs follow a simple age rule: `login_log` and `audit_log` are kept for **1 year** and partitioned by month (`PARTITION BY RANGE`), so pruning is an instant `DROP PARTITION` rather than a multi-million-row `DELETE`. `session` and `idempotency_record` expire in days. Decided at first migration, since retrofitting partitioning is expensive.
+
+### 16.4 Capacity and Targets
+
+- **Connection pool**: HikariCP, ~20–30 connections per instance (2 instances → ~40–60 total). Sized against MySQL's `max_connections`, not guessed upward; with virtual threads the pool is the intended bottleneck.
+- **JVM heap**: ~2–4 GB per instance. Bounded by streaming imports/exports and paginated reads rather than by heap sizing.
+- **Database host**: sized so the InnoDB buffer pool holds the hot working set — indexes and rows for the active academic year. This is the single most effective performance lever available, and on a self-hosted instance (Q1) it is a sizing decision the project owns: budget ~60–70% of the database host's RAM to `innodb_buffer_pool_size`, on a host with enough memory to cover the active-year working set with headroom.
+
+**Targets** (verified by load test, §19): p95 < 300 ms for list/detail endpoints, p95 < 1 s for dashboards, at 300 concurrent users with production-sized data.
+
+## 17. Deployment and Operations
+
+One deployment per school (D8), sized for 5,000 students, with **self-hosted MySQL** per review decision Q1.
+
+### 17.1 Topology
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ Domestic cloud VPC (single region)                           │
+│                                                              │
+│   LB / Nginx ──┬──► Spring Boot instance #1 (Docker)         │
+│    │           └──► Spring Boot instance #2 (Docker)         │
+│    │                      │                                  │
+│    │                      ├──► MySQL 8 primary (self-hosted) │
+│    │                      │        │ async replication       │
+│    │                      │        ▼                         │
+│    │                      │    MySQL 8 replica               │
+│    │                      │    (standby + backup source)     │
+│    │                      │        │                         │
+│    │                      │        ▼                         │
+│    │                      │    Backups → Object Storage      │
+│    │                      └──► Object Storage (private,      │
+│    │                             lifecycle-tiered)           │
+│    └── TLS, HSTS, static SPA assets, login rate limiting     │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- **Two application instances, stateless.** Chosen for rolling deploys and fault tolerance, not throughput — one instance carries the load. Because the app holds no local state (D4 sessions in MySQL, D9 uploads direct to object storage, D5 lease-claimed jobs, ShedLock-guarded schedules), the second instance costs configuration only.
+- **Artifact**: a single Spring Boot fat JAR in a Docker image; Docker Compose for local development (app + MySQL + MinIO).
+- **Environments**: local, staging, production. **Staging must hold a production-sized anonymized dataset** — ~450k service records, ~1.1M login-log rows, and full evidence-metadata volume — because index and migration decisions cannot be validated against a small dataset. This is a prerequisite for the load test in §19.
+- **Configuration**: Spring profiles; all secrets injected at runtime.
+- **Rolling deploys.** Two instances make rolling restarts natural; database migrations must therefore be backward-compatible for one release (expand/contract) so both versions can run briefly. Where a migration cannot be made compatible, a short maintenance window is acceptable and preferable to a fragile deploy.
+- **Archiving**: per-academic-year archival and export, as required by `05-OnlineSystem.md` §2.2, implemented via the lifecycle policy in §16.3.
+
+### 17.2 Self-Hosted MySQL Operations
+
+Choosing self-hosted MySQL (Q1) moves durability from a provider's responsibility to the project's. Combined with an operating team of basic DevOps experience (Q10), the database plan must be **explicit, automated, and rehearsed** rather than left to convention. This is the most operationally demanding part of the system and should be treated as a first-class deliverable, not an afterthought at deployment time.
+
+**Minimum required setup:**
+
+| Concern | Requirement |
+| --- | --- |
+| Topology | Primary + one asynchronous replica on a separate host. The replica serves as standby and as the backup source, so backups never load the primary |
+| Binary logs | `binlog` enabled with `ROW` format, retained ≥ 7 days — this is what makes point-in-time recovery possible at all |
+| Full backups | Nightly physical backup (Percona XtraBackup, or `mysqldump` if the dataset stays small enough), streamed to object storage with versioning and a lifecycle rule |
+| PITR | Continuous binlog shipping to object storage, enabling recovery to any point within the retention window |
+| Verification | **Automated weekly restore test** into a scratch instance with a row-count and checksum assertion. An unverified backup is not a backup, and this is the single highest-value automation in the whole operations plan |
+| Failover | Documented **manual** promotion runbook. Automatic failover (MHA/Orchestrator) is *not* recommended here — with a two-node setup and a small team, automated failover more often causes split-brain than it prevents downtime |
+| Durability config | `innodb_flush_log_at_trx_commit = 1`, `sync_binlog = 1`. Non-negotiable for a ledger; the throughput cost is irrelevant at ~60 req/s |
+| Monitoring | Replication lag, disk headroom, buffer-pool hit ratio, slow query log, backup success/failure alerting |
+| Upgrades | Documented minor-version patching procedure; MySQL is internet-exposed to nothing, but unpatched database servers are a standing risk |
+
+**Recovery objectives to agree explicitly:** an RPO of ≤ 5 minutes (bounded by binlog shipping frequency) and an RTO of ≤ 4 hours (bounded by restore time for a ~60 GB dataset plus manual promotion) are realistic for this topology. Both must be **measured during acceptance**, not assumed — `01-TimeBankDesign.md` §16 lists data loss as a top institutional risk, and the ledger is the one dataset in the system that cannot be reconstructed from anything else.
+
+**A managed database remains the lower-risk option** and is worth revisiting if budget allows, precisely because it converts most of this table into a provider's problem. This document records self-hosting as the decision taken, with the mitigations above as the condition for taking it safely.
+
+## 18. Observability
+
+- **Actuator**: `/health` (liveness/readiness — both needed for load-balancer registration across two instances), `/metrics`, restricted to internal access.
+- **Business metrics**: pending reviews, review SLA breaches, failed jobs, ledger reconciliation mismatches, login failure rate, upload rejection rate.
+- **Technical metrics** (now warranted at 5,000 students): p95/p99 latency per endpoint, HikariCP pool saturation and wait time, slow-query count, InnoDB buffer-pool hit ratio, table growth rate, background-job queue depth and duration. Pool saturation and buffer-pool hit ratio are the two leading indicators of the failure modes §16 is written to prevent.
+- **Slow query log enabled** in production with a threshold around 500 ms, reviewed regularly. This is the cheapest possible early warning for a missing index.
+- **Alerting**: ledger mismatch, job failure, purge job non-execution, replication lag, disk/DB capacity, error-rate spike, sustained pool saturation.
+- **Metrics stack**: Actuator with Micrometer exporting to the cloud provider's monitoring service is sufficient and avoids running Prometheus/Grafana. At 5,000 students, retaining latency and DB metrics is no longer optional the way it was at pilot scale — capacity questions must be answerable with data.
+- **Log aggregation** is required rather than nice-to-have: with two instances, per-container logs are no longer greppable in place, and `requestId` correlation across instances is the primary debugging tool.
+
+## 19. Testing Strategy
+
+Testing effort concentrates on the invariants in §12, because those are what a manual audit years later will depend on.
+
+| Level | Tool | Coverage focus |
+| --- | --- | --- |
+| Unit | JUnit 5 + AssertJ | Status machines, hour/coin calculation, rule evaluation, progress computation, risk rules (Phase 3) |
+| Integration | Testcontainers (real MySQL) + `@SpringBootTest` | Repositories, transactions, optimistic locking, idempotency replay, ledger concurrency |
+| API | MockMvc | Envelope shape, error codes, validation mapping, permission and data-scope enforcement per endpoint |
+| Architecture | ArchUnit / Spring Modulith | Layer direction, module boundaries, no entity leakage into controllers |
+| Contract | OpenAPI snapshot diff in CI | Detects unintended API changes |
+| **Performance** | **k6 / Gatling + JMeter, against a production-sized staging dataset** | **Newly required at this scale — see below** |
+
+**Non-negotiable correctness test cases**, drawn from `APIContract.md` §11:
+
+- Concurrent approval of the same record credits exactly once.
+- Duplicate `Idempotency-Key` replays rather than double-writes.
+- A teacher accessing another grade's record receives `404`, not `403`.
+- Concurrent edits produce `409`, never a silent overwrite.
+- Reversal produces an opposite transaction and leaves the original intact.
+- Rule changes do not retroactively alter already-credited records.
+- A failure midway through review approval rolls back all five side effects.
+
+**Performance acceptance criteria (new).** The scale correction makes load testing a release gate rather than an optional exercise, because every claim in §16 is a hypothesis until measured. Against a staging dataset of ~5,000 students / ~450k service records / ~1.1M login-log rows:
+
+- 300 concurrent users sustained: p95 < 300 ms for list and detail endpoints, p95 < 1 s for dashboards.
+- Burst test: mass submission by ~500 students within 30 minutes, including evidence uploads, with no error-rate increase.
+- A 500k-row historical import runs to completion with bounded heap, resumes correctly after a forced restart mid-job, and does not degrade p95 latency for concurrent interactive users.
+- No endpoint issues an unindexed scan — verified by enabling the slow query log during the run and asserting it stays empty.
+- Virtual-thread pinning check under load (D3 caveat).
+- Full backup restore timed end-to-end on the production-sized dataset.
+
+**Test data generation** is therefore a deliverable in its own right: a seeder producing a realistic 5,000-student dataset with plausible distributions (records per student, review states, file counts). Without it, none of the above can be verified, and the project would repeat exactly the mistake this revision corrects.
+
+---
+
+## Part H · Review
+
+## 20. Delivery Sequence (Indicative)
+
+Ordered so that the highest-risk core is proven first; detailed task planning follows this document's approval.
+
+1. **Foundation** — project skeleton, Flyway baseline, envelope/error handling, requestId, auditing infrastructure, Docker Compose, CI.
+2. **Test data seeder** — generates a production-sized dataset (5,000 students, ~1M records, realistic distributions). Built *early*, not late, because every performance and migration decision from milestone 5 onward depends on it (R2).
+3. **Identity** — users, roles, permission codes, session auth, data scope, `/me`, login logs.
+4. **Base data** — students, classes, grades, academic years, organizations, service categories, rules. Includes seeding the 1:1 conversion, 0.5 h rounding, and honour tiers, and agreeing the coin unit representation with the frontend (R8).
+5. **Core loop** — service records, evidence upload, submission validation, review queue, review decisions, **ledger + progress in one transaction**. The riskiest part, built early, matching `Docs/frontend/Design.md` §13.3.
+6. **Projects** — projects, registrations, waitlist, completion.
+7. **Proposals** — event proposals, approval chain, atomic project generation.
+8. **Cases** — appeals, supplements, manual corrections.
+9. **Admin surface** — dashboards, reports, notifications, exports, historical ledger import.
+10. **Data lifecycle** — log partitioning and the cohort purge job with dry-run (§16.3). Small, but log partitioning must be decided with the first migration rather than retrofitted.
+11. **Hardening** — rate limiting, reconciliation job, **load test against the production-sized dataset**, index and slow-query review, end-to-end acceptance against the real frontend.
+12. **Database operations** — replication, backup automation, PITR, **verified restore drill with measured RPO/RTO**, failover runbook (§17.2, R1). Runs in parallel from milestone 1 rather than at the end; it is the highest-risk item in the project and must not be discovered late.
+13. **Seams** — feature flags only; Phase 3/4 endpoints reject cleanly. Nothing else reserved or stubbed (§14).
+
+## 21. Risks
+
+| ID | Risk | Impact | Mitigation |
+| --- | --- | --- | --- |
+| **R1** | **Self-hosted MySQL operated by a small team with basic DevOps experience (Q1 + Q10)** | **Permanent loss or corruption of the ledger — the one dataset that cannot be reconstructed** | Replica + binlog PITR + nightly backups to object storage; **automated weekly restore verification**; documented manual failover runbook; measured RPO/RTO in acceptance (§17.2). Revisit managed database if budget allows |
+| R2 | Performance assumptions untested against real data volumes | Endpoints that work in development degrade badly at 1M rows — the exact failure this revision exists to prevent | Production-sized staging dataset, load test as a release gate, slow query log asserted empty (§19) |
+| R3 | Data-scope check omitted on a new endpoint | Cross-grade leak of minors' data | Scope applied in query builders, not controllers; a permission/scope test required per endpoint before it is "done" |
+| R4 | Ledger drift from a code path bypassing `AccountService` | Incorrect balances, loss of institutional trust | Repository exposes no balance setter; checkpointed reconciliation with alerting; code review rule |
+| R5 | Retention purge implemented as row-age rather than cohort-scoped, or summary built incorrectly | Irreversible deletion of currently enrolled students' records, or a permanent summary that misstates a graduate's hours | Purge keyed to graduation year; **ledger reconciliation gate before deletion** (§16.3); dry-run and audited; both jobs alert on non-execution |
+| R6 | Import of historical paper ledgers with dirty data | Wrong balances at launch, at 5,000-student scale | Mandatory validate-before-commit, row-level error report, dry-run, reversible import batch id |
+| R7 | Rule versioning implemented late | Historical records become unexplainable after any rule change | Rule version referenced by records from the first migration, not retrofitted |
+| R8 | Coin unit scale (centi-coins) not agreed with the frontend before integration | Balances rendered 100× wrong, or a late schema change | Settle the API representation during detailed design, before the frontend leaves its mock client (§22.1) |
+| R9 | Module boundaries erode into a big ball of mud | Long-term maintainability by a rotating team | ArchUnit/Modulith enforcement in CI from day one |
+| R10 | Frontend/backend contract drift during integration | Rework late in the schedule | OpenAPI snapshot in CI; integrate against the real frontend from milestone 5 onward |
+| R11 | Background job saturating shared resources | Interactive latency degrades for 300 concurrent users during an import | Dedicated bounded executor, chunked processing, off-peak scheduling (D5) |
+
+## 22. Review Decisions (Resolved)
+
+All ten questions raised in the first draft were answered during review. The answers are recorded here as decisions, with their effect on the design.
+
+| # | Question | Decision | Effect on design |
+| --- | --- | --- | --- |
+| Q1 | Cloud provider, managed vs self-hosted MySQL | **Self-hosted MySQL** | §17 rewritten: backup, PITR, and failover are now the project's responsibility. See §17.2 and risk R1 |
+| Q2 | SSO / unified identity required? | **No** — account + password | Simplifies authentication; D4 unchanged. No IdP integration in Phase 2 |
+| Q3 | Minimum recording unit and conversion | **0.5 h minimum, round to nearest 0.5 h; conversion configurable, default 1 h → 1 coin (1:1)** | Consistent with `01-TimeBankDesign.md` §4.2 and the §13.3 honour tiers. See note below |
+| Q4 | Guardian accounts in Phase 2? | **Defer to Phase 3** | Guardian data is a student field only; no guardian role, login, or permission set in Phase 2 |
+| Q5 | Is travel time creditable? | **No** | Submission validation rejects travel time; the "includes travel time" field from `02-ManualAudit.md` §2.2 becomes a disclosure flag that blocks crediting, not a duration component |
+| Q6 | Must off-campus service be pre-registered? | **No** — follow the original design | Off-campus service is recorded directly; the retroactive-entry / compensation path (`01-TimeBankDesign.md` §8.5) remains the mechanism for late or unsigned cases. No new workflow, no contract change |
+| Q7 | Retention after graduation | **1 year, then delete** | §16.3 is now one cohort purge job. Bounds the database (~10–20 GB) and object storage (~550–700 GB), and cuts restore time and RTO (mitigating R1). No summary tier, no archive, no restore path |
+| Q8 | Attestation path D → A | **Deferred — nothing blockchain-related in Phase 2** | §14.2 removed, including the local-signature path D from the earlier draft. No `attestation` table, no provider interface, no signing key |
+| Q9 | Second campus / federation within ~3 years? | **No** | D8 single-tenant confirmed |
+| Q10 | Who operates it after handover? | **School IT staff, basic DevOps** | Constrains acceptable operational complexity; reinforces D1 (no Redis), D5 (no broker), and shapes §17 |
+
+### 22.1 Consequences Requiring Design Attention
+
+**Q3 — 1:1 conversion confirmed, and the resulting unit design.** The conversion is **1 hour → 1 coin**, matching `01-TimeBankDesign.md` §4.2 and keeping the §13.3 honour thresholds (25 / 75 / 150 / 300) directly comparable to accumulated hours. Combined with the 0.5 h minimum unit, the smallest creditable amount is **half a coin**, which interacts with the contract's integer-only rule (`APIContract.md` §2.1: no floating-point, amounts as minimum-accounting-unit integers). Resolution:
+
+| Quantity | Storage | Example |
+| --- | --- | --- |
+| Service duration | Integer **minutes** — the canonical, never-derived value | 90 minutes |
+| Rounded creditable duration | Integer minutes, rounded to nearest 30 at crediting | 90 minutes |
+| Time coins | Integer **centi-coins** (1 coin = 100 units), the "cents" model | 150 units = 1.5 coins |
+
+- **Why centi-coins rather than half-coin units.** A half-coin minimum unit would represent 1.5 coins as `3`, which is unreadable in the database and breaks the moment any rule produces a non-half value. Centi-coins keep every amount an exact integer while leaving headroom for the Phase 4 appreciation multipliers (`01-TimeBankDesign.md` §8.4: continuous-service, high-responsibility, and special-project bonuses), which will otherwise force a schema migration the first time someone configures a 1.5× bonus.
+- **Rounding is a versioned rule applied at crediting**, not a constraint on data entry. A student enters real start/end times; the system stores exact minutes and rounds only when computing the credited amount.
+- **The conversion ratio is a rule-table field.** Changing it is a data change, not a code change, and because rules are versioned and applied as of the service date (§12 invariant 8), a future change never retroactively alters credited records.
+
+**One API detail to confirm during detailed design:** the contract specifies amounts as minimum-accounting-unit integers, so `/accounts` would return `7550` for 75.5 coins. Either the API documents the scale factor explicitly so the frontend formats correctly, or coin amounts are exposed in a display-friendly form alongside the raw integer. This needs settling before the frontend swaps off its mock client, since the existing UI renders coin balances directly.
+
+**Q7 — one year, then delete.** This is the simplest policy available and the cheapest to build: a single cohort-scoped job, no summary tier, no archive format, no restore path. It bounds every storage tier — the database settles around 10–20 GB and object storage around 550–700 GB, neither growing without limit — and it deletes minors' personal data and photographs promptly rather than holding them for years, which is the right direction for PIPL minimum-necessary (`06-Legal.md`).
+
+**What it means in practice:** after graduation + 1 year the system holds nothing about a former student. Any longer-term record the school wants — a cohort summary for transcripts or verification — is produced through the **existing export capability before the purge date** and filed with the school's own permanent student records. That keeps the retention question where it belongs, as a school business process rather than a system feature, and adds no code.
+
+The consequences for appeals and post-graduation verification are a policy matter for the school to settle when it writes the student-facing privacy notice; they are **deferred to a later phase** and are not a backend design concern.
+
+**Q6 — off-campus service needs no pre-registration; the original design stands.** Students record off-campus service directly, and the existing compensation / retroactive-entry path (`01-TimeBankDesign.md` §8.5, the `Case` resource with `type = supplement`) handles cases where a supervisor signature or proof was not obtained at the time. This means:
+
+- No new resource, no new workflow, and **no change to `APIContract.md`** — the previously flagged contract gap is withdrawn.
+- `sourceType` continues to distinguish project-linked, off-campus, and self-initiated records without one of them carrying an extra precondition.
+- Authenticity for off-campus service continues to rest where the institutional design puts it: supervisor contact details, proof materials, review scrutiny, and sampled telephone verification (`02-ManualAudit.md` §9), rather than a gate at submission time.
+- This also preserves the spontaneous-volunteering principle in `CONTRIBUTING.md` (「不得因此限制或官僚化自发的公益行为」), which a pre-registration requirement would have worked against.
+
+**Q5 — travel time.** The record schema keeps the "includes travel time" disclosure field for audit purposes, but any declared travel minutes are excluded from creditable duration and the record is routed to manual review rather than silently reduced, so the student sees why their credited hours differ from their claim.
+
+**Q1 + Q10 — the principal operational risk.** Self-hosted MySQL operated by staff with basic DevOps experience is the highest-risk combination in this design: it places backup correctness, point-in-time recovery, replication, and failover on a team without deep database operations experience, guarding a ledger that must survive for the full student lifecycle. This is addressed concretely in §17.2 and tracked as risk R1. It also further justifies keeping the infrastructure surface minimal — every service *not* adopted (Redis, a broker, a search cluster) is one fewer thing this team must operate.
+
+---
+
+## 23. Decision Register
+
+All decisions below were re-derived against the corrected scale in §3 (5,000 students, 500 staff, 300 peak concurrent). The **Changed?** column records what the correction moved.
+
+| ID | Decision | Rationale in one line | Changed? |
+| --- | --- | --- | --- |
+| D1 | **No Redis at launch; MySQL + Caffeine + Nginx. Option B (Redis for cache + rate limiting) pre-approved as the upgrade** | MySQL absorbs ~120 session ops/s comfortably; sessions and idempotency stay in MySQL permanently | **Nuance changed** — Redis is now reasonable-but-unnecessary rather than clearly wrong, and the upgrade path is explicit |
+| D2 | **No WebSocket; HTTP polling, SSE as upgrade path** | No bidirectional need; multi-instance topology makes push *harder*, not easier | Unchanged; **strengthened** by the two-instance topology. Polled endpoints now carry hard cheapness requirements |
+| D3 | Spring MVC + virtual threads, not WebFlux | Imperative simplicity; the connection pool becomes the correct bottleneck | Unchanged; **strengthened** at 300 concurrent |
+| D4 | Cookie session (Spring Session JDBC), not JWT | Instant revocation and XSS-safe storage matter more than statelessness | Unchanged |
+| D5 | DB job table + dedicated `@Async` executor, no broker — **now with mandatory chunking, checkpointing, and pool isolation** | The job resource must exist anyway; imports grew to 100k–500k rows | **Requirements added** |
+| D6 | JPA for writes + JdbcTemplate for reads | Optimistic locking and auditing where invariants live; SQL where reporting lives | Unchanged; **more important** at 1M rows |
+| D7 | Flyway | Plain reviewable SQL — **plus a large-table migration policy** (online DDL, batched backfills) | **Policy added** |
+| D8 | Single-tenant, one deployment per school | Confirmed by review (Q9 = no federation; scale stated per-school) | **Confirmed by review** |
+| D9 | S3-compatible storage (OSS prod / MinIO dev) — **plus lifecycle tiering** | ~1 TB over ten years makes local disk and BLOBs disqualifying, not merely suboptimal | **Strengthened**; tiering added |
+| D10 | Code-first OpenAPI + generated TS types | The frontend already validated the contract; drift-proof beats ceremony | Unchanged |
+| D11 | Modular monolith, horizontally scaled | The core requirement is a multi-entity ACID transaction; no module needs independent scaling | Unchanged |
+| D12 | Stored balance + immutable ledger + **checkpointed** reconciliation | Derived balances are now **disqualified**, not merely disfavoured | **Alternative ruled out** |
+
+**Net effect of the scale correction:** no decision reversed. Two gained explicit upgrade paths (D1, D5), three gained new requirements (D5, D7, D9), one alternative was disqualified (D12), and one was confirmed by review (D8). The substantive additions are elsewhere: the deployment topology moved to two instances plus self-hosted database operations (§17), and data lifecycle, query discipline, and load testing became binding requirements (§16, §19).
+
+---
+
+## 24. Related Documents
+
+| Document | Relationship |
+| --- | --- |
+| `Docs/integration/APIContract.md` | **Authoritative** for endpoints, statuses, permissions, error codes. This document explains how they are implemented, never what they are. |
+| `Docs/frontend/Design.md` | Consumer of this backend; defines pages, flows, and acceptance criteria |
+| `Design/chinese/01-TimeBankDesign.md` | Institutional rules: hour requirements, time-coin semantics, roles, incentives |
+| `Design/chinese/02-ManualAudit.md` | Review workflow and service-record data fields |
+| `Design/chinese/03-AutoAudit.md` | Phase 3 POV model, risk control, witness credit |
+| `Design/chinese/04-Blockchain.md` | Attestation package design, chain selection, path A–D options |
+| `Design/chinese/05-OnlineSystem.md` | System positioning, module inventory, phased implementation plan |
+| `Design/chinese/06-Legal.md` | Legal red lines: non-financial, data residency, minors' data |
+| `Design/chinese/07-AI.md` | Phase 3 AI module integration and cost estimates |
+
+> **Pending**: a Chinese counterpart `Docs/backend/Design_CN.md` should be produced once this document is reviewed and stabilized, mirroring its structure exactly (per the repository convention for `Design.md` / `Design_CN.md` and `APIContract.md` / `APIContract_CN.md`).
