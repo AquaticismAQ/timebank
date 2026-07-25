@@ -322,3 +322,150 @@ The frontend polls the job query endpoint; long-lived connections are not a requ
 
 ---
 
+## 4. Phase 2 APIs
+
+### 4.1 Current User & In-App Notifications
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/me` | Authenticated | Current user, permissions, workspaces, feature flags |
+| `GET` | `/notifications` | Authenticated | Current user notification list |
+| `GET` | `/notifications/unread-count` | Authenticated | Unread count |
+| `PATCH` | `/notifications/{id}` | Owner | Mark single notification as read |
+| `POST` | `/notifications/read-all` | Owner | Mark all as read |
+| `GET` | `/announcements` | Authenticated | Active announcements |
+
+### 4.2 Projects
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/projects` | `projects.read` | Query visible projects |
+| `GET` | `/projects/{id}` | `projects.read` | Project detail |
+| `POST` | `/projects` | `projects.create` | Create draft |
+| `PATCH` | `/projects/{id}` | `projects.update` | Update project |
+| `POST` | `/projects/{id}/publish` | `projects.publish` | Publish |
+| `POST` | `/projects/{id}/close` | `projects.close` | Close early |
+| `POST` | `/projects/{id}/archive` | `projects.archive` | Archive |
+| `GET` | `/projects/{id}/timeline` | `projects.audit.read` | Project change timeline |
+
+Project status changes use action endpoints to avoid bypassing business validation via a generic `PATCH status`.
+
+### 4.3 Student Event Proposals
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/event-proposals` | Owner/`eventProposals.read` | Students query own proposals; teachers/admins query approval queue within scope |
+| `POST` | `/event-proposals` | `eventProposals.create` | Student creates proposal draft |
+| `GET` | `/event-proposals/{id}` | Owner/`eventProposals.read` | Proposal detail |
+| `PATCH` | `/event-proposals/{id}` | Proposer & editable | Edit draft or changes-requested proposal |
+| `DELETE` | `/event-proposals/{id}` | Proposer & draft only | Delete draft |
+| `POST` | `/event-proposals/{id}/submit` | Proposer | Submit for approval |
+| `POST` | `/event-proposals/{id}/withdraw` | Proposer/admin permission | Withdraw or request withdrawal |
+| `GET` | `/event-proposals/{id}/revisions` | Owner/`eventProposals.read` | Revision history |
+| `GET` | `/event-proposals/{id}/timeline` | Owner/`eventProposals.read` | Approval timeline |
+| `POST` | `/event-proposals/{id}/reviews` | `eventProposals.review` | Request changes, recommend approval, approve, or reject |
+| `POST` | `/event-proposals/{id}/assign` | `eventProposals.assign` | Assign or transfer reviewer |
+| `GET` | `/event-proposal-queue/summary` | `eventProposals.review` | Pending counts and approval SLA |
+
+Approval request:
+
+```json
+{
+  "decision": "requestChanges",
+  "reasonCode": "SAFETY_PLAN_INCOMPLETE",
+  "comment": "Please add an adult supervision and emergency contact plan.",
+  "proposalVersion": 2
+}
+```
+
+When approving a proposal, the backend:
+
+1. Writes a non-overwritable approval event.
+2. Updates proposal status to `approved`.
+3. Generates an official `Project` draft based on the approved version.
+4. Records the student as `studentOrganizer` and the designated teacher as project owner.
+5. Backfills `approvedProjectId` and creates an in-app notification.
+
+The frontend must not create a project first and then separately update the proposal, to avoid orphan projects or duplicates.
+
+### 4.4 Applications
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/applications` | `applications.read` | Query own or in-scope applications |
+| `GET` | `/applications/{id}` | `applications.read` | Application detail |
+| `POST` | `/projects/{projectId}/applications` | `applications.create` | Student registers |
+| `POST` | `/applications/{id}/cancel` | Owner/admin permission | Cancel registration |
+| `POST` | `/applications/{id}/confirm` | `applications.manage` | Admin confirms |
+| `POST` | `/applications/{id}/reject` | `applications.manage` | Reject application |
+| `POST` | `/applications/bulk-actions` | `applications.manage` | Batch confirm, reject, or mark complete |
+
+### 4.5 Service Records
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/service-records` | `serviceRecords.read` | Query own or in-scope records |
+| `POST` | `/service-records` | `serviceRecords.create` | Create draft |
+| `GET` | `/service-records/{id}` | `serviceRecords.read` | Record detail |
+| `PATCH` | `/service-records/{id}` | Owner & editable state | Update draft/returned record |
+| `DELETE` | `/service-records/{id}` | Owner & draft only | Delete draft |
+| `POST` | `/service-records/{id}/submit` | Owner | Submit for review |
+| `POST` | `/service-records/{id}/withdraw` | Owner & review not started | Withdraw |
+| `GET` | `/service-records/{id}/timeline` | `serviceRecords.read` | Record timeline |
+| `GET` | `/service-records/{id}/revisions` | `serviceRecords.read` | Revision history |
+| `GET` | `/service-records/{id}/reviews` | `serviceRecords.read` | Review history |
+
+On submission, the server performs:
+
+- Required field and format validation.
+- Service time and duration rule validation.
+- Project eligibility and registration relationship validation.
+- Duplicate record detection.
+- Evidence material completeness validation.
+
+### 4.6 Files
+
+Recommended controlled direct upload flow:
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `POST` | `/files/upload-intents` | Authenticated | Obtain short-lived upload credentials |
+| `POST` | `/files/{id}/complete` | Uploader | Confirm upload complete and trigger validation |
+| `GET` | `/files/{id}` | Resource access | Get metadata and short-lived download URL |
+| `DELETE` | `/files/{id}` | Uploader & not bound to submitted record | Delete temporary file |
+
+`upload-intents` request includes filename, MIME, size, and purpose; the server returns the allowed upload URL, request headers, expiration, and `fileId`. File status is `processing` until virus scan and type validation complete; files in `processing` status cannot be submitted for review.
+
+### 4.7 Review Center
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/review-queue` | `reviews.read` | Query review queue |
+| `GET` | `/review-queue/summary` | `reviews.read` | Pending and SLA summary |
+| `POST` | `/service-records/{id}/reviews` | `reviews.decide` | Submit review decision |
+| `POST` | `/service-records/reviews/bulk` | `reviews.bulkDecide` | Batch review |
+| `POST` | `/service-records/{id}/assign` | `reviews.assign` | Assign or transfer reviewer |
+
+Review request:
+
+```json
+{
+  "decision": "returnForChanges",
+  "reasonCode": "MISSING_EVIDENCE",
+  "comment": "Please add confirmation from the organization.",
+  "recordVersion": 3
+}
+```
+
+Review approval must be in a single backend transaction:
+
+1. Write review event.
+2. Update service record status.
+3. Generate time-coin transaction.
+4. Update account balance view.
+5. Update progress tracking.
+6. Create in-app notification.
+
+The frontend does not sequentially call multiple endpoints to simulate this transaction.
+
+### 4.8 Appeals & Supplements
