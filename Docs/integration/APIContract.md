@@ -469,3 +469,347 @@ Review approval must be in a single backend transaction:
 The frontend does not sequentially call multiple endpoints to simulate this transaction.
 
 ### 4.8 Appeals & Supplements
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/cases` | `cases.read` | Query own or in-scope cases |
+| `POST` | `/cases` | `cases.create` | Create appeal/supplement draft |
+| `GET` | `/cases/{id}` | `cases.read` | Detail |
+| `PATCH` | `/cases/{id}` | Owner & draft/supplement state | Edit |
+| `POST` | `/cases/{id}/submit` | Owner | Submit |
+| `POST` | `/cases/{id}/decisions` | `cases.decide` | Admin processing |
+| `GET` | `/cases/{id}/timeline` | `cases.read` | Timeline |
+
+### 4.9 Students, Classes, Grades & Academic Years
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/students` | `students.read` | Student list |
+| `POST` | `/students` | `students.manage` | Create student |
+| `GET` | `/students/{id}` | Owner/`students.read` | Student detail |
+| `PATCH` | `/students/{id}` | `students.manage` | Update authoritative profile |
+| `POST` | `/students/{id}/activate` | `students.manage` | Activate |
+| `POST` | `/students/{id}/deactivate` | `students.manage` | Deactivate |
+| `GET` | `/students/{id}/progress` | Owner/`progress.read` | Progress tracking |
+| `GET` | `/students/{id}/service-records` | Owner/`students.read` | Service history |
+| `GET` | `/academic-years` | Authenticated | Academic years |
+| `GET` | `/grades` | Authenticated | Grades |
+| `GET` | `/classes` | Authenticated | Classes |
+
+### 4.10 Organizations & Service Categories
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/organizations` | `organizations.read` | Organization list |
+| `POST` | `/organizations` | `organizations.manage` | Create |
+| `GET` | `/organizations/{id}` | `organizations.read` | Detail |
+| `PATCH` | `/organizations/{id}` | `organizations.manage` | Update |
+| `POST` | `/organizations/{id}/archive` | `organizations.manage` | Archive |
+| `GET` | `/service-categories` | Authenticated | Service categories |
+| `POST` | `/service-categories` | `rules.manage` | Create category |
+| `PATCH` | `/service-categories/{id}` | `rules.manage` | Update category |
+
+### 4.11 Accounts & Transactions
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/accounts` | `accounts.read` | In-scope account list |
+| `GET` | `/accounts/{id}` | Owner/`accounts.read` | Account balance view |
+| `GET` | `/accounts/{id}/transactions` | Owner/`accounts.read` | Transactions |
+| `GET` | `/account-transactions/{id}` | Owner/`accounts.read` | Transaction detail |
+| `POST` | `/accounts/{id}/adjustments` | `accounts.adjust` | Manual adjustment generating transaction |
+| `POST` | `/account-transactions/{id}/reverse` | `accounts.reverse` | Reverse specified transaction |
+| `POST` | `/accounts/{id}/freeze` | `accounts.freeze` | Freeze |
+| `POST` | `/accounts/{id}/unfreeze` | `accounts.freeze` | Unfreeze |
+
+All change requests must include a standardized reason code and description. Reversal generates a reverse transaction; the original transaction is not deleted.
+
+### 4.12 Rules
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/rules` | `rules.read` | Query current or historical rules |
+| `POST` | `/rules` | `rules.manage` | Create rule draft |
+| `GET` | `/rules/{id}` | `rules.read` | Rule detail |
+| `PATCH` | `/rules/{id}` | `rules.manage` | Update draft |
+| `POST` | `/rules/{id}/validate` | `rules.manage` | Validate and return impact summary |
+| `POST` | `/rules/{id}/publish` | `rules.publish` | Publish and set effective time |
+| `POST` | `/rules/{id}/archive` | `rules.manage` | Archive |
+
+Effective rules cannot be modified in place; changes must create a new version.
+
+### 4.13 Dashboards, Statistics & Reports
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/dashboards/student` | Student | Student home aggregation |
+| `GET` | `/dashboards/teacher` | Teacher | Teacher pending and scope statistics |
+| `GET` | `/dashboards/admin` | Admin | School-wide dashboard |
+| `GET` | `/reports/participation` | `reports.read` | Participation rate |
+| `GET` | `/reports/completion` | `reports.read` | Compliance rate |
+| `GET` | `/reports/service-hours` | `reports.read` | Service hours |
+| `GET` | `/reports/review-efficiency` | `reports.read` | Review efficiency |
+| `POST` | `/exports` | `exports.create` | Create export job |
+| `GET` | `/exports/{jobId}` | Creator/admin | Query export job |
+| `GET` | `/exports/{jobId}/download` | Creator/admin | Get short-lived download URL |
+
+Dashboard endpoints are for homepage aggregation only; business details are still obtained through resource endpoints. All page data must not be concentrated into a single "mega endpoint."
+
+### 4.14 Imports
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/imports/templates/{type}` | `imports.create` | Download template |
+| `POST` | `/imports` | `imports.create` | Create import job |
+| `GET` | `/imports/{id}` | `imports.read` | Import detail |
+| `POST` | `/imports/{id}/validate` | `imports.create` | Pre-validate |
+| `GET` | `/imports/{id}/errors` | `imports.read` | Error list/file |
+| `POST` | `/imports/{id}/commit` | `imports.commit` | Confirm import |
+| `POST` | `/imports/{id}/cancel` | `imports.create` | Cancel |
+
+Imports must validate before commit. Duplicate imports are prevented by source file hash, business unique keys, and idempotency keys working together.
+
+### 4.15 Users, Roles & Audit
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/users` | `users.read` | User list |
+| `POST` | `/users` | `users.manage` | Create user |
+| `PATCH` | `/users/{id}` | `users.manage` | Update user |
+| `POST` | `/users/{id}/unlock` | `users.manage` | Unlock |
+| `POST` | `/users/{id}/reset-password` | `users.manage` | Admin-triggered reset |
+| `GET` | `/roles` | `roles.read` | Role list |
+| `POST` | `/roles` | `roles.manage` | Create role |
+| `PATCH` | `/roles/{id}` | `roles.manage` | Update role permissions |
+| `GET` | `/permissions` | `roles.read` | Permission code catalog |
+| `GET` | `/audit-logs` | `auditLogs.read` | Operation audit |
+| `GET` | `/login-logs` | `securityLogs.read` | Login logs |
+| `GET` | `/system/settings` | `settings.read` | System parameters |
+| `PATCH` | `/system/settings` | `settings.manage` | Update allowed parameters |
+
+### 4.16 School Info
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/school/info` | Authenticated | School basic info (name, Student Development Center, contact, etc.) |
+
+Example response:
+
+```json
+{
+  "data": {
+    "name": "Example Middle School",
+    "studentDevCenter": "Student Development Center",
+    "contact": "dev-center@example.edu.cn",
+    "academicYear": "2025-2026"
+  }
+}
+```
+
+This endpoint returns low-frequency school-level configuration info; the frontend can fetch and cache it during app initialization. The difference from `/system/settings`: `/school/info` is available to all authenticated users and returns school display-level info; `/system/settings` is for administrators and returns configurable system parameters.
+
+---
+
+## 5. Permission Matrix
+
+| Resource/Action | Student | Teacher | SDC Admin | System Admin |
+| --- | --- | --- | --- | --- |
+| Browse projects | Visible scope | Visible scope | School-wide | School-wide |
+| Create/publish projects | No | Authorized scope | Yes | Per config |
+| Submit event proposals | Own | No | Proxy requires special permission | No |
+| Approve event proposals | No | Evaluate/recommend within data scope; approve per permission | School-wide approval | Read-only by default |
+| Register | Own | No | Proxy requires special permission | No |
+| Submit service records | Own | Proxy requires special permission | Proxy requires special permission | No |
+| Review records | No | Within data scope | School-wide | Read-only by default |
+| Appeal decisions | No | Per authorization | Yes | Read-only by default |
+| View accounts | Own | Read-only within data scope | School-wide | Per permission |
+| Adjust/reverse accounts | No | No | Special permission | Special permission |
+| Rule management | No | Read-only | Yes | System parameters primarily |
+| Import/export | Own data not exported separately | Within scope | School-wide | System-level |
+| User/role management | No | No | Partial users | Yes |
+| Audit logs | Own timeline | In-scope business logs | School-wide business logs | All |
+
+The permission matrix is for default design; final configuration is determined by school role assignments.
+
+---
+
+## 6. Phase 3 Reserved APIs: POV
+
+The following endpoints may return `404` or a clear `FEATURE_DISABLED` in Phase 2; when enabled, they still use `/api/v1`:
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/pov-sessions` | Create on-site POV session |
+| `GET` | `/pov-sessions/{id}` | POV status |
+| `POST` | `/pov-sessions/{id}/check-ins` | Submit GPS/timestamp |
+| `POST` | `/pov-sessions/{id}/media` | Associate desensitized materials |
+| `POST` | `/pov-sessions/{id}/witness-invitations` | Create witness QR code/short-lived credentials |
+| `POST` | `/witness-confirmations` | Witness confirmation |
+| `POST` | `/pov-sessions/{id}/peer-confirmations` | Group member mutual verification |
+| `POST` | `/pov-sessions/{id}/guardian-endorsements` | Guardian endorsement |
+| `POST` | `/pov-sessions/{id}/submit` | Submit for POV review |
+| `GET` | `/pov-review-queue` | Web admin POV queue |
+| `GET` | `/service-records/{id}/risk-assessment` | AI/rule risk results |
+| `POST` | `/verification-calls` | Create random spot-check task |
+| `POST` | `/verification-calls/{id}/result` | Record verification result |
+| `GET` | `/attestations/{id}` | Evidence storage status |
+
+POV ultimately generates or links to a standard `ServiceRecord`; after review approval, crediting still occurs through standard account transactions.
+
+---
+
+## 7. Phase 4 Reserved APIs
+
+### 7.1 Redemption
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/redemption-items` | Student-visible redemption catalog |
+| `GET` | `/redemption-items/{id}` | Redemption item detail |
+| `POST` | `/redemption-orders` | Create redemption request |
+| `GET` | `/redemption-orders` | Own or admin-scope orders |
+| `POST` | `/redemption-orders/{id}/cancel` | Cancel |
+| `POST` | `/redemption-orders/{id}/decisions` | Approve/reject |
+| `POST` | `/redemption-orders/{id}/fulfill` | Mark fulfilled |
+
+### 7.2 Borrowing
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/borrowing/eligibility` | Query own eligibility and limit |
+| `POST` | `/borrowing-applications` | Create application |
+| `GET` | `/borrowing-applications` | Query applications |
+| `POST` | `/borrowing-applications/{id}/decisions` | Approve/reject |
+| `POST` | `/borrowing-applications/{id}/repayments` | Record repayment |
+
+### 7.3 Value-Added & Recognition
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/recognition-levels` | Recognition tiers |
+| `GET` | `/students/{id}/recognitions` | Student recognitions |
+| `GET` | `/bonus-rules` | Value-added rules |
+| `POST` | `/bonus-rules` | Create rule |
+| `POST` | `/bonus-rules/{id}/publish` | Publish rule |
+| `GET` | `/bonus-awards` | Bonus award transactions |
+
+These capabilities are controlled by feature flags. When disabled, the frontend does not display action entry points, and the backend rejects mutation requests.
+
+---
+
+## 8. Caching & Performance Conventions
+
+- Low-frequency resources such as dictionaries, grades, and categories may use `ETag`/`If-None-Match`.
+- Account, review status, and permission data must not be cached long-term.
+- Lists must be paginated; large data exports use async jobs.
+- Dashboards allow short-lived aggregate caching and return `generatedAt`.
+- API should return data sufficient to complete page tasks, avoiding obvious row-by-row N+1 requests.
+
+---
+
+## 9. Audit & Privacy
+
+- Each mutation request is associated with `requestId`, operator, time, source, and business object.
+- Login, permission changes, review decisions, account changes, import/export, and rule publication must write audit logs.
+- API must not return unnecessary phone numbers, emails, or guardian information in list responses.
+- Sensitive fields are desensitized by permission; download URLs are short-lived.
+- Frontend must not write access tokens, sensitive materials, or complete error objects to browser logs.
+- Audit logs cannot be modified or deleted through regular admin APIs.
+
+---
+
+## 10. Contract Delivery & Change Management
+
+### 10.1 OpenAPI
+
+Before backend implementation, a machine-readable OpenAPI 3.x file should be generated from this document, including at minimum:
+
+- Paths, methods, permissions, and request/response schemas.
+- Enums, statuses, and error codes.
+- Example data.
+- Pagination, idempotency, and concurrency headers.
+- Phase 3 and Phase 4 endpoint markers.
+
+The React frontend API Client and Mock Server should be generated from or validated against the same OpenAPI contract.
+
+### 10.2 Change Rules
+
+- Adding optional fields is a compatible change.
+- Deleting fields, changing types, changing enum semantics, or tightening existing behavior is a breaking change.
+- Breaking changes go into a new API major version.
+- When enums add new values, the frontend must have unknown-value fallback rendering.
+- API changes must simultaneously update OpenAPI, Mock, contract tests, and this document.
+
+### 10.3 Definition of Done
+
+An endpoint is considered complete only when all of the following are met:
+
+- OpenAPI is defined and passes validation.
+- Permission and data scope tests pass.
+- Normal, validation failure, forbidden, concurrent conflict, and duplicate request behaviors are clearly defined.
+- Frontend does not depend on undocumented fields.
+- Audit and idempotency requirements are implemented per risk level.
+
+---
+
+## 11. Phase 2 API Acceptance Scenarios
+
+1. Student submits an event proposal; teacher requests changes; student resubmits; admin approves and generates an official project draft.
+2. Admin or responsible teacher publishes the project generated from the proposal; other students query and register; teacher processes the registration list.
+3. Student creates a draft, uploads materials, and submits a service record.
+4. Teacher returns the record; student supplements and resubmits; teacher approves.
+5. Review approval generates account transaction and updates progress in a single transaction.
+6. Student initiates an appeal; Student Development Center processes it and produces a complete timeline.
+7. Admin imports a historical ledger, views validation errors, and confirms valid data.
+8. Teacher can only access authorized grades/classes; out-of-scope access returns `403` or invisible `404`.
+9. Duplicate submission, duplicate approval, duplicate review, and duplicate account adjustments do not generate duplicate projects or transactions.
+10. Concurrent edits return clear conflicts; other users' modifications are not silently overwritten.
+11. Web passes all end-to-end acceptance without WeChat or other IM integration.
+
+---
+
+## 12. Frontend Implementation Conventions
+
+### 12.1 API Client Layer
+
+The frontend accesses all backend data through a unified API Client layer (`src/app/api/client.ts`). The API Client is grouped by resource domain (e.g., `api.projects`, `api.serviceRecords`, `api.accounts`), with each method corresponding to a REST endpoint, returning `Promise<T>`.
+
+In the current phase, the API Client uses Mock data as its foundation, simulating network latency via `delay()`. When the backend is ready, method implementations can be replaced with `fetch` calls without any component-level changes.
+
+### 12.2 Data Fetching Pattern
+
+Components use `useState` + `useEffect` pattern to fetch data, without directly importing Mock constants:
+
+```tsx
+// ✅ Correct: Fetch through API Client
+const [projects, setProjects] = useState<Project[]>([]);
+useEffect(() => {
+  api.projects.list().then(setProjects).catch(() => {});
+}, []);
+
+// ❌ Wrong: Directly importing Mock data
+import { MOCK_PROJECTS } from '../../mock/data';
+```
+
+When loading state is needed, return a loading placeholder when data is `null` or empty array:
+
+```tsx
+const [progress, setProgress] = useState<StudentProgress | null>(null);
+useEffect(() => {
+  api.students.progress(user?.studentId || 'std_001').then(setProgress).catch(() => {});
+}, [user?.studentId]);
+
+if (!progress) return <div className="p-4 lg:p-6">Loading...</div>;
+```
+
+### 12.3 Type Sources
+
+TypeScript types (e.g., `Project`, `ServiceRecord`, `Account`) are still imported from `../../mock/data` because the Mock data file also serves as the type definition source. Once backend OpenAPI-generated types are available, the import path can be switched to the generated type files.
+
+### 12.4 Dashboard Aggregation Endpoints
+
+The student home page uses `GET /dashboards/student` to fetch progress, account, recent records, and recommended projects in one call. The admin dashboard uses `GET /dashboards/admin` to fetch statistics, pending review queue, and active projects. Aggregation endpoints are only for home pages; detail pages still use resource endpoints.
+
+### 12.5 Organization & School Info
+
+Organization lists are fetched via `api.organizations.list()`, and school info is fetched via `api.school.getInfo()`. These low-frequency data can be fetched on component mount and cached in component state.
