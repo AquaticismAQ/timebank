@@ -395,3 +395,206 @@ Administrators include Student Development Center administrators and system admi
 
 ---
 
+## 8. Phase 2 Core Operation Flows
+
+### 8.1 Project Publication & Registration
+
+```text
+Teacher/Admin creates project draft
+→ Complete time, location, capacity, service tasks, and crediting rules
+→ Publish
+→ Students register in Project Center
+→ System confirms per rules or enters waitlist
+→ Teacher views and manages registration list
+→ After project ends, student initiates service record from registration
+```
+
+### 8.2 Student-Initiated Activity & Approval
+
+```text
+Student creates activity proposal draft
+→ Fills in activity goals, implementation plan, organization, safety measures, and recruitment plan
+→ Submit for approval
+→ Teacher/Admin evaluates
+   → Request revision: Student creates new revision per feedback and resubmits
+   → Reject: Record standardized reason and explanation
+   → Recommend approval: Transfer to Student Development Center for final review
+   → Approve: Generate official project draft and assign responsible teacher
+→ Teacher/Admin refines project rules and officially publishes
+→ Other students register in Project Center
+→ Student initiator participates in preparation and registration collaboration via project page
+```
+
+Student initiators can only access explicitly authorized project preparation information, and cannot independently modify review rules, approve registrations, credit hours, or publish projects unless separately granted corresponding permissions.
+
+### 8.3 Self-Initiated Service Record & Review
+
+```text
+Student creates new record and saves draft
+→ Fills in service information and uploads proof
+→ Confirm and submit
+→ Teacher reviews
+   → Approve: Generate time-coin transaction and update progress
+   → Return: Student supplements materials and resubmits
+   → Reject: Record reason; student can initiate appeal
+→ Student views results, account, and progress
+```
+
+### 8.4 Appeal
+
+```text
+Student initiates appeal from record detail
+→ Fills in dispute and supplements materials
+→ Student Development Center enters appeal queue
+→ Uphold original decision / Change to approved / Request additional supplement
+→ System notifies student and records in timeline
+```
+
+### 8.5 Historical Ledger Import
+
+```text
+Administrator downloads template
+→ Uploads historical ledger
+→ System parses and pre-validates
+→ Administrator views summary and row-by-row errors
+→ Correct and re-upload or confirm valid data
+→ Backend imports asynchronously
+→ Generates service records, account transactions, and import audit report
+```
+
+---
+
+## 9. Phase 3 Extension Reservations: POV
+
+The Phase 2 Web frontend reserves the following capabilities, but they are disabled by default via feature toggles:
+
+### 9.1 Student-Side Reservations
+
+- "On-site POV" entry point and POV record status.
+- "POV Evidence" read-only section in Web service record detail.
+- Witness, group member mutual verification, guardian endorsement, and AI initial review status timeline.
+- View POV records and appeal results submitted from the Mini Program via Web.
+
+### 9.2 Admin-Side Reservations
+
+- POV review queue.
+- AI risk score, risk labels, and evidence metadata section.
+- Random spot-check tasks, witness verification results, and public challenge processing.
+- Whitelist bases and witness credit management.
+- Evidence storage status and TxHash view entry.
+
+### 9.3 Boundaries
+
+- The Mini Program handles on-site capture; Web handles complete management and manual processing.
+- The Mini Program cannot create independent account balances or independent review statuses.
+- POV data is integrated through the same `/api/v1` resource system.
+
+---
+
+## 10. Phase 4 Extension Reservations: Redemption, Borrowing & Value-Added
+
+### 10.1 Student-Side Reservations
+
+- Redemption center, redemption detail, confirmation, and redemption history.
+- Borrowing eligibility, application, approval progress, and repayment plan.
+- Honor tier, continuous service, and special project bonus descriptions.
+
+### 10.2 Admin-Side Reservations
+
+- Redemption catalog, inventory/quota, exchange rates, and approval.
+- Borrowing limits, applicable conditions, approval, and overdue tracking.
+- Value-added rules, rule scope, and reward transactions.
+- Reconciliation, statistics, and exception handling.
+
+### 10.3 Enablement Principles
+
+- Phase 2 can complete routing, permission codes, and data model reservations, but does not open them to students by default.
+- Unenabled features uniformly display "Not yet available"; blank pages or failing APIs must not be used as substitutes.
+- Once enabled, unified account transactions are still reused; balances are not directly modified.
+
+---
+
+## 11. Responsive Layout & Key Components
+
+### 11.1 Breakpoint Strategy
+
+- Mobile: Single column, bottom navigation, card lists, bottom action area.
+- Tablet: Dual-column detail or list + filter.
+- Desktop: Fixed sidebar, data tables, list and detail side-by-side, batch operations.
+
+Specific breakpoints use Tailwind CSS unified configuration; business pages must not define inconsistent breakpoint systems.
+
+### 11.2 Shared UI Patterns
+
+- App shell, page title, breadcrumb, and workspace switcher.
+- Status badges and status timelines.
+- Search, filter drawer, sort, and selected conditions display.
+- Data tables and mobile card lists.
+- Multi-step forms, file upload, and material preview.
+- Confirmation dialogs, bottom action panels, and reason input.
+- Empty states, skeleton screens, error states, and retry.
+- In-app notifications, toast, and global task progress.
+
+### 11.3 Unified Status Language
+
+The same business status uses unified names, colors, and descriptions across all pages. Pages must not create synonymous statuses like "processing" or "under review" on their own; status definitions are governed by `APIContract.md`.
+
+---
+
+## 12. Frontend Module Organization
+
+Recommended organization by business domain, not by page type:
+
+```text
+auth
+workspace
+dashboard
+projects
+applications
+event-proposals
+service-records
+reviews
+students
+organizations
+accounts
+progress
+appeals
+notifications
+reports
+imports-exports
+administration
+future-pov
+future-redemption
+future-borrowing
+```
+
+Each business domain contains its routing, pages, components, queries, form validation, and permission mapping. Cross-domain capabilities such as authentication, file upload, error handling, design tokens, and API client are placed in a shared foundation layer.
+
+---
+
+## 13. Frontend-Driven Delivery Sequence
+
+1. Establish page map, role-permission matrix, and unified status dictionary.
+2. Build React/Tailwind app shell, login, routing, permission gates, and Mock API.
+3. Prioritize the minimal closed loop of student record submission and teacher review.
+4. Add project registration, account transactions, and progress tracking.
+5. Complete admin base data, rules, import/export, and audit capabilities.
+6. Connect to real RESTful API, replacing Mock with contract tests.
+7. Complete mobile, desktop, exception states, permissions, and end-to-end acceptance testing.
+8. Retain Phase 3 and Phase 4 routing and permission entry points, but do not load corresponding modules when feature toggles are off.
+
+---
+
+## 14. Phase 2 Acceptance Criteria
+
+- Students, teachers, and administrators can log in with independent accounts and see the correct workspace.
+- When permissions are insufficient, the frontend does not display entry points; direct route access is also rejected by the backend.
+- Students can complete project registration, record submission, material supplement, appeal, and result query.
+- Students can create, submit, revise, and withdraw activity proposals, and view approval comments and linked official projects.
+- Teachers can complete project management, registration management, student activity proposal evaluation, record review, return, and progress viewing.
+- Administrators can manage activity proposal review rules and queues, and manage school-wide base data, rules, accounts, statistics, import/export, and audit logs.
+- Approved reviews generate account transactions and automatically update student progress.
+- The Web runs completely without WeChat or other IM integration.
+- Mobile completes all student core tasks; desktop supports efficient batch operations for teachers and administrators.
+- Network failure, duplicate submission, session expiration, file failure, and concurrent modification all have clear feedback and recovery paths.
+- Phase 3 and Phase 4 entry points are controlled by feature toggles and do not affect Phase 2 stability.
