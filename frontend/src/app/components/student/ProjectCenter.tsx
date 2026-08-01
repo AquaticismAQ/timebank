@@ -1,0 +1,261 @@
+import { useState, useEffect, useMemo } from 'react';
+import { Search, X, MapPin, Clock, Users, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADE_LABEL_KEYS, type Project, type ProjectStatus } from '../../mock/data';
+import { toast } from 'sonner';
+import { api } from '../../api/client';
+
+const colorMap: Record<string, string> = {
+  gray: 'bg-muted text-muted-foreground',
+  blue: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+  yellow: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
+  green: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+  orange: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+  red: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+  purple: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
+};
+
+type FilterStatus = ProjectStatus | 'all' | 'canApply';
+
+export function ProjectCenter() {
+  const { t } = useTranslation();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [applied, setApplied] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    api.projects.list().then(setProjects).catch(() => {});
+  }, []);
+
+  const filtered = useMemo(() => {
+    return projects.filter(p => {
+      const matchSearch = !search || p.title.includes(search) || p.organizationName.includes(search) || p.location.includes(search);
+      const matchStatus = filterStatus === 'all' ? true : filterStatus === 'canApply' ? p.status === 'registrationOpen' : p.status === filterStatus;
+      const matchCat = filterCategory === 'all' || p.categoryId === filterCategory;
+      return matchSearch && matchStatus && matchCat;
+    });
+  }, [search, filterStatus, filterCategory]);
+
+  const handleApply = (proj: Project) => {
+    if (applied.has(proj.id) || proj.myApplicationStatus) { toast.info(t('student.projects.alreadyApplied')); return; }
+    if (proj.status !== 'registrationOpen') { toast.error(t('student.projects.notAccepting')); return; }
+    setApplied(prev => new Set([...prev, proj.id]));
+    toast.success(t('student.projects.appliedSuccess', { title: proj.title }));
+  };
+
+  const getApplyBtnText = (proj: Project) => {
+    if (applied.has(proj.id) || proj.myApplicationStatus === 'pending') return t('student.projects.pendingConfirm');
+    if (proj.myApplicationStatus === 'confirmed') return t('student.projects.registered');
+    if (proj.myApplicationStatus === 'completed') return t('student.projects.completed');
+    if (proj.myApplicationStatus === 'waitlisted') return t('student.projects.waitlist');
+    if (proj.status !== 'registrationOpen') return t('student.projects.registrationClosed');
+    if (proj.enrolledCount >= proj.capacity) return t('student.projects.joinWaitlist');
+    return t('student.projects.registerNow');
+  };
+
+  const statusOptions = [
+    { value: 'all', label: t('student.projects.all') },
+    { value: 'canApply', label: t('student.projects.available') },
+    { value: 'inProgress', label: t('student.projects.inProgress') },
+    { value: 'completed', label: t('student.projects.completed') },
+  ];
+
+  const FilterPanel = () => (
+    <div className="space-y-4">
+      <div>
+        <div className="text-xs text-muted-foreground font-medium mb-2">{t('student.projects.statusFilter')}</div>
+        <div className="flex flex-col gap-1">
+          {statusOptions.map(opt => (
+            <button key={opt.value} onClick={() => setFilterStatus(opt.value as FilterStatus)}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                filterStatus === opt.value ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'text-foreground hover:bg-accent'
+              }`}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="text-xs text-muted-foreground font-medium mb-2">{t('student.projects.serviceCategory')}</div>
+        <div className="flex flex-col gap-1">
+          <button onClick={() => setFilterCategory('all')}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+              filterCategory === 'all' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'text-foreground hover:bg-accent'
+            }`}>
+            {t('student.projects.allCategories')}
+          </button>
+          {SERVICE_CATEGORIES.map(cat => (
+            <button key={cat.id} onClick={() => setFilterCategory(cat.id)}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                filterCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'text-foreground hover:bg-accent'
+              }`}>
+              {cat.name.startsWith('mock.') ? t(cat.name) : cat.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="p-4 lg:p-6">
+      <div className="mb-4 lg:mb-5 flex items-center justify-between">
+        <div>
+          <h2 className="text-foreground">{t('student.projects.title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('student.projects.count', { count: filtered.length })}</p>
+        </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="flex gap-2 mb-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder={t('student.projects.searchPlaceholder')}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+        {/* Mobile filter toggle */}
+        <button onClick={() => setShowMobileFilters(!showMobileFilters)}
+          className={`lg:hidden flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm transition-colors ${
+            showMobileFilters ? 'bg-[oklch(0.488_0.243_264.376)] text-white border-[oklch(0.488_0.243_264.376)]' : 'border-border text-muted-foreground hover:bg-accent'
+          }`}>
+          <SlidersHorizontal className="w-4 h-4" />
+          {t('common.filter')}
+        </button>
+      </div>
+
+      {/* Mobile filter panel */}
+      {showMobileFilters && (
+        <div className="lg:hidden bg-card border border-border rounded-xl p-4 mb-4">
+          <div className="flex gap-2 flex-wrap mb-3">
+            {statusOptions.map(opt => (
+              <button key={opt.value} onClick={() => setFilterStatus(opt.value as FilterStatus)}
+                className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                  filterStatus === opt.value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
+                }`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => setFilterCategory('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${filterCategory === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+              {t('student.projects.allCategories')}
+            </button>
+            {SERVICE_CATEGORIES.map(cat => (
+              <button key={cat.id} onClick={() => setFilterCategory(cat.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${filterCategory === cat.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+                {cat.name.startsWith('mock.') ? t(cat.name) : cat.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop: sidebar + grid layout */}
+      <div className="lg:flex lg:gap-6">
+
+        {/* Desktop filter sidebar */}
+        <aside className="hidden lg:block w-48 xl:w-56 shrink-0">
+          <div className="bg-card border border-border rounded-2xl p-4 sticky top-4">
+            <FilterPanel />
+            {(filterStatus !== 'all' || filterCategory !== 'all') && (
+              <button onClick={() => { setFilterStatus('all'); setFilterCategory('all'); }}
+                className="mt-3 w-full text-xs text-muted-foreground hover:text-destructive transition-colors text-center">
+                {t('student.projects.clearFilter')}
+              </button>
+            )}
+          </div>
+        </aside>
+
+        {/* Project grid */}
+        <div className="flex-1 min-w-0">
+          {filtered.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <Search className="w-10 h-10 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">{t('student.projects.noMatch')}</p>
+              <button onClick={() => { setSearch(''); setFilterStatus('all'); setFilterCategory('all'); }}
+                className="mt-2 text-xs text-primary hover:underline">
+                {t('student.projects.clearAllFilters')}
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {filtered.map(proj => {
+                const status = PROJECT_STATUS_LABELS[proj.status];
+                const isExpanded = expandedId === proj.id;
+                const btnText = getApplyBtnText(proj);
+                const isApplied = applied.has(proj.id) || (proj.myApplicationStatus && ['confirmed', 'completed', 'waitlisted', 'pending'].includes(proj.myApplicationStatus));
+
+                return (
+                  <div key={proj.id} className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col">
+                    <div className="p-4 flex-1">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
+                        <span className="text-xs text-muted-foreground">{t(proj.categoryName)}</span>
+                      </div>
+                      <h3 className="text-sm text-foreground font-medium leading-snug mb-2">{proj.title}</h3>
+                      <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{proj.summary}</p>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-3">
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{proj.location}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 shrink-0" />
+                          <span>{proj.recognizedMinutes / 60} {t('common.hours')}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Users className="w-3 h-3 shrink-0" />
+                          <span>{proj.enrolledCount}/{proj.capacity} {t('common.people')}</span>
+                        </div>
+                        <div>{proj.startAt.slice(0, 10)}</div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="border-t border-border pt-3 mb-3 space-y-1.5 text-xs text-muted-foreground">
+                          <p><span className="font-medium text-foreground">{t('student.projects.details')}</span>{proj.description}</p>
+                          <p><span className="font-medium text-foreground">{t('student.projects.organizer')}</span>{proj.organizationName}</p>
+                          <p><span className="font-medium text-foreground">{t('student.projects.owner')}</span>{proj.ownerName}</p>
+                          <p><span className="font-medium text-foreground">{t('student.projects.registrationDeadline')}</span>{proj.registrationCloseAt.slice(0, 10)}</p>
+                          <p><span className="font-medium text-foreground">{t('student.projects.evidenceReq')}</span>{proj.evidenceRequirements}</p>
+                          <p><span className="font-medium text-foreground">{t('student.projects.eligibleGrades')}</span>{proj.eligibleGrades.map(g => t(GRADE_LABEL_KEYS[g])).join(', ')}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                      <button onClick={() => setExpandedId(isExpanded ? null : proj.id)}
+                        className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                        {isExpanded ? <><ChevronUp className="w-3 h-3" /> {t('student.projects.collapse')}</> : <><ChevronDown className="w-3 h-3" /> {t('student.projects.viewDetails')}</>}
+                      </button>
+                      <button onClick={() => handleApply(proj)}
+                        disabled={!!isApplied && proj.myApplicationStatus !== 'pending'}
+                        className={`px-4 py-1.5 rounded-xl text-xs transition-colors ${
+                          isApplied ? 'bg-muted text-muted-foreground cursor-default' :
+                          proj.status === 'registrationOpen' ? 'bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90' :
+                          'bg-muted text-muted-foreground cursor-not-allowed'
+                        }`}>
+                        {btnText}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

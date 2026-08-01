@@ -1,0 +1,225 @@
+import { useState, useEffect } from 'react';
+import { ArrowUpRight, ArrowDownLeft, Lock, ChevronDown, ChevronUp, Gift, Building2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { TRANSACTION_TYPE_LABELS, RECOGNITION_LEVELS, type Account, type AccountTransaction } from '../../mock/data';
+import { api } from '../../api/client';
+import { useAuth } from '../../App';
+
+const colorMap: Record<string, string> = {
+  green: 'text-green-600 dark:text-green-400',
+  orange: 'text-orange-600 dark:text-orange-400',
+  blue: 'text-blue-600 dark:text-blue-400',
+  yellow: 'text-yellow-600 dark:text-yellow-400',
+  red: 'text-red-600 dark:text-red-400',
+  purple: 'text-purple-600 dark:text-purple-400',
+};
+
+const txBg: Record<string, string> = {
+  green: 'bg-green-100 dark:bg-green-900/30',
+  orange: 'bg-orange-100 dark:bg-orange-900/30',
+  blue: 'bg-blue-100 dark:bg-blue-900/30',
+  yellow: 'bg-yellow-100 dark:bg-yellow-900/30',
+  red: 'bg-red-100 dark:bg-red-900/30',
+  purple: 'bg-purple-100 dark:bg-purple-900/30',
+};
+
+export function AccountPage() {
+  const { t } = useTranslation();
+  const { user } = useAuth();
+  const [account, setAccount] = useState<Account | null>(null);
+  const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.accounts.get(user?.studentId || 'std_001').then(setAccount).catch(() => {});
+    api.accounts.transactions(user?.studentId || 'std_001').then(setTransactions).catch(() => {});
+  }, [user?.studentId]);
+
+  if (!account) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
+
+  const currentLevel = RECOGNITION_LEVELS.find((l, i) =>
+    account.totalEarned >= l.minHours && account.totalEarned < (RECOGNITION_LEVELS[i + 1]?.minHours ?? Infinity)
+  ) || RECOGNITION_LEVELS[0];
+  const nextLevel = RECOGNITION_LEVELS.find(l => l.minHours > account.totalEarned);
+
+  return (
+    <div className="p-4 lg:p-6">
+      <h2 className="text-foreground mb-5">{t('student.account.title')}</h2>
+
+      {/* ── Desktop: 2-column ───────────────────────────────────────────── */}
+      <div className="lg:grid lg:grid-cols-5 lg:gap-6">
+
+        {/* Left — balance + level */}
+        <div className="lg:col-span-2 space-y-4">
+
+          {/* Balance card */}
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 dark:border-transparent dark:from-[oklch(0.488_0.243_264.376)] dark:to-[oklch(0.488_0.243_264.376)]/75 rounded-2xl p-6 text-blue-900 dark:text-white">
+            <div className="text-sm text-blue-500 dark:text-white/60 mb-1">{t('student.account.currentBalance')}</div>
+            <div className="flex items-end gap-2 mb-5">
+              <span className="text-5xl font-bold">{account.balance}</span>
+              <span className="text-lg text-blue-400 dark:text-white/60 mb-1">{t('student.account.coinsBalance')}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-blue-200/50 dark:bg-white/15 rounded-xl p-2">
+                <div className="text-xl font-semibold">{account.totalEarned}</div>
+                <div className="text-xs text-blue-500 dark:text-white/60">{t('student.account.totalEarned')}</div>
+              </div>
+              <div className="bg-blue-200/50 dark:bg-white/15 rounded-xl p-2">
+                <div className="text-xl font-semibold">{account.totalRedeemed}</div>
+                <div className="text-xs text-blue-500 dark:text-white/60">{t('student.account.exchanged')}</div>
+              </div>
+              <div className="bg-blue-200/50 dark:bg-white/15 rounded-xl p-2">
+                <div className="text-xl font-semibold">{account.frozen}</div>
+                <div className="text-xs text-blue-500 dark:text-white/60">{t('student.account.frozen')}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recognition level */}
+          <div className="bg-card border border-border rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-foreground">{t('student.account.honorLevel')}</h3>
+              {nextLevel && (
+                <div className="text-xs text-muted-foreground">{nextLevel.minHours - account.totalEarned} {t('student.account.distanceTo')}{t(nextLevel.label)}</div>
+              )}
+            </div>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-3xl">{currentLevel.icon}</span>
+              <div>
+                <div className="text-foreground font-medium">{t(currentLevel.label)}</div>
+                <div className="text-xs text-muted-foreground">{t('student.account.totalEarnedLabel')}: {account.totalEarned} {t('common.coins')}</div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {RECOGNITION_LEVELS.slice(1).map(level => {
+                const prog = Math.min(account.totalEarned / level.minHours, 1);
+                const reached = account.totalEarned >= level.minHours;
+                return (
+                  <div key={level.level} className="flex items-center gap-3">
+                    <span className="text-lg w-6 text-center shrink-0">{level.icon}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between text-xs mb-0.5">
+                        <span className={reached ? 'text-foreground' : 'text-muted-foreground'}>{t(level.label)}</span>
+                        <span className="text-muted-foreground">{level.minHours}h</span>
+                      </div>
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${reached ? 'bg-primary' : 'bg-primary/40'}`} style={{ width: `${prog * 100}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Feature gates */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: t('student.account.exchangeCenter'), desc: t('student.account.exchangeDesc'), icon: Gift },
+              { label: t('student.account.loanApplication'), desc: t('student.account.loanDesc'), icon: Building2 },
+            ].map(item => (
+              <div key={item.label} className="bg-muted/50 border border-border/50 rounded-xl p-4 opacity-60">
+                <item.icon className="w-5 h-5 text-muted-foreground mb-1.5" />
+                <div className="text-sm text-foreground">{item.label}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{item.desc}</div>
+                <div className="mt-2 text-xs bg-muted text-muted-foreground px-2 py-1 rounded-md inline-block">{t('student.account.notAvailable')}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right — transaction list */}
+        <div className="lg:col-span-3 mt-4 lg:mt-0">
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-border">
+              <h3 className="text-sm font-medium text-foreground">{t('student.account.transactions')}</h3>
+            </div>
+
+            {transactions.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground text-sm">{t('student.account.noTransactions')}</div>
+            ) : (
+              <>
+                {/* Desktop table view */}
+                <table className="hidden lg:table w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left px-4 py-2.5 text-xs text-muted-foreground font-medium">{t('student.account.type')}</th>
+                      <th className="text-left px-4 py-2.5 text-xs text-muted-foreground font-medium">{t('student.account.description')}</th>
+                      <th className="text-left px-4 py-2.5 text-xs text-muted-foreground font-medium">{t('student.account.time')}</th>
+                      <th className="text-right px-4 py-2.5 text-xs text-muted-foreground font-medium">{t('student.account.change')}</th>
+                      <th className="text-right px-4 py-2.5 text-xs text-muted-foreground font-medium">{t('student.account.balance')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {transactions.map(tx => {
+                      const typeInfo = TRANSACTION_TYPE_LABELS[tx.type];
+                      return (
+                        <tr key={tx.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${txBg[typeInfo.color]}`}>
+                                {typeInfo.sign === '+' ? <ArrowUpRight className={`w-4 h-4 ${colorMap[typeInfo.color]}`} /> :
+                                 typeInfo.sign === '-' ? <ArrowDownLeft className={`w-4 h-4 ${colorMap[typeInfo.color]}`} /> :
+                                 <Lock className={`w-4 h-4 ${colorMap[typeInfo.color]}`} />}
+                              </div>
+                              <span className="text-xs text-foreground">{t(typeInfo.label)}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate">
+                            {tx.relatedRecordTitle || tx.description}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{tx.createdAt.slice(0, 10)}</td>
+                          <td className={`px-4 py-3 text-right font-medium ${colorMap[typeInfo.color]}`}>
+                            {typeInfo.sign}{tx.amount}
+                          </td>
+                          <td className="px-4 py-3 text-right text-xs text-muted-foreground">{tx.balanceAfter}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {/* Mobile: expandable cards */}
+                <div className="lg:hidden divide-y divide-border">
+                  {transactions.map(tx => {
+                    const typeInfo = TRANSACTION_TYPE_LABELS[tx.type];
+                    const isExpanded = expandedId === tx.id;
+                    return (
+                      <div key={tx.id}>
+                        <button className="w-full flex items-center gap-3 p-4 text-left"
+                          onClick={() => setExpandedId(isExpanded ? null : tx.id)}>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${txBg[typeInfo.color]}`}>
+                            {typeInfo.sign === '+' ? <ArrowUpRight className={`w-5 h-5 ${colorMap[typeInfo.color]}`} /> :
+                             typeInfo.sign === '-' ? <ArrowDownLeft className={`w-5 h-5 ${colorMap[typeInfo.color]}`} /> :
+                             <Lock className={`w-5 h-5 ${colorMap[typeInfo.color]}`} />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-foreground">{t(typeInfo.label)}</span>
+                              <span className={`font-semibold ${colorMap[typeInfo.color]}`}>{typeInfo.sign}{tx.amount}</span>
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">{tx.relatedRecordTitle || tx.description}</div>
+                            <div className="text-xs text-muted-foreground">{tx.createdAt.slice(0, 10)}</div>
+                          </div>
+                          {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
+                        </button>
+                        {isExpanded && (
+                          <div className="px-4 pb-4 border-t border-border pt-3 space-y-2 text-xs text-muted-foreground">
+                            <div className="flex justify-between"><span>{t('student.account.balanceBefore')}</span><span className="text-foreground">{tx.balanceBefore} {t('common.coins')}</span></div>
+                            <div className="flex justify-between"><span>{t('student.account.balanceAfter')}</span><span className="text-foreground">{tx.balanceAfter} {t('common.coins')}</span></div>
+                            <div className="flex justify-between"><span>{t('student.account.operator')}</span><span className="text-foreground">{tx.operatorName}</span></div>
+                            <div><span>{t('student.account.description')}: </span><span className="text-foreground">{tx.description}</span></div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
