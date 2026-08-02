@@ -1,7 +1,8 @@
 /**
- * Partner organizations, service categories.
- *
- * Not built in B0 — this package marks the module boundary per
- * Design.md §7 so ArchUnit/Modulith can enforce it from day one.
+ * Partner organizations, service categories (Design.md §7) — plus school
+ * info and feature flags, grouped here per the note in
+ * `Docs/implementation/00-Status.md` §13: neither maps to a single
+ * Design.md §7 module, and both are closest in spirit to "the school's own
+ * organizational profile."
  */
 package cn.timebank.organization;

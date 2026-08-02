@@ -1,7 +1,6 @@
 /**
- * Rule versions, publication, effective windows, impact preview.
- *
- * Not built in B0 — this package marks the module boundary per
- * Design.md §7 so ArchUnit/Modulith can enforce it from day one.
+ * Rule versions, publication, effective windows, impact preview
+ * (Design.md §7). Published versions are immutable (invariant 7) —
+ * changing an effective rule creates a new version, never an edit.
  */
 package cn.timebank.rules;

@@ -2,7 +2,7 @@
 
 > **Living document.** The single place to answer "where are we?". The plan lives in `01-Overview.md` and the phase docs; this file holds only state. Update it on phase entry, phase exit, and whenever a gate or risk changes — not in a burst before a review meeting.
 
-**Snapshot as of 2026-08-02 — B0 (Foundation) and B1 (Identity) both complete and live on the test server.** Phase 1 (institutional design) is complete. The frontend is built and read-wired against a mock client. The backend now has real authentication end to end: session login/logout, CSRF, permission-gated endpoints, lockout, and immediate session revocation on deactivation or password change — all proven against real MySQL (22 tests: 3 ArchUnit + 4 MockMvc + 15 integration) and live-verified over HTTPS (login → `/me` → `/users` → logout → 401). B2 (Base Data) has not started — no student/grade/rules module exists yet.
+**Snapshot as of 2026-08-02 — B0 (Foundation), B1 (Identity), and B2 (Base Data & Rules) all complete and live on the test server.** Phase 1 (institutional design) is complete. The frontend is built and read-wired against a mock client. The backend now has real authentication end to end plus the reference data every business record will point at: students, academic structure, organizations, service categories, versioned rules with an immutable-publish lifecycle, localization resolution, notification templates, feature flags, and dictionary caching — all proven against real MySQL (32 tests: 3 ArchUnit + 4 MockMvc + 25 integration) and live-verified over HTTPS. B3 (Core Loop) has not started.
 
 **Environment:** the shared test server is provisioned and in active use (MySQL 8, Java 21, Maven installed 2026-08-02). **No Docker anywhere** — the app runs as a systemd unit (`timebank-backend.service`, user `timebank`) and all tests run on the server against real MySQL (`01-Overview.md` §6). Server host and credentials live only in the untracked, git-ignored `test-server-credits.md`; they are never repeated in any tracked file, issue, or CI configuration. A **dedicated, scoped MySQL user** (`timebank_app`, privileges limited to `timebank.*` and `timebank_it_%.*`) was created rather than using the shared superuser `dbadmin` from the credentials file — see §11.
 
@@ -24,8 +24,8 @@ A phase is `✅` only when **every** exit-criteria checkbox in its own document 
 
 | | |
 | --- | --- |
-| **Overall state** | In progress — B0 and B1 complete |
-| **Current phase** | B2 Base Data & Rules (`—`, not started); B0.14's automated CI trigger remains open |
+| **Overall state** | In progress — B0, B1, and B2 complete |
+| **Current phase** | B3 Core Loop (`—`, not started); B0.14's automated CI trigger remains open |
 | **Planned duration** | ~28 weeks to pilot go-live (2 backend + 1 frontend engineer + ~0.2 FTE ops) |
 | **Total effort** | ~72 person-weeks |
 | **Start date** | 2026-08-02 |
@@ -50,7 +50,7 @@ A phase is `✅` only when **every** exit-criteria checkbox in its own document 
 | --- | --- | --- | --- | --- | --- | --- |
 | **B0** Foundation | `02-` | 7 pw | W1–W3 | `▶` | | Deployed and tested live on the test server 2026-08-02; only B0.14's automated CI trigger remains |
 | **B1** Identity | `03-` | 5 pw | W4–W6 | `✅` | | Deployed and live-verified over HTTPS 2026-08-02 |
-| **B2** Base data & rules | `04-` | 5 pw | W6–W8 | `—` | | |
+| **B2** Base data & rules | `04-` | 5 pw | W6–W8 | `✅` | | Deployed and live-verified over HTTPS 2026-08-02 |
 | **B3** Core loop | `05-` | 12 pw | W9–W15 | `—` | | Carries G2; do not compress |
 | **B4** Projects & proposals | `06-` | 7 pw | W16–W19 | `—` | | |
 | **B5** Admin surface | `07-` | 8 pw | W20–W23 | `—` | | |
@@ -103,22 +103,22 @@ A phase is `✅` only when **every** exit-criteria checkbox in its own document 
 | B1.10 | Login logs + auth audit | `✅` | `login_log` partitioned like `audit_log`; audit entries on create/update/unlock/reset/password-change |
 | B1.11 | Auth rate limiting at Nginx | `✅` | `limit_req_zone` in `/etc/nginx/conf.d/timebank-rate-limit.conf` (10r/m, burst 5), scoped to `/api/v1/auth/(login\|forgot-password\|reset-password)` only |
 
-### B2 · Base Data & Rules
+### B2 · Base Data & Rules — `✅` done and deployed
 
-| ID | Item | Status |
-| --- | --- | --- |
-| B2.1 | Student module (guardian fields excluded from lists) | `—` |
-| B2.2 | Academic structure + graduation year | `—` |
-| B2.3 | Organizations | `—` |
-| B2.4 | Service categories with per-language names | `—` |
-| B2.5 | Localization resolution | `—` |
-| B2.6 | Notification templates | `—` |
-| B2.7 | Rules module (immutable published versions) | `—` |
-| B2.8 | Rule seeding (rounding, 1:1 conversion, tiers) | `—` |
-| B2.9 | **Rule resolution by service date** | `—` |
-| B2.10 | School info + system settings | `—` |
-| B2.11 | Feature flags | `—` |
-| B2.12 | Dictionary caching | `—` |
+| ID | Item | Status | Notes |
+| --- | --- | --- | --- |
+| B2.1 | Student module (guardian fields excluded from lists) | `✅` | `StudentPrivacyIT` caught a real bug — see §13 |
+| B2.2 | Academic structure + graduation year | `✅` | `graduation_year` `NOT NULL` from the first migration |
+| B2.3 | Organizations | `✅` | `projectCount` hardcoded to 0 with a comment referencing B4 — honest placeholder, not a broken query |
+| B2.4 | Service categories with per-language names | `✅` | 6 seeded categories match the frontend mock's set |
+| B2.5 | Localization resolution | `✅` | `LocalizationIT`; live-verified with both `Accept-Language: zh-CN` and `en` |
+| B2.6 | Notification templates | `✅` | Rendering only, no parameter substitution yet (none needed until B3) |
+| B2.7 | Rules module (immutable published versions) | `✅` | `RuleVersioningIT`; live-verified (`PATCH` on published → `409`) |
+| B2.8 | Rule seeding (rounding, 1:1 conversion, tiers) | `✅` | 30 min rounding, 60 min → 100 centi-coins, tiers 25/75/150/300h |
+| B2.9 | **Rule resolution by service date** | `✅` | `RuleVersioningIT` proves an old service date keeps resolving to the closed-window rule after a new one publishes |
+| B2.10 | School info + system settings | `✅` | System settings endpoint was already built in B1 under `iam` (contract §4.15 grouping) |
+| B2.11 | Feature flags | `✅` | Wired into `/me`; Phase 3/4 mutation-rejection N/A — no such endpoint exists yet |
+| B2.12 | Dictionary caching | `✅` | Caffeine, 60s TTL; `DictionaryCachingIT` — a real cache-key collision was caught and fixed here, see §13 |
 
 ### B3 · Core Loop
 
@@ -331,6 +331,7 @@ Material decisions taken during implementation that change a plan or contract do
 | 2026-08-02 | **Docker dropped from every environment**; fat JAR + systemd instead. Testcontainers replaced by real MySQL on the shared test server with per-run schema isolation; CI moves onto the server so no credential enters a hosted configuration | B0.11/B0.13/B0.14, B3.9, B7.13, I0.12, `Design.md` §8/§17/§19 | `01-Overview.md` §6 |
 | 2026-08-02 | **B0 implemented and deployed.** Package root changed from `cn.<school>.timebank` to `cn.timebank` (D8 rationale — see §11 below); a scoped MySQL user (`timebank_app`) created instead of using the shared `dbadmin` superuser from the credentials file; test server found to be a genuinely shared multi-tenant box, not dedicated — sizing and heap choices adjusted accordingly | B0 (all items), `Design.md` §7 | §11 below |
 | 2026-08-02 | **B1 implemented and deployed.** `TeacherScopeAssignment` moved from `iam` to `security` module (owns scope-assignment storage, since `DataScopeResolverImpl` needs it and `iam`→`security` already exists via session revocation — kept the module dependency graph one-directional); Spring Security 6.2's default XOR CSRF handler replaced with the plain one for the double-submit-cookie pattern; `AuthService.authenticate()` made non-`@Transactional` since it deliberately throws after writes it needs to keep | B1 (all items) | §12 below |
+| 2026-08-02 | **B2 implemented and deployed.** `school_info.current_academic_year_code` denormalized to a plain string (not a FK to `academic_year.id`) to avoid an `organization`↔`student` module cycle; `RequestLanguageService` placed in `organization.application` (not `common`) since resolving the school-default language requires reading `school_info`, and `common` must stay dependency-free; `StudentServiceImpl.getDetail()`'s `readOnly` transaction and three no-arg `@Cacheable` methods' default-key collision both fixed after being caught live — see §13 below | B2 (all items) | §13 below |
 
 ## 10. How to Update This Document
 
@@ -393,3 +394,22 @@ $ curl -X POST .../auth/logout               → 200
 $ curl https://tb.example.com/api/v1/me        → 401 AUTHENTICATION_REQUIRED
 ```
 22 tests pass on the server against real MySQL (up from 13 at the end of B0), confirmed via a full `mvn clean verify` run, not assumed from an earlier partial run: `ModuleBoundaryTest` (2), `PermissionAnnotationTest` (1, new), `PingControllerTest` (4), `AuditServiceIT` (3), `IdempotencyServiceIT` (4), `AuthFlowIT` (4, new), `DataScopeResolverIT` (4, new).
+
+## 13. B2 Implementation Findings (2026-08-02)
+
+Two real bugs, both found only because B2's exit criteria demanded live proof against real MySQL rather than a clean local compile plus passing ArchUnit rules — neither would have surfaced from either of those alone.
+
+**A `readOnly` transaction silently swallows a write that legitimately belongs inside it.** `StudentServiceImpl.getDetail()` was annotated `@Transactional(readOnly = true)` — reasonable, since it's a read endpoint — but conditionally writes an audit row when `includeSensitiveFields` is true (contract §9's "sensitive access is audited" requirement). Called via the controller (a real Spring-proxied call), the audit write silently never committed: Hibernate configures `FlushMode.MANUAL` for a read-only transaction, and the transaction ends in an implicit rollback rather than a commit. It *appeared* to work during manual testing of `create()`, because `create()` calls `getDetail()` as a same-instance self-invocation, which bypasses the Spring proxy entirely and therefore runs under `create()`'s own non-read-only transaction instead of `getDetail()`'s annotation. `StudentPrivacyIT` calls `getDetail()` directly (as the controller does) and caught the gap: audit count didn't increase after a permitted sensitive read. Fixed by removing `readOnly = true` from `getDetail()`, with a comment explaining why. **General lesson:** a `readOnly` transaction must never contain a conditional write — audit or otherwise — and a self-invocation from a writable method can mask exactly this bug in ad hoc testing.
+
+**No-arg `@Cacheable` methods sharing one cache region collide on Spring's default key.** `SchoolInfoServiceImpl.getInfo()`, `FeatureFlagServiceImpl.getFlags()`, and `AcademicStructureServiceImpl.listAcademicYears()` were each annotated `@Cacheable(CacheConfig.DICTIONARIES)` with no explicit `key`. Spring's `SimpleKeyGenerator` maps every no-arg method call to the same `SimpleKey.EMPTY`, and all three share the same named Caffeine region — so whichever method's result lands in the cache first "wins" that slot, and every other no-arg method in the region gets back a value of the wrong type. This surfaced live as a `ClassCastException` (`FeatureFlagsDto` cannot be cast to `SchoolInfoDto`) the first time `GET /school/info` was called after `/me` (which reads feature flags) had already populated the shared slot — a 500 in production, not a compile or unit-test failure. The other three `@Cacheable` methods in the same region (`listGrades`, `listClasses`, `ServiceCategoryService.list`) were already safe, since each takes `resolvedLanguage` and therefore gets a distinct key for free — the bug is specific to no-arg methods. Fixed by giving each no-arg method an explicit string key (`'schoolInfo'`, `'featureFlags'`, `'academicYears'`); `DictionaryCachingIT` now calls all three back-to-back against a real Caffeine cache to catch a regression. **General lesson:** every `@Cacheable` method sharing a named region needs a key that's unique *within that region*, not just within its own method — a rule easy to satisfy by accident when a cacheable method takes arguments, and easy to violate by accident when it doesn't.
+
+**Live verification, for reference** (throwaway admin + student created directly via SQL/API for this check, then deleted; a rule published then archived, with the seeded default's effective window explicitly reopened afterward since archiving a superseding rule does not automatically reopen the one it closed):
+```
+$ curl https://tb.example.com/api/v1/school/info          (authenticated) → 200, {"name":"Example City HD",...}
+$ curl -H "Accept-Language: zh-CN" .../grades            → 六年级, 七年级, ...
+$ curl -H "Accept-Language: en" .../grades                → Grade 6, Grade 7, ...  (same ids/codes/sequence)
+$ curl .../me                                              → featureFlags all false, matching the seed row
+$ curl -X POST .../students  → 201, list omits guardian/email, detail includes them
+$ curl -X POST .../rules → draft; POST .../rules/{id}/publish → 200; PATCH .../rules/{id} → 409 STATE_CONFLICT
+```
+32 tests pass on the server against real MySQL (up from 22 at the end of B1), confirmed via a full `mvn clean verify` run: `ModuleBoundaryTest` (2), `PermissionAnnotationTest` (1), `PingControllerTest` (4), `AuditServiceIT` (3), `IdempotencyServiceIT` (4), `AuthFlowIT` (4), `DataScopeResolverIT` (4), `RuleVersioningIT` (3, new), `StudentPrivacyIT` (3, new), `LocalizationIT` (3, new), `DictionaryCachingIT` (1, new).

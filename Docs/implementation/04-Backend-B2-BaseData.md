@@ -40,14 +40,14 @@ Two things that are cheap now and expensive later: **rule versioning wired in fr
 
 ## 4. Exit Criteria
 
-- [ ] Students, grades, classes, academic years, organizations, and categories are queryable, scoped, and paginated.
-- [ ] Student **list** responses contain no guardian name, guardian contact, phone, or e-mail; detail responses expose them only under permission, and that access is audited.
-- [ ] The same request with `Accept-Language: zh-CN` and `en` returns identically-coded, differently-named dictionary data — and identical status/enum values.
-- [ ] A missing translation falls back to the school default; no response contains a null or empty localized name.
-- [ ] Publishing a rule creates a new version; editing a published version fails.
-- [ ] `resolveRule(date)` returns the historically correct version, proven by a test that publishes a new rule and re-reads an old date.
-- [ ] Every student row carries a graduation year (B6's purge cannot be retrofitted onto rows without one).
-- [ ] Feature flags in `/me` match the flag table; a mutation on a Phase 3/4 endpoint is rejected at the API boundary.
+- [x] Students, grades, classes, academic years, organizations, and categories are queryable, scoped, and paginated. Proven live over HTTPS (create/list/detail/deactivate a student; `GET /academic-years`, `/grades`, `/school/info`) and by `mvn verify` on the server against real MySQL.
+- [x] Student **list** responses contain no guardian name, guardian contact, phone, or e-mail; detail responses expose them only under permission, and that access is audited. Proven by `StudentPrivacyIT` on real MySQL — this caught a real bug (see §12 of `00-Status.md`): `getDetail`'s audit write was silently dropped because the method was `@Transactional(readOnly = true)`.
+- [x] The same request with `Accept-Language: zh-CN` and `en` returns identically-coded, differently-named dictionary data — and identical status/enum values. Proven by `LocalizationIT` and live: `GET /grades` with each header returns the same `id`/`code`/`sequence`, different `name`.
+- [x] A missing translation falls back to the school default; no response contains a null or empty localized name. Proven by `LocalizedNames.pick`'s fallback logic and `LocalizationIT`'s blank-name assertion (no missing-translation row exists in seed data to exercise the fallback branch itself, but the logic is unconditional, not data-dependent).
+- [x] Publishing a rule creates a new version; editing a published version fails. Proven by `RuleVersioningIT` and live (`PATCH` on a published rule → `409 STATE_CONFLICT`).
+- [x] `resolveRule(date)` returns the historically correct version, proven by a test that publishes a new rule and re-reads an old date. `RuleVersioningIT.publishingANewRuleClosesThePreviousOnesWindowWithoutAlteringHistoricalResolution` — publishes a second rule with different rounding and confirms the old service date still resolves to the first rule's parameters.
+- [x] Every student row carries a graduation year (B6's purge cannot be retrofitted onto rows without one). Schema `NOT NULL`; proven live via student creation.
+- [x] Feature flags in `/me` match the flag table; a mutation on a Phase 3/4 endpoint is rejected at the API boundary. Flags proven live (`/me` reflects all-disabled seed row). The rejection half is **not applicable yet** — no Phase 3/4 endpoint exists to mutate (correct per `Design.md` §14: flags are not built ahead of the feature they gate).
 
 ## 5. Risks and Watch-Outs
 

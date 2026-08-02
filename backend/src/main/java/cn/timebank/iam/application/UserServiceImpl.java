@@ -17,6 +17,8 @@ import cn.timebank.iam.domain.User;
 import cn.timebank.iam.domain.UserStatus;
 import cn.timebank.iam.infrastructure.RoleRepository;
 import cn.timebank.iam.infrastructure.UserRepository;
+import cn.timebank.organization.application.FeatureFlagService;
+import cn.timebank.organization.application.dto.FeatureFlagsDto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -50,16 +52,18 @@ class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final FeatureFlagService featureFlagService;
 
     private final int maxFailedAttempts;
     private final int lockoutDurationMinutes;
     private final int defaultSessionTimeoutMinutes;
 
     UserServiceImpl(UserRepository userRepository, RoleRepository roleRepository,
-                     PasswordEncoder passwordEncoder, AuditService auditService,
+                     PasswordEncoder passwordEncoder, AuditService auditService, FeatureFlagService featureFlagService,
                      @Value("${timebank.auth.lockout.max-failed-attempts:5}") int maxFailedAttempts,
                      @Value("${timebank.auth.lockout.duration-minutes:15}") int lockoutDurationMinutes,
                      @Value("${timebank.auth.session.default-timeout-minutes:480}") int defaultSessionTimeoutMinutes) {
+        this.featureFlagService = featureFlagService;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
@@ -233,11 +237,12 @@ class UserServiceImpl implements UserService {
         User user = findOrThrow(userId);
         Set<String> roleCodes = user.getRoles().stream().map(Role::getCode).collect(Collectors.toCollection(LinkedHashSet::new));
         Set<String> permissionCodes = permissionCodesOf(user);
+        FeatureFlagsDto flags = featureFlagService.getFlags();
         return new MeResponse(
                 new MeResponse.UserSummary(user.getId(), user.getDisplayName(), roleCodes, permissionCodes),
                 deriveWorkspaces(roleCodes),
                 user.getPreferredLanguage(),
-                MeResponse.FeatureFlags.allDisabled());
+                new MeResponse.FeatureFlags(flags.pov(), flags.redemption(), flags.borrowing(), flags.appreciation()));
     }
 
     private User findOrThrow(String id) {
