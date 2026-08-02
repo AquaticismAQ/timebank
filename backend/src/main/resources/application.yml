@@ -1,0 +1,95 @@
+spring:
+  application:
+    name: timebank-backend
+
+  threads:
+    virtual:
+      enabled: true # D3 — Spring MVC + virtual threads, no WebFlux
+
+  datasource:
+    # No defaults for secrets (Design.md §17.1: "Configuration: Spring profiles;
+    # all secrets injected at runtime"). Fails fast if the env is not set rather
+    # than silently connecting to nothing.
+    url: ${TIMEBANK_DB_URL:?TIMEBANK_DB_URL must be set}
+    username: ${TIMEBANK_DB_USERNAME:?TIMEBANK_DB_USERNAME must be set}
+    password: ${TIMEBANK_DB_PASSWORD:?TIMEBANK_DB_PASSWORD must be set}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # Conservative for the shared test server (3.8 GB RAM total, many other
+      # tenants). Design.md §16.4's ~20-30/instance target is for a dedicated
+      # production host — do not copy that number here.
+      maximum-pool-size: ${TIMEBANK_DB_POOL_SIZE:5}
+      pool-name: timebank-hikari
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate # Flyway owns schema, always (D7) — never "update".
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+  session:
+    jdbc:
+      initialize-schema: never # Flyway owns this schema too (V2__spring_session.sql, D7)
+
+server:
+  port: ${TIMEBANK_SERVER_PORT:8080}
+  # Bound to loopback only — Nginx terminates TLS and proxies (Design.md §17.1);
+  # the app is never reachable directly from outside the host.
+  address: 127.0.0.1
+  # Nginx sets X-Forwarded-Proto/-For (B0.11's vhost config) — without this,
+  # request.isSecure() reports false behind the proxy and the Secure cookie
+  # flag below would silently never be set.
+  forward-headers-strategy: native
+  servlet:
+    session:
+      cookie:
+        name: TIMEBANK_SESSION
+        http-only: true
+        secure: true
+        same-site: lax
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true # liveness + readiness (B0.12) — both needed for load-balancer registration
+      show-details: never
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    cn.timebank: INFO
+
+timebank:
+  environment: ${TIMEBANK_ENVIRONMENT:unspecified}
+  security:
+    # Contract §2.3. Comma-separated. The test-server frontend origin is the
+    # sane default; production deployments override via env var.
+    allowed-origins: ${TIMEBANK_ALLOWED_ORIGINS:https://tb.example.com}
+  auth:
+    lockout:
+      max-failed-attempts: ${TIMEBANK_LOCKOUT_MAX_ATTEMPTS:5}
+      duration-minutes: ${TIMEBANK_LOCKOUT_DURATION_MINUTES:15}
+    session:
+      default-timeout-minutes: ${TIMEBANK_SESSION_DEFAULT_TIMEOUT_MINUTES:480}

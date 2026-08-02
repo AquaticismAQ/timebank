@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 build/
+target/
 
 # Environment
 .env
@@ -28,3 +29,10 @@ pnpm-debug.log*
 # Misc
 .cache/
 coverage/
+
+# Server credentials — never commit (see Docs/implementation/01-Overview.md §6)
+test-server-credits.md
+*credentials*.md
+*.pem
+*.key
+id_rsa*

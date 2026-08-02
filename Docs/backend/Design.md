@@ -178,7 +178,7 @@ Each domain module is internally layered; the layering is a rule about dependenc
 
 ## 7. Module Decomposition
 
-Modules mirror the business domains in `Docs/frontend/Design.md` §12 so that frontend and backend share one vocabulary. Package root: `cn.<school>.timebank`.
+Modules mirror the business domains in `Docs/frontend/Design.md` §12 so that frontend and backend share one vocabulary. **Package root: `cn.timebank`** — revised during implementation (B0, 2026-08-02) from the originally proposed `cn.<school>.timebank`. Baking a specific school into the compiled package name cuts against D8 (one codebase, many single-tenant deployments; school identity is data/configuration, never code). Modules are `cn.timebank.<module>`, e.g. `cn.timebank.audit`.
 
 | Module | Package | Owns | Phase |
 | --- | --- | --- | --- |
@@ -233,10 +233,10 @@ Phase 3 and Phase 4 modules (`pov`, `risk`, `attestation`, `redemption`, `borrow
 | Validation | Jakarta Bean Validation (Hibernate Validator) | Mapped to `fieldErrors` in the error envelope |
 | Mapping | MapStruct | Entity ↔ DTO, compile-time, no reflection surprises |
 | Excel / CSV | Apache POI (SXSSF) or EasyExcel | Import/export of ledgers; streaming to bound memory |
-| Testing | JUnit 5, AssertJ, MockMvc, **Testcontainers (MySQL)** | See §19 |
+| Testing | JUnit 5, AssertJ, MockMvc, **integration tests against real MySQL on the shared test server** | See §19. Testcontainers is not used — it requires Docker |
 | Observability | Spring Boot Actuator + structured JSON logging | See §18 |
 | Build | Maven (multi-module optional; single module to start) | Gradle acceptable if the team prefers it |
-| Container | Docker + Docker Compose | See §17 |
+| Packaging / runtime | **Fat JAR run by systemd — no containers** | See §17. Docker is not used in any environment |
 
 **Deliberately absent:** Redis (D1), WebSocket/STOMP (D2), Kafka/RabbitMQ (D5), Elasticsearch, service mesh, microservices (D11), reactive stack (D3). Each is addressed with a revisit trigger.
 
@@ -737,8 +737,8 @@ One deployment per school (D8), sized for 5,000 students, with **self-hosted MyS
 ┌──────────────────────────────────────────────────────────────┐
 │ Domestic cloud VPC (single region)                           │
 │                                                              │
-│   LB / Nginx ──┬──► Spring Boot instance #1 (Docker)         │
-│    │           └──► Spring Boot instance #2 (Docker)         │
+│   LB / Nginx ──┬──► Spring Boot instance #1 (systemd unit)   │
+│    │           └──► Spring Boot instance #2 (systemd unit)   │
 │    │                      │                                  │
 │    │                      ├──► MySQL 8 primary (self-hosted) │
 │    │                      │        │ async replication       │
@@ -755,9 +755,9 @@ One deployment per school (D8), sized for 5,000 students, with **self-hosted MyS
 ```
 
 - **Two application instances, stateless.** Chosen for rolling deploys and fault tolerance, not throughput — one instance carries the load. Because the app holds no local state (D4 sessions in MySQL, D9 uploads direct to object storage, D5 lease-claimed jobs, ShedLock-guarded schedules), the second instance costs configuration only.
-- **Artifact**: a single Spring Boot fat JAR in a Docker image; Docker Compose for local development (app + MySQL + MinIO).
-- **Environments**: local, staging, production. **Staging must hold a production-sized anonymized dataset** — ~450k service records, ~1.1M login-log rows, and full evidence-metadata volume — because index and migration decisions cannot be validated against a small dataset. This is a prerequisite for the load test in §19.
-- **Configuration**: Spring profiles; all secrets injected at runtime.
+- **Artifact**: a single Spring Boot fat JAR, run directly by **systemd** on the host. **No containers in any environment** — the project decision is that Docker is not used, so development, test, staging, and production share one packaging model rather than maintaining two. This also removes a layer the school's IT staff would otherwise have to operate (Q10).
+- **Environments**: **shared test server** (the development and integration environment; host and access recorded only in the untracked credentials file — see `Docs/implementation/01-Overview.md` §6), staging, production. **Staging must hold a production-sized anonymized dataset** — ~450k service records, ~1.1M login-log rows, and full evidence-metadata volume — because index and migration decisions cannot be validated against a small dataset. This is a prerequisite for the load test in §19.
+- **Configuration**: Spring profiles; all secrets injected at runtime through systemd unit environment files (mode `0600`, outside the repository) or the provider's secret manager. **No credential ever enters version control.**
 - **Rolling deploys.** Two instances make rolling restarts natural; database migrations must therefore be backward-compatible for one release (expand/contract) so both versions can run briefly. Where a migration cannot be made compatible, a short maintenance window is acceptable and preferable to a fragile deploy.
 - **Archiving**: per-academic-year archival and export, as required by `05-OnlineSystem.md` §2.2, implemented via the lifecycle policy in §16.3.
 
@@ -800,11 +800,18 @@ Testing effort concentrates on the invariants in §12, because those are what a 
 | Level | Tool | Coverage focus |
 | --- | --- | --- |
 | Unit | JUnit 5 + AssertJ | Status machines, hour/coin calculation, rule evaluation, progress computation, risk rules (Phase 3) |
-| Integration | Testcontainers (real MySQL) + `@SpringBootTest` | Repositories, transactions, optimistic locking, idempotency replay, ledger concurrency |
+| Integration | **Real MySQL 8 on the shared test server** + `@SpringBootTest` | Repositories, transactions, optimistic locking, idempotency replay, ledger concurrency |
 | API | MockMvc | Envelope shape, error codes, validation mapping, permission and data-scope enforcement per endpoint |
 | Architecture | ArchUnit / Spring Modulith | Layer direction, module boundaries, no entity leakage into controllers |
 | Contract | Response-shape assertions against `frontend/src/app/api/types.ts` (D10.3), plus a committed `openapi.json` diff for review | Detects unintended API changes; the diff informs review rather than failing the build |
 | **Performance** | **k6 / Gatling + JMeter, against a production-sized staging dataset** | **Newly required at this scale — see below** |
+
+**Tests run on the shared test server, against real MySQL.** Docker is not used, so Testcontainers — which starts a throwaway database per run — is unavailable. The properties it provided must be recreated deliberately, because they are what make integration tests trustworthy:
+
+- **Isolation per run.** Each integration run targets its own schema (`timebank_it_<run>`), created, migrated by Flyway, and dropped afterwards. If the database account lacks `CREATE DATABASE`, the fallback is a single pre-created `timebank_it` schema guarded by a run lock, which serializes runs rather than corrupting them. Integration tests never touch the shared application schema.
+- **Determinism.** A run starts from an empty, freshly migrated schema, not from whatever the last run left behind. Tests that depend on leftover data are the failure mode this replaces.
+- **Concurrency tests still need a real database**, which is exactly what the server provides — the ledger tests in §12 are unaffected by the change.
+- **The database is a shared resource.** Parallel test execution across developers is bounded by the isolation scheme above; heavy runs (seeded data, load tests) are coordinated rather than simultaneous.
 
 **Non-negotiable correctness test cases**, drawn from `APIContract.md` §11:
 
@@ -835,7 +842,7 @@ Testing effort concentrates on the invariants in §12, because those are what a 
 
 Ordered so that the highest-risk core is proven first; detailed task planning follows this document's approval.
 
-1. **Foundation** — project skeleton, Flyway baseline, envelope/error handling, requestId, auditing infrastructure, Docker Compose, CI.
+1. **Foundation** — project skeleton, Flyway baseline, envelope/error handling, requestId, auditing infrastructure, test-server deployment (systemd units, no containers), CI.
 2. **Test data seeder** — generates a production-sized dataset (5,000 students, ~1M records, realistic distributions). Built *early*, not late, because every performance and migration decision from milestone 5 onward depends on it (R2).
 3. **Identity** — users, roles, permission codes, session auth, data scope, `/me`, login logs.
 4. **Base data** — students, classes, grades, academic years, organizations, service categories, rules. Includes seeding the 1:1 conversion, 0.5 h rounding, and honour tiers, and agreeing the coin unit representation with the frontend (R8).

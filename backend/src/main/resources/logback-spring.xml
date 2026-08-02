@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!--
+        Structured JSON logging (B0.5). requestId comes from MDC, set by
+        RequestIdFilter for the lifetime of each request, so every log
+        line — across both application instances once there are two — can be
+        correlated by it (Design.md §17.1, §18 "log aggregation ... requestId
+        correlation across instances is the primary debugging tool").
+
+        Never log tokens, session ids, evidence URLs, or personal-data
+        request bodies (contract §9) — that rule is enforced by what call
+        sites choose to log, not by this appender; this file only fixes the
+        shape.
+    -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <message>message</message>
+                <logger>logger</logger>
+                <thread>thread</thread>
+                <level>level</level>
+            </fieldNames>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

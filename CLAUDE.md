@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 TimeBank (时间银行) is an institutional system for recording, auditing, and incentivizing middle-school student volunteer service. Service hours become "time coins" (never a currency/token — see Content Principles below). The project has four phases:
 
 - **Phase 1 — Institutional design**: complete, documented in `Design/chinese/*.md`.
-- **Phase 2 — Online system (current focus)**: React web frontend is nearly complete (`frontend/`); a Java/Spring Boot + MySQL backend is about to start and does not exist yet.
+- **Phase 2 — Online system (current focus)**: React web frontend is nearly complete (`frontend/`). Java/Spring Boot + MySQL backend implementation started 2026-08-02 (`backend/`) per `Docs/implementation/`; B0 (Foundation) and B1 (Identity — real session auth, CSRF, permissions, lockout) are done and deployed to the shared test server, B2 (Base Data) onward not yet built — see `Docs/implementation/00-Status.md` for current state.
 - **Phase 3 — POV (Proof of Volunteering)**: WeChat Mini Program witness/AI-verification layer, reserved via feature flags, not implemented.
 - **Phase 4 — Redemption/borrowing/value-added**: reserved via feature flags, not implemented.
 
@@ -17,7 +17,9 @@ Repo layout:
 Design/chinese/          Phase 1 institutional design docs (制度设计, source of "why")
 Docs/frontend/Design.md  Phase 2 frontend page/flow spec (English + _CN Chinese twin)
 Docs/integration/APIContract.md   The REST API contract — authoritative for both frontend and future backend
+Docs/implementation/     Phase-by-phase backend + integration build plan and the living status tracker (00-Status.md)
 frontend/                React + Vite web app (Student Portal + Admin/Teacher Portal)
+backend/                 Spring Boot 3.4 / Java 21 backend, single Maven module, package root `cn.timebank` (see below)
 ```
 
 `Docs/frontend/Design.md` and `Docs/integration/APIContract.md` each have a `_CN.md` Chinese counterpart that must stay in sync when edited.
@@ -36,7 +38,19 @@ pnpm preview         # preview a production build
 
 There is no lint, test, or typecheck script configured in `frontend/package.json` — do not assume `pnpm lint`/`pnpm test` exist. TypeScript is `strict: true` but `noUnusedLocals`/`noUnusedParameters` are off (see `frontend/tsconfig.json`).
 
-There is currently no backend directory — when it's created, prefer confirming the module layout (single Spring Boot app vs. multi-module Maven/Gradle) with the user before assuming a structure, since none exists yet to infer from.
+Backend commands run from `backend/` (single Maven module, no multi-module split — that question from earlier is resolved):
+
+```bash
+cd backend
+mvn compile           # local compile check only
+mvn test               # fast tests: MockMvc slices + ArchUnit, no external dependency
+mvn verify              # adds *IT integration tests — needs TIMEBANK_DB_HOST/_USERNAME/_PASSWORD env vars
+                         # for an account with CREATE/DROP on `timebank_it_%` (see test-server-credits.md, untracked)
+```
+
+**No Docker anywhere in this project** — not locally, not in tests, not in deployment (`Docs/implementation/01-Overview.md` §6). Integration tests (`*IT` classes, run via `mvn verify`/Failsafe, not `mvn test`/Surefire) run against real MySQL on the shared test server, each in its own `timebank_it_<random>` schema created and dropped per test class (`cn.timebank.testsupport.MySqlTestSchemaExtension`) — never against the application's own `timebank` schema. The app deploys as a systemd unit (`backend/scripts/deploy.sh`), not a container; see `backend/scripts/verify.sh` for the test entry point a CI runner would call. Both scripts read secrets from the environment and contain none themselves.
+
+The backend follows `Docs/implementation/` phase by phase — check `Docs/implementation/00-Status.md` before assuming what exists. As of B1 (Identity), real code exists in `cn.timebank.common.*` (envelope, error handling, request-id logging, pagination, idempotency), `cn.timebank.audit` (append-only audit log), `cn.timebank.iam` (users, roles, permissions, login logs, password lifecycle), and `cn.timebank.security` (session auth, CSRF, `@PreAuthorize` on every endpoint, the data-scope resolver mechanism — not yet wired to a real resource). Every other business module (`student`, `servicerecord`, `project`, etc.) has no code yet beyond an empty `package-info.java` marking its boundary for B0.2's ArchUnit rules. Package root is `cn.timebank`, not `cn.<school>.timebank` as `Docs/backend/Design.md` §7 originally proposed — deviation and rationale recorded there and in the status doc.
 
 ## Frontend architecture
 
