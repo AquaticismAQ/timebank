@@ -1,6 +1,6 @@
 # TimeBank · RESTful API Contract
 
-> This document defines the top-level API contract required for frontend-driven implementation. It describes resource boundaries, endpoints, statuses, permissions, and general protocols, but does not replace backend database design or OpenAPI field-level specifications. Phase 2 endpoints are prioritized for implementation; Phase 3 and Phase 4 endpoints are reserved as stable extension namespaces.
+> This document defines the top-level API contract required for frontend-driven implementation. It describes resource boundaries, endpoints, statuses, permissions, request bodies, and general protocols. It is **authoritative for API behaviour**; exact response payload shapes are owned by the frontend types module, and no OpenAPI file arbitrates either — see §10.1 for the sources of truth and their precedence. Phase 2 endpoints are prioritized for implementation; Phase 3 and Phase 4 endpoints are reserved as stable extension namespaces.
 
 ---
 
@@ -26,8 +26,10 @@
 | Time Format | ISO 8601 with timezone, e.g., `2026-09-01T08:30:00+08:00` |
 | Date Format | `YYYY-MM-DD` |
 | ID | Server-generated unguessable string; frontend must not parse IDs |
-| Amounts/Duration | No floating-point numbers; duration in minutes, time-coins in minimum accounting unit integers |
+| Duration | Integer **minutes** only. The API never sends hours, and never sends a duration as a decimal |
+| Time-coin amounts | Integer **centi-coins** (1 coin = 100 units). `7550` means 75.5 coins. Clients format for display; the API never sends a decimal coin value |
 | Field Naming | JSON uses `camelCase` |
+| Language | `Accept-Language` on every request; see §2.10 |
 | API Versioning | URL major version; compatible fields are append-only, no reusing old semantics |
 
 ### 2.2 Authentication
@@ -59,6 +61,7 @@ Login response must at least return:
       "permissions": ["projects.read", "serviceRecords.create"]
     },
     "workspaces": ["student"],
+    "preferredLanguage": "zh-CN",
     "featureFlags": {
       "pov": false,
       "redemption": false,
@@ -173,6 +176,44 @@ Server must return stable sorting; pagination of the same request must not produ
 - Drafts can be deleted; base data is preferentially deactivated or archived.
 - Account balances can only change through transactions; no direct balance modification endpoint is provided.
 
+### 2.10 Language and Localization
+
+The web frontend ships in Chinese and English (default `zh-CN`). Localization is split across the API boundary by **what kind of text a field holds**, not by which screen shows it.
+
+| Text class | Examples | Wire representation |
+| --- | --- | --- |
+| **Codes and enums** | `status`, `decision`, `type`, `sourceType`, `reasonCode`, `recognitionLevel`, `priority` | **Never localized.** The stable code is sent; the client owns the label and must fall back to rendering the raw code for values it does not recognize (§10.2) |
+| **Dictionary / base data** | Service categories, organization types, grades, classes, recognition tiers, rule names | Server-localized. The response carries both the stable identifier (`categoryId` / `code`) and the localized `name` for the resolved language. Clients key logic and styling off the identifier, never off `name` |
+| **User-authored content** | Project titles and descriptions, proposal fields, review comments, organization names, appeal text | Returned exactly as entered, in whatever language it was written. Never machine-translated, never stored once per language |
+| **Server-generated messages** | Notification `title`/`body`, error `message` | Rendered per request language. Notifications additionally carry `templateCode` and parameters so history re-renders correctly after a language switch, and so a client may localize independently |
+
+**Language resolution order:** `Accept-Language` header → the principal's `preferredLanguage` → the school's default language. Requests with no usable match fall back rather than failing, and a missing dictionary translation falls back to the school's default language — a localized `name` is never `null` or empty.
+
+**`preferredLanguage`** is a BCP 47 tag restricted to the supported set (`zh-CN`, `en`). It is returned by `/me`, updatable through `PATCH /me/profile`, and is what asynchronous output uses — exports, e-mail, scheduled notifications — since those have no request header to read. A client may cache the choice locally for instant switching, but the server value is authoritative across devices.
+
+**Locale never changes data semantics.** Numbers, dates, durations, and coin amounts are transported in the canonical forms of §2.1 regardless of language; only presentation differs.
+
+### 2.11 Response Composition
+
+Three rules that the API must satisfy so a page can render from the responses it already has, per §8's prohibition on row-by-row follow-up requests.
+
+**1. Referenced entities ship with their display name.** Any ID a UI renders next to a human-readable label is accompanied by that label in the same response object:
+
+| Field | Accompanied by |
+| --- | --- |
+| `projectId` | `projectTitle` |
+| `studentId` | `studentName` |
+| `categoryId` / `serviceCategoryId` | `categoryName` / `serviceCategoryName` |
+| `organizationId` | `organizationName` |
+| `ownerId`, `reviewerId`, `operatorId` | `ownerName`, `reviewerName`, `operatorName` |
+| `relatedRecordId`, `linkedProjectId` | `relatedRecordTitle`, `linkedProjectTitle` |
+
+These labels are **read-only point-in-time snapshots for display**. They are never accepted in a request body, never used as an identifier, and may legitimately differ from the referenced entity's current name if it was renamed after the fact.
+
+**2. Viewer-derived fields are prefixed `my`.** `myApplicationStatus`, `myRole` and similar are computed for the authenticated principal. They are never cached across users and are absent — not `null` — when they do not apply.
+
+**3. Server-computed aggregates are part of the resource.** `enrolledCount`, `projectCount`, `revisionCount`, `daysWaiting`, and progress totals are derived server-side. The client renders them and never recomputes or overrides them.
+
 ---
 
 ## 3. Core Resources & Statuses
@@ -245,6 +286,8 @@ confirmed → cancelled
 ```
 
 ### 3.4 Service Record `ServiceRecord`
+
+`sourceType` distinguishes how the service arose, and is set at creation: `project` (performed under a registered project), `external` (organized by an external organization), `self` (student-initiated). It changes which fields are required at submission, not which state machine applies.
 
 Status:
 
@@ -549,6 +592,7 @@ Effective rules cannot be modified in place; changes must create a new version.
 | `GET` | `/reports/completion` | `reports.read` | Compliance rate |
 | `GET` | `/reports/service-hours` | `reports.read` | Service hours |
 | `GET` | `/reports/review-efficiency` | `reports.read` | Review efficiency |
+| `GET` | `/reports/top-projects` | `reports.read` | Highest-participation projects for the selected period |
 | `POST` | `/exports` | `exports.create` | Create export job |
 | `GET` | `/exports/{jobId}` | Creator/admin | Query export job |
 | `GET` | `/exports/{jobId}/download` | Creator/admin | Get short-lived download URL |
@@ -718,37 +762,41 @@ These capabilities are controlled by feature flags. When disabled, the frontend 
 
 ---
 
-## 10. Contract Delivery & Change Management
+## 10. Sources of Truth & Change Management
 
-### 10.1 OpenAPI
+### 10.1 Sources of Truth and Precedence
 
-Before backend implementation, a machine-readable OpenAPI 3.x file should be generated from this document, including at minimum:
+The earlier requirement to hand-produce an OpenAPI file *before* implementation is **withdrawn**. It was written when no client existed; a complete React frontend now exists and has already settled the question that a pre-written spec was meant to settle — but only for part of the surface (§13.2). The contract is therefore layered, with each artifact authoritative for what it has actually proven.
 
-- Paths, methods, permissions, and request/response schemas.
-- Enums, statuses, and error codes.
-- Example data.
-- Pagination, idempotency, and concurrency headers.
-- Phase 3 and Phase 4 endpoint markers.
+| Artifact | Authoritative for | Not authoritative for |
+| --- | --- | --- |
+| **This document** | Behaviour: resources, status machines, permissions and data scope, transaction boundaries, error codes, idempotency and concurrency, **request bodies** (§13.4) | Exhaustive response field lists |
+| **`frontend/src/app/api/types.ts`** — the payload types, lifted unchanged out of `frontend/src/app/mock/data.ts` | **Response payload shapes**: field names, optionality, and units for every endpoint the frontend consumes | Any behaviour, status semantics, or permission rule |
+| **`openapi.json`** emitted by springdoc from the running backend | Nothing. A generated byproduct for tooling and for showing an API diff during review | Everything |
 
-The React frontend API Client and Mock Server should be generated from or validated against the same OpenAPI contract.
+**Precedence.** Behaviour conflict → this document wins. Response-field conflict → the types module wins. Where the two genuinely contradict, this document wins and the types module is corrected **in the same pull request**. `openapi.json` never arbitrates: it is regenerated, never hand-edited, and never a merge gate.
+
+**Why not spec-first.** The contract's read surface has been exercised by a working UI that renders every field it receives, which is stronger evidence than a spec review. **Why not code-first-as-arbiter.** That would make the arbiter whatever the backend happens to emit, forcing an existing, working frontend to chase it.
+
+**Revisit when a second client appears.** Once the Phase 3 Mini Program consumes the same API, two consumers can disagree and the frontend types module stops being a neutral arbiter. At that point, generating shared types from `openapi.json` becomes correct. Nothing here blocks that move.
 
 ### 10.2 Change Rules
 
 - Adding optional fields is a compatible change.
 - Deleting fields, changing types, changing enum semantics, or tightening existing behavior is a breaking change.
 - Breaking changes go into a new API major version.
-- When enums add new values, the frontend must have unknown-value fallback rendering.
-- API changes must simultaneously update OpenAPI, Mock, contract tests, and this document.
+- When enums add new values, clients must have unknown-value fallback rendering (render the raw code).
+- **A contract change lands as one pull request** touching this document, its `_CN` counterpart, the types module, the API client, and the backend implementation. A change to only one of them is the definition of drift.
 
 ### 10.3 Definition of Done
 
-An endpoint is considered complete only when all of the following are met:
+An endpoint is complete only when all of the following are met:
 
-- OpenAPI is defined and passes validation.
-- Permission and data scope tests pass.
-- Normal, validation failure, forbidden, concurrent conflict, and duplicate request behaviors are clearly defined.
-- Frontend does not depend on undocumented fields.
+- Behaviour matches this document, and the response matches the types module.
+- Permission and data-scope tests pass, including the invisible-`404` case.
+- Normal, validation failure, forbidden, concurrent conflict, and duplicate request behaviours are all defined and tested.
 - Audit and idempotency requirements are implemented per risk level.
+- **The frontend screen that consumes it renders correctly against the real backend with the mock client disabled.** This is the acceptance gate that replaces the former OpenAPI validation gate — a rendered page is a stricter check than a schema comparison, because it also catches missing display names, wrong units, and unusable pagination.
 
 ---
 
@@ -765,6 +813,7 @@ An endpoint is considered complete only when all of the following are met:
 9. Duplicate submission, duplicate approval, duplicate review, and duplicate account adjustments do not generate duplicate projects or transactions.
 10. Concurrent edits return clear conflicts; other users' modifications are not silently overwritten.
 11. Web passes all end-to-end acceptance without WeChat or other IM integration.
+12. Every screen renders correctly in both `zh-CN` and `en`, with no localized enum or status value crossing the wire and no dictionary name returned empty for the non-default language.
 
 ---
 
@@ -804,7 +853,7 @@ if (!progress) return <div className="p-4 lg:p-6">Loading...</div>;
 
 ### 12.3 Type Sources
 
-TypeScript types (e.g., `Project`, `ServiceRecord`, `Account`) are still imported from `../../mock/data` because the Mock data file also serves as the type definition source. Once backend OpenAPI-generated types are available, the import path can be switched to the generated type files.
+TypeScript types (e.g., `Project`, `ServiceRecord`, `Account`) are currently imported from `../../mock/data`, which doubles as the type definition source. Per §10.1 these types are the **authoritative response shapes**, so they are lifted unchanged into `frontend/src/app/api/types.ts`, leaving `mock/data.ts` holding fixtures only. Components and the API client then import types from the API layer rather than from the mock layer, and deleting the mock fixtures later removes no type information.
 
 ### 12.4 Dashboard Aggregation Endpoints
 
@@ -813,3 +862,118 @@ The student home page uses `GET /dashboards/student` to fetch progress, account,
 ### 12.5 Organization & School Info
 
 Organization lists are fetched via `api.organizations.list()`, and school info is fetched via `api.school.getInfo()`. These low-frequency data can be fetched on component mount and cached in component state.
+
+---
+
+## 13. Frontend Consumption Map
+
+This section exists so the backend can be built against what the frontend actually consumes, rather than against an idealized reading of §3–§4. It records the mapping, the shortcuts the mock takes that must **not** be copied, and every known divergence with its resolution.
+
+### 13.1 API Client Method → Endpoint
+
+| Client method | Endpoint | Wired in a screen? |
+| --- | --- | --- |
+| `auth.login` | `POST /auth/login` | Yes |
+| `auth.me` | `GET /me` | No |
+| `auth.logout` | `POST /auth/logout` | No |
+| `school.getInfo` | `GET /school/info` | Yes |
+| `projects.list` | `GET /projects` | Yes |
+| `projects.get` | `GET /projects/{id}` | No |
+| `projects.create` / `update` | `POST /projects` / `PATCH /projects/{id}` | No |
+| `projects.publish` / `close` / `archive` | `POST /projects/{id}/publish` / `/close` / `/archive` | No |
+| `eventProposals.list` | `GET /event-proposals` | Yes |
+| `eventProposals.get` | `GET /event-proposals/{id}` | No |
+| `eventProposals.create` / `update` | `POST /event-proposals` / `PATCH /event-proposals/{id}` | No |
+| `eventProposals.submit` / `withdraw` | `POST /event-proposals/{id}/submit` / `/withdraw` | No |
+| `eventProposals.review` | `POST /event-proposals/{id}/reviews` | No |
+| `applications.list` | `GET /applications` | No |
+| `applications.create` | `POST /projects/{projectId}/applications` | No |
+| `applications.cancel` / `confirm` | `POST /applications/{id}/cancel` / `/confirm` | No |
+| `serviceRecords.list` | `GET /service-records` | Yes |
+| `serviceRecords.get` | `GET /service-records/{id}` | No |
+| `serviceRecords.create` / `update` / `delete` | `POST` / `PATCH` / `DELETE /service-records[/{id}]` | No |
+| `serviceRecords.submit` | `POST /service-records/{id}/submit` | No |
+| `reviewQueue.list` | `GET /review-queue` | Yes |
+| `reviewQueue.summary` | `GET /review-queue/summary` | No |
+| `reviewQueue.decide` | `POST /service-records/{id}/reviews` | No |
+| `accounts.get` | `GET /accounts?filter[studentId]=…` | Yes |
+| `accounts.transactions` | `GET /accounts/{id}/transactions` | Yes |
+| `students.list` | `GET /students` | Yes |
+| `students.get` | `GET /students/{id}` | No |
+| `students.progress` | `GET /students/{id}/progress` | Yes |
+| `organizations.list` | `GET /organizations` | Yes |
+| `notifications.list` | `GET /notifications` | Yes |
+| `notifications.unreadCount` | `GET /notifications/unread-count` | Yes |
+| `notifications.markRead` / `markAllRead` | `PATCH /notifications/{id}` / `POST /notifications/read-all` | Yes |
+| `dashboards.student` / `admin` | `GET /dashboards/student` / `/admin` | Yes |
+| `reports.data` | Composes `GET /reports/participation`, `/completion`, `/service-hours`, `/top-projects` | Yes |
+| `users.list` | `GET /users` | No |
+
+`api.accounts.get(studentId)` takes a student ID while the account endpoints are keyed by account ID. This is resolved in the client — filter by `studentId`, then use the returned `accountId` — rather than by adding a student-scoped account endpoint.
+
+### 13.2 What the Frontend Has and Has Not Validated
+
+**Validated: the read surface.** Every page fetches through `api.*` and none imports mock fixtures directly, so response shapes for the "Yes" rows above are exercised by screens that render every field they receive. Those shapes are authoritative (§10.1).
+
+**Not validated: the entire write surface.** No component calls any create, update, submit, review, publish, confirm, or cancel method; those actions currently end in a toast. **No request body has ever been constructed or sent.** File upload does not exist in the frontend at all — evidence appears as pre-built objects carrying a direct `url`.
+
+The practical consequence: the request bodies in §13.4 and the upload flow in §4.6 carry **no** frontend validation and are where integration gaps will concentrate. They must be settled before the frontend wires its mutations, and the wiring is a prerequisite for review-loop acceptance, not follow-up work.
+
+### 13.3 Mock Shortcuts That Are Not the Target Design
+
+The mock client takes deliberate shortcuts that must not be read as contract behaviour:
+
+| Mock shortcut | Real requirement |
+| --- | --- |
+| `reviewQueue.decide` sets record status and splices the queue item client-side | One backend transaction: review event, status, account transaction, progress, notification (§4.7) |
+| Lists return bare arrays | `{data, page, meta}` envelope (§2.5); the client unwraps `data` and exposes `page` where the UI paginates |
+| Approving a proposal only flips its status | Approval atomically creates the official project draft and backfills `approvedProjectId` (§4.3) |
+| `MOCK_USERS` carry a `password` field | Never present in any response |
+| Student list fixtures carry `guardianName` / `guardianContact` | Guardian and contact fields are omitted from list responses (§9) |
+| `EvidenceFile.url` is a permanent direct link | Short-lived URL issued by `GET /files/{id}` after a permission check, and audited (§4.6) |
+| Category names hold i18n keys (`mock.categories.cat_campus`) | Dictionary names are localized server-side; the client keys off `categoryId` (§2.10) |
+| Filtering and searching happen in the browser over the full array | Server-side `filter[...]` / `search` / `sort` with pagination (§2.7) |
+
+### 13.4 Request Bodies
+
+Because no write has been exercised by a client, request shapes are specified here rather than inferred:
+
+**The general rule:** a request body is the **writable subset of the resource's core fields** listed in §3. Three field classes are rejected with `422 VALIDATION_FAILED` rather than silently ignored, so a client never believes it set something it did not:
+
+- **Status fields.** Transitions go through action endpoints (`/submit`, `/publish`, `/reviews`), never through `PATCH`.
+- **Denormalized display names** (§2.11 rule 1) — `projectTitle`, `studentName`, `categoryName`, and the rest are outputs.
+- **Server-computed values** — `enrolledCount`, `durationMinutes` where it is derived from `startAt`/`endAt`, `creditedUnits`, `balanceAfter`, `version` in the body when it belongs in `If-Match`, timestamps, and every `my*` field.
+
+**Additional per-endpoint requirements:**
+
+| Endpoint | Body requirements |
+| --- | --- |
+| `POST /service-records` | `sourceType` plus its required companions (§3.4): `projectId` for `project`, `organizationId`/`organizationName` and supervisor contact for `external`. `serviceDate`, `startAt`, `endAt`, `serviceCategoryId`, `description`, evidence file IDs |
+| `POST /service-records/{id}/submit` | Empty body; `Idempotency-Key` required. All submission validation (§4.5) runs here, not at create |
+| `POST /service-records/{id}/reviews` | `decision`, `reasonCode`, `comment`, `recordVersion`; `Idempotency-Key` required |
+| `POST /event-proposals/{id}/reviews` | `decision`, `reasonCode`, `comment`, `proposalVersion`; `Idempotency-Key` required |
+| `POST /projects/{projectId}/applications` | Empty or `note` only — the student is the principal, never a body field |
+| `POST /accounts/{id}/adjustments`, `POST /account-transactions/{id}/reverse` | `amount` in centi-coins (signed for adjustments), `reasonCode`, `memo`; `Idempotency-Key` required |
+| `POST /files/upload-intents` | `filename`, `mimeType`, `sizeBytes`, `purpose` (§4.6) |
+| `PATCH /me/profile` | Self-service fields only, including `preferredLanguage` (§2.10) |
+
+### 13.5 Divergences and Their Resolution
+
+Known differences between the frontend as built and this contract. The resolution principle: **the contract wins on behaviour, statuses, units, and privacy; the frontend wins on response shape.**
+
+| # | Item | Frontend today | Resolution | Change lands in |
+| --- | --- | --- | --- | --- |
+| 1 | Proposal status | `needsRevision`; no `underReview` | Contract wins: `changesRequested`, and `underReview` exists (§3.2) | Frontend |
+| 2 | Record status | No `appealPending` | Contract wins; add when appeals are wired (§3.4) | Frontend |
+| 3 | Coin amounts | `balance: 6` meaning 6 coins | Contract wins: integer centi-coins on the wire, formatted for display (§2.1) | Frontend formatter |
+| 4 | Duration | `completedHours` etc. duplicated alongside minutes | Contract wins: minutes only on the wire; hours derived in the UI (§2.1) | Frontend |
+| 5 | Category names | Hold i18n keys | Contract wins: localized `name` from the server, keyed by `categoryId` (§2.10) | Frontend + fixtures |
+| 6 | Guardian fields in student lists | Present | Contract wins: omitted from lists (§9) | Frontend fixtures + backend |
+| 7 | Evidence URLs | Permanent direct links | Contract wins: short-lived, permission-checked (§4.6) | Frontend upload wiring |
+| 8 | List envelope / pagination | Bare arrays, client-side filtering | Contract wins (§2.5, §2.7) | Frontend client layer |
+| 9 | Display names alongside IDs (`projectTitle`, `studentName`, …) | Present throughout | **Frontend wins** — now codified as §2.11 | Contract (done) |
+| 10 | `enrolledCount`, `myApplicationStatus`, `daysWaiting`, `hasAnomaly`, `priority` | Present | **Frontend wins** — server-computed per §2.11. In Phase 2 anomaly flags are rule-based, not AI-derived | Contract (done) |
+| 11 | Aggregate payloads (`AdminStats`, `ReportData`, `StudentProgress`, `ReviewQueueItem`) | Defined in the frontend types only | **Frontend wins** — the types module is authoritative for these shapes (§10.1) | Types module |
+| 12 | Proposal `timeline` embedded in the resource | Embedded | Both: detail responses may embed the timeline; list responses must not, and `/timeline` remains the full history (§4.3) | Contract (done) |
+| 13 | Reports | One `reports.data()` blob | Four report endpoints composed in the client; `/reports/top-projects` added (§4.13) | Contract (done) + frontend |
+| 14 | Language preference | `localStorage` only | Server-persisted `preferredLanguage`, with the local value as a cache (§2.10) | Frontend + backend |

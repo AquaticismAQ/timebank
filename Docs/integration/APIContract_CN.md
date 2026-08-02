@@ -1,6 +1,6 @@
 # 时间银行 · RESTful API 合约（API Contract）
 
-> 本文档定义前端驱动实施所需的顶层 API 合约。它描述资源边界、端点、状态、权限和通用协议，不替代后端数据库设计或 OpenAPI 逐字段规范。第二阶段接口优先实现；第三、第四阶段接口作为稳定扩展命名空间预留。
+> 本文档定义前端驱动实施所需的顶层 API 合约。它描述资源边界、端点、状态、权限、请求体和通用协议，**对 API 行为具有权威性**；响应载荷的具体字段形状由前端类型模块拥有，且不由任何 OpenAPI 文件裁决——真相来源与优先级见 §10.1。第二阶段接口优先实现；第三、第四阶段接口作为稳定扩展命名空间预留。
 
 ---
 
@@ -26,8 +26,10 @@
 | 时间格式 | ISO 8601，带时区，例如 `2026-09-01T08:30:00+08:00` |
 | 日期格式 | `YYYY-MM-DD` |
 | ID | 服务端生成的不可猜测字符串；前端不得解析 ID |
-| 金额/时长 | 不使用浮点数；时长使用分钟，时间币使用最小记账单位整数 |
+| 时长 | 只使用整数**分钟**。API 不下发小时数，也不下发小数时长 |
+| 时间币金额 | 整数**分币**（1 时间币 = 100 单位）。`7550` 表示 75.5 时间币。客户端负责展示格式化；API 不下发小数时间币 |
 | 字段命名 | JSON 使用 `camelCase` |
+| 语言 | 每个请求携带 `Accept-Language`，见 §2.10 |
 | API 版本 | URL 主版本；兼容字段只追加、不复用旧语义 |
 
 ### 2.2 认证
@@ -59,6 +61,7 @@ Web 推荐使用 Secure、HttpOnly、SameSite Cookie 管理会话；如采用访
       "permissions": ["projects.read", "serviceRecords.create"]
     },
     "workspaces": ["student"],
+    "preferredLanguage": "zh-CN",
     "featureFlags": {
       "pov": false,
       "redemption": false,
@@ -173,6 +176,44 @@ Web 推荐使用 Secure、HttpOnly、SameSite Cookie 管理会话；如采用访
 - 草稿可删除；基础数据优先停用或归档。
 - 账户余额只能通过流水变化，不提供直接修改余额接口。
 
+### 2.10 语言与本地化
+
+Web 前端提供中文与英文两种界面（默认 `zh-CN`）。本地化的切分依据是**字段承载的文本类型**，而不是显示它的页面。
+
+| 文本类型 | 示例 | 传输表示 |
+| --- | --- | --- |
+| **代码与枚举** | `status`、`decision`、`type`、`sourceType`、`reasonCode`、`recognitionLevel`、`priority` | **永不本地化**。下发稳定代码，标签由客户端负责；对不认识的值必须兜底展示原始代码（§10.2） |
+| **字典/基础数据** | 服务类别、组织类型、年级、班级、荣誉等级、规则名称 | 服务端本地化。响应同时携带稳定标识（`categoryId` / `code`）与所解析语言的 `name`。客户端的逻辑与样式一律以标识为准，不得依赖 `name` |
+| **用户撰写内容** | 项目标题与描述、提案字段、审核意见、组织名称、复核陈述 | 按录入原样返回，录入什么语言就是什么语言。不做机器翻译，不按语言重复存储 |
+| **服务端生成文案** | 通知 `title`/`body`、错误 `message` | 按请求语言渲染。通知另外携带 `templateCode` 与参数，使切换语言后历史通知能重新正确渲染，也允许客户端自行本地化 |
+
+**语言解析顺序：** `Accept-Language` 请求头 → 当前用户的 `preferredLanguage` → 学校默认语言。无法匹配时降级而不是报错；字典项缺少某语言译文时降级到学校默认语言——本地化 `name` 永不为 `null` 或空串。
+
+**`preferredLanguage`** 为受支持集合内的 BCP 47 标签（`zh-CN`、`en`）。由 `/me` 返回，通过 `PATCH /me/profile` 修改，并作为异步产物（导出、邮件、定时通知）的语言依据——这些场景没有请求头可读。客户端可本地缓存以便即时切换，但跨设备以服务端值为准。
+
+**语言不改变数据语义。** 数字、日期、时长和时间币金额始终按 §2.1 的规范形式传输，与语言无关，差异只在展示层。
+
+### 2.11 响应组装
+
+以下三条规则保证页面能够仅凭已获得的响应完成渲染，符合 §8 关于禁止逐行追加请求的约定。
+
+**1. 被引用实体随行下发展示名称。** 凡是界面会在 ID 旁展示可读标签的地方，同一响应对象内必须同时给出该标签：
+
+| 字段 | 随行字段 |
+| --- | --- |
+| `projectId` | `projectTitle` |
+| `studentId` | `studentName` |
+| `categoryId` / `serviceCategoryId` | `categoryName` / `serviceCategoryName` |
+| `organizationId` | `organizationName` |
+| `ownerId`、`reviewerId`、`operatorId` | `ownerName`、`reviewerName`、`operatorName` |
+| `relatedRecordId`、`linkedProjectId` | `relatedRecordTitle`、`linkedProjectTitle` |
+
+这些标签是**只读的、时点性的展示快照**：不接受出现在请求体中，不得当作标识使用；若被引用实体后来改名，它与当前名称不一致是正常的。
+
+**2. 随访问者变化的字段以 `my` 前缀标识。** `myApplicationStatus`、`myRole` 等按当前登录主体计算，不得跨用户缓存；不适用时字段缺省而不是返回 `null`。
+
+**3. 服务端计算的聚合值属于资源本身。** `enrolledCount`、`projectCount`、`revisionCount`、`daysWaiting` 以及各类进度合计均由服务端推导，客户端只负责展示，不重算也不覆盖。
+
 ---
 
 ## 3. 核心资源与状态
@@ -245,6 +286,8 @@ confirmed → cancelled
 ```
 
 ### 3.4 服务记录 `ServiceRecord`
+
+`sourceType` 标识服务的来源方式，创建时确定：`project`（在已报名项目下完成）、`external`（外部组织组织）、`self`（学生自发）。它决定提交时的必填字段组合，不改变状态机本身。
 
 状态：
 
@@ -549,6 +592,7 @@ queued → running → succeeded
 | `GET` | `/reports/completion` | `reports.read` | 达标率 |
 | `GET` | `/reports/service-hours` | `reports.read` | 服务时长 |
 | `GET` | `/reports/review-efficiency` | `reports.read` | 审核效率 |
+| `GET` | `/reports/top-projects` | `reports.read` | 所选周期内参与度最高的项目 |
 | `POST` | `/exports` | `exports.create` | 创建导出任务 |
 | `GET` | `/exports/{jobId}` | 创建者/管理员 | 查询导出任务 |
 | `GET` | `/exports/{jobId}/download` | 创建者/管理员 | 获取短时下载地址 |
@@ -718,37 +762,41 @@ POV 最终生成或关联标准 `ServiceRecord`，审核通过后仍通过标准
 
 ---
 
-## 10. 合约交付与变更管理
+## 10. 真相来源与变更管理
 
-### 10.1 OpenAPI
+### 10.1 真相来源与优先级
 
-后端实现前，应基于本文生成机器可读的 OpenAPI 3.x 文件，至少包含：
+原先"后端实现前先手工产出 OpenAPI 文件"的要求**予以撤销**。该要求写于尚无客户端之时；如今完整的 React 前端已经存在，并且已经解决了预写规范本想解决的问题——但只覆盖了部分接口面（§13.2）。因此合约采用分层结构，每份产物只对自己真正验证过的部分具有权威性。
 
-- 路径、方法、权限和请求/响应 Schema。
-- 枚举、状态与错误码。
-- 示例数据。
-- 分页、幂等和并发头。
-- 第三、第四阶段端点标记。
+| 产物 | 权威范围 | 非权威范围 |
+| --- | --- | --- |
+| **本文档** | 行为：资源、状态机、权限与数据范围、事务边界、错误码、幂等与并发、**请求体**（§13.4） | 响应字段的完整清单 |
+| **`frontend/src/app/api/types.ts`** —— 由 `frontend/src/app/mock/data.ts` 原样抽出的载荷类型 | **响应载荷形状**：前端消费的每个端点的字段名、可选性与单位 | 任何行为、状态语义或权限规则 |
+| 后端运行时由 springdoc 生成的 **`openapi.json`** | 无。仅作为工具链与评审差异展示用的衍生产物 | 全部 |
 
-React 前端的 API Client 和 Mock Server 应由同一 OpenAPI 合约生成或校验。
+**优先级。** 行为冲突以本文档为准；响应字段冲突以类型模块为准；两者确实矛盾时以本文档为准，并在**同一个 PR 内**修正类型模块。`openapi.json` 永不裁决：它只被重新生成、不被手工编辑，也不作为合并门槛。
+
+**为什么不采用规范先行。** 合约的读取面已由一个真实渲染全部字段的界面验证过，这比规范评审更强。**为什么不让代码生成的规范充当裁决者。** 那等于把裁决权交给后端"恰好输出了什么"，迫使一个已经可用的前端反过来追随后端。
+
+**出现第二个客户端时重新评估。** 一旦第三阶段小程序开始消费同一 API，两个消费者之间可能产生分歧，前端类型模块就不再是中立裁决者；届时改为由 `openapi.json` 生成共享类型才是正确做法。本决定不阻碍该演进。
 
 ### 10.2 变更规则
 
 - 新增可选字段属于兼容变更。
 - 删除字段、修改类型、改变枚举语义或收紧原有行为属于破坏性变更。
 - 破坏性变更进入新的 API 主版本。
-- 枚举新增值时，前端必须有未知值兜底展示。
-- API 变更需同时更新 OpenAPI、Mock、合约测试和本文档。
+- 枚举新增值时，客户端必须有未知值兜底展示（展示原始代码）。
+- **一次合约变更以一个 PR 落地**，同时改动本文档、其英文版、类型模块、API Client 和后端实现。只改其中之一，正是"漂移"的定义。
 
 ### 10.3 完成定义
 
 一个端点只有同时满足以下条件才视为完成：
 
-- OpenAPI 已定义并通过校验。
-- 权限与数据范围测试通过。
-- 正常、校验失败、无权限、并发冲突和重复请求行为明确。
-- 前端不依赖未记录字段。
+- 行为符合本文档，响应符合类型模块。
+- 权限与数据范围测试通过，包含越权不可见返回 `404` 的场景。
+- 正常、校验失败、无权限、并发冲突和重复请求行为均已定义并测试。
 - 审计与幂等要求按风险等级落实。
+- **消费该端点的前端页面在关闭 Mock Client 后，能对接真实后端正确渲染。** 这是取代原 OpenAPI 校验门槛的验收关口——渲染成功比 Schema 比对更严格，因为它同时能发现缺失的展示名称、错误的单位和不可用的分页。
 
 ---
 
@@ -765,6 +813,7 @@ React 前端的 API Client 和 Mock Server 应由同一 OpenAPI 合约生成或�
 9. 重复提交、重复审批、重复审核和重复账户调整不会生成重复项目或重复流水。
 10. 并发编辑返回明确冲突，不静默覆盖其他用户修改。
 11. Web 在没有微信及其他 IM 接入的环境中通过全部端到端验收。
+12. 每个页面在 `zh-CN` 与 `en` 下均能正确渲染：没有本地化后的枚举或状态值出现在传输层，也没有字典项在非默认语言下返回空名称。
 
 ---
 
@@ -804,7 +853,7 @@ if (!progress) return <div className="p-4 lg:p-6">加载中...</div>;
 
 ### 12.3 类型来源
 
-TypeScript 类型（如 `Project`、`ServiceRecord`、`Account`）仍从 `../../mock/data` 导入，因为 Mock 数据文件同时充当类型定义源。后端 OpenAPI 生成类型后，导入路径切换为生成的类型文件即可。
+TypeScript 类型（如 `Project`、`ServiceRecord`、`Account`）目前从 `../../mock/data` 导入，该文件同时充当类型定义源。按 §10.1，这些类型即**权威的响应形状**，因此原样抽出到 `frontend/src/app/api/types.ts`，`mock/data.ts` 只保留假数据。此后组件与 API Client 从 API 层导入类型而不是从 Mock 层导入，将来删除假数据不会带走任何类型信息。
 
 ### 12.4 仪表盘聚合端点
 
@@ -813,3 +862,118 @@ TypeScript 类型（如 `Project`、`ServiceRecord`、`Account`）仍从 `../../
 ### 12.5 组织与学校信息
 
 组织列表通过 `api.organizations.list()` 获取，学校信息通过 `api.school.getInfo()` 获取。这些低频变化数据可在组件挂载时获取并缓存于组件状态。
+
+---
+
+## 13. 前端消费映射
+
+本章的目的，是让后端对着前端**实际消费的内容**来建设，而不是对着 §3–§4 的理想解读来建设。它记录映射关系、Mock 中**不得**照抄的取巧做法，以及每一处已知差异及其处理方式。
+
+### 13.1 API Client 方法 → 端点
+
+| Client 方法 | 端点 | 是否已接入页面 |
+| --- | --- | --- |
+| `auth.login` | `POST /auth/login` | 是 |
+| `auth.me` | `GET /me` | 否 |
+| `auth.logout` | `POST /auth/logout` | 否 |
+| `school.getInfo` | `GET /school/info` | 是 |
+| `projects.list` | `GET /projects` | 是 |
+| `projects.get` | `GET /projects/{id}` | 否 |
+| `projects.create` / `update` | `POST /projects` / `PATCH /projects/{id}` | 否 |
+| `projects.publish` / `close` / `archive` | `POST /projects/{id}/publish` / `/close` / `/archive` | 否 |
+| `eventProposals.list` | `GET /event-proposals` | 是 |
+| `eventProposals.get` | `GET /event-proposals/{id}` | 否 |
+| `eventProposals.create` / `update` | `POST /event-proposals` / `PATCH /event-proposals/{id}` | 否 |
+| `eventProposals.submit` / `withdraw` | `POST /event-proposals/{id}/submit` / `/withdraw` | 否 |
+| `eventProposals.review` | `POST /event-proposals/{id}/reviews` | 否 |
+| `applications.list` | `GET /applications` | 否 |
+| `applications.create` | `POST /projects/{projectId}/applications` | 否 |
+| `applications.cancel` / `confirm` | `POST /applications/{id}/cancel` / `/confirm` | 否 |
+| `serviceRecords.list` | `GET /service-records` | 是 |
+| `serviceRecords.get` | `GET /service-records/{id}` | 否 |
+| `serviceRecords.create` / `update` / `delete` | `POST` / `PATCH` / `DELETE /service-records[/{id}]` | 否 |
+| `serviceRecords.submit` | `POST /service-records/{id}/submit` | 否 |
+| `reviewQueue.list` | `GET /review-queue` | 是 |
+| `reviewQueue.summary` | `GET /review-queue/summary` | 否 |
+| `reviewQueue.decide` | `POST /service-records/{id}/reviews` | 否 |
+| `accounts.get` | `GET /accounts?filter[studentId]=…` | 是 |
+| `accounts.transactions` | `GET /accounts/{id}/transactions` | 是 |
+| `students.list` | `GET /students` | 是 |
+| `students.get` | `GET /students/{id}` | 否 |
+| `students.progress` | `GET /students/{id}/progress` | 是 |
+| `organizations.list` | `GET /organizations` | 是 |
+| `notifications.list` | `GET /notifications` | 是 |
+| `notifications.unreadCount` | `GET /notifications/unread-count` | 是 |
+| `notifications.markRead` / `markAllRead` | `PATCH /notifications/{id}` / `POST /notifications/read-all` | 是 |
+| `dashboards.student` / `admin` | `GET /dashboards/student` / `/admin` | 是 |
+| `reports.data` | 组合 `GET /reports/participation`、`/completion`、`/service-hours`、`/top-projects` | 是 |
+| `users.list` | `GET /users` | 否 |
+
+`api.accounts.get(studentId)` 传入的是学生 ID，而账户端点以账户 ID 为键。该差异在 Client 内解决——先按 `studentId` 过滤，再用返回的 `accountId`——而不是新增以学生为键的账户端点。
+
+### 13.2 前端已验证与未验证的部分
+
+**已验证：读取面。** 每个页面都通过 `api.*` 取数，没有任何组件直接引用假数据常量，因此上表中"是"的那些响应形状，已由真实渲染全部字段的页面验证过。这些形状具有权威性（§10.1）。
+
+**未验证：整个写入面。** 没有任何组件调用创建、修改、提交、审核、发布、确认或取消方法；这些操作目前只弹出提示。**从未构造或发送过任何请求体。** 文件上传在前端完全不存在——证明材料是预置对象并直接携带 `url`。
+
+由此产生的现实结论：§13.4 的请求体与 §4.6 的上传流程**没有任何**前端验证，联调缺口将集中在此。它们必须在前端接入写操作之前定稿，而该接入工作是审核闭环验收的前置条件，不是事后补做的收尾。
+
+### 13.3 Mock 中不得照抄的取巧做法
+
+Mock Client 有意采取了若干捷径，不得被当作合约行为：
+
+| Mock 取巧做法 | 真实要求 |
+| --- | --- |
+| `reviewQueue.decide` 在客户端改状态并从队列里移除条目 | 后端单一事务：审核事件、状态、账户流水、进度、通知（§4.7） |
+| 列表直接返回数组 | `{data, page, meta}` 信封（§2.5）；Client 解包 `data`，在需要分页的界面暴露 `page` |
+| 提案批准只翻转状态 | 批准同一事务内生成正式项目草稿并回填 `approvedProjectId`（§4.3） |
+| `MOCK_USERS` 带 `password` 字段 | 任何响应中都不存在 |
+| 学生列表假数据带 `guardianName` / `guardianContact` | 列表响应不返回监护人与联系方式（§9） |
+| `EvidenceFile.url` 是永久直链 | 由 `GET /files/{id}` 校验权限后签发短时地址，并记录访问审计（§4.6） |
+| 类别名称里放的是 i18n key（`mock.categories.cat_campus`） | 字典名称由服务端本地化，客户端以 `categoryId` 为键（§2.10） |
+| 在浏览器内对全量数组做筛选与搜索 | 服务端 `filter[...]` / `search` / `sort` 加分页（§2.7） |
+
+### 13.4 请求体
+
+由于没有任何写操作被客户端验证过，请求形状在此明确规定，而不是靠推断：
+
+**通用规则：** 请求体是 §3 所列资源核心字段中**可写的那部分**。以下三类字段一律以 `422 VALIDATION_FAILED` 拒绝，而不是静默忽略，以免客户端误以为自己设置成功：
+
+- **状态字段。** 状态流转一律走动作端点（`/submit`、`/publish`、`/reviews`），不走 `PATCH`。
+- **随行展示名称**（§2.11 规则 1）——`projectTitle`、`studentName`、`categoryName` 等只是输出。
+- **服务端计算值**——`enrolledCount`、由 `startAt`/`endAt` 推导的 `durationMinutes`、`creditedUnits`、`balanceAfter`、本应放在 `If-Match` 中的 `version`、各类时间戳，以及全部 `my*` 字段。
+
+**各端点的附加要求：**
+
+| 端点 | 请求体要求 |
+| --- | --- |
+| `POST /service-records` | `sourceType` 及其必需伴随字段（§3.4）：`project` 需 `projectId`；`external` 需 `organizationId`/`organizationName` 与负责人联系方式。另需 `serviceDate`、`startAt`、`endAt`、`serviceCategoryId`、`description`、证明文件 ID |
+| `POST /service-records/{id}/submit` | 空请求体；必须携带 `Idempotency-Key`。全部提交校验（§4.5）在此执行，而不是在创建时 |
+| `POST /service-records/{id}/reviews` | `decision`、`reasonCode`、`comment`、`recordVersion`；必须携带 `Idempotency-Key` |
+| `POST /event-proposals/{id}/reviews` | `decision`、`reasonCode`、`comment`、`proposalVersion`；必须携带 `Idempotency-Key` |
+| `POST /projects/{projectId}/applications` | 空请求体或仅 `note`——学生身份取自登录主体，绝不作为请求字段 |
+| `POST /accounts/{id}/adjustments`、`POST /account-transactions/{id}/reverse` | 以分币为单位的 `amount`（调整为带符号整数）、`reasonCode`、`memo`；必须携带 `Idempotency-Key` |
+| `POST /files/upload-intents` | `filename`、`mimeType`、`sizeBytes`、`purpose`（§4.6） |
+| `PATCH /me/profile` | 仅自助维护字段，含 `preferredLanguage`（§2.10） |
+
+### 13.5 差异清单与处理方式
+
+前端现状与本合约之间的已知差异。处理原则：**行为、状态、单位和隐私以合约为准；响应形状以前端为准。**
+
+| # | 事项 | 前端现状 | 处理方式 | 改动落在 |
+| --- | --- | --- | --- | --- |
+| 1 | 提案状态 | `needsRevision`，且没有 `underReview` | 合约为准：`changesRequested`，并存在 `underReview`（§3.2） | 前端 |
+| 2 | 记录状态 | 没有 `appealPending` | 合约为准；接入复核时补齐（§3.4） | 前端 |
+| 3 | 时间币金额 | `balance: 6` 表示 6 时间币 | 合约为准：传输层为整数分币，展示时格式化（§2.1） | 前端格式化 |
+| 4 | 时长 | `completedHours` 等与分钟字段重复 | 合约为准：传输层只有分钟，小时在界面换算（§2.1） | 前端 |
+| 5 | 类别名称 | 存放 i18n key | 合约为准：由服务端下发本地化 `name`，以 `categoryId` 为键（§2.10） | 前端与假数据 |
+| 6 | 学生列表中的监护人字段 | 存在 | 合约为准：列表不返回（§9） | 前端假数据与后端 |
+| 7 | 证明材料地址 | 永久直链 | 合约为准：短时且校验权限（§4.6） | 前端上传接入 |
+| 8 | 列表信封与分页 | 裸数组、客户端筛选 | 合约为准（§2.5、§2.7） | 前端 Client 层 |
+| 9 | ID 旁的展示名称（`projectTitle`、`studentName` 等） | 全面存在 | **前端为准**——已固化为 §2.11 | 合约（已完成） |
+| 10 | `enrolledCount`、`myApplicationStatus`、`daysWaiting`、`hasAnomaly`、`priority` | 存在 | **前端为准**——按 §2.11 由服务端计算。第二阶段的异常标记基于规则，不来自 AI | 合约（已完成） |
+| 11 | 聚合载荷（`AdminStats`、`ReportData`、`StudentProgress`、`ReviewQueueItem`） | 仅在前端类型中定义 | **前端为准**——这些形状以类型模块为权威（§10.1） | 类型模块 |
+| 12 | 提案 `timeline` 内嵌在资源中 | 内嵌 | 两者并存：详情响应可内嵌时间线，列表响应不得内嵌，完整历史仍由 `/timeline` 提供（§4.3） | 合约（已完成） |
+| 13 | 报表 | 单个 `reports.data()` 聚合块 | 由 Client 组合四个报表端点；新增 `/reports/top-projects`（§4.13） | 合约（已完成）与前端 |
+| 14 | 语言偏好 | 仅存 `localStorage` | 服务端持久化 `preferredLanguage`，本地值作为缓存（§2.10） | 前端与后端 |
