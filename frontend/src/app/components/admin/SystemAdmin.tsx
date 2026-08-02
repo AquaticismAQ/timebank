@@ -1,0 +1,794 @@
+import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Trash2, Lock } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuth, useLogs } from '../../App';
+import { api } from '../../api/client';
+
+// ── Rule config types ──────────────────────────────────────────────────────
+
+interface RuleItem {
+  label: string;
+  value: string;
+  field: string;
+  unit?: string;
+}
+
+interface RuleSection {
+  id: string;
+  title: string;
+  items: RuleItem[];
+}
+
+const INITIAL_RULES: RuleSection[] = [
+  {
+    id: 'high',
+    title: 'admin.system.rules.highSection',
+    items: [
+      { label: 'admin.system.rules.highAnnual', value: '75', field: 'highAnnual', unit: 'admin.system.rules.highAnnualUnit' },
+      { label: 'admin.system.rules.highTotal', value: '300', field: 'highTotal', unit: 'admin.system.rules.highTotalUnit' },
+      { label: 'admin.system.rules.highMin', value: '0.5', field: 'highMin', unit: 'admin.system.rules.highMinUnit' },
+    ],
+  },
+  {
+    id: 'middle',
+    title: 'admin.system.rules.middleSection',
+    items: [
+      { label: 'admin.system.rules.middleAnnual', value: '25', field: 'middleAnnual', unit: 'admin.system.rules.middleAnnualUnit' },
+      { label: 'admin.system.rules.middleTotal', value: '75', field: 'middleTotal', unit: 'admin.system.rules.middleTotalUnit' },
+    ],
+  },
+  {
+    id: 'coin',
+    title: 'admin.system.rules.coinSection',
+    items: [
+      { label: 'admin.system.rules.coinRate', value: '1', field: 'coinRate', unit: 'admin.system.rules.coinRateUnit' },
+      { label: 'admin.system.rules.coinMin', value: '0.5', field: 'coinMin', unit: 'admin.system.rules.coinMinUnit' },
+    ],
+  },
+];
+
+interface RuleModalProps {
+  section: RuleSection;
+  onClose: () => void;
+  onSave: (updated: RuleSection) => void;
+}
+
+function RuleModal({ section, onClose, onSave }: RuleModalProps) {
+  const { t } = useTranslation();
+  const [items, setItems] = useState<RuleItem[]>(section.items.map(i => ({ ...i })));
+  const [confirmed, setConfirmed] = useState(false);
+
+  const updateValue = (field: string, val: string) => {
+    setItems(prev => prev.map(i => i.field === field ? { ...i, value: val } : i));
+  };
+
+  const handleSave = () => {
+    for (const item of items) {
+      if (item.value.trim() === '' || isNaN(Number(item.value))) {
+        toast.error(t('admin.system.ruleRequiresNumber', { label: t(item.label) }));
+        return;
+      }
+      if (Number(item.value) <= 0) {
+        toast.error(t('admin.system.ruleMustBePositive', { label: t(item.label) }));
+        return;
+      }
+    }
+    if (!confirmed) {
+      toast.error(t('admin.system.checkConfirmationBox'));
+      return;
+    }
+    onSave({ ...section, items });
+  };
+
+  const hasChanges = items.some((item, i) => item.value !== section.items[i].value);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
+          <Shield className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
+          <h3 className="flex-1 text-foreground text-sm">{t('admin.system.editRule')}: {t(section.title)}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Warning banner */}
+        <div className="mx-5 mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 flex gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: t('admin.system.ruleWarning') }} />
+        </div>
+
+        {/* Fields */}
+        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
+          {items.map(item => (
+            <div key={item.field}>
+              <label className="block text-xs text-muted-foreground mb-1.5">{t(item.label)}</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={item.value}
+                  onChange={e => updateValue(item.field, e.target.value)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40"
+                />
+                {item.unit && (
+                  <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{t(item.unit)}</span>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Confirm checkbox */}
+          {hasChanges && (
+            <label className="flex items-start gap-2.5 pt-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={e => setConfirmed(e.target.checked)}
+                className="mt-0.5 accent-[oklch(0.488_0.243_264.376)]"
+              />
+              <span className="text-xs text-muted-foreground leading-relaxed">
+                {t('admin.system.ruleConfirmText')}
+              </span>
+            </label>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-border shrink-0 flex gap-3">
+          <button type="button" onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent">
+            {t('common.cancel')}
+          </button>
+          <button type="button" onClick={handleSave}
+            disabled={!hasChanges}
+            className="flex-1 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">
+            {t('admin.system.saveRule')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type Tab = 'users' | 'rules' | 'import' | 'logs' | 'settings';
+type UserRole = 'admin' | 'teacher' | 'student';
+type UserStatus = 'active' | 'inactive';
+
+interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  roles: UserRole[];
+  status: UserStatus;
+  lastLogin: string;
+}
+
+const INITIAL_USERS: AdminUser[] = [
+  { id: 'u1', name: 'Wei 陈老师', email: 'wei.chen@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-27' },
+  { id: 'u2', name: 'Alex 林', email: 'alex.lin@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-26' },
+  { id: 'u3', name: 'Mei 赵老师', email: 'mei.zhao@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-25' },
+  { id: 'u4', name: 'Jordan', email: 'jordan@example-school.cn', roles: ['teacher', 'student'], status: 'active', lastLogin: '2026-07-24' },
+  { id: 'u5', name: 'Nina 江', email: 'nina.jiang@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-20' },
+];
+
+
+const ROLE_LABELS: Record<UserRole, string> = { admin: 'mock.roles.admin', teacher: 'mock.roles.teacher', student: 'mock.roles.student' };
+const ALL_ROLES: UserRole[] = ['admin', 'teacher', 'student'];
+
+function roleColor(role: UserRole) {
+  if (role === 'admin') return 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300';
+  if (role === 'teacher') return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300';
+  return 'bg-muted text-muted-foreground';
+}
+
+interface UserFormState {
+  name: string;
+  email: string;
+  roles: UserRole[];
+  status: UserStatus;
+  password: string;
+  confirmPassword: string;
+  showResetPwd: boolean;
+}
+
+const emptyForm = (): UserFormState => ({
+  name: '', email: '', roles: ['teacher'], status: 'active',
+  password: '', confirmPassword: '', showResetPwd: false,
+});
+
+function userToForm(u: AdminUser): UserFormState {
+  return { name: u.name, email: u.email, roles: [...u.roles], status: u.status, password: '', confirmPassword: '', showResetPwd: false };
+}
+
+interface UserModalProps {
+  mode: 'create' | 'edit';
+  initial: UserFormState;
+  onClose: () => void;
+  onSave: (form: UserFormState) => void;
+  onDelete?: () => void;
+}
+
+function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps) {
+  const { t } = useTranslation();
+  const [form, setForm] = useState<UserFormState>(initial);
+  const [showPwd, setShowPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const set = (patch: Partial<UserFormState>) => setForm(prev => ({ ...prev, ...patch }));
+
+  const toggleRole = (role: UserRole) => {
+    set({ roles: form.roles.includes(role) ? form.roles.filter(r => r !== role) : [...form.roles, role] });
+  };
+
+  const handleSave = () => {
+    if (!form.name.trim()) { toast.error(t('admin.system.errorNameRequired')); return; }
+    if (!form.email.trim() || !form.email.includes('@')) { toast.error(t('admin.system.errorEmailInvalid')); return; }
+    if (form.roles.length === 0) { toast.error(t('admin.system.errorRoleRequired')); return; }
+    if (mode === 'create') {
+      if (!form.password) { toast.error(t('admin.system.errorPasswordRequired')); return; }
+      if (form.password.length < 6) { toast.error(t('admin.system.errorPasswordTooShort')); return; }
+      if (form.password !== form.confirmPassword) { toast.error(t('admin.system.errorPasswordMismatch')); return; }
+    } else if (form.showResetPwd) {
+      if (!form.password) { toast.error(t('admin.system.errorNewPasswordRequired')); return; }
+      if (form.password.length < 6) { toast.error(t('admin.system.errorPasswordTooShort')); return; }
+      if (form.password !== form.confirmPassword) { toast.error(t('admin.system.errorPasswordMismatch')); return; }
+    }
+    onSave(form);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
+          <Users className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
+          <h3 className="flex-1 text-foreground">{mode === 'create' ? t('admin.system.createUser') : t('admin.system.editUser')}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
+
+          {/* Name */}
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.nameLabel')} *</label>
+            <input type="text" value={form.name} onChange={e => set({ name: e.target.value })}
+              placeholder={t('admin.system.namePlaceholder')}
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.emailLabel')} *</label>
+            <input type="email" value={form.email} onChange={e => set({ email: e.target.value })}
+              placeholder={t('admin.system.emailPlaceholder')}
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+          </div>
+
+          {/* Roles */}
+          <div>
+            <label className="block text-xs text-muted-foreground mb-2">{t('admin.system.rolesLabel')} * ({t('admin.system.multiSelect')})</label>
+            <div className="flex gap-2">
+              {ALL_ROLES.map(role => (
+                <button key={role} type="button" onClick={() => toggleRole(role)}
+                  className={`flex-1 py-2 rounded-xl border text-sm transition-colors ${
+                    form.roles.includes(role)
+                      ? 'bg-[oklch(0.488_0.243_264.376)] text-white border-[oklch(0.488_0.243_264.376)]'
+                      : 'border-border text-muted-foreground hover:bg-accent'
+                  }`}>
+                  {t(ROLE_LABELS[role])}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Status (edit only) */}
+          {mode === 'edit' && (
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <div className="text-sm text-foreground">{t('admin.system.accountStatus')}</div>
+                <div className="text-xs text-muted-foreground">{t('admin.system.accountStatusDesc')}</div>
+              </div>
+              <button type="button" onClick={() => set({ status: form.status === 'active' ? 'inactive' : 'active' })}
+                className={`relative w-10 h-6 rounded-full transition-colors duration-200 ${form.status === 'active' ? 'bg-[oklch(0.488_0.243_264.376)]' : 'bg-muted'}`}>
+                <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${form.status === 'active' ? 'translate-x-4' : 'translate-x-0'}`} />
+              </button>
+            </div>
+          )}
+
+          {/* Password (create) */}
+          {mode === 'create' && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.initialPassword')} *</label>
+                <div className="relative">
+                  <input type={showPwd ? 'text' : 'password'} value={form.password} onChange={e => set({ password: e.target.value })}
+                    placeholder={t('admin.system.passwordPlaceholder')}
+                    className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+                  <button type="button" onClick={() => setShowPwd(!showPwd)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.confirmPassword')} *</label>
+                <div className="relative">
+                  <input type={showConfirmPwd ? 'text' : 'password'} value={form.confirmPassword} onChange={e => set({ confirmPassword: e.target.value })}
+                    placeholder={t('admin.system.reenterPassword')}
+                    className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+                  <button type="button" onClick={() => setShowConfirmPwd(!showConfirmPwd)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {showConfirmPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reset password (edit) */}
+          {mode === 'edit' && (
+            <div className="border border-border rounded-xl overflow-hidden">
+              <button type="button" onClick={() => set({ showResetPwd: !form.showResetPwd, password: '', confirmPassword: '' })}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm text-muted-foreground hover:bg-accent transition-colors">
+                <span>{t('admin.system.resetPassword')}</span>
+                <ChevronRight className={`w-4 h-4 transition-transform ${form.showResetPwd ? 'rotate-90' : ''}`} />
+              </button>
+              {form.showResetPwd && (
+                <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
+                  <div className="relative">
+                    <input type={showPwd ? 'text' : 'password'} value={form.password} onChange={e => set({ password: e.target.value })}
+                      placeholder={t('admin.system.newPasswordPlaceholder')}
+                      className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+                    <button type="button" onClick={() => setShowPwd(!showPwd)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <input type={showConfirmPwd ? 'text' : 'password'} value={form.confirmPassword} onChange={e => set({ confirmPassword: e.target.value })}
+                    placeholder={t('admin.system.confirmNewPassword')}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Delete (edit only) */}
+          {mode === 'edit' && onDelete && (
+            <div className="pt-1">
+              {!confirmDelete ? (
+                <button type="button" onClick={() => setConfirmDelete(true)}
+                  className="flex items-center gap-2 text-xs text-destructive hover:text-destructive/80 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" /> {t('admin.system.deleteUser')}
+                </button>
+              ) : (
+                <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 space-y-2">
+                  <p className="text-xs text-destructive">{t('admin.system.confirmDeleteUser')}</p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setConfirmDelete(false)}
+                      className="flex-1 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent">
+                      {t('common.cancel')}
+                    </button>
+                    <button type="button" onClick={onDelete}
+                      className="flex-1 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs hover:opacity-90">
+                      {t('admin.system.confirmDelete')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-border shrink-0 flex gap-3">
+          <button type="button" onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent">
+            {t('common.cancel')}
+          </button>
+          <button type="button" onClick={handleSave}
+            className="flex-1 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity">
+            {mode === 'create' ? t('admin.system.createUser') : t('admin.system.saveChanges')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function SystemAdmin() {
+  const { t } = useTranslation();
+  const { user } = useAuth();
+  const { logs, addLog } = useLogs();
+  const isAdmin = user?.roles?.includes('admin') ?? false;
+  const [schoolName, setSchoolName] = useState('');
+
+  useEffect(() => {
+    api.school.getInfo().then(info => setSchoolName(info.name)).catch(() => {});
+  }, []);
+  const [activeTab, setActiveTab] = useState<Tab>('users');
+  const [users, setUsers] = useState<AdminUser[]>(INITIAL_USERS);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
+  const [rules, setRules] = useState<RuleSection[]>(INITIAL_RULES);
+  const [editingRule, setEditingRule] = useState<RuleSection | null>(null);
+  const [features, setFeatures] = useState({ pov: false, redemption: false, borrowing: false, appreciation: false });
+
+  const toggleFeature = (key: keyof typeof features) => {
+    setFeatures(prev => ({ ...prev, [key]: !prev[key] }));
+    toast.success(t('admin.system.featureToggleUpdated'));
+  };
+
+  const handleRuleSave = (updated: RuleSection) => {
+    setRules(prev => prev.map(r => r.id === updated.id ? updated : r));
+    addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.rules.logModifyRule', { title: t(updated.title) }), target: t('admin.system.rules.logRuleTarget'), category: 'system' });
+    setEditingRule(null);
+    toast.success(t('admin.system.ruleUpdated', { title: t(updated.title) }));
+  };
+
+  const handleCreate = (form: UserFormState) => {
+    const newUser: AdminUser = {
+      id: `u${Date.now()}`,
+      name: form.name.trim(),
+      email: form.email.trim(),
+      roles: form.roles,
+      status: 'active',
+      lastLogin: '—',
+    };
+    setUsers(prev => [...prev, newUser]);
+    addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logCreateUser'), target: `${newUser.name} (${newUser.email})`, category: 'system' });
+    setCreateOpen(false);
+    toast.success(t('admin.system.userCreated', { name: newUser.name }));
+  };
+
+  const handleEdit = (form: UserFormState) => {
+    if (!editTarget) return;
+    setUsers(prev => prev.map(u => u.id === editTarget.id
+      ? { ...u, name: form.name.trim(), email: form.email.trim(), roles: form.roles, status: form.status }
+      : u
+    ));
+    addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logEditUser'), target: `${form.name.trim()} (${form.email.trim()})`, category: 'system' });
+    setEditTarget(null);
+    toast.success(t('admin.system.userUpdated'));
+    if (form.showResetPwd && form.password) toast.success(t('admin.system.passwordReset'));
+  };
+
+  const handleDelete = () => {
+    if (!editTarget) return;
+    addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logDeleteUser'), target: `${editTarget.name} (${editTarget.email})`, category: 'system' });
+    setUsers(prev => prev.filter(u => u.id !== editTarget.id));
+    setEditTarget(null);
+    toast.success(t('admin.system.userDeleted', { name: editTarget.name }));
+  };
+
+  const tabs: { key: Tab; label: string; icon: typeof Users }[] = [
+    { key: 'users', label: t('admin.system.tabUsers'), icon: Users },
+    { key: 'rules', label: t('admin.system.tabRules'), icon: Shield },
+    { key: 'import', label: t('admin.system.tabImport'), icon: FileText },
+    { key: 'logs', label: t('admin.system.tabLogs'), icon: FileText },
+    { key: 'settings', label: t('admin.system.tabSettings'), icon: Settings },
+  ];
+
+  return (
+    <div className="p-4 lg:p-6 space-y-4">
+      <div>
+        <h1 className="text-foreground">{t('admin.system.title')}</h1>
+        <p className="text-sm text-muted-foreground">{t('admin.system.subtitle')}</p>
+      </div>
+
+      {/* Tab navigation */}
+      <div className="flex gap-1 bg-muted rounded-xl p-1 overflow-x-auto">
+        {tabs.map(({ key, label, icon: Icon }) => (
+          <button key={key} onClick={() => setActiveTab(key)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-colors flex-shrink-0 ${
+              activeTab === key ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}>
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Users tab ─────────────────────────────────────────────── */}
+      {activeTab === 'users' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">{t('admin.system.userCount', { count: users.length })}</p>
+            <button onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90 transition-opacity">
+              <Plus className="w-4 h-4" /> {t('admin.system.createUser')}
+            </button>
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block bg-card border border-border rounded-2xl overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  {[t('admin.system.colName'), t('admin.system.colEmail'), t('admin.system.colRoles'), t('admin.system.colStatus'), t('admin.system.colLastLogin'), t('admin.system.colActions')].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs text-muted-foreground font-medium">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id} className="border-b border-border last:border-b-0 hover:bg-muted/30">
+                    <td className="px-4 py-3 text-sm text-foreground font-medium">{u.name}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{u.email}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1 flex-wrap">
+                        {u.roles.map(r => (
+                          <span key={r} className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(r)}`}>{t(ROLE_LABELS[r])}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs ${u.status === 'active' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                        {u.status === 'active' ? t('admin.system.active') : t('admin.system.inactive')}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{u.lastLogin}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => setEditTarget(u)}
+                        className="text-xs text-[oklch(0.488_0.243_264.376)] hover:opacity-70 transition-opacity">
+                        {t('admin.system.edit')}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="sm:hidden space-y-2">
+            {users.map(u => (
+              <div key={u.id} className="bg-card border border-border rounded-2xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm text-foreground font-medium">{u.name}</span>
+                      <span className={`text-xs ${u.status === 'active' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                        {u.status === 'active' ? t('admin.system.active') : t('admin.system.inactive')}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mb-2">{u.email}</div>
+                    <div className="flex gap-1 flex-wrap">
+                      {u.roles.map(r => (
+                        <span key={r} className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(r)}`}>{t(ROLE_LABELS[r])}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <button onClick={() => setEditTarget(u)}
+                    className="text-xs px-3 py-1.5 border border-border rounded-lg text-muted-foreground hover:bg-accent shrink-0">
+                    {t('admin.system.edit')}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Rules tab ─────────────────────────────────────────────── */}
+      {activeTab === 'rules' && (
+        <div className="space-y-4">
+          {!isAdmin && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-4 flex gap-3">
+              <Lock className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-blue-800 dark:text-blue-300 font-medium">{t('admin.system.adminOnlyRules')}</p>
+                <p className="text-xs text-blue-700/70 dark:text-blue-400/70 mt-0.5">
+                  {t('admin.system.adminOnlyRulesDesc')}
+                </p>
+              </div>
+            </div>
+          )}
+          {rules.map(section => (
+            <div key={section.id} className="bg-card border border-border rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                <h3 className="text-sm text-foreground">{t(section.title)}</h3>
+                {isAdmin ? (
+                  <button onClick={() => setEditingRule(section)}
+                    className="text-xs text-[oklch(0.488_0.243_264.376)] hover:opacity-70 transition-opacity">
+                    {t('admin.system.edit')}
+                  </button>
+                ) : (
+                  <Lock className="w-3.5 h-3.5 text-muted-foreground/50" />
+                )}
+              </div>
+              <div className="divide-y divide-border">
+                {section.items.map(item => (
+                  <div key={item.field} className="flex items-center justify-between px-4 py-3">
+                    <span className="text-xs text-muted-foreground">{t(item.label)}</span>
+                    <span className="text-xs text-foreground font-medium tabular-nums">
+                      {item.value} {item.unit ? t(item.unit) : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Import/Export tab ─────────────────────────────────────── */}
+      {activeTab === 'import' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <Upload className="w-8 h-8 text-[oklch(0.488_0.243_264.376)] mb-3" />
+              <h3 className="text-foreground mb-1">{t('admin.system.importHistoricalRecords')}</h3>
+              <p className="text-xs text-muted-foreground mb-4">{t('admin.system.importHistoricalDesc')}</p>
+              <div className="space-y-2">
+                <button onClick={() => toast.success(t('admin.system.templateDownloaded'))}
+                  className="w-full py-2.5 border border-border rounded-xl text-sm text-muted-foreground hover:bg-accent text-center">
+                  {t('admin.system.downloadTemplate')}
+                </button>
+                <button onClick={() => toast.info(t('admin.system.downloadTemplateFirst'))}
+                  className="w-full py-2.5 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90">
+                  {t('admin.system.uploadDataFile')}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <Upload className="w-8 h-8 text-indigo-500 mb-3" />
+              <h3 className="text-foreground mb-1">{t('admin.system.importStudentInfo')}</h3>
+              <p className="text-xs text-muted-foreground mb-4">{t('admin.system.importStudentDesc')}</p>
+              <div className="space-y-2">
+                <button onClick={() => toast.success(t('admin.system.studentTemplateDownloaded'))}
+                  className="w-full py-2.5 border border-border rounded-xl text-sm text-muted-foreground hover:bg-accent text-center">
+                  {t('admin.system.downloadStudentTemplate')}
+                </button>
+                <button onClick={() => toast.info(t('admin.system.downloadTemplateFirst'))}
+                  className="w-full py-2.5 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90">
+                  {t('admin.system.uploadStudentFile')}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-card border border-border rounded-2xl p-5 sm:col-span-2">
+              <Download className="w-8 h-8 text-green-500 mb-3" />
+              <h3 className="text-foreground mb-1">{t('admin.system.exportData')}</h3>
+              <p className="text-xs text-muted-foreground mb-4">{t('admin.system.exportDesc')}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[t('admin.system.exportAllRecords'), t('admin.system.exportTransactions'), t('admin.system.exportReports'), t('admin.system.exportAuditLogs')].map(label => (
+                  <button key={label} onClick={() => toast.success(t('admin.system.exportTaskCreated', { label }))}
+                    className="py-2 border border-border rounded-xl text-sm text-foreground hover:bg-accent flex items-center justify-between px-4">
+                    {label}
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Logs tab ──────────────────────────────────────────────── */}
+      {activeTab === 'logs' && (
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-border">
+            <h3 className="text-foreground">{t('admin.system.auditLogs')}</h3>
+            <p className="text-xs text-muted-foreground">{t('admin.system.logsDesc', { count: logs.length })}</p>
+          </div>
+          <div className="divide-y divide-border">
+            {logs.map(log => (
+              <div key={log.id} className="px-4 py-3 flex items-start gap-3">
+                <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                  log.category === 'review'  ? 'bg-blue-500'   :
+                  log.category === 'project' ? 'bg-green-500'  :
+                  log.category === 'import'  ? 'bg-purple-500' :
+                  log.category === 'student' ? 'bg-orange-400' : 'bg-gray-400'
+                }`} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-foreground">{log.action}</div>
+                  <div className="text-xs text-muted-foreground">{log.target}</div>
+                  {log.memo && (
+                    <div className="mt-1 text-xs text-muted-foreground/70 bg-muted/50 rounded-md px-2 py-1 italic">
+                      {t('admin.system.memoLabel')}: {log.memo}
+                    </div>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-xs text-foreground">{log.operator}</div>
+                  <div className="text-xs text-muted-foreground">{log.time}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Settings tab ──────────────────────────────────────────── */}
+      {activeTab === 'settings' && (
+        <div className="space-y-4">
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-border">
+              <h3 className="text-foreground">{t('admin.system.featureToggles')}</h3>
+              <p className="text-xs text-muted-foreground">{t('admin.system.featureTogglesDesc')}</p>
+            </div>
+            {[
+              { key: 'pov' as const, label: t('admin.system.featPov'), desc: t('admin.system.featPovDesc') },
+              { key: 'redemption' as const, label: t('admin.system.featRedemption'), desc: t('admin.system.featRedemptionDesc') },
+              { key: 'borrowing' as const, label: t('admin.system.featBorrowing'), desc: t('admin.system.featBorrowingDesc') },
+              { key: 'appreciation' as const, label: t('admin.system.featAppreciation'), desc: t('admin.system.featAppreciationDesc') },
+            ].map(item => (
+              <div key={item.key} className="flex items-center gap-4 px-4 py-4 border-b border-border last:border-b-0">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-foreground">{item.label}</div>
+                  <div className="text-xs text-muted-foreground">{item.desc}</div>
+                </div>
+                <button onClick={() => toggleFeature(item.key)}
+                  className={`relative w-10 h-6 rounded-full transition-colors duration-200 ${features[item.key] ? 'bg-[oklch(0.488_0.243_264.376)]' : 'bg-muted'}`}>
+                  <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${features[item.key] ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-border">
+              <h3 className="text-foreground">{t('admin.system.systemInfo')}</h3>
+            </div>
+            {[
+              { label: t('admin.system.sysName'), value: `TimeBank · ${schoolName}` },
+              { label: t('admin.system.sysVersion'), value: 'v2.0.0-beta (Phase 2)' },
+              { label: t('admin.system.adminContact'), value: 'Wei Chen / Mei Zhao' },
+              { label: t('admin.system.officeLocation'), value: 'H300 / H504' },
+              { label: t('admin.system.apiVersion'), value: '/api/v1' },
+            ].map(item => (
+              <div key={item.label} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0">
+                <span className="text-xs text-muted-foreground">{item.label}</span>
+                <span className="text-xs text-foreground">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Create modal */}
+      {createOpen && (
+        <UserModal
+          mode="create"
+          initial={emptyForm()}
+          onClose={() => setCreateOpen(false)}
+          onSave={handleCreate}
+        />
+      )}
+
+      {/* Edit user modal */}
+      {editTarget && (
+        <UserModal
+          mode="edit"
+          initial={userToForm(editTarget)}
+          onClose={() => setEditTarget(null)}
+          onSave={handleEdit}
+          onDelete={handleDelete}
+        />
+      )}
+
+      {/* Edit rule modal */}
+      {editingRule && (
+        <RuleModal
+          section={editingRule}
+          onClose={() => setEditingRule(null)}
+          onSave={handleRuleSave}
+        />
+      )}
+    </div>
+  );
+}
