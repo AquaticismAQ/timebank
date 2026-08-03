@@ -30,6 +30,8 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -299,6 +301,13 @@ class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Optional<String> findUserIdByStudentId(String studentId) {
         return userRepository.findByStudentId(studentId).map(User::getId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, String> displayNamesOf(List<String> userIds) {
+        return userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getDisplayName));
     }
 
     private AuthenticatedUserView toAuthView(User user) {

@@ -442,6 +442,8 @@ Requirements: private by default, short-lived access URLs, virus/type scanning b
 
 **Decision: A.** A `FileStorage` port with `S3FileStorage` (works for both OSS and MinIO) behind it.
 
+**Execution note (2026-08-03):** B3.4 implemented this port against a `LocalFileStorage` adapter for its first, test-stage pass instead — a deliberate, documented substitution (disk space is not a concern at this volume), not a reversal of this decision. Concrete server path, config keys, and the move to a real `S3FileStorage` adapter are tracked in `Docs/implementation/00-Status.md` §15 and `Docs/implementation/14-Backend-B3F-CloudFileStorage.md`.
+
 **Lifecycle tiering.** Evidence access is heavily front-loaded — files are viewed during review and then almost never again. An object-storage lifecycle rule transitions objects Standard → Infrequent Access (~90 days) → Archive (~1 year). Objects are **deleted at graduation + 1 year** together with their database rows (§16.3), so no long-lived archive tier accumulates.
 
 **Deletion must cover the objects, not just the rows.** The purge job deletes evidence objects from the bucket in the same pass that removes their `file` metadata. Deleting only the metadata would leave the bucket full of unattributable images of minors — a privacy liability that nothing in the system records the existence of, and storage nobody can safely reclaim.

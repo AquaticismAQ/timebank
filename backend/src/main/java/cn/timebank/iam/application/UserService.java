@@ -10,6 +10,8 @@ import cn.timebank.iam.application.dto.UserDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /** The `iam` module's published interface (Design.md §6). */
@@ -50,4 +52,13 @@ public interface UserService {
      * (Design.md §6 module-boundary rule).
      */
     Optional<String> findUserIdByStudentId(String studentId);
+
+    /**
+     * B4: denormalizing `ownerName`/`proposedSupervisorName`-style fields on
+     * `project`/`eventProposal` lists without N+1 — a batch lookup, same
+     * cross-module-without-domain-reach-in shape as {@link
+     * #findUserIdByStudentId}. Ids absent from the result are silently
+     * omitted (the caller decides the fallback, e.g. an empty string).
+     */
+    Map<String, String> displayNamesOf(List<String> userIds);
 }

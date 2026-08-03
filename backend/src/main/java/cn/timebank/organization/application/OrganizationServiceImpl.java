@@ -11,6 +11,7 @@ import cn.timebank.organization.application.dto.OrganizationRequests.UpdateOrgan
 import cn.timebank.organization.domain.Organization;
 import cn.timebank.organization.domain.OrganizationStatus;
 import cn.timebank.organization.infrastructure.OrganizationRepository;
+import cn.timebank.organization.infrastructure.ProjectCountRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -23,10 +24,13 @@ class OrganizationServiceImpl implements OrganizationService {
 
     private final OrganizationRepository repository;
     private final AuditService auditService;
+    private final ProjectCountRepository projectCountRepository;
 
-    OrganizationServiceImpl(OrganizationRepository repository, AuditService auditService) {
+    OrganizationServiceImpl(OrganizationRepository repository, AuditService auditService,
+                             ProjectCountRepository projectCountRepository) {
         this.repository = repository;
         this.auditService = auditService;
+        this.projectCountRepository = projectCountRepository;
     }
 
     @Override
@@ -108,10 +112,12 @@ class OrganizationServiceImpl implements OrganizationService {
     }
 
     private OrganizationDto toDto(Organization org) {
-        // projectCount: hardcoded until B4's project table exists (§2.11 rule 3's
-        // aggregate has nothing to aggregate over yet — see Docs/implementation/00-Status.md).
+        // Organization lists are small (school-scale, dozens not thousands) —
+        // a per-row count query here is not the N+1 discipline §16.1 is
+        // about for the busy service-record/review surfaces.
+        int projectCount = projectCountRepository.countByOrganizationId(org.getId());
         return new OrganizationDto(org.getId(), org.getName(), org.getType().name().toLowerCase(),
                 org.getContactName(), org.getContactEmail(), org.getContactPhone(), org.getAddress(),
-                org.getStatus().name().toLowerCase(), 0, org.getVersion(), org.getCreatedAt());
+                org.getStatus().name().toLowerCase(), projectCount, org.getVersion(), org.getCreatedAt());
     }
 }

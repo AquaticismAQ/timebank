@@ -110,9 +110,14 @@ class ReviewDecisionTransaction {
         return serviceRecordService.getDetail(recordId, auth, resolvedLanguage);
     }
 
+    // Contract §4.7 documents camelCase decision values ("returnForChanges");
+    // this codebase's enum constants are UPPER_SNAKE — convert rather than
+    // require the wire format to match Java naming. (Existing tests that
+    // pass the literal enum name, e.g. "APPROVE", still work unchanged: a
+    // single-word decision converts to itself either way.)
     private Decision parseDecision(String raw) {
         try {
-            return Decision.valueOf(raw);
+            return Decision.valueOf(raw.replaceAll("([a-z])([A-Z])", "$1_$2").toUpperCase());
         } catch (IllegalArgumentException e) {
             throw ApiException.invalidRequest("Unknown decision: " + raw);
         }

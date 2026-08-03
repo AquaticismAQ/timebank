@@ -6,6 +6,10 @@ dist/
 build/
 target/
 
+# B3.4's local-disk evidence storage adapter (test-stage only — never real
+# evidence; a real S3-compatible store is 14-Backend-B3F-CloudFileStorage.md)
+backend/data/
+
 # Environment
 .env
 .env.local

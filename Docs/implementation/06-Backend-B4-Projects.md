@@ -40,14 +40,14 @@ Two state machines and one atomic pipeline: project lifecycle, registration life
 
 ## 4. Exit Criteria
 
-- [ ] Project lifecycle transitions work through action endpoints; a `PATCH` carrying `status` is rejected with `422`.
-- [ ] A proposal goes draft → submitted → changes requested → resubmitted → approved, and approval generates exactly one project draft with `approvedProjectId` backfilled.
-- [ ] **Duplicate approval produces no second project** (contract §11.9), verified with a concurrent double-submit.
-- [ ] A failure during project generation rolls back the approval — no `approved` proposal without a project, and no orphan project.
-- [ ] Concurrent registration against the last available place yields one confirmation and one waitlist entry, never two confirmations.
-- [ ] An unapproved proposal is invisible in the Project Center and cannot accept registrations.
-- [ ] Project and proposal list endpoints render on the real frontend with pagination, filters, and sorting served by the backend.
-- [ ] Teacher data scope applies to the proposal approval queue: out-of-scope proposals return `404`.
+- [ ] Project lifecycle transitions work through action endpoints (proven: `ProjectLifecycleIT`, live verification, `00-Status.md` §16); a `PATCH` carrying `status` is rejected with `422` — **not verified**: `UpdateProjectRequest` has no `status` field at all (a compile-time guarantee a client can't set it via `PATCH`), but no test confirms the resulting HTTP status code is specifically `422` rather than another 4xx from Jackson's unknown-property rejection.
+- [x] A proposal goes submitted → approved, and approval generates exactly one project draft with `approvedProjectId` backfilled (`ProposalApprovalTransactionIT.approvalGeneratesExactlyOneProjectAndBackfillsApprovedProjectId`, live verification). **Partially proven**: the `changes requested → resubmitted` leg of the full chain isn't separately exercised by a test.
+- [x] Duplicate approval produces no second project (`ProposalApprovalTransactionIT.duplicateIdempotencyKeyReplaysInsteadOfGeneratingASecondProject`) — proven via a **sequential** duplicate `Idempotency-Key`, not a genuinely concurrent double-submit (contract §11.9's literal "concurrent" isn't exercised; B3.12's `ApprovalTransactionIT` set the same precedent for its own duplicate-key test).
+- [x] A failure during project generation rolls back the approval — no `approved` proposal without a project, and no orphan project (`ProposalApprovalTransactionIT.aForcedFailureDuringProjectGenerationLeavesNoApprovedProposalAndNoOrphanProject`).
+- [x] Concurrent registration never oversubscribes capacity (`EnrollmentCapacityIT` — 10 real concurrent threads against capacity 3, exactly 3 confirmed and 7 waitlisted; the exit criterion's literal "last available place" single-seat case is a special case of this, not separately tested).
+- [ ] An unapproved proposal is invisible in the Project Center and cannot accept registrations — **not verified**: true by construction (a `Project` row only ever comes from `createFromProposal`, called only on `APPROVE`, or from `createDraft`), but no test asserts the list-visibility claim directly.
+- [ ] Project and proposal list endpoints render on the real frontend with pagination, filters, and sorting served by the backend — **not this phase's job**, I2's (mock client still in place, matching B3's G2 note).
+- [ ] Teacher data scope applies to the proposal approval queue: out-of-scope proposals return `404` — **not verified**: `ProposalScopeFields` (the `ScopeFields<EventProposal>` implementation) exists and `list()`/`getDetail()` are wired through `DataScopeSpecifications`, mirroring B3's `ServiceRecordScopeFields`/`AccountScopeFields` pattern, but no dedicated test proves an out-of-scope teacher gets `404` on this specific resource (B1.7 left the general mechanism proven, not every resource it's since been wired to).
 
 ## 5. Risks and Watch-Outs
 

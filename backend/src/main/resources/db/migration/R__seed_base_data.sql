@@ -73,4 +73,8 @@ INSERT IGNORE INTO rule_version (
 INSERT IGNORE INTO notification_template (id, code, title_zh, title_en, body_zh, body_en, created_at, updated_at) VALUES
     ('tmpl_record_approved', 'serviceRecord.approved', '服务记录已通过', 'Service Record Approved', '你提交的服务记录已通过审核，时间币已入账。', 'Your service record has been approved and time-coins credited.', NOW(3), NOW(3)),
     ('tmpl_record_returned', 'serviceRecord.returned', '服务记录需要补充', 'Service Record Needs More Information', '你提交的服务记录被退回，请查看审核意见并补充材料。', 'Your service record was returned - please review the feedback and resubmit.', NOW(3), NOW(3)),
-    ('tmpl_record_rejected', 'serviceRecord.rejected', '服务记录未通过', 'Service Record Rejected', '你提交的服务记录未通过审核，请查看审核意见。', 'Your service record was not approved - please review the feedback.', NOW(3), NOW(3));
+    ('tmpl_record_rejected', 'serviceRecord.rejected', '服务记录未通过', 'Service Record Rejected', '你提交的服务记录未通过审核，请查看审核意见。', 'Your service record was not approved - please review the feedback.', NOW(3), NOW(3)),
+    -- B4's proposal-approval transaction is the second real writer of a notification row.
+    ('tmpl_proposal_approved', 'eventProposal.approved', '活动提案已通过', 'Event Proposal Approved', '你的活动提案已通过审核，正式项目已生成。', 'Your event proposal has been approved and an official project has been generated.', NOW(3), NOW(3)),
+    ('tmpl_proposal_changes_requested', 'eventProposal.changesRequested', '活动提案需要修改', 'Event Proposal Needs Changes', '你的活动提案需要修改，请查看审核意见并重新提交。', 'Your event proposal needs changes - please review the feedback and resubmit.', NOW(3), NOW(3)),
+    ('tmpl_proposal_rejected', 'eventProposal.rejected', '活动提案未通过', 'Event Proposal Rejected', '你的活动提案未通过审核，请查看审核意见。', 'Your event proposal was not approved - please review the feedback.', NOW(3), NOW(3));

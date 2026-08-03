@@ -1,6 +1,7 @@
 package cn.timebank.servicerecord.domain;
 
 import cn.timebank.common.concurrency.VersionedEntity;
+import cn.timebank.common.persistence.StringListJsonConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
