@@ -3,6 +3,9 @@ package cn.timebank.review.application;
 import cn.timebank.account.application.AccountService;
 import cn.timebank.account.infrastructure.AccountRepository;
 import cn.timebank.account.infrastructure.AccountTransactionRepository;
+import cn.timebank.file.application.FileService;
+import cn.timebank.file.application.dto.FileRequests.CreateUploadIntentRequest;
+import cn.timebank.file.application.dto.UploadIntentDto;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.iam.application.dto.UserDto;
@@ -28,6 +31,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.ByteArrayInputStream;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -69,8 +73,23 @@ class ApprovalTransactionIT extends AbstractIntegrationTest {
     private StudentProgressRepository progressRepository;
     @Autowired
     private NotificationRepository notificationRepository;
+    @Autowired
+    private FileService fileService;
+
+    private static final byte[] VALID_JPEG = {
+            (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00, 0x01, 0x02, 0x03, 0x04,
+            0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
 
     private static final AtomicInteger SEQ = new AtomicInteger();
+
+    private String readyFile() {
+        UploadIntentDto intent = fileService.createUploadIntent(
+                new CreateUploadIntentRequest("evidence.jpg", "image/jpeg", VALID_JPEG.length, "serviceRecordEvidence"),
+                "usr_test_admin");
+        fileService.receiveContent(intent.fileId(), "usr_test_admin", new ByteArrayInputStream(VALID_JPEG));
+        fileService.complete(intent.fileId(), "usr_test_admin");
+        return intent.fileId();
+    }
 
     @Test
     void approvalProducesExactlyOneOfEachOfTheFiveEffects() {
@@ -280,7 +299,7 @@ class ApprovalTransactionIT extends AbstractIntegrationTest {
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, LocalDate.now().minusDays(2), start, end,
                 "Community Center", "cat_campus", "Helped out", null, null,
-                List.of("file_placeholder_1"), false);
+                List.of(readyFile()), false);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
         return serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-submit-" + draft.id(), "zh-CN");
     }

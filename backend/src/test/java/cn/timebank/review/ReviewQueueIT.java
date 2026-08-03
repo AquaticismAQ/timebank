@@ -1,5 +1,8 @@
 package cn.timebank.review;
 
+import cn.timebank.file.application.FileService;
+import cn.timebank.file.application.dto.FileRequests.CreateUploadIntentRequest;
+import cn.timebank.file.application.dto.UploadIntentDto;
 import cn.timebank.review.application.ReviewService;
 import cn.timebank.review.application.dto.ReviewQueueItemDto;
 import cn.timebank.review.application.dto.ReviewQueueSummaryDto;
@@ -17,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
+import java.io.ByteArrayInputStream;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -40,8 +44,23 @@ class ReviewQueueIT extends AbstractIntegrationTest {
     private ServiceRecordService serviceRecordService;
     @Autowired
     private ReviewService reviewService;
+    @Autowired
+    private FileService fileService;
+
+    private static final byte[] VALID_JPEG = {
+            (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00, 0x01, 0x02, 0x03, 0x04,
+            0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
 
     private static final AtomicInteger SEQ = new AtomicInteger();
+
+    private String readyFile() {
+        UploadIntentDto intent = fileService.createUploadIntent(
+                new CreateUploadIntentRequest("evidence.jpg", "image/jpeg", VALID_JPEG.length, "serviceRecordEvidence"),
+                "usr_test_admin");
+        fileService.receiveContent(intent.fileId(), "usr_test_admin", new ByteArrayInputStream(VALID_JPEG));
+        fileService.complete(intent.fileId(), "usr_test_admin");
+        return intent.fileId();
+    }
 
     @Test
     void submittedRecordsAppearInTheQueueWithDenormalizedNamesAndComputedFields() {
@@ -77,7 +96,7 @@ class ReviewQueueIT extends AbstractIntegrationTest {
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, LocalDate.now().minusDays(1),
                 Instant.now().minus(1, ChronoUnit.DAYS).minusSeconds(3600), Instant.now().minus(1, ChronoUnit.DAYS),
-                "Somewhere", "cat_campus", "desc", null, null, List.of("file_1"), false);
+                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
 
         var page = reviewService.queue(PageRequest.of(0, 50), adminAuth(), "zh-CN");
@@ -97,7 +116,7 @@ class ReviewQueueIT extends AbstractIntegrationTest {
         Instant start = end.minusSeconds(3600);
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, LocalDate.now().minusDays(2), start, end,
-                "Somewhere", "cat_campus", "desc", null, null, List.of("file_1"), false);
+                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
         return serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-submit-" + draft.id(), "zh-CN");
     }

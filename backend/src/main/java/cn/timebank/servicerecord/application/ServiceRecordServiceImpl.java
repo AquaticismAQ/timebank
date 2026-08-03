@@ -7,6 +7,7 @@ import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.common.idempotency.IdempotencyService;
+import cn.timebank.file.application.FileService;
 import cn.timebank.organization.application.ServiceCategoryService;
 import cn.timebank.organization.application.dto.ServiceCategoryDto;
 import cn.timebank.security.application.CookieSessionUserDetails;
@@ -64,12 +65,14 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
     private final DataScopeResolver dataScopeResolver;
     private final IdempotencyService idempotencyService;
     private final ObjectMapper objectMapper;
+    private final FileService fileService;
     private final ServiceRecordScopeFields scopeFields = new ServiceRecordScopeFields();
 
     ServiceRecordServiceImpl(ServiceRecordRepository repository, ServiceRecordRevisionRepository revisionRepository,
                               StudentService studentService, ServiceCategoryService serviceCategoryService,
                               AuditService auditService, DataScopeResolver dataScopeResolver,
-                              IdempotencyService idempotencyService, ObjectMapper objectMapper) {
+                              IdempotencyService idempotencyService, ObjectMapper objectMapper,
+                              FileService fileService) {
         this.repository = repository;
         this.revisionRepository = revisionRepository;
         this.studentService = studentService;
@@ -78,6 +81,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         this.dataScopeResolver = dataScopeResolver;
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
+        this.fileService = fileService;
     }
 
     @Override
@@ -336,8 +340,18 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
             errors.add(new FieldErrorDetail("serviceDate", "FUTURE_DATE", "Service date cannot be in the future."));
         }
         if (record.getEvidenceFileIds() == null || record.getEvidenceFileIds().isEmpty()) {
-            // Structural only — file-status (pending/processing/rejected) enforcement is B3.5, deferred.
             errors.add(new FieldErrorDetail("evidenceFileIds", "EVIDENCE_REQUIRED", "At least one evidence file is required."));
+        } else {
+            // B3.5: a PENDING/PROCESSING/REJECTED file cannot be attached — enforced
+            // here, not merely in the UI. A fileId absent from the map (deleted, or
+            // never existed) is treated the same as not-ready.
+            Map<String, String> statuses = fileService.statusesOf(record.getEvidenceFileIds());
+            for (String fileId : record.getEvidenceFileIds()) {
+                if (!"READY".equals(statuses.get(fileId))) {
+                    errors.add(new FieldErrorDetail("evidenceFileIds", "EVIDENCE_NOT_READY",
+                            "Evidence file " + fileId + " is not ready (status: " + statuses.getOrDefault(fileId, "MISSING") + ")."));
+                }
+            }
         }
 
         if (!errors.isEmpty()) {
