@@ -40,15 +40,23 @@ Everything an administrator needs to run the system for a term: handle appeals a
 
 ## 4. Exit Criteria
 
-- [ ] An appeal runs end to end and produces a complete, readable timeline (contract §11.6).
-- [ ] A manual correction changes a balance **only** by appending a transaction; the original is intact.
+**Pass 1 (B5.1-B5.5, B5.12 — done; see `00-Status.md` §17):**
+
+- [ ] An appeal runs end to end and produces a complete, readable timeline (contract §11.6) — **partially verified**: `CaseDecisionTransactionIT` proves an appeal's create→submit→resolve cycle never touches the ledger, but no test calls `CaseService.timeline(...)` and asserts its rendered entries; the endpoint exists and is built the same way `ProposalService.timeline` (B4, proven) is, but isn't itself exercised by a test.
+- [x] A manual correction changes a balance **only** by appending a transaction; the original is intact (`CaseDecisionTransactionIT.manualCorrectionResolveGeneratesExactlyOneAccountTransaction`, `.duplicateIdempotencyKeyReplaysInsteadOfDoubleAdjusting`; live verification in `00-Status.md` §17).
+- [x] `/notifications/unread-count` returns `304` on an unchanged badge (`NotificationReadPathIT`, live verification §17) — **the "single index-covered query" half is unmeasured**, not proven: the covering index (`idx_notification_recipient_unread`, V8) exists and the query is written to use it, but no `EXPLAIN` test confirms it, the same honesty gap B3/B4 left for their own query-count claims.
+- [x] No admin API can modify or delete an audit log row (`AuditLogQueryIT.theControllerHasNoMutatingMappingAtAll` — structural, not permission-based; `AuditServiceIT.repositoryDeclaresNoUpdateOrDeleteMethod` already covered the repository side since B0).
+
+**Pass 2 (dashboards, reports, materialized summaries — not started):**
+
 - [ ] Dashboards return `generatedAt` and are not shared across principals.
 - [ ] Report figures for a seeded grade match a hand-computed SQL query — reports that are merely plausible are not verified.
+
+**Pass 3 (exports, imports, executor/chunking/checkpointing infrastructure — not started):**
+
 - [ ] A 500k-row import: validates with a row-level error report, commits successfully, resumes correctly after a forced restart, and **does not degrade p95 latency** for concurrent interactive users (R11).
 - [ ] Re-importing the same file does not double-credit anything.
 - [ ] Export of a full academic year streams to object storage with bounded heap.
-- [ ] `/notifications/unread-count` returns `304` on an unchanged badge and runs as a single index-covered query.
-- [ ] No admin API can modify or delete an audit log row.
 
 ## 5. Risks and Watch-Outs
 

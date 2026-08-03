@@ -46,6 +46,17 @@ public interface AccountService {
 
     AccountTransactionDto adjust(String accountId, AdjustmentRequest request, String actorId);
 
+    /**
+     * B5.2: a manual correction may be the first-ever credit for a student
+     * (that is the point of a retroactive correction) — unlike {@link
+     * #adjust}, which requires an already-existing account, this lazily
+     * creates one exactly the way {@link #credit} does, so a caseflow
+     * resolution never fails with "account not found" for a student who
+     * has never earned before.
+     */
+    AccountTransactionDto adjustForStudent(String studentId, String gradeId, String classId,
+                                            AdjustmentRequest request, String actorId);
+
     /** Creates an opposite-signed transaction referencing the original; the original row is never touched. */
     AccountTransactionDto reverse(String transactionId, ReverseRequest request, String actorId);
 

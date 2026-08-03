@@ -113,6 +113,18 @@ class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
+    public AccountTransactionDto adjustForStudent(String studentId, String gradeId, String classId,
+                                                    AdjustmentRequest request, String actorId) {
+        Account account = getOrCreateLocked(studentId, gradeId, classId);
+        if (account.isFrozen()) {
+            throw ApiException.stateConflict("Account is frozen; cannot adjust.");
+        }
+        return appendTransaction(account, TransactionType.CORRECTION, request.amount(), "adjustment", null,
+                request.reasonCode(), actorId, null);
+    }
+
+    @Override
+    @Transactional
     public AccountTransactionDto reverse(String transactionId, ReverseRequest request, String actorId) {
         AccountTransaction original = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> ApiException.notFound("Transaction not found."));

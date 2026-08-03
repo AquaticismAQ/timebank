@@ -52,6 +52,14 @@ server:
   # request.isSecure() reports false behind the proxy and the Secure cookie
   # flag below would silently never be set.
   forward-headers-strategy: native
+  tomcat:
+    # Contract §2.7's `filter[field]=value`/`page[number]` convention (B0.6)
+    # puts literal `[`/`]` in query-parameter *names* — Tomcat's default
+    # RFC 3986 query validation rejects those characters outright (a plain
+    # 400, before the request even reaches Spring MVC), which went
+    # unnoticed until B5.12's `GET /audit-logs` became the first endpoint
+    # to actually exercise `filter[...]` over real HTTP.
+    relaxed-query-chars: "[,]"
   servlet:
     session:
       cookie:

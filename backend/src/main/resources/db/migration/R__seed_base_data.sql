@@ -77,4 +77,12 @@ INSERT IGNORE INTO notification_template (id, code, title_zh, title_en, body_zh,
     -- B4's proposal-approval transaction is the second real writer of a notification row.
     ('tmpl_proposal_approved', 'eventProposal.approved', '活动提案已通过', 'Event Proposal Approved', '你的活动提案已通过审核，正式项目已生成。', 'Your event proposal has been approved and an official project has been generated.', NOW(3), NOW(3)),
     ('tmpl_proposal_changes_requested', 'eventProposal.changesRequested', '活动提案需要修改', 'Event Proposal Needs Changes', '你的活动提案需要修改，请查看审核意见并重新提交。', 'Your event proposal needs changes - please review the feedback and resubmit.', NOW(3), NOW(3)),
-    ('tmpl_proposal_rejected', 'eventProposal.rejected', '活动提案未通过', 'Event Proposal Rejected', '你的活动提案未通过审核，请查看审核意见。', 'Your event proposal was not approved - please review the feedback.', NOW(3), NOW(3));
+    ('tmpl_proposal_rejected', 'eventProposal.rejected', '活动提案未通过', 'Event Proposal Rejected', '你的活动提案未通过审核，请查看审核意见。', 'Your event proposal was not approved - please review the feedback.', NOW(3), NOW(3)),
+    -- B5's caseflow decisions are the third real writer of a notification row.
+    ('tmpl_case_resolved', 'case.resolved', '申诉/补交已处理', 'Case Resolved', '你提交的申诉/补交材料已处理完毕。', 'Your appeal/supplement has been resolved.', NOW(3), NOW(3)),
+    ('tmpl_case_needs_information', 'case.needsInformation', '申诉/补交需要补充信息', 'Case Needs More Information', '你提交的申诉/补交材料需要补充信息，请查看审核意见并重新提交。', 'Your appeal/supplement needs more information - please review the feedback and resubmit.', NOW(3), NOW(3)),
+    ('tmpl_case_rejected', 'case.rejected', '申诉/补交未通过', 'Case Rejected', '你提交的申诉/补交材料未通过，请查看审核意见。', 'Your appeal/supplement was rejected - please review the feedback.', NOW(3), NOW(3));
+
+-- System settings: a single fixed row (B5.5/B5.12).
+INSERT IGNORE INTO system_settings (id, notification_poll_interval_seconds, version, updated_at, updated_by) VALUES
+    ('default', 30, 1, NOW(3), NULL);

@@ -13,6 +13,16 @@ import java.util.Optional;
  * {@code deleteById}, no {@code delete}, no derivable update method.
  * {@link #save} is present for a first insert only; the module never calls
  * it twice for the same id (invariant 10, Design.md §12).
+ *
+ * <p>{@code GET /audit-logs}' combinable multi-field filtering (B5.12) is
+ * deliberately built with {@code NamedParameterJdbcTemplate}
+ * ({@code AuditLogQueryServiceImpl}), not {@code JpaSpecificationExecutor}
+ * added here — Spring Data JPA's {@code JpaSpecificationExecutor} declares
+ * its own {@code delete(Specification)}, which would silently reintroduce
+ * exactly the write capability this interface exists to structurally rule
+ * out (caught live by {@code AuditServiceIT
+ * .repositoryDeclaresNoUpdateOrDeleteMethod}). Design.md D6 designates
+ * JdbcTemplate for this kind of dynamic-filter read anyway.
  */
 public interface AuditLogRepository extends Repository<AuditLog, String> {
 
