@@ -295,6 +295,12 @@ class UserServiceImpl implements UserService {
         return sb.toString();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> findUserIdByStudentId(String studentId) {
+        return userRepository.findByStudentId(studentId).map(User::getId);
+    }
+
     private AuthenticatedUserView toAuthView(User user) {
         Set<String> roleCodes = user.getRoles().stream().map(Role::getCode).collect(Collectors.toCollection(LinkedHashSet::new));
         return new AuthenticatedUserView(

@@ -2,7 +2,7 @@
 
 > **Living document.** The single place to answer "where are we?". The plan lives in `01-Overview.md` and the phase docs; this file holds only state. Update it on phase entry, phase exit, and whenever a gate or risk changes — not in a burst before a review meeting.
 
-**Snapshot as of 2026-08-02 — B0 (Foundation), B1 (Identity), and B2 (Base Data & Rules) all complete and live on the test server.** Phase 1 (institutional design) is complete. The frontend is built and read-wired against a mock client. The backend now has real authentication end to end plus the reference data every business record will point at: students, academic structure, organizations, service categories, versioned rules with an immutable-publish lifecycle, localization resolution, notification templates, feature flags, and dictionary caching — all proven against real MySQL (32 tests: 3 ArchUnit + 4 MockMvc + 25 integration) and live-verified over HTTPS. B3 (Core Loop) has not started.
+**Snapshot as of 2026-08-03 — B0-B2 complete; B3 (Core Loop)'s core-loop work items complete and live on the test server, file module deliberately deferred.** Phase 1 (institutional design) is complete. The frontend is built and read-wired against a mock client. The backend now has the full draft→submit→review→credit pipeline: service records with revisions and an explicit state-transition table, submission validation (required-fields-per-sourceType, time/duration rules, duplicate detection, travel-time disclosure), the review queue and append-only decisions, the append-only ledger with row-locked concurrency, the atomic five-effect approval transaction (review event + status + ledger + progress + notification) wrapped in `Idempotency-Key`, and the progress projection — all proven against real MySQL (65 tests: 4 ArchUnit/unit + 4 MockMvc + 57 integration) and live-verified over HTTPS. **B3.4 (file/evidence module) and B3.5 (file access control) are a deliberate follow-up**, not built in this pass — see §14. Gate G2 is therefore not yet closed: two of its exit-criteria bullets depend on the file module.
 
 **Environment:** the shared test server is provisioned and in active use (MySQL 8, Java 21, Maven installed 2026-08-02). **No Docker anywhere** — the app runs as a systemd unit (`timebank-backend.service`, user `timebank`) and all tests run on the server against real MySQL (`01-Overview.md` §6). Server host and credentials live only in the untracked, git-ignored `test-server-credits.md`; they are never repeated in any tracked file, issue, or CI configuration. A **dedicated, scoped MySQL user** (`timebank_app`, privileges limited to `timebank.*` and `timebank_it_%.*`) was created rather than using the shared superuser `dbadmin` from the credentials file — see §11.
 
@@ -24,8 +24,8 @@ A phase is `✅` only when **every** exit-criteria checkbox in its own document 
 
 | | |
 | --- | --- |
-| **Overall state** | In progress — B0, B1, and B2 complete |
-| **Current phase** | B3 Core Loop (`—`, not started); B0.14's automated CI trigger remains open |
+| **Overall state** | In progress — B0-B2 complete; B3 core loop complete, file module deferred |
+| **Current phase** | B3 Core Loop (`▶`, B3.4/B3.5 remain); B0.14's automated CI trigger remains open |
 | **Planned duration** | ~28 weeks to pilot go-live (2 backend + 1 frontend engineer + ~0.2 FTE ops) |
 | **Total effort** | ~72 person-weeks |
 | **Start date** | 2026-08-02 |
@@ -37,7 +37,7 @@ A phase is `✅` only when **every** exit-criteria checkbox in its own document 
 | Gate | Meaning | Planned | Status | Evidence |
 | --- | --- | --- | --- | --- |
 | **G1** Contract freeze | Request bodies frozen, types module lifted, divergences 1–4 resolved | W6 | `—` | |
-| **G2** Core loop proven | Full record lifecycle with atomic crediting, demonstrated on the real frontend | W15 | `—` | |
+| **G2** Core loop proven | Full record lifecycle with atomic crediting, demonstrated on the real frontend | W15 | `⏸` | Core loop proven against real MySQL and live HTTPS (§14) — blocked on B3.4/B3.5 (evidence upload/access) before the gate's file-related exit criteria can close. Not yet demonstrated on the real frontend (that's I2's job) |
 | **G3** Restore drill | Production-sized restore, timed; RPO/RTO measured | W12, repeat W25 | `—` | |
 | **G4** Load test | 300 concurrent, p95 targets met, slow-query log empty | W26 | `—` | |
 | **G5** UAT sign-off | All 12 acceptance scenarios passed in both languages | W28 | `—` | |
@@ -51,7 +51,7 @@ A phase is `✅` only when **every** exit-criteria checkbox in its own document 
 | **B0** Foundation | `02-` | 7 pw | W1–W3 | `▶` | | Deployed and tested live on the test server 2026-08-02; only B0.14's automated CI trigger remains |
 | **B1** Identity | `03-` | 5 pw | W4–W6 | `✅` | | Deployed and live-verified over HTTPS 2026-08-02 |
 | **B2** Base data & rules | `04-` | 5 pw | W6–W8 | `✅` | | Deployed and live-verified over HTTPS 2026-08-02 |
-| **B3** Core loop | `05-` | 12 pw | W9–W15 | `—` | | Carries G2; do not compress |
+| **B3** Core loop | `05-` | 12 pw | W9–W15 | `▶` | | Carries G2; do not compress. Core-loop items (B3.1-3.3, 3.6-3.13) done and deployed 2026-08-03; B3.4/B3.5 (file module) deliberately deferred — see §14 |
 | **B4** Projects & proposals | `06-` | 7 pw | W16–W19 | `—` | | |
 | **B5** Admin surface | `07-` | 8 pw | W20–W23 | `—` | | |
 | **B6** Hardening & lifecycle | `08-` | 6 pw | W24–W26 | `—` | | Carries G4 |
@@ -124,19 +124,21 @@ A phase is `✅` only when **every** exit-criteria checkbox in its own document 
 
 | ID | Item | Status |
 | --- | --- | --- |
-| B3.1 | Service record module + revisions | `—` |
-| B3.2 | State machine (transition table) | `—` |
-| B3.3 | Submission validation | `—` |
-| B3.4 | File module (intent → complete → scan) | `—` |
+| B3.1 | Service record module + revisions | `✅` |
+| B3.2 | State machine (transition table) | `✅` |
+| B3.3 | Submission validation | `✅` |
+| B3.4 | File module (intent → complete → scan) | `—` | 
 | B3.5 | File access control + audit | `—` |
-| B3.6 | Review queue projection | `—` |
-| B3.7 | Review decisions (append-only) | `—` |
-| B3.8 | Account module + immutable ledger | `—` |
-| B3.9 | Ledger serialization (`FOR UPDATE`) | `—` |
-| B3.10 | Adjustments, reversal, freeze | `—` |
-| B3.11 | Progress projection | `—` |
-| B3.12 | **The approval transaction (5 effects, atomic)** | `—` |
-| B3.13 | Crediting calculation (integers only) | `—` |
+| B3.6 | Review queue projection | `✅` |
+| B3.7 | Review decisions (append-only) | `✅` |
+| B3.8 | Account module + immutable ledger | `✅` |
+| B3.9 | Ledger serialization (`FOR UPDATE`) | `✅` |
+| B3.10 | Adjustments, reversal, freeze | `✅` |
+| B3.11 | Progress projection | `✅` |
+| B3.12 | **The approval transaction (5 effects, atomic)** | `✅` |
+| B3.13 | Crediting calculation (integers only) | `✅` |
+
+B3.4/B3.5 are a deliberate follow-up (§14) — installing MinIO on the shared, disk-constrained test server and choosing a real-vs-stubbed AV scanning approach are their own decisions, not folded into this pass.
 
 ### B4 · Projects & Proposals
 
@@ -272,20 +274,20 @@ Cross-cutting items I1.2–I1.10 (pagination, filtering, error states, polling, 
 
 ## 6. Acceptance Scenarios (`APIContract.md` §11)
 
-| # | Scenario | Status |
-| --- | --- | --- |
-| 1 | Proposal → changes requested → resubmit → approve → project draft | `—` |
-| 2 | Publish generated project → students register → teacher manages list | `—` |
-| 3 | Draft, upload evidence, submit a record | `—` |
-| 4 | Return → supplement → resubmit → approve | `—` |
-| 5 | Approval credits ledger and progress in one transaction | `—` |
-| 6 | Appeal processed with a complete timeline | `—` |
-| 7 | Historical import with validation errors, then commit | `—` |
-| 8 | Out-of-scope access returns `403`/invisible `404` | `—` |
-| 9 | Duplicate submit/approve/adjust creates no duplicates | `—` |
-| 10 | Concurrent edits conflict, never silently overwrite | `—` |
-| 11 | Full acceptance with no WeChat/IM dependency | `—` |
-| 12 | Both languages render with no localized enum on the wire | `—` |
+| # | Scenario | Status | Notes |
+| --- | --- | --- | --- |
+| 1 | Proposal → changes requested → resubmit → approve → project draft | `—` | |
+| 2 | Publish generated project → students register → teacher manages list | `—` | |
+| 3 | Draft, upload evidence, submit a record | `—` | Blocked on B3.4 (file upload) |
+| 4 | Return → supplement → resubmit → approve | `—` | Return→resubmit proven (`ServiceRecordSubmissionIT`/`ApprovalTransactionIT`); "supplement" is a B5 case-module concept |
+| 5 | Approval credits ledger and progress in one transaction | `✅` | `ApprovalTransactionIT.approvalProducesExactlyOneOfEachOfTheFiveEffects` + live HTTPS verification (§14) |
+| 6 | Appeal processed with a complete timeline | `—` | |
+| 7 | Historical import with validation errors, then commit | `—` | |
+| 8 | Out-of-scope access returns `403`/invisible `404` | `—` | `serviceRecords`/`accounts` now have real Specification-based scope (§14) but a dedicated out-of-scope-teacher acceptance test isn't written yet |
+| 9 | Duplicate submit/approve/adjust creates no duplicates | `✅` | `ApprovalTransactionIT.duplicateIdempotencyKeyReplaysInsteadOfDoubleCrediting` |
+| 10 | Concurrent edits conflict, never silently overwrite | `✅` | `ServiceRecordSubmissionIT.concurrentEditsToOneRecordReturnConflictNotSilentOverwrite`, `AccountConcurrencyIT` |
+| 11 | Full acceptance with no WeChat/IM dependency | `—` | |
+| 12 | Both languages render with no localized enum on the wire | `—` | |
 
 ## 7. Risk Register State
 
@@ -332,6 +334,7 @@ Material decisions taken during implementation that change a plan or contract do
 | 2026-08-02 | **B0 implemented and deployed.** Package root changed from `cn.<school>.timebank` to `cn.timebank` (D8 rationale — see §11 below); a scoped MySQL user (`timebank_app`) created instead of using the shared `dbadmin` superuser from the credentials file; test server found to be a genuinely shared multi-tenant box, not dedicated — sizing and heap choices adjusted accordingly | B0 (all items), `Design.md` §7 | §11 below |
 | 2026-08-02 | **B1 implemented and deployed.** `TeacherScopeAssignment` moved from `iam` to `security` module (owns scope-assignment storage, since `DataScopeResolverImpl` needs it and `iam`→`security` already exists via session revocation — kept the module dependency graph one-directional); Spring Security 6.2's default XOR CSRF handler replaced with the plain one for the double-submit-cookie pattern; `AuthService.authenticate()` made non-`@Transactional` since it deliberately throws after writes it needs to keep | B1 (all items) | §12 below |
 | 2026-08-02 | **B2 implemented and deployed.** `school_info.current_academic_year_code` denormalized to a plain string (not a FK to `academic_year.id`) to avoid an `organization`↔`student` module cycle; `RequestLanguageService` placed in `organization.application` (not `common`) since resolving the school-default language requires reading `school_info`, and `common` must stay dependency-free; `StudentServiceImpl.getDetail()`'s `readOnly` transaction and three no-arg `@Cacheable` methods' default-key collision both fixed after being caught live — see §13 below | B2 (all items) | §13 below |
+| 2026-08-03 | **B3's core-loop items implemented and deployed; file module (B3.4/B3.5) deliberately deferred.** New `notification` row/writer added ahead of B5 since the approval transaction needed somewhere to write its fifth effect; `iam.UserService` gained `findUserIdByStudentId` so `review` can resolve a notification recipient without reaching into `iam.domain`; B1.7/B1.8's data-scope mechanism wired to a real entity for the first time (`serviceRecords`, `accounts`); three real bugs found and fixed live — see §14 below | B3.1-3.3, 3.6-3.13, `iam.application.UserService`, `notification` module | §14 below |
 
 ## 10. How to Update This Document
 
@@ -413,3 +416,26 @@ $ curl -X POST .../students  → 201, list omits guardian/email, detail includes
 $ curl -X POST .../rules → draft; POST .../rules/{id}/publish → 200; PATCH .../rules/{id} → 409 STATE_CONFLICT
 ```
 32 tests pass on the server against real MySQL (up from 22 at the end of B1), confirmed via a full `mvn clean verify` run: `ModuleBoundaryTest` (2), `PermissionAnnotationTest` (1), `PingControllerTest` (4), `AuditServiceIT` (3), `IdempotencyServiceIT` (4), `AuthFlowIT` (4), `DataScopeResolverIT` (4), `RuleVersioningIT` (3, new), `StudentPrivacyIT` (3, new), `LocalizationIT` (3, new), `DictionaryCachingIT` (1, new).
+
+## 14. B3 Implementation Findings (2026-08-03) — core loop, file module deferred
+
+**Scope of this pass.** Per discussion at phase entry, B3 was split in two: this pass built everything except the file/evidence module (B3.1-B3.3, B3.6-B3.13 — service records, revisions, the state machine, submission validation, the review queue, append-only decisions, the ledger, progress, and the five-effect approval transaction). B3.4 (file upload/scan) and B3.5 (file access control) are a deliberate follow-up, since B3.4 requires installing MinIO as a new persistent systemd service on the shared test server (§11's ~5.2 GB free disk, 3.8 GB total RAM across four other tenants) and a decision on real-vs-stubbed AV scanning — both judged to deserve their own checkpoint rather than being bundled into an already-large phase. Because the file module doesn't exist, `service_record.evidence_file_ids` is a plain JSON array of opaque strings with only structural ("at least one present") validation — no `pending`/`processing`/`rejected` status enforcement is possible yet. Two of B3's exit-criteria bullets (a `processing`/`rejected` file can't be attached; evidence download issues a short-lived URL and audits cross-student access) and one acceptance scenario (§6 row 3) remain open for that reason — Gate G2 is not closed.
+
+**A `readOnly`-adjacent bug's mirror image: a mutating method that never flushes returns a stale `version` to a caller that immediately needs the true one.** `ServiceRecordServiceImpl.submit()`/`withdraw()`/`updateDraft()` and `beginReviewTransition()` each mutate an already-persisted `ServiceRecord` and build their response DTO from the same in-memory entity — but JPA's `@Version` field is only incremented by Hibernate when the pending `UPDATE` actually executes, which for a `@Transactional` method with no intervening query is deferred to commit, not immediately after the setter calls. The returned DTO's `version` therefore reflected the *pre-increment* value. This is invisible for a method whose result is only ever displayed, but B3.12's approval flow chains `submit()`'s returned version straight into `ConcurrencyControl.checkVersion` inside the very next call (`reviews.decide`) — exactly the case that exposed it: `ApprovalTransactionIT` failed with a spurious "changed by someone else, current version is 2" on a record nothing else had touched. Fixed by calling `repository.saveAndFlush(record)` before building the DTO in each of the four methods, forcing the increment to happen (and the in-memory field to update) before the method returns. **General lesson, worth checking before B4/B5 copy this pattern for `Project`/`Case`:** any mutating method whose returned `version` might be chained by a caller into a subsequent optimistic-lock check needs an explicit flush — auto-flush-at-commit is not soon enough.
+
+**A "read-then-lock" pattern for lazy resource creation defeats its own pessimistic lock on the (far more common) already-exists path.** `AccountServiceImpl.getOrCreateLocked()` originally called an unlocked `findByStudentId` first (to decide whether to create), then a locked `findWithLockById` second, for every credit — not just the first-ever one. Because both queries ran inside the same persistence context/session, Hibernate's first-level cache returned the *same managed entity instance* for the second (locked) query rather than re-hydrating its fields — meaning the lock was genuinely acquired at the database, but the in-memory `version` the transaction would later write back with was whatever the *first, unlocked* read had seen. Under `AccountConcurrencyIT`'s real concurrent threads, this surfaced as a reproducible `ObjectOptimisticLockingFailureException` even though the row-level lock was serializing correctly. Fixed by adding `findWithLockByStudentId` and using it as the *only* read for the common case, falling back to create+re-lock only when it's genuinely absent. **General lesson:** never issue an unlocked read and a locked read for the same identity within one persistence context expecting the second to refresh the first's cached state — it won't.
+
+**B1.7/B1.8's data-scope mechanism, built in B1 and left "mechanism only" through B2, is now wired to two real entities.** `ServiceRecordScopeFields`/`AccountScopeFields` implement `ScopeFields<T>` against the denormalized `studentId`/`gradeId`/`classId` columns each entity carries (mirroring the existing display-name denormalization pattern); `list()`/`getDetail()`-style reads on both `servicerecord` and `account` now run through `DataScopeSpecifications.apply(...)`, with `grantAll` decided by the calling service checking for `admin`/`sysadmin` role codes — the resolver itself still never infers scope from a role name. Owner-gated mutation endpoints (`PATCH`/`DELETE`/`submit`/`withdraw`) use a simpler direct ownership check instead (`record.studentId == principal.studentId()`), since "Owner" in the contract's permission column is a different, narrower question than "in scope" and a teacher's Grades/Classes scope should never let them edit a student's draft.
+
+**The review queue (B3.6) is a hand-written `NamedParameterJdbcTemplate` projection against `service_record`/`service_category`, not an entity graph** — deliberately, since it's flagged as one of the two busiest admin surfaces at scale. This is a legitimate cross-module *read-model query* (Design.md §6's "or a read-model query" clause): raw SQL carries no Java class dependency on `servicerecord.domain`, so `ModuleBoundaryTest` doesn't (and shouldn't) flag it, even though `review` is reading `servicerecord`'s table directly.
+
+**Live verification, for reference** (throwaway admin, student, and linked student-user created directly via SQL for this check — the `student ↔ user` link has no API surface yet, by design — then deleted along with every row the flow created):
+```
+$ curl -X POST .../service-records                      → 201, DRAFT, version 1
+$ curl -X POST .../service-records/{id}/submit            → 200, SUBMITTED, version 2
+$ curl .../review-queue          (as admin)                → 200, the record, priority "low", hasAnomaly false
+$ curl -X POST .../service-records/{id}/reviews {"decision":"APPROVE",...} → 200, APPROVED, creditedUnits 100, version 4
+```
+Database check after approval: exactly one `review_decision`, one `account_transaction` (`SERVICE_CREDIT`, amount 100, `balance_after` 100), one `student_progress` row (`total_credited_minutes` 60, `total_credited_centi_coins` 100, `honour_level` `NONE`), one `notification` (rendered `serviceRecord.approved`, Chinese — matching the student's `preferredLanguage`). `GET /students/{id}/progress` returned `completedMinutes: 60, gapMinutes: 4440, timeCoinBalance: 100, recognitionLevel: "none"` — all consistent.
+
+65 tests pass on the server against real MySQL (up from 32 at the end of B2), confirmed via a full `mvn verify` run: the 32 existing B0-B2 tests unchanged, plus `ServiceRecordStateMachineTest` (9, new, unit — no Spring context), `AccountLedgerIT` (6, new), `AccountConcurrencyIT` (1, new — 20 real threads against one row), `ReviewQueueIT` (3, new), `ApprovalTransactionIT` (8, new — the full happy path, idempotency replay, rule-immutability, and five separate forced-failure-per-effect tests each proving the other four effects were not committed), `ServiceRecordSubmissionIT` (6, new — one test per B3.3 validation rule plus the optimistic-concurrency exit criterion).

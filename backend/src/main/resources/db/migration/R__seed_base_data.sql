@@ -67,6 +67,10 @@ INSERT IGNORE INTO rule_version (
 
 -- Notification templates: representative examples proving the mechanism.
 -- The full catalog is finalized as B3/B4 build the transactions that need them.
+-- serviceRecord.approved/.returned proved the mechanism in B2; .rejected is
+-- added now as B3's approval transaction becomes the first real writer of
+-- a notification row (rather than just rendering one).
 INSERT IGNORE INTO notification_template (id, code, title_zh, title_en, body_zh, body_en, created_at, updated_at) VALUES
     ('tmpl_record_approved', 'serviceRecord.approved', '服务记录已通过', 'Service Record Approved', '你提交的服务记录已通过审核，时间币已入账。', 'Your service record has been approved and time-coins credited.', NOW(3), NOW(3)),
-    ('tmpl_record_returned', 'serviceRecord.returned', '服务记录需要补充', 'Service Record Needs More Information', '你提交的服务记录被退回，请查看审核意见并补充材料。', 'Your service record was returned - please review the feedback and resubmit.', NOW(3), NOW(3));
+    ('tmpl_record_returned', 'serviceRecord.returned', '服务记录需要补充', 'Service Record Needs More Information', '你提交的服务记录被退回，请查看审核意见并补充材料。', 'Your service record was returned - please review the feedback and resubmit.', NOW(3), NOW(3)),
+    ('tmpl_record_rejected', 'serviceRecord.rejected', '服务记录未通过', 'Service Record Rejected', '你提交的服务记录未通过审核，请查看审核意见。', 'Your service record was not approved - please review the feedback.', NOW(3), NOW(3));

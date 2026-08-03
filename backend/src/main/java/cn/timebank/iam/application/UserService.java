@@ -42,4 +42,12 @@ public interface UserService {
     boolean recordFailedLogin(String userId);
 
     MeResponse buildMeResponse(String userId);
+
+    /**
+     * B3.12: resolves which login account a student's in-app notification
+     * goes to. Exposed here (rather than a direct repository reach-in) so
+     * `notification`/`review` never depend on `iam.domain`/`infrastructure`
+     * (Design.md §6 module-boundary rule).
+     */
+    Optional<String> findUserIdByStudentId(String studentId);
 }

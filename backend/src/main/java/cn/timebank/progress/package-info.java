@@ -1,7 +1,8 @@
 /**
- * Requirement rules evaluation, per-student progress projection.
- *
- * Not built in B0 — this package marks the module boundary per
- * Design.md §7 so ArchUnit/Modulith can enforce it from day one.
+ * Per-student progress projection (B3.11) — a stored *lifetime* total,
+ * updated only from inside the approval transaction with amounts already
+ * resolved against the rule in effect at each record's own service date
+ * (invariant 8). Annual figures are computed live, bounded to one student
+ * and one academic year, not stored as a second stateful counter.
  */
 package cn.timebank.progress;
