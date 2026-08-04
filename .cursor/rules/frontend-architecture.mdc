@@ -1,0 +1,69 @@
+---
+description: Frontend architecture patterns and the mock-to-real integration path
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend Architecture
+
+React 18 + Vite 6 + Tailwind CSS v4 + shadcn/Radix UI. Path alias `@` → `frontend/src`.
+
+## Data Flow
+
+All data goes through `frontend/src/app/api/client.ts` which exports a single `api` object:
+
+```typescript
+api.projects.list()         // → Promise<Project[]>
+api.serviceRecords.create() // → Promise<ServiceRecord>
+api.auth.login()            // → Promise<LoginResponse>
+```
+
+**Currently backed by in-memory mocks** from `frontend/src/app/mock/data.ts`. Types and fixtures live together in that file — I0.1 will split them.
+
+## Integration Status
+
+- **Read calls:** ~20 methods wired through `api.*`, components use `useState`+`useEffect`
+- **Write calls:** methods defined in `client.ts` but **components don't call them** — mutations show `toast.success()` stubs
+- **No real HTTP transport yet** — no `fetch`, no CSRF, no cookies, no error handling
+
+## Component Organization
+
+```
+components/auth/     LoginPage, WorkspaceSelect
+components/layout/   StudentLayout, AdminLayout (shell/nav)
+components/student/  8 student portal pages (StudentHome, ProjectCenter, ServiceRecords, ...)
+components/admin/    8 admin portal pages (AdminDashboard, AuditCenter, ProjectManagement, ...)
+components/ui/       shadcn/Radix primitives — treat as vendored
+```
+
+## Routing
+
+`/student/*` → `RequireAuth(workspace=student)` → `StudentLayout`
+`/admin/*` → `RequireAuth(workspace=admin)` → `AdminLayout`
+
+Auth persisted to `localStorage` (no session cookies yet — I0 adds real auth).
+
+## Integration Rules (I0–I3)
+
+1. **Only change `client.ts` method bodies** when swapping mock → real — no component changes for the swap itself
+2. **Types go in `api/types.ts`** (after I0.1 lift), not in mock/data.ts
+3. **Per-domain toggle** (`VITE_API_BASE_URL` + domain switch) for incremental swap
+4. **Envelope unwrap in one place** — `{data, page, meta}` from backend
+5. **Error mapping in one place** — 422→field errors, 409→conflict, 403/404→not-available
+6. **Never render raw error objects** — student-facing phrasing in both languages
+7. **Idempotency keys generated once per user intent**, reused on retry
+8. **No optimistic UI on ledger operations** — show result from server response, not local prediction
+9. **`If-Match`/version on updates** — handle 409 with "someone else changed this" + refresh
+
+## Known Divergences (I0 must fix)
+
+- Proposal status `needsRevision` → `changesRequested`, add `underReview`
+- Coin amounts → integer centi-coins (1 coin = 100 units)
+- Drop `*Hours` fields from wire types (hours derived from minutes)
+- Category/dictionary names from server, not hardcoded constants
+
+## Styling
+
+- **Mobile-first** — build mobile layout first, enhance for tablet/desktop
+- Tailwind v4 config in CSS (no `tailwind.config.js`)
+- Theme tokens in `frontend/src/styles/theme.css` / `globals.css`

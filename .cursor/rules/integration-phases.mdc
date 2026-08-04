@@ -1,0 +1,57 @@
+---
+description: Integration phase work items (I0-I3) — the current implementation focus
+alwaysApply: true
+---
+
+# Integration Phases — Next Work
+
+All integration phases are `—` (not started). This is the primary implementation focus.
+
+## I0 · Contract Prep (blocks everything else)
+
+| ID | Item |
+|----|------|
+| I0.1 | Lift types from `mock/data.ts` → `api/types.ts` (types only, fixtures stay) |
+| I0.2 | Freeze request bodies (joint review of APIContract §13.4) |
+| I0.3 | HTTP transport — `fetch` wrapper (base URL, `credentials: 'include'`, CSRF, `Accept-Language`) |
+| I0.4 | Envelope handling — unwrap `{data}`, surface `{page}`, map `{error}` to typed `ApiError` |
+| I0.5 | Error-to-UI mapping — 422→field errors, 409→conflict, 403/404→not-available, 429→retry, 5xx→generic |
+| I0.6 | Idempotency + `If-Match` helpers |
+| I0.7 | Per-domain mock/real toggle (`VITE_API_BASE_URL` + domain switch) |
+| I0.8–I0.11 | Fix divergences: proposal statuses, centi-coins, drop `*Hours`, server dictionary names |
+| I0.12 | Dev environment recipe (Vite proxy/CORS, cookie behavior for SPA against remote test server) |
+
+**Gate G1:** request bodies frozen, types lifted, divergences fixed, one call proven against B1's `/me`.
+
+## I1 · Read Path (8 domains, sequential by backend readiness)
+
+| Order | Domain | Key methods |
+|-------|--------|-------------|
+| 1 | Session & school | `auth.login/me/logout`, `school.getInfo` |
+| 2 | Dictionaries | categories, grades, classes, organizations |
+| 3 | Students & progress | `students.list/get/progress` |
+| 4 | Accounts | `accounts.get/transactions` |
+| 5 | Records & review | `serviceRecords.list/get`, `reviewQueue.list/summary` |
+| 6 | Projects & proposals | `projects.list/get`, `eventProposals.list/get`, `applications.list` |
+| 7 | Notifications | `notifications.*` |
+| 8 | Dashboards & reports | `dashboards.*`, `reports.data` |
+
+Each domain: swap client method bodies → add pagination → server-side filter/sort → loading/error states → localization check → delete mock fixture.
+
+## I2 · Write Path (8 domains, highest risk — R12)
+
+Wire every `toast.success()` stub to a real mutation. Key rules:
+- No optimistic UI on ledger operations
+- `Idempotency-Key` per user intent, not per HTTP attempt
+- Validation errors on the right form fields, preserve user input
+- 409 → "someone else changed this" + refresh, never silent overwrite
+- Action endpoints, never `PATCH {status}`
+- Bulk actions: partial-failure rendered row by row
+
+## I3 · Acceptance
+
+Evidence upload flow, localization sweep, 12 acceptance scenarios (§11), historical import rehearsal, UAT with real users, cutover plan.
+
+## Sequencing Rule
+
+I0 blocks I1/I2/I3. Each I1 domain swap blocks the same domain in I2. I2 blocks I3.

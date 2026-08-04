@@ -1,0 +1,48 @@
+---
+description: TimeBank project overview — phases, status, and what to build next
+alwaysApply: true
+---
+
+# TimeBank Project Context
+
+TimeBank (时间银行) is a middle-school volunteer service recording system. Service hours → "time coins" (non-financial, never call them tokens/currency).
+
+## Current State (2026-08-04)
+
+**Backend (B0–B6 work items done, deployed, live on test server):**
+- B0 Foundation, B1 Identity, B2 Base Data: `✅`
+- B3 Core Loop (records, review, ledger, progress): all 13 work items `✅`
+- B4 Projects & Proposals: all 12 work items `✅`
+- B5 Admin Surface: all 12 work items `✅`
+- B6 Hardening: most items done; load test (B6.10) blocked on staging infra
+- B7 Database Ops: mostly blocked on infrastructure
+- B3F Cloud File Storage: not started (local-disk adapter in use)
+
+**Frontend:** React SPA complete, reads from in-memory mocks via `api.*` client. No real HTTP calls yet.
+
+**Integration (I0–I3): ALL `—` not started — this is the next focus.**
+
+## What Comes Next
+
+The **integration phases** (I0 → I1 → I2 → I3) wire the finished frontend to the finished backend:
+
+1. **I0 Contract Prep** — lift types, build HTTP transport, fix divergences, per-domain toggle
+2. **I1 Read Path** — swap 20+ read calls from mock to real backend, domain by domain
+3. **I2 Write Path** — wire every mutation (currently just `toast.success()` stubs)
+4. **I3 Acceptance** — evidence upload, localization, E2E scenarios, UAT
+
+Also remaining backend-side:
+- Open exit criteria on B3–B5 phases (frontend demos, query-count/EXPLAIN tests)
+- B3F cloud file storage migration
+- B7 infrastructure provisioning (blocked externally)
+
+## Key Documents
+
+| Doc | Purpose |
+|-----|---------|
+| `Docs/implementation/00-Status.md` | Living status — **read before assuming what exists** |
+| `Docs/implementation/01-Overview.md` | Phase map, timeline, gates, conventions |
+| `Docs/integration/APIContract.md` | The REST API contract — authoritative for both sides |
+| `Docs/backend/Design.md` | Backend architecture, decisions (D1–D12), module layout |
+| `Docs/frontend/Design.md` | Frontend page/flow spec |
+| `Docs/implementation/10-..through..13-` | I0–I3 detailed work items and exit criteria |
