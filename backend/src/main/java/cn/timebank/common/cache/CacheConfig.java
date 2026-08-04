@@ -27,9 +27,17 @@ public class CacheConfig {
 
     public static final String DICTIONARIES = "dictionaries";
 
+    /**
+     * B5.6: dashboards cache 30-60 s and are viewer-derived (Design.md
+     * §16.2) — every call site keys explicitly on the caller's own
+     * principal (never a no-arg key, the B2.12 collision lesson), so this
+     * single region is safe to share across the three dashboard endpoints.
+     */
+    public static final String DASHBOARDS = "dashboards";
+
     @Bean
     public CaffeineCacheManager cacheManager() {
-        CaffeineCacheManager manager = new CaffeineCacheManager(DICTIONARIES);
+        CaffeineCacheManager manager = new CaffeineCacheManager(DICTIONARIES, DASHBOARDS);
         manager.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(60, TimeUnit.SECONDS)
                 .maximumSize(10_000));

@@ -6,6 +6,7 @@ import cn.timebank.account.application.dto.AccountTransactionDto;
 import cn.timebank.caseflow.application.dto.CaseDto;
 import cn.timebank.caseflow.application.dto.CaseRequests.CreateCaseRequest;
 import cn.timebank.caseflow.application.dto.CaseRequests.DecideRequest;
+import cn.timebank.caseflow.application.dto.TimelineEntryDto;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.iam.application.dto.AuthenticatedUserView;
@@ -26,6 +27,7 @@ import org.springframework.security.core.Authentication;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -86,6 +88,29 @@ class CaseDecisionTransactionIT extends AbstractIntegrationTest {
         assertThat(resolved.status()).isEqualTo("RESOLVED");
         assertThatThrownBy(() -> accountService.getByStudentId(student.id(), staffAuth("admin")))
                 .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void appealTimelineRendersACompleteReadableSequence() {
+        StudentDetailDto student = createStudent();
+        CaseDto submitted = createAndSubmitAppeal(student);
+
+        caseService.decide(submitted.id(),
+                new DecideRequest("resolve", "REVIEWED", "Confirmed with the supervisor by phone", submitted.version()),
+                staffAuth("admin"), "idem-appeal-timeline-" + submitted.id(), "zh-CN");
+
+        List<TimelineEntryDto> timeline = caseService.timeline(submitted.id(), staffAuth("admin"));
+
+        assertThat(timeline).hasSize(3);
+        assertThat(timeline).isSortedAccordingTo(java.util.Comparator.comparing(TimelineEntryDto::occurredAt));
+        assertThat(timeline.get(0).type()).isEqualTo("created");
+        assertThat(timeline.get(0).actorId()).isEqualTo(student.id());
+        assertThat(timeline.get(1).type()).isEqualTo("submitted");
+        assertThat(timeline.get(1).actorId()).isEqualTo(student.id());
+        TimelineEntryDto decisionEntry = timeline.get(2);
+        assertThat(decisionEntry.type()).isEqualTo("decision.resolve");
+        assertThat(decisionEntry.description()).isEqualTo("Confirmed with the supervisor by phone");
+        assertThat(decisionEntry.actorId()).isEqualTo("usr_admin_actor");
     }
 
     @Test

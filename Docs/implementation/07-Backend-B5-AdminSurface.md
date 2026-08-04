@@ -42,21 +42,21 @@ Everything an administrator needs to run the system for a term: handle appeals a
 
 **Pass 1 (B5.1-B5.5, B5.12 — done; see `00-Status.md` §17):**
 
-- [ ] An appeal runs end to end and produces a complete, readable timeline (contract §11.6) — **partially verified**: `CaseDecisionTransactionIT` proves an appeal's create→submit→resolve cycle never touches the ledger, but no test calls `CaseService.timeline(...)` and asserts its rendered entries; the endpoint exists and is built the same way `ProposalService.timeline` (B4, proven) is, but isn't itself exercised by a test.
+- [x] An appeal runs end to end and produces a complete, readable timeline (contract §11.6) — `CaseDecisionTransactionIT.appealTimelineRendersACompleteReadableSequence` (added in the Pass 2/3 session) calls `CaseService.timeline(...)` after a create→submit→resolve cycle and asserts the three rendered entries, their order, and their actor ids — the gap this bullet named is closed.
 - [x] A manual correction changes a balance **only** by appending a transaction; the original is intact (`CaseDecisionTransactionIT.manualCorrectionResolveGeneratesExactlyOneAccountTransaction`, `.duplicateIdempotencyKeyReplaysInsteadOfDoubleAdjusting`; live verification in `00-Status.md` §17).
 - [x] `/notifications/unread-count` returns `304` on an unchanged badge (`NotificationReadPathIT`, live verification §17) — **the "single index-covered query" half is unmeasured**, not proven: the covering index (`idx_notification_recipient_unread`, V8) exists and the query is written to use it, but no `EXPLAIN` test confirms it, the same honesty gap B3/B4 left for their own query-count claims.
 - [x] No admin API can modify or delete an audit log row (`AuditLogQueryIT.theControllerHasNoMutatingMappingAtAll` — structural, not permission-based; `AuditServiceIT.repositoryDeclaresNoUpdateOrDeleteMethod` already covered the repository side since B0).
 
-**Pass 2 (dashboards, reports, materialized summaries — not started):**
+**Pass 2 (dashboards, reports, materialized summaries — done; see `00-Status.md` §18):**
 
-- [ ] Dashboards return `generatedAt` and are not shared across principals.
-- [ ] Report figures for a seeded grade match a hand-computed SQL query — reports that are merely plausible are not verified.
+- [x] Dashboards return `generatedAt` and are not shared across principals — `DashboardReportingIT.teacherDashboardsAreScopedPerPrincipalAndCarryGeneratedAt` proves two teachers with different grade scopes get different `scopedStudentCount`s from the same cached region, not each other's; `studentAndAdminDashboardsReturnGeneratedAt` covers the other two.
+- [x] Report figures for a seeded grade match a hand-computed SQL query — `DashboardReportingIT.participationReportMatchesHandComputedFiguresForASeededGrade` / `completionReportMatchesHandComputedFiguresForASeededGrade` seed a grade with a known student/record mix and assert the exact expected total/participated/completed counts and rate, not just "a number came back."
 
-**Pass 3 (exports, imports, executor/chunking/checkpointing infrastructure — not started):**
+**Pass 3 (exports, imports, executor/chunking/checkpointing infrastructure — done with named gaps; see `00-Status.md` §18):**
 
-- [ ] A 500k-row import: validates with a row-level error report, commits successfully, resumes correctly after a forced restart, and **does not degrade p95 latency** for concurrent interactive users (R11).
-- [ ] Re-importing the same file does not double-credit anything.
-- [ ] Export of a full academic year streams to object storage with bounded heap.
+- [ ] A 500k-row import: validates with a row-level error report, commits successfully, resumes correctly after a forced restart, and **does not degrade p95 latency** for concurrent interactive users (R11) — **partially verified**. Proven at small scale against real MySQL: a row-level error report with the correct error codes (`ImportExportIT.importValidateProducesCorrectCountsAndErrorReport`), a correct commit crediting exactly the valid rows once (`.importCommitCreditsExactlyTheValidRowsOnce`), and the checkpoint-skip mechanism a reclaimed run depends on, proven directly by simulating the reclaimed state rather than a real process kill (`.aResumedCommitSkipsAlreadyCommittedRowsAndDoesNotDoubleCredit`). **Not proven:** an actual 500k-row run, a forced `kill -9` mid-job, or any p95/concurrent-load measurement — that is G4/B6.10 territory. A real, named gap in the checkpoint design itself is also documented in `ImportJobRunner`'s Javadoc: checkpointing happens at chunk boundaries (500 rows) and once more at successful completion, not after every row, so a crash *exactly* mid-chunk resumes from the previous boundary and re-credits that chunk's already-applied rows — closing this fully needs the row-credit write and the checkpoint write to be atomic together, which `AccountService`'s current per-call transaction ownership does not support.
+- [x] Re-importing the same file does not double-credit anything — proven three ways: `.reimportingTheIdenticalFileIsRejectedAfterCommit` (a second upload of byte-identical content is rejected at creation, before validation or commit even run), the resumed-commit test above (the skip mechanism itself), and live verification below (a second, differently-worded file for the same student credited independently and correctly).
+- [x] Export of a full academic year streams to object storage with bounded heap — proven functionally: `ExportJobRunner` writes to a local temp file (never an in-memory buffer) before a single `FileStorage.store` call, and the "serviceRecords" export uses keyset (not `OFFSET`) pagination per Design.md §16.1. **Not measured:** actual heap usage under a full-scale (100k-row) export — the boundedness claim rests on the streaming design, not a memory profile.
 
 ## 5. Risks and Watch-Outs
 
