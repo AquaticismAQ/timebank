@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, ChevronDown, ChevronUp, Download, Upload, AlertCircle, Pencil, X, Save } from 'lucide-react';
-import { GRADES, GRADE_LABEL_KEYS, type Student } from '../../mock/data';
+import { GRADES, GRADE_LABEL_KEYS } from '../../mock/data';
+import { type Student } from '../../api/types';
+import { formatCoins, minutesToHours } from '../../lib/format';
 import { toast } from 'sonner';
 import { useAuth, useLogs } from '../../App';
 import { api } from '../../api/client';
@@ -56,8 +58,8 @@ export function StudentList() {
       studentNumber: s.studentNumber,
       grade: s.grade,
       className: s.className,
-      completedHours: s.completedHours,
-      timeCoinBalance: s.timeCoinBalance,
+      completedHours: s.completedMinutes / 60,
+      timeCoinBalance: s.timeCoinBalance / 100,
       memo: '',
     });
   };
@@ -67,18 +69,30 @@ export function StudentList() {
     if (editForm.completedHours < 0) { toast.error('Completed hours cannot be negative'); return; }
     if (editForm.timeCoinBalance < 0) { toast.error('Time coins cannot be negative'); return; }
 
+    const priorCompletedHours = editStudent.completedMinutes / 60;
+    const priorTimeCoinBalance = editStudent.timeCoinBalance / 100;
+
     const changes: string[] = [];
     if (editForm.studentNumber !== editStudent.studentNumber)
       changes.push(`Student No. ${editStudent.studentNumber}→${editForm.studentNumber}`);
-    if (editForm.completedHours !== editStudent.completedHours)
-      changes.push(`Completed hours ${editStudent.completedHours}h→${editForm.completedHours}h`);
-    if (editForm.timeCoinBalance !== editStudent.timeCoinBalance)
-      changes.push(`Time coins ${editStudent.timeCoinBalance}→${editForm.timeCoinBalance}`);
+    if (editForm.completedHours !== priorCompletedHours)
+      changes.push(`Completed hours ${priorCompletedHours}h→${editForm.completedHours}h`);
+    if (editForm.timeCoinBalance !== priorTimeCoinBalance)
+      changes.push(`Time coins ${priorTimeCoinBalance}→${editForm.timeCoinBalance}`);
     if (editForm.name !== editStudent.name) changes.push(`Name changed to "${editForm.name}"`);
     if (editForm.grade !== editStudent.grade || editForm.className !== editStudent.className)
       changes.push(`Class changed to ${editForm.grade} ${editForm.className}`);
 
-    setStudents(prev => prev.map(s => s.id === editStudent.id ? { ...s, ...editForm } : s));
+    setStudents(prev => prev.map(s => s.id === editStudent.id ? {
+      ...s,
+      name: editForm.name,
+      email: editForm.email,
+      studentNumber: editForm.studentNumber,
+      grade: editForm.grade,
+      className: editForm.className,
+      completedMinutes: Math.round(editForm.completedHours * 60),
+      timeCoinBalance: Math.round(editForm.timeCoinBalance * 100),
+    } : s));
 
     addLog({
       operator: user?.displayName ?? 'Admin',
@@ -93,11 +107,14 @@ export function StudentList() {
     setEditForm(null);
   };
 
+  const sortValue = (s: Student, key: SortKey): string | number =>
+    key === 'completedHours' ? s.completedMinutes : key === 'timeCoinBalance' ? s.timeCoinBalance : s[key];
+
   const filtered = useMemo(() => {
     let items = students.filter(s => {
       const matchSearch = !search || s.name.includes(search) || s.studentNumber.includes(search) || s.className.includes(search);
       const matchGrade = filterGrade === 'all' || s.grade === filterGrade;
-      const pct = s.completedHours / s.annualRequiredHours;
+      const pct = s.completedMinutes / s.annualRequiredMinutes;
       const matchStatus = filterStatus === 'all' ? true :
         filterStatus === 'onTrack' ? pct >= 0.5 :
         filterStatus === 'below50' ? pct < 0.5 :
@@ -105,16 +122,16 @@ export function StudentList() {
       return matchSearch && matchGrade && matchStatus;
     });
     return [...items].sort((a, b) => {
-      const av = a[sortKey] as string | number;
-      const bv = b[sortKey] as string | number;
+      const av = sortValue(a, sortKey);
+      const bv = sortValue(b, sortKey);
       return sortDesc ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
     });
   }, [search, filterGrade, filterStatus, sortKey, sortDesc]);
 
   const stats = {
     total: students.length,
-    onTrack: students.filter(s => (s.completedHours / s.annualRequiredHours) >= 0.5).length,
-    atRisk: students.filter(s => (s.completedHours / s.annualRequiredHours) < 0.25).length,
+    onTrack: students.filter(s => (s.completedMinutes / s.annualRequiredMinutes) >= 0.5).length,
+    atRisk: students.filter(s => (s.completedMinutes / s.annualRequiredMinutes) < 0.25).length,
   };
 
   const SortTh = ({ k, label }: { k: SortKey; label: string }) => (
@@ -201,7 +218,7 @@ export function StudentList() {
           </thead>
           <tbody className="divide-y divide-border">
             {filtered.map(student => {
-              const annualPct = student.completedHours / student.annualRequiredHours;
+              const annualPct = student.completedMinutes / student.annualRequiredMinutes;
               const atRisk = annualPct < 0.25;
               const belowHalf = annualPct < 0.5;
               return (
@@ -221,7 +238,7 @@ export function StudentList() {
                   <td className="px-4 py-3 min-w-32">
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
-                        <ProgressBar value={student.completedHours} max={student.annualRequiredHours}
+                        <ProgressBar value={student.completedMinutes} max={student.annualRequiredMinutes}
                           color={atRisk ? 'bg-red-500' : belowHalf ? 'bg-yellow-500' : 'bg-green-500'} />
                       </div>
                       <span className={`text-xs font-medium w-8 text-right shrink-0 ${atRisk ? 'text-red-500' : belowHalf ? 'text-yellow-500' : 'text-green-500'}`}>
@@ -229,8 +246,8 @@ export function StudentList() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-foreground">{student.completedHours}h</td>
-                  <td className="px-4 py-3 text-sm text-foreground">{student.timeCoinBalance}</td>
+                  <td className="px-4 py-3 text-sm text-foreground">{minutesToHours(student.completedMinutes)}h</td>
+                  <td className="px-4 py-3 text-sm text-foreground">{formatCoins(student.timeCoinBalance)}</td>
                   <td className="px-4 py-3">
                     {atRisk ? (
                       <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
@@ -396,7 +413,7 @@ export function StudentList() {
       {/* Mobile: expandable cards */}
       <div className="lg:hidden space-y-2">
         {filtered.map(student => {
-          const annualPct = student.completedHours / student.annualRequiredHours;
+          const annualPct = student.completedMinutes / student.annualRequiredMinutes;
           const isExpanded = expandedId === student.id;
           const atRisk = annualPct < 0.25;
           const belowHalf = annualPct < 0.5;
@@ -419,9 +436,9 @@ export function StudentList() {
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground mb-1.5">
-                      {student.completedHours}h / {student.annualRequiredHours}h · {student.timeCoinBalance} {t('admin.students.coinsUnit')}
+                      {minutesToHours(student.completedMinutes)}h / {minutesToHours(student.annualRequiredMinutes)}h · {formatCoins(student.timeCoinBalance)} {t('admin.students.coinsUnit')}
                     </div>
-                    <ProgressBar value={student.completedHours} max={student.annualRequiredHours}
+                    <ProgressBar value={student.completedMinutes} max={student.annualRequiredMinutes}
                       color={atRisk ? 'bg-red-500' : belowHalf ? 'bg-yellow-500' : 'bg-green-500'} />
                   </div>
                   <div className="flex items-center gap-1 text-muted-foreground shrink-0">
@@ -439,13 +456,13 @@ export function StudentList() {
                     <div className="space-y-1.5">
                       <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.studentNumber')}</span><span className="text-foreground">{student.studentNumber}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.email')}</span><span className="text-foreground text-xs truncate ml-2">{student.email}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.completedHours')}</span><span className="text-green-600 dark:text-green-400">{student.completedHours}h</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.pendingHours')}</span><span className="text-blue-500">{student.pendingHours}h</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.completedHours')}</span><span className="text-green-600 dark:text-green-400">{minutesToHours(student.completedMinutes)}h</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.pendingHours')}</span><span className="text-blue-500">{minutesToHours(student.pendingMinutes)}h</span></div>
                     </div>
                     <div className="space-y-1.5">
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.annualRequiredHours')}</span><span className="text-foreground">{student.annualRequiredHours}h</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.graduationRequiredHours')}</span><span className="text-foreground">{student.stageRequiredHours}h</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.timeCoins')}</span><span className="text-foreground">{student.timeCoinBalance}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.annualRequiredHours')}</span><span className="text-foreground">{minutesToHours(student.annualRequiredMinutes)}h</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.graduationRequiredHours')}</span><span className="text-foreground">{minutesToHours(student.stageRequiredMinutes)}h</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.timeCoins')}</span><span className="text-foreground">{formatCoins(student.timeCoinBalance)}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.enrolled')}</span><span className="text-foreground">{student.joinedAt}</span></div>
                     </div>
                   </div>

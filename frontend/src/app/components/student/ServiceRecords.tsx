@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, X, FileText, AlertTriangle, ChevronDown, ChevronUp, Upload, Send, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { RECORD_STATUS_LABELS, SERVICE_CATEGORIES, type ServiceRecord, type RecordStatus } from '../../mock/data';
+import { RECORD_STATUS_LABELS, SERVICE_CATEGORIES, resolveCategoryName } from '../../mock/data';
+import { type ServiceRecord, type RecordStatus } from '../../api/types';
+import { formatCoins } from '../../lib/format';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 
@@ -20,7 +22,7 @@ type ViewMode = 'list' | 'new';
 const STEP_KEYS = ['source', 'serviceInfo', 'evidence', 'confirmSubmit'];
 
 export function ServiceRecords() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [records, setRecords] = useState<ServiceRecord[]>([]);
   const [view, setView] = useState<ViewMode>('list');
   const [search, setSearch] = useState('');
@@ -157,7 +159,7 @@ export function ServiceRecords() {
                 <select value={formData.categoryId} onChange={e => setFormData(f => ({ ...f, categoryId: e.target.value }))}
                   className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
                   {SERVICE_CATEGORIES.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name.startsWith('mock.') ? t(cat.name) : cat.name}</option>
+                    <option key={cat.id} value={cat.id}>{resolveCategoryName(cat.id, i18n.language)}</option>
                   ))}
                 </select>
               </div>
@@ -363,7 +365,7 @@ export function ServiceRecords() {
                         <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
-                        {rec.creditedUnits ? <span className="text-yellow-600 dark:text-yellow-400">+{rec.creditedUnits}</span> : '—'}
+                        {rec.creditedUnits ? <span className="text-yellow-600 dark:text-yellow-400">+{formatCoins(rec.creditedUnits)}</span> : '—'}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1 justify-end">
@@ -415,7 +417,7 @@ export function ServiceRecords() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
-                          {rec.creditedUnits && <span className="text-xs text-yellow-600 dark:text-yellow-400">+{rec.creditedUnits} {t('common.coins')}</span>}
+                          {rec.creditedUnits && <span className="text-xs text-yellow-600 dark:text-yellow-400">+{formatCoins(rec.creditedUnits)} {t('common.coins')}</span>}
                         </div>
                         <div className="text-sm text-foreground font-medium truncate">{rec.projectTitle || rec.organizationName}</div>
                         <div className="text-xs text-muted-foreground">{rec.serviceDate} · {rec.durationMinutes / 60} {t('common.hours')} · {rec.serviceCategoryName.startsWith('mock.') ? t(rec.serviceCategoryName) : rec.serviceCategoryName}</div>

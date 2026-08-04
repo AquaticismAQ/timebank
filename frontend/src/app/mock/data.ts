@@ -1,13 +1,14 @@
-// Mock data for Time Bank preview and testing
+// Mock data for Time Bank preview and testing. Types live in ../api/types
+// (APIContract.md §10.1/§12.3) — this file holds fixtures only.
+
+import type {
+  SchoolInfo, Role, User, ProjectStatus, Project, ApplicationStatus, Application,
+  RecordStatus, ServiceRecord, AccountTransaction, Account, StudentProgress,
+  Notification, Student, ReviewStatus, ReviewQueueItem, Organization, AdminStats,
+  ReportData, ProposalStatus, EventProposal,
+} from '../api/types';
 
 export const SCHOOL_NAME = 'Example City HD';
-
-export interface SchoolInfo {
-  name: string;
-  fullName: string;
-  studentDevCenter: string;
-  contact: string;
-}
 
 export const MOCK_SCHOOL_INFO: SchoolInfo = {
   name: SCHOOL_NAME,
@@ -18,26 +19,6 @@ export const MOCK_SCHOOL_INFO: SchoolInfo = {
 
 export async function getSchoolInfo(): Promise<SchoolInfo> {
   return Promise.resolve(MOCK_SCHOOL_INFO);
-}
-
-export type Role = 'student' | 'teacher' | 'admin' | 'sysadmin';
-
-export interface User {
-  id: string;
-  username: string;
-  password: string;
-  displayName: string;
-  roles: Role[];
-  workspaces: ('student' | 'admin')[];
-  studentId?: string;
-  email: string;
-  avatar?: string;
-  featureFlags: {
-    pov: boolean;
-    redemption: boolean;
-    borrowing: boolean;
-    appreciation: boolean;
-  };
 }
 
 export const MOCK_USERS: User[] = [
@@ -96,34 +77,28 @@ export const MOCK_USERS: User[] = [
   },
 ];
 
-export type ProjectStatus = 'draft' | 'published' | 'registrationOpen' | 'inProgress' | 'completed' | 'archived' | 'closed';
+// ── Service categories ──────────────────────────────────────────────────────
+// Dictionary data (APIContract.md §2.10): the real backend resolves a
+// localized `name` server-side per Accept-Language. This fixture carries
+// both language variants directly (no i18n-key indirection) so client.ts
+// can stamp the resolved name onto a response the same way a real server
+// would, and so a picker widget reading this table directly can resolve its
+// own labels without going through `t()`.
 
-export interface Project {
-  id: string;
-  title: string;
-  summary: string;
-  description: string;
-  categoryId: string;
-  categoryName: string;
-  organizationId: string;
-  organizationName: string;
-  ownerId: string;
-  ownerName: string;
-  startAt: string;
-  endAt: string;
-  location: string;
-  capacity: number;
-  enrolledCount: number;
-  recognizedMinutes: number;
-  eligibleGrades: string[];
-  registrationOpenAt: string;
-  registrationCloseAt: string;
-  status: ProjectStatus;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-  evidenceRequirements: string;
-  myApplicationStatus?: ApplicationStatus;
+export const SERVICE_CATEGORIES: { id: string; color: string; name: { en: string; zh: string } }[] = [
+  { id: 'cat_campus', color: 'blue', name: { en: 'Campus Activities', zh: '校园活动' } },
+  { id: 'cat_community', color: 'green', name: { en: 'Community Service', zh: '社区服务' } },
+  { id: 'cat_welfare', color: 'pink', name: { en: 'Welfare Service', zh: '福利服务' } },
+  { id: 'cat_education', color: 'purple', name: { en: 'Education Support', zh: '教育支持' } },
+  { id: 'cat_environment', color: 'teal', name: { en: 'Environmental Protection', zh: '环境保护' } },
+  { id: 'cat_other', color: 'gray', name: { en: 'Other', zh: '其他' } },
+];
+
+/** `language` is an i18next language code (`'zh'` or `'en'`), not a BCP 47 tag. */
+export function resolveCategoryName(categoryId: string, language: string): string {
+  const category = SERVICE_CATEGORIES.find(c => c.id === categoryId);
+  if (!category) return categoryId;
+  return language === 'zh' ? category.name.zh : category.name.en;
 }
 
 export const MOCK_PROJECTS: Project[] = [
@@ -133,7 +108,7 @@ export const MOCK_PROJECTS: Project[] = [
     summary: 'Assist the school in organizing the 2026 fall campus open day, serving as guides and exhibition assistants.',
     description: 'This open day expects to receive over 200 visiting families. Volunteers need to help maintain order, guide parents and students through subject exhibition areas, and answer basic questions. The entire event lasts about 4 hours. Volunteers are required to wear school uniform, be polite and enthusiastic, and be familiar with the campus map.',
     categoryId: 'cat_campus',
-    categoryName: 'mock.categories.cat_campus',
+    categoryName: resolveCategoryName('cat_campus', 'en'),
     organizationId: 'org_school',
     organizationName: `${SCHOOL_NAME} School`,
     ownerId: 'usr_admin001',
@@ -160,7 +135,7 @@ export const MOCK_PROJECTS: Project[] = [
     summary: 'Participate in cleaning community parks and streets, raise environmental awareness, and serve community residents.',
     description: 'In collaboration with the Example District C Environmental Protection Bureau, students participate in a community cleanup. Activities include sweeping streets, collecting trash, and environmental outreach. The event lasts about 3 hours, with school-provided transportation. Parental written consent is required.',
     categoryId: 'cat_community',
-    categoryName: 'mock.categories.cat_community',
+    categoryName: resolveCategoryName('cat_community', 'en'),
     organizationId: 'org_enviro',
     organizationName: 'Example District C Environmental Protection Association',
     ownerId: 'usr_teacher001',
@@ -187,7 +162,7 @@ export const MOCK_PROJECTS: Project[] = [
     summary: 'Assist the librarian with organizing books, updating the catalog index, and maintaining the reading environment.',
     description: 'The library needs systematic organization at the end of each semester. Volunteers will work under the librarian to classify books, shelve them, update labels, and collect reader feedback. Each session is 2 hours, and volunteers can participate multiple times.',
     categoryId: 'cat_campus',
-    categoryName: 'mock.categories.cat_campus',
+    categoryName: resolveCategoryName('cat_campus', 'en'),
     organizationId: 'org_school',
     organizationName: `${SCHOOL_NAME} School Library`,
     ownerId: 'usr_admin001',
@@ -214,7 +189,7 @@ export const MOCK_PROJECTS: Project[] = [
     summary: 'Visit the Example City City Welfare Home to spend time with elderly residents, chat, perform shows, and assist with daily activities.',
     description: 'A monthly nursing home visit where volunteers spend about 2 hours with elderly residents. Activities include chatting, crafts, and performances. Volunteers need compassion and patience, and must attend a brief training session beforehand.',
     categoryId: 'cat_welfare',
-    categoryName: 'mock.categories.cat_welfare',
+    categoryName: resolveCategoryName('cat_welfare', 'en'),
     organizationId: 'org_welfare',
     organizationName: 'Example City First Welfare Home',
     ownerId: 'usr_admin001',
@@ -241,7 +216,7 @@ export const MOCK_PROJECTS: Project[] = [
     summary: 'Travel to rural elementary schools in the Example City suburbs for a week-long teaching support program to help local students.',
     description: 'Summer teaching support is an intensive, high-value volunteer activity. Participants will go to a rural elementary school in Example County to provide tutoring in subjects like Chinese, Math, and English. Participants need a solid academic foundation. Room and board are arranged by the school.',
     categoryId: 'cat_education',
-    categoryName: 'mock.categories.cat_education',
+    categoryName: resolveCategoryName('cat_education', 'en'),
     organizationId: 'org_rural',
     organizationName: 'Example County Charity Education Association',
     ownerId: 'usr_admin001',
@@ -268,7 +243,7 @@ export const MOCK_PROJECTS: Project[] = [
     summary: 'Assist the student council in planning and executing the welcome party, handling check-in, stage setup, and crowd control.',
     description: 'The annual welcome party is a major school event requiring many volunteers. Tasks include: setting up the venue before the event, serving as guides and check-in staff during the party, and helping with cleanup afterward.',
     categoryId: 'cat_campus',
-    categoryName: 'mock.categories.cat_campus',
+    categoryName: resolveCategoryName('cat_campus', 'en'),
     organizationId: 'org_school',
     organizationName: `${SCHOOL_NAME} Student Council`,
     ownerId: 'usr_teacher001',
@@ -290,22 +265,6 @@ export const MOCK_PROJECTS: Project[] = [
     myApplicationStatus: undefined,
   },
 ];
-
-export type ApplicationStatus = 'pending' | 'confirmed' | 'waitlisted' | 'rejected' | 'completed' | 'cancelled';
-
-export interface Application {
-  id: string;
-  projectId: string;
-  projectTitle: string;
-  studentId: string;
-  studentName: string;
-  status: ApplicationStatus;
-  appliedAt: string;
-  confirmedAt?: string;
-  completedAt?: string;
-  cancelledAt?: string;
-  note?: string;
-}
 
 export const MOCK_APPLICATIONS: Application[] = [
   {
@@ -342,50 +301,6 @@ export const MOCK_APPLICATIONS: Application[] = [
   },
 ];
 
-export type RecordStatus = 'draft' | 'submitted' | 'underReview' | 'approved' | 'returned' | 'rejected' | 'corrected';
-
-export interface ServiceRecord {
-  id: string;
-  studentId: string;
-  studentName: string;
-  projectId?: string;
-  projectTitle?: string;
-  sourceType: 'project' | 'external' | 'self';
-  serviceDate: string;
-  startAt: string;
-  endAt: string;
-  durationMinutes: number;
-  location: string;
-  organizationId?: string;
-  organizationName: string;
-  serviceCategoryId: string;
-  serviceCategoryName: string;
-  description: string;
-  supervisorName: string;
-  supervisorContact: string;
-  evidenceFiles: EvidenceFile[];
-  status: RecordStatus;
-  reviewSummary?: string;
-  reviewerName?: string;
-  reviewedAt?: string;
-  creditedUnits?: number;
-  version: number;
-  createdAt: string;
-  submittedAt?: string;
-  updatedAt: string;
-  returnReason?: string;
-  rejectReason?: string;
-}
-
-export interface EvidenceFile {
-  id: string;
-  name: string;
-  type: string;
-  size: number;
-  url: string;
-  uploadedAt: string;
-}
-
 export const MOCK_RECORDS: ServiceRecord[] = [
   {
     id: 'rec_001',
@@ -402,7 +317,7 @@ export const MOCK_RECORDS: ServiceRecord[] = [
     organizationId: 'org_school',
     organizationName: `${SCHOOL_NAME} School Library`,
     serviceCategoryId: 'cat_campus',
-    serviceCategoryName: 'mock.categories.cat_campus',
+    serviceCategoryName: resolveCategoryName('cat_campus', 'en'),
     description: 'Assisted the librarian with reclassifying and shelving humanities and social science books, updated labels for about 200 books, and cleaned the reading area tables and chairs.',
     supervisorName: 'Librarian Wang',
     supervisorContact: 'library@example-school.cn',
@@ -414,7 +329,7 @@ export const MOCK_RECORDS: ServiceRecord[] = [
     reviewSummary: 'Documentation complete, service record verified, approved.',
     reviewerName: 'Teacher Wei Chen',
     reviewedAt: '2026-07-18T10:30:00+08:00',
-    creditedUnits: 3,
+    creditedUnits: 300,
     version: 1,
     createdAt: '2026-07-15T17:00:00+08:00',
     submittedAt: '2026-07-16T09:00:00+08:00',
@@ -435,7 +350,7 @@ export const MOCK_RECORDS: ServiceRecord[] = [
     organizationId: 'org_welfare',
     organizationName: 'Example City First Welfare Home',
     serviceCategoryId: 'cat_welfare',
-    serviceCategoryName: 'mock.categories.cat_welfare',
+    serviceCategoryName: resolveCategoryName('cat_welfare', 'en'),
     description: 'Participated in a nursing home visit, chatted with elderly residents, assisted with origami crafts, and performed two songs. The residents responded enthusiastically and the event was a great success.',
     supervisorName: 'Deputy Director Chen',
     supervisorContact: '0000-87654321',
@@ -446,7 +361,7 @@ export const MOCK_RECORDS: ServiceRecord[] = [
     reviewSummary: 'Welfare home documentation complete, approved.',
     reviewerName: 'Alex Lin',
     reviewedAt: '2026-06-20T11:00:00+08:00',
-    creditedUnits: 3,
+    creditedUnits: 300,
     version: 1,
     createdAt: '2026-06-15T14:00:00+08:00',
     submittedAt: '2026-06-16T08:30:00+08:00',
@@ -467,7 +382,7 @@ export const MOCK_RECORDS: ServiceRecord[] = [
     organizationId: undefined,
     organizationName: 'Example City City Library',
     serviceCategoryId: 'cat_community',
-    serviceCategoryName: 'mock.categories.cat_community',
+    serviceCategoryName: resolveCategoryName('cat_community', 'en'),
     description: 'Participated in the summer reading festival at Example City City Library, assisted with organizing children reading activities, and guided children through book recommendation interactions, serving about 30 young readers.',
     supervisorName: 'Director Zhao',
     supervisorContact: 'zhao@nblib.cn',
@@ -496,7 +411,7 @@ export const MOCK_RECORDS: ServiceRecord[] = [
     organizationId: undefined,
     organizationName: 'Example District A XX Community',
     serviceCategoryId: 'cat_community',
-    serviceCategoryName: 'mock.categories.cat_community',
+    serviceCategoryName: resolveCategoryName('cat_community', 'en'),
     description: 'Participated in the community summer drowning prevention campaign, distributed educational materials to residents, and posted safety reminder posters.',
     supervisorName: 'Community Director Li',
     supervisorContact: '138xxxx8888',
@@ -525,7 +440,7 @@ export const MOCK_RECORDS: ServiceRecord[] = [
     organizationId: undefined,
     organizationName: 'Example District A Cultural Center',
     serviceCategoryId: 'cat_education',
-    serviceCategoryName: 'mock.categories.cat_education',
+    serviceCategoryName: resolveCategoryName('cat_education', 'en'),
     description: 'Served as a reading tutor volunteer at the community reading corner, assisting elementary students with their summer reading plans.',
     supervisorName: '',
     supervisorContact: '',
@@ -537,36 +452,14 @@ export const MOCK_RECORDS: ServiceRecord[] = [
   },
 ];
 
-export interface AccountTransaction {
-  id: string;
-  accountId: string;
-  type: 'serviceCredit' | 'correction' | 'freeze' | 'unfreeze' | 'redemption' | 'borrow' | 'repayment' | 'bonus';
-  amount: number;
-  balanceBefore: number;
-  balanceAfter: number;
-  relatedRecordId?: string;
-  relatedRecordTitle?: string;
-  description: string;
-  operatorName: string;
-  createdAt: string;
-}
-
-export interface Account {
-  id: string;
-  studentId: string;
-  balance: number;
-  totalEarned: number;
-  totalRedeemed: number;
-  frozen: number;
-  borrowed: number;
-  updatedAt: string;
-}
+// Time-coin amounts below are integer centi-coins (APIContract.md §2.1):
+// 1 coin = 100 units. Format for display via `formatCoins` (lib/format.ts).
 
 export const MOCK_ACCOUNT: Account = {
   id: 'acc_001',
   studentId: 'std_001',
-  balance: 6,
-  totalEarned: 6,
+  balance: 600,
+  totalEarned: 600,
   totalRedeemed: 0,
   frozen: 0,
   borrowed: 0,
@@ -578,9 +471,9 @@ export const MOCK_TRANSACTIONS: AccountTransaction[] = [
     id: 'txn_001',
     accountId: 'acc_001',
     type: 'serviceCredit',
-    amount: 3,
-    balanceBefore: 3,
-    balanceAfter: 6,
+    amount: 300,
+    balanceBefore: 300,
+    balanceAfter: 600,
     relatedRecordId: 'rec_001',
     relatedRecordTitle: 'School Library Organization and Classification',
     description: 'Service record approved, credited 3 time coins (150 minutes → 3 coins, calculated at 30 minutes = 0.5 coins)',
@@ -591,9 +484,9 @@ export const MOCK_TRANSACTIONS: AccountTransaction[] = [
     id: 'txn_002',
     accountId: 'acc_001',
     type: 'serviceCredit',
-    amount: 3,
+    amount: 300,
     balanceBefore: 0,
-    balanceAfter: 3,
+    balanceAfter: 300,
     relatedRecordId: 'rec_002',
     relatedRecordTitle: 'Nursing Home Visit and Care Activity',
     description: 'Service record approved, credited 3 time coins (150 minutes → 3 coins)',
@@ -601,30 +494,6 @@ export const MOCK_TRANSACTIONS: AccountTransaction[] = [
     createdAt: '2026-06-20T11:00:00+08:00',
   },
 ];
-
-export interface StudentProgress {
-  studentId: string;
-  academicYear: string;
-  grade: string;
-  annualRequiredMinutes: number;
-  stageRequiredMinutes: number;
-  completedMinutes: number;
-  underReviewMinutes: number;
-  gapMinutes: number;
-  completedHours: number;
-  underReviewHours: number;
-  annualRequiredHours: number;
-  stageRequiredHours: number;
-  gapHours: number;
-  timeCoinBalance: number;
-  byCategory: {
-    categoryId: string;
-    categoryName: string;
-    completedMinutes: number;
-    underReviewMinutes: number;
-  }[];
-  recognitionLevel: 'none' | 'bronze' | 'silver' | 'gold' | 'excellent';
-}
 
 export const MOCK_PROGRESS: StudentProgress = {
   studentId: 'std_001',
@@ -635,31 +504,14 @@ export const MOCK_PROGRESS: StudentProgress = {
   completedMinutes: 300,
   underReviewMinutes: 240,
   gapMinutes: 3960,
-  completedHours: 5,
-  underReviewHours: 4,
-  annualRequiredHours: 75,
-  stageRequiredHours: 300,
-  gapHours: 66,
-  timeCoinBalance: 6,
+  timeCoinBalance: 600,
   byCategory: [
-    { categoryId: 'cat_campus', categoryName: 'mock.categories.cat_campus', completedMinutes: 150, underReviewMinutes: 0 },
-    { categoryId: 'cat_welfare', categoryName: 'mock.categories.cat_welfare', completedMinutes: 150, underReviewMinutes: 0 },
-    { categoryId: 'cat_community', categoryName: 'mock.categories.cat_community', completedMinutes: 0, underReviewMinutes: 240 },
+    { categoryId: 'cat_campus', categoryName: resolveCategoryName('cat_campus', 'en'), completedMinutes: 150, underReviewMinutes: 0 },
+    { categoryId: 'cat_welfare', categoryName: resolveCategoryName('cat_welfare', 'en'), completedMinutes: 150, underReviewMinutes: 0 },
+    { categoryId: 'cat_community', categoryName: resolveCategoryName('cat_community', 'en'), completedMinutes: 0, underReviewMinutes: 240 },
   ],
   recognitionLevel: 'none',
 };
-
-export interface Notification {
-  id: string;
-  userId: string;
-  category: 'review' | 'project' | 'account' | 'rules' | 'system';
-  title: string;
-  body: string;
-  relatedType?: string;
-  relatedId?: string;
-  isRead: boolean;
-  createdAt: string;
-}
 
 export const MOCK_NOTIFICATIONS: Notification[] = [
   {
@@ -719,56 +571,21 @@ export const MOCK_NOTIFICATIONS: Notification[] = [
   },
 ];
 
-export interface Student {
-  id: string;
-  studentNumber: string;
-  name: string;
-  grade: string;
-  className: string;
-  email: string;
-  status: 'active' | 'inactive' | 'graduated';
-  completedHours: number;
-  pendingHours: number;
-  annualRequiredHours: number;
-  stageRequiredHours: number;
-  timeCoinBalance: number;
-  joinedAt: string;
-  guardianName?: string;
-  guardianContact?: string;
-}
+// `*Minutes`/`timeCoinBalance` below follow the same minutes-only/centi-coin
+// conventions as above.
 
 export const MOCK_STUDENTS: Student[] = [
-  { id: 'std_001', studentNumber: '2024001', name: 'Jia Ming', grade: 'Grade 10', className: '10A', email: 'jiaming@example-school.cn', status: 'active', completedHours: 5, pendingHours: 4, annualRequiredHours: 75, stageRequiredHours: 300, timeCoinBalance: 6, joinedAt: '2023-09-01', guardianName: 'Zhang Daqiang', guardianContact: '139xxxx1234' },
-  { id: 'std_002', studentNumber: '2024002', name: 'Yun Li', grade: 'Grade 10', className: '10A', email: 'yunli@example-school.cn', status: 'active', completedHours: 42, pendingHours: 8, annualRequiredHours: 75, stageRequiredHours: 300, timeCoinBalance: 45, joinedAt: '2023-09-01', guardianName: 'Li Guoqiang', guardianContact: '138xxxx5678' },
-  { id: 'std_003', studentNumber: '2024003', name: 'Wang Haotian', grade: 'Grade 10', className: '10B', email: 'wanghaotian@example-school.cn', status: 'active', completedHours: 78, pendingHours: 0, annualRequiredHours: 75, stageRequiredHours: 300, timeCoinBalance: 82, joinedAt: '2023-09-01' },
-  { id: 'std_004', studentNumber: '2024004', name: 'Chen Meiling', grade: 'Grade 9', className: '9A', email: 'chenmei@example-school.cn', status: 'active', completedHours: 30, pendingHours: 5, annualRequiredHours: 75, stageRequiredHours: 300, timeCoinBalance: 32, joinedAt: '2024-09-01' },
-  { id: 'std_005', studentNumber: '2024005', name: 'Liu Yufei', grade: 'Grade 9', className: '9B', email: 'liuyufei@example-school.cn', status: 'active', completedHours: 15, pendingHours: 2, annualRequiredHours: 75, stageRequiredHours: 300, timeCoinBalance: 16, joinedAt: '2024-09-01' },
-  { id: 'std_006', studentNumber: '2023001', name: 'Huang Zihan', grade: 'Grade 11', className: '11A', email: 'huangzihan@example-school.cn', status: 'active', completedHours: 185, pendingHours: 10, annualRequiredHours: 75, stageRequiredHours: 300, timeCoinBalance: 198, joinedAt: '2022-09-01' },
-  { id: 'std_007', studentNumber: '2023002', name: 'Zhao Siyuan', grade: 'Grade 11', className: '11B', email: 'zhaosy@example-school.cn', status: 'active', completedHours: 92, pendingHours: 15, annualRequiredHours: 75, stageRequiredHours: 300, timeCoinBalance: 95, joinedAt: '2022-09-01' },
-  { id: 'std_008', studentNumber: '2025001', name: 'Sun Wenting', grade: 'Grade 7', className: '7A', email: 'sunwenting@example-school.cn', status: 'active', completedHours: 18, pendingHours: 0, annualRequiredHours: 25, stageRequiredHours: 75, timeCoinBalance: 18, joinedAt: '2025-09-01' },
-  { id: 'std_009', studentNumber: '2025002', name: 'Zhou Junjie', grade: 'Grade 7', className: '7A', email: 'zhoujunjie@example-school.cn', status: 'active', completedHours: 8, pendingHours: 3, annualRequiredHours: 25, stageRequiredHours: 75, timeCoinBalance: 8, joinedAt: '2025-09-01' },
-  { id: 'std_010', studentNumber: '2025003', name: 'Wu Yaqi', grade: 'Grade 8', className: '8A', email: 'wuyaqi@example-school.cn', status: 'active', completedHours: 22, pendingHours: 5, annualRequiredHours: 25, stageRequiredHours: 75, timeCoinBalance: 23, joinedAt: '2024-09-01' },
+  { id: 'std_001', studentNumber: '2024001', name: 'Jia Ming', grade: 'Grade 10', className: '10A', email: 'jiaming@example-school.cn', status: 'active', completedMinutes: 300, pendingMinutes: 240, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 600, joinedAt: '2023-09-01', guardianName: 'Zhang Daqiang', guardianContact: '139xxxx1234' },
+  { id: 'std_002', studentNumber: '2024002', name: 'Yun Li', grade: 'Grade 10', className: '10A', email: 'yunli@example-school.cn', status: 'active', completedMinutes: 2520, pendingMinutes: 480, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 4500, joinedAt: '2023-09-01', guardianName: 'Li Guoqiang', guardianContact: '138xxxx5678' },
+  { id: 'std_003', studentNumber: '2024003', name: 'Wang Haotian', grade: 'Grade 10', className: '10B', email: 'wanghaotian@example-school.cn', status: 'active', completedMinutes: 4680, pendingMinutes: 0, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 8200, joinedAt: '2023-09-01' },
+  { id: 'std_004', studentNumber: '2024004', name: 'Chen Meiling', grade: 'Grade 9', className: '9A', email: 'chenmei@example-school.cn', status: 'active', completedMinutes: 1800, pendingMinutes: 300, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 3200, joinedAt: '2024-09-01' },
+  { id: 'std_005', studentNumber: '2024005', name: 'Liu Yufei', grade: 'Grade 9', className: '9B', email: 'liuyufei@example-school.cn', status: 'active', completedMinutes: 900, pendingMinutes: 120, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 1600, joinedAt: '2024-09-01' },
+  { id: 'std_006', studentNumber: '2023001', name: 'Huang Zihan', grade: 'Grade 11', className: '11A', email: 'huangzihan@example-school.cn', status: 'active', completedMinutes: 11100, pendingMinutes: 600, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 19800, joinedAt: '2022-09-01' },
+  { id: 'std_007', studentNumber: '2023002', name: 'Zhao Siyuan', grade: 'Grade 11', className: '11B', email: 'zhaosy@example-school.cn', status: 'active', completedMinutes: 5520, pendingMinutes: 900, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 9500, joinedAt: '2022-09-01' },
+  { id: 'std_008', studentNumber: '2025001', name: 'Sun Wenting', grade: 'Grade 7', className: '7A', email: 'sunwenting@example-school.cn', status: 'active', completedMinutes: 1080, pendingMinutes: 0, annualRequiredMinutes: 1500, stageRequiredMinutes: 4500, timeCoinBalance: 1800, joinedAt: '2025-09-01' },
+  { id: 'std_009', studentNumber: '2025002', name: 'Zhou Junjie', grade: 'Grade 7', className: '7A', email: 'zhoujunjie@example-school.cn', status: 'active', completedMinutes: 480, pendingMinutes: 180, annualRequiredMinutes: 1500, stageRequiredMinutes: 4500, timeCoinBalance: 800, joinedAt: '2025-09-01' },
+  { id: 'std_010', studentNumber: '2025003', name: 'Wu Yaqi', grade: 'Grade 8', className: '8A', email: 'wuyaqi@example-school.cn', status: 'active', completedMinutes: 1320, pendingMinutes: 300, annualRequiredMinutes: 1500, stageRequiredMinutes: 4500, timeCoinBalance: 2300, joinedAt: '2024-09-01' },
 ];
-
-export type ReviewStatus = 'pending' | 'underReview' | 'approved' | 'returned' | 'rejected';
-
-export interface ReviewQueueItem {
-  id: string;
-  serviceRecordId: string;
-  studentName: string;
-  grade: string;
-  className: string;
-  projectTitle?: string;
-  organizationName: string;
-  serviceDate: string;
-  durationMinutes: number;
-  submittedAt: string;
-  status: ReviewStatus;
-  priority: 'high' | 'normal' | 'low';
-  daysWaiting: number;
-  hasAnomaly: boolean;
-  anomalyNote?: string;
-}
 
 export const MOCK_REVIEW_QUEUE: ReviewQueueItem[] = [
   { id: 'rev_001', serviceRecordId: 'rec_003', studentName: 'Jia Ming', grade: 'Grade 10', className: '10A', organizationName: 'Example City City Library', serviceDate: '2026-07-20', durationMinutes: 240, submittedAt: '2026-07-21T08:00:00+08:00', status: 'underReview', priority: 'normal', daysWaiting: 6, hasAnomaly: false },
@@ -780,37 +597,12 @@ export const MOCK_REVIEW_QUEUE: ReviewQueueItem[] = [
   { id: 'rev_007', serviceRecordId: 'rec_011', studentName: 'Zhao Siyuan', grade: 'Grade 11', className: '11B', organizationName: 'Example City Museum', serviceDate: '2026-07-18', durationMinutes: 240, submittedAt: '2026-07-20T09:00:00+08:00', status: 'underReview', priority: 'normal', daysWaiting: 7, hasAnomaly: false },
 ];
 
-export interface Organization {
-  id: string;
-  name: string;
-  type: 'school' | 'community' | 'nonprofit' | 'government' | 'other';
-  contactName: string;
-  contactEmail: string;
-  contactPhone: string;
-  address: string;
-  status: 'active' | 'inactive' | 'archived';
-  projectCount: number;
-  createdAt: string;
-}
-
 export const MOCK_ORGANIZATIONS: Organization[] = [
   { id: 'org_school', name: `${SCHOOL_NAME} School`, type: 'school', contactName: 'Teacher Wei Chen', contactEmail: 'wei.chen@example-school.cn', contactPhone: '0000-88888888', address: 'No. 1 Campus Road, Example District A, Example City', status: 'active', projectCount: 12, createdAt: '2024-09-01' },
   { id: 'org_welfare', name: 'Example City First Welfare Home', type: 'nonprofit', contactName: 'Deputy Director Chen', contactEmail: 'welfare@example.org', contactPhone: '0000-87654321', address: 'No. 88 Fulil Road, Example District B, Example City', status: 'active', projectCount: 6, createdAt: '2024-09-15' },
   { id: 'org_enviro', name: 'Example District C Environmental Protection Association', type: 'nonprofit', contactName: 'President Li', contactEmail: 'enviro@example.org', contactPhone: '0000-87123456', address: 'Example Town, Example District C, Example City', status: 'active', projectCount: 4, createdAt: '2025-01-10' },
   { id: 'org_rural', name: 'Example County Charity Education Association', type: 'nonprofit', contactName: 'Director Zhang', contactEmail: 'charity@example.org', contactPhone: '0000-63456789', address: 'Example Town Two, Example County', status: 'active', projectCount: 3, createdAt: '2025-03-01' },
 ];
-
-export interface AdminStats {
-  totalStudents: number;
-  activeStudents: number;
-  totalProjects: number;
-  activeProjects: number;
-  pendingReviews: number;
-  approvedThisMonth: number;
-  totalServiceHours: number;
-  avgCompletionRate: number;
-  reviewAvgDays: number;
-}
 
 export const MOCK_ADMIN_STATS: AdminStats = {
   totalStudents: 186,
@@ -823,13 +615,6 @@ export const MOCK_ADMIN_STATS: AdminStats = {
   avgCompletionRate: 0.68,
   reviewAvgDays: 4.2,
 };
-
-export interface ReportData {
-  participationByGrade: { grade: string; total: number; participated: number; rate: number }[];
-  completionByGrade: { grade: string; total: number; completed: number; rate: number }[];
-  serviceHoursByMonth: { month: string; hours: number }[];
-  topProjects: { title: string; participants: number; totalHours: number }[];
-}
 
 export const MOCK_REPORT_DATA: ReportData = {
   participationByGrade: [
@@ -870,58 +655,8 @@ export const MOCK_REPORT_DATA: ReportData = {
   ],
 };
 
-// Service categories
 // ── Event Proposals (Section 5.3) ────────────────────────────────────────────
-
-export type ProposalStatus = 'draft' | 'submitted' | 'needsRevision' | 'approved' | 'rejected' | 'withdrawn';
-
-export interface ProposalTimeline {
-  action: string;
-  actor: string;
-  time: string;
-  note?: string;
-}
-
-export interface EventProposal {
-  id: string;
-  title: string;
-  status: ProposalStatus;
-  myRole: string;
-  categoryId: string;
-  categoryName: string;
-  plannedDate: string;
-  location: string;
-  estimatedDurationHours: number;
-  estimatedCapacity: number;
-  goal: string;
-  description: string;
-  expectedOutcomes: string;
-  activityFormat: string;
-  targetParticipants: string;
-  volunteerTasks: string;
-  initiatorName: string;
-  coOrganizers: string;
-  mentorTeacher: string;
-  partnerOrg: string;
-  contactInfo: string;
-  riskMeasures: string;
-  materialNeeds: string;
-  budgetNeeds: string;
-  recruitmentMethod: string;
-  eligibility: string;
-  proofMethod: string;
-  suggestedHours: number;
-  currentApprovalNode: string;
-  reviewerName?: string;
-  feedback?: string;
-  linkedProjectId?: string;
-  linkedProjectTitle?: string;
-  revisionCount: number;
-  createdAt: string;
-  updatedAt: string;
-  submittedAt?: string;
-  timeline: ProposalTimeline[];
-}
+// `estimatedDurationMinutes`/`suggestedMinutes` are minutes-only on the wire.
 
 export const MOCK_PROPOSALS: EventProposal[] = [
   {
@@ -930,10 +665,10 @@ export const MOCK_PROPOSALS: EventProposal[] = [
     status: 'approved',
     myRole: 'Student Initiator',
     categoryId: 'cat_education',
-    categoryName: 'mock.categories.cat_education',
+    categoryName: resolveCategoryName('cat_education', 'en'),
     plannedDate: '2026-09-20',
     location: `${SCHOOL_NAME} Middle School Library and Playground`,
-    estimatedDurationHours: 4,
+    estimatedDurationMinutes: 240,
     estimatedCapacity: 30,
     goal: 'Promote reading culture through used book charity sales and picture book donations, raising book resources for mountain area schools.',
     description: 'The activity is divided into two areas: an indoor book charity sale area (students donate used books for sale at low prices) and an outdoor picture book reading area (picture book reading sessions for younger students). Proceeds will be used to purchase new books for donation to Example City partner mountain area schools.',
@@ -952,7 +687,7 @@ export const MOCK_PROPOSALS: EventProposal[] = [
     recruitmentMethod: 'Class WeChat group announcement + school bulletin board posting',
     eligibility: 'All grades welcome, priority given to those with reading guide experience',
     proofMethod: 'Activity sign-in sheet + supervising teacher confirmation letter + on-site activity photos',
-    suggestedHours: 4,
+    suggestedMinutes: 240,
     currentApprovalNode: 'Approved',
     reviewerName: 'Alex Lin',
     feedback: 'Activity plan is complete with clear objectives, approved. Please coordinate with the library for venue scheduling.',
@@ -971,13 +706,13 @@ export const MOCK_PROPOSALS: EventProposal[] = [
   {
     id: 'prop_002',
     title: 'Community Elderly Digital Skills Support Workshop',
-    status: 'needsRevision',
+    status: 'changesRequested',
     myRole: 'Student Initiator',
     categoryId: 'cat_welfare',
-    categoryName: 'mock.categories.cat_welfare',
+    categoryName: resolveCategoryName('cat_welfare', 'en'),
     plannedDate: '2026-10-12',
     location: 'Example District D Community Service Center',
-    estimatedDurationHours: 3,
+    estimatedDurationMinutes: 180,
     estimatedCapacity: 15,
     goal: 'Help elderly community residents learn basic smartphone operations to bridge the digital divide.',
     description: 'Small group tutoring format, with 2 volunteers per group for 3-4 elderly participants. Content covers WeChat video calls, QR code payments, online appointment booking, and other high-frequency scenarios.',
@@ -996,7 +731,7 @@ export const MOCK_PROPOSALS: EventProposal[] = [
     recruitmentMethod: 'Class WeChat group recruitment',
     eligibility: 'Basic familiarity with digital devices, patient',
     proofMethod: 'Community staff signed confirmation letter + activity photos',
-    suggestedHours: 3,
+    suggestedMinutes: 180,
     currentApprovalNode: 'Needs Revision',
     reviewerName: 'Alex Lin',
     feedback: 'Please supplement: (1) How to contact the community to confirm venue and elderly participation interest; (2) Recruitment method needs to be more specific, clarify the in-school coordinator; (3) Explain how privacy protection measures are implemented at the operational level. Resubmit after revisions.',
@@ -1016,10 +751,10 @@ export const MOCK_PROPOSALS: EventProposal[] = [
     status: 'submitted',
     myRole: 'Student Initiator',
     categoryId: 'cat_environment',
-    categoryName: 'Environmental Action',
+    categoryName: resolveCategoryName('cat_environment', 'en'),
     plannedDate: '2026-09-05',
     location: `${SCHOOL_NAME} Middle School Campus`,
-    estimatedDurationHours: 2,
+    estimatedDurationMinutes: 120,
     estimatedCapacity: 20,
     goal: 'Raise awareness of waste sorting among all students and staff, and promote waste sorting habits.',
     description: 'Arrange volunteers at waste disposal points on each floor for outreach and on-site guidance, create illustrated waste sorting posters, and provide friendly reminders and documentation during peak hours.',
@@ -1038,7 +773,7 @@ export const MOCK_PROPOSALS: EventProposal[] = [
     recruitmentMethod: 'Student council channels + class group announcements',
     eligibility: 'All students welcome',
     proofMethod: 'Student council officer signature + photo documentation',
-    suggestedHours: 2,
+    suggestedMinutes: 120,
     currentApprovalNode: 'Pending Review',
     revisionCount: 0,
     createdAt: '2026-07-20T14:00:00',
@@ -1055,10 +790,10 @@ export const MOCK_PROPOSALS: EventProposal[] = [
     status: 'draft',
     myRole: 'Student Initiator',
     categoryId: 'cat_education',
-    categoryName: 'mock.categories.cat_education',
+    categoryName: resolveCategoryName('cat_education', 'en'),
     plannedDate: '',
     location: 'TBD',
-    estimatedDurationHours: 2,
+    estimatedDurationMinutes: 120,
     estimatedCapacity: 25,
     goal: 'Upper grade students provide after-school subject tutoring for lower grade students, developing learning skills and responsibility in both parties.',
     description: '',
@@ -1077,7 +812,7 @@ export const MOCK_PROPOSALS: EventProposal[] = [
     recruitmentMethod: '',
     eligibility: 'Grade 9 and above with strong academic performance',
     proofMethod: '',
-    suggestedHours: 2,
+    suggestedMinutes: 120,
     currentApprovalNode: 'Draft',
     revisionCount: 0,
     createdAt: '2026-07-25T11:00:00',
@@ -1091,20 +826,12 @@ export const MOCK_PROPOSALS: EventProposal[] = [
 export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, { label: string; color: string }> = {
   draft: { label: 'mock.proposalStatus.draft', color: 'gray' },
   submitted: { label: 'mock.proposalStatus.submitted', color: 'blue' },
-  needsRevision: { label: 'mock.proposalStatus.needsRevision', color: 'orange' },
+  underReview: { label: 'mock.proposalStatus.underReview', color: 'blue' },
+  changesRequested: { label: 'mock.proposalStatus.changesRequested', color: 'orange' },
   approved: { label: 'mock.proposalStatus.approved', color: 'green' },
   rejected: { label: 'mock.proposalStatus.rejected', color: 'red' },
   withdrawn: { label: 'mock.proposalStatus.withdrawn', color: 'gray' },
 };
-
-export const SERVICE_CATEGORIES = [
-  { id: 'cat_campus', name: 'mock.categories.cat_campus', color: 'blue' },
-  { id: 'cat_community', name: 'mock.categories.cat_community', color: 'green' },
-  { id: 'cat_welfare', name: 'mock.categories.cat_welfare', color: 'pink' },
-  { id: 'cat_education', name: 'mock.categories.cat_education', color: 'purple' },
-  { id: 'cat_environment', name: 'mock.categories.cat_environment', color: 'teal' },
-  { id: 'cat_other', name: 'mock.categories.cat_other', color: 'gray' },
-];
 
 export const GRADES = ['Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11'];
 export const GRADE_LABEL_KEYS: Record<string, string> = {

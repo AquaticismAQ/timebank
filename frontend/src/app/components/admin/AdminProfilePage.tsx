@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { LogOut, ChevronRight, Bell, Shield, HelpCircle, Moon, Sun, Monitor, Mail, X, Lock, Eye, Database, UserCheck, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth, useTheme } from '../../App';
-import { type SchoolInfo } from '../../mock/data';
+import { type SchoolInfo } from '../../api/types';
 import { api } from '../../api/client';
 
 export function AdminProfilePage() {

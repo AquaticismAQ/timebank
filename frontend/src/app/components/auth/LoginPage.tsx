@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth, useTheme } from '../../App';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
-import { type SchoolInfo } from '../../mock/data';
+import { type SchoolInfo } from '../../api/types';
 import { LanguageSwitcher } from '../LanguageSwitcher';
 
 export function LoginPage() {

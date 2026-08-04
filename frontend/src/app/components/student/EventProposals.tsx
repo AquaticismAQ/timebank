@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Plus, ChevronDown, ChevronUp, ChevronRight, Edit, Send, Copy, X, FileText, CheckCircle, AlertTriangle, Clock, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { PROPOSAL_STATUS_LABELS, SERVICE_CATEGORIES, type EventProposal, type ProposalStatus } from '../../mock/data';
+import { PROPOSAL_STATUS_LABELS, SERVICE_CATEGORIES, resolveCategoryName } from '../../mock/data';
+import { type EventProposal, type ProposalStatus } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { minutesToHours } from '../../lib/format';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -45,7 +47,7 @@ const EMPTY_FORM = {
 };
 
 export function EventProposals() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [view, setView] = useState<ViewMode>('list');
   const [filterStatus, setFilterStatus] = useState<ProposalStatus | 'all'>('all');
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -72,7 +74,7 @@ export function EventProposals() {
         plannedDate: template.plannedDate,
         location: template.location,
         activityFormat: template.activityFormat,
-        estimatedDurationHours: template.estimatedDurationHours,
+        estimatedDurationHours: template.estimatedDurationMinutes / 60,
         estimatedCapacity: template.estimatedCapacity,
         targetParticipants: template.targetParticipants,
         volunteerTasks: template.volunteerTasks,
@@ -86,7 +88,7 @@ export function EventProposals() {
         recruitmentMethod: template.recruitmentMethod,
         eligibility: template.eligibility,
         proofMethod: template.proofMethod,
-        suggestedHours: template.suggestedHours,
+        suggestedHours: template.suggestedMinutes / 60,
       });
     } else {
       setFormData(EMPTY_FORM);
@@ -195,7 +197,7 @@ export function EventProposals() {
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('student.proposals.serviceCategory')}<span className="text-destructive ml-0.5">*</span></label>
                 <select value={formData.categoryId} onChange={e => setFormData(f => ({ ...f, categoryId: e.target.value }))}
                   className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
-                  {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{resolveCategoryName(c.id, i18n.language)}</option>)}
                 </select>
               </div>
               {field(t('student.proposals.publicGoal'), 'goal', { placeholder: t('student.proposals.publicGoalPlaceholder'), rows: 3 })}
@@ -255,7 +257,7 @@ export function EventProposals() {
               <div className="space-y-3 text-sm">
                 {[
                   [t('student.proposals.eventName'), formData.title || t('student.proposals.notFilled')],
-                  [t('student.proposals.serviceCategory'), SERVICE_CATEGORIES.find(c => c.id === formData.categoryId)?.name || ''],
+                  [t('student.proposals.serviceCategory'), resolveCategoryName(formData.categoryId, i18n.language)],
                   [t('student.proposals.plannedDate'), formData.plannedDate || t('student.proposals.notFilled')],
                   [t('student.proposals.location'), formData.location || t('student.proposals.notFilled')],
                   [t('student.proposals.estimatedDuration'), `${formData.estimatedDurationHours} ${t('common.hours')}`],
@@ -336,7 +338,7 @@ export function EventProposals() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
-              <span className="text-xs text-muted-foreground">{p.categoryName.startsWith('mock.') ? t(p.categoryName) : p.categoryName}</span>
+              <span className="text-xs text-muted-foreground">{p.categoryName}</span>
               {p.revisionCount > 0 && (
                 <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">v{p.revisionCount + 1}</span>
               )}
@@ -353,7 +355,7 @@ export function EventProposals() {
           <div className="lg:col-span-2 space-y-4">
 
             {/* Revision feedback */}
-            {p.status === 'needsRevision' && p.feedback && (
+            {p.status === 'changesRequested' && p.feedback && (
               <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 flex gap-3">
                 <AlertTriangle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                 <div>
@@ -395,7 +397,7 @@ export function EventProposals() {
                   [t('student.proposals.plannedDate'), p.plannedDate],
                   [t('student.proposals.location'), p.location],
                   [t('student.proposals.activityFormat'), p.activityFormat],
-                  [t('student.proposals.estimatedDuration'), `${p.estimatedDurationHours} ${t('common.hours')}`],
+                  [t('student.proposals.estimatedDuration'), `${minutesToHours(p.estimatedDurationMinutes)} ${t('common.hours')}`],
                   [t('student.proposals.estimatedVolunteers'), `${p.estimatedCapacity} ${t('common.volunteers')}`],
                   [t('student.proposals.targetParticipants'), p.targetParticipants],
                   [t('student.proposals.volunteerTasks'), p.volunteerTasks],
@@ -425,7 +427,7 @@ export function EventProposals() {
                   [t('student.proposals.recruitmentMethod'), p.recruitmentMethod],
                   [t('student.proposals.eligibility'), p.eligibility],
                   [t('student.proposals.verificationMethod'), p.proofMethod],
-                  [t('student.proposals.suggestedHours'), `${p.suggestedHours} ${t('common.hours')}`],
+                  [t('student.proposals.suggestedHours'), `${minutesToHours(p.suggestedMinutes)} ${t('common.hours')}`],
                 ],
               },
             ].map(section => (
@@ -477,11 +479,11 @@ export function EventProposals() {
             <div className="bg-card border border-border rounded-2xl p-4 space-y-2">
               <h3 className="text-sm font-medium text-foreground mb-3">{t('student.proposals.availableActions')}</h3>
 
-              {(p.status === 'draft' || p.status === 'needsRevision') && (
+              {(p.status === 'draft' || p.status === 'changesRequested') && (
                 <button onClick={() => { openForm(p); }}
                   className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity">
                   <Edit className="w-4 h-4" />
-                  {p.status === 'needsRevision' ? t('student.proposals.reviseResubmit') : t('student.proposals.editDraft')}
+                  {p.status === 'changesRequested' ? t('student.proposals.reviseResubmit') : t('student.proposals.editDraft')}
                 </button>
               )}
 
@@ -492,7 +494,7 @@ export function EventProposals() {
                 </button>
               )}
 
-              {(p.status === 'submitted' || p.status === 'needsRevision') && (
+              {(p.status === 'submitted' || p.status === 'changesRequested') && (
                 <button onClick={() => handleWithdraw(p)}
                   className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border text-muted-foreground text-sm hover:bg-accent transition-colors">
                   <RotateCcw className="w-4 h-4" />
@@ -551,7 +553,7 @@ export function EventProposals() {
           ['all', t('student.proposals.tabAll')],
           ['draft', t('student.proposals.tabDraft')],
           ['submitted', t('student.proposals.tabSubmitted')],
-          ['needsRevision', t('student.proposals.tabNeedsRevision')],
+          ['changesRequested', t('student.proposals.tabChangesRequested')],
           ['approved', t('student.proposals.tabApproved')],
           ['rejected', t('student.proposals.tabRejected')],
           ['withdrawn', t('student.proposals.tabWithdrawn')],
@@ -602,7 +604,7 @@ export function EventProposals() {
                         <div className="text-sm text-foreground font-medium">{p.title}</div>
                         <div className="text-xs text-muted-foreground">{p.myRole}</div>
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{p.categoryName.startsWith('mock.') ? t(p.categoryName) : p.categoryName}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{p.categoryName}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{p.plannedDate || '—'}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{p.currentApprovalNode}</td>
                       <td className="px-4 py-3">
@@ -611,7 +613,7 @@ export function EventProposals() {
                       <td className="px-4 py-3 text-xs text-muted-foreground">{p.updatedAt.slice(0, 10)}</td>
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-end">
-                          {(p.status === 'draft' || p.status === 'needsRevision') && (
+                          {(p.status === 'draft' || p.status === 'changesRequested') && (
                             <button onClick={() => openForm(p)}
                               className="text-xs px-2 py-1 rounded-lg border border-border hover:bg-accent text-muted-foreground flex items-center gap-1">
                               <Edit className="w-3 h-3" /> {t('common.edit')}
@@ -638,7 +640,7 @@ export function EventProposals() {
                 <div key={p.id} className="bg-card border border-border rounded-2xl p-4"
                   onClick={() => { setDetailId(p.id); setView('detail'); }}>
 
-                  {p.status === 'needsRevision' && (
+                  {p.status === 'changesRequested' && (
                     <div className="flex items-center gap-1.5 text-xs text-orange-600 dark:text-orange-400 mb-2">
                       <AlertTriangle className="w-3.5 h-3.5" /> {t('student.proposals.revisionsRequired')}
                     </div>
@@ -653,7 +655,7 @@ export function EventProposals() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
-                        <span className="text-xs text-muted-foreground">{p.categoryName.startsWith('mock.') ? t(p.categoryName) : p.categoryName}</span>
+                        <span className="text-xs text-muted-foreground">{p.categoryName}</span>
                       </div>
                       <div className="text-sm text-foreground font-medium leading-snug">{p.title}</div>
                     </div>

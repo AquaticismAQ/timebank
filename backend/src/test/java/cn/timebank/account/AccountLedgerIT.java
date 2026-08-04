@@ -69,7 +69,7 @@ class AccountLedgerIT extends AbstractIntegrationTest {
         AccountDto account = accountService.getByStudentId(studentId, adminAuth());
 
         AccountTransactionDto reversal = accountService.reverse(original.id(),
-                new ReverseRequest("CORRECTION_ERROR", "Wrong duration"), "usr_test_admin");
+                new ReverseRequest("CORRECTION_ERROR", "Wrong duration"), "usr_test_admin", "idem-" + original.id());
 
         assertThat(reversal.amount()).isEqualTo(-300);
         assertThat(reversal.reversalOfTransactionId()).isEqualTo(original.id());
@@ -91,10 +91,53 @@ class AccountLedgerIT extends AbstractIntegrationTest {
         String accountId = accountService.getByStudentId(studentId, adminAuth()).id();
 
         AccountTransactionDto adjustment = accountService.adjust(accountId,
-                new AdjustmentRequest(-100, "MANUAL_CORRECTION", "Overcounted"), "usr_test_admin");
+                new AdjustmentRequest(-100, "MANUAL_CORRECTION", "Overcounted"), "usr_test_admin", "idem-adjust-" + accountId);
 
         assertThat(adjustment.amount()).isEqualTo(-100);
         assertThat(adjustment.balanceAfter()).isEqualTo(credit.balanceAfter() - 100);
+    }
+
+    @Test
+    void duplicateAdjustmentIdempotencyKeyReplaysInsteadOfDoublePosting() {
+        String studentId = createStudent();
+        accountService.credit(studentId, "grade_6", "class_6A", 500, "test", "src_1", "SERVICE_APPROVED", "usr_test_admin");
+        String accountId = accountService.getByStudentId(studentId, adminAuth()).id();
+        AdjustmentRequest request = new AdjustmentRequest(-100, "MANUAL_CORRECTION", "Overcounted");
+        String key = "idem-dup-adjust-" + accountId;
+
+        AccountTransactionDto first = accountService.adjust(accountId, request, "usr_test_admin", key);
+        AccountTransactionDto replay = accountService.adjust(accountId, request, "usr_test_admin", key);
+
+        assertThat(replay.id()).isEqualTo(first.id());
+        AccountDto account = accountService.getByStudentId(studentId, adminAuth());
+        assertThat(account.balance()).isEqualTo(400);
+    }
+
+    @Test
+    void adjustmentWithoutIdempotencyKeyIsRejected() {
+        String studentId = createStudent();
+        accountService.credit(studentId, "grade_6", "class_6A", 500, "test", "src_1", "SERVICE_APPROVED", "usr_test_admin");
+        String accountId = accountService.getByStudentId(studentId, adminAuth()).id();
+
+        assertThatThrownBy(() -> accountService.adjust(accountId,
+                new AdjustmentRequest(-100, "MANUAL_CORRECTION", "Overcounted"), "usr_test_admin", null))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void duplicateReversalIdempotencyKeyReplaysInsteadOfDoubleReversing() {
+        String studentId = createStudent();
+        AccountTransactionDto original = accountService.credit(studentId, "grade_6", "class_6A", 300,
+                "test", "src_1", "SERVICE_APPROVED", "usr_test_admin");
+        ReverseRequest request = new ReverseRequest("CORRECTION_ERROR", "Wrong duration");
+        String key = "idem-dup-reverse-" + original.id();
+
+        AccountTransactionDto first = accountService.reverse(original.id(), request, "usr_test_admin", key);
+        AccountTransactionDto replay = accountService.reverse(original.id(), request, "usr_test_admin", key);
+
+        assertThat(replay.id()).isEqualTo(first.id());
+        AccountDto account = accountService.getByStudentId(studentId, adminAuth());
+        assertThat(account.balance()).isEqualTo(0);
     }
 
     @Test
@@ -127,7 +170,7 @@ class AccountLedgerIT extends AbstractIntegrationTest {
         accountService.freeze(accountId, new FreezeRequest("SUSPECTED_FRAUD", "Under review"), "usr_test_admin");
 
         AccountTransactionDto reversal = accountService.reverse(original.id(),
-                new ReverseRequest("CORRECTION_ERROR", "Fixing while frozen"), "usr_test_admin");
+                new ReverseRequest("CORRECTION_ERROR", "Fixing while frozen"), "usr_test_admin", "idem-frozen-" + original.id());
         assertThat(reversal.amount()).isEqualTo(-200);
     }
 

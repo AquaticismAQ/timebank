@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { ArrowUpRight, ArrowDownLeft, Lock, ChevronDown, ChevronUp, Gift, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { TRANSACTION_TYPE_LABELS, RECOGNITION_LEVELS, type Account, type AccountTransaction } from '../../mock/data';
+import { TRANSACTION_TYPE_LABELS, RECOGNITION_LEVELS } from '../../mock/data';
+import { type Account, type AccountTransaction } from '../../api/types';
+import { formatCoins } from '../../lib/format';
 import { api } from '../../api/client';
 import { useAuth } from '../../App';
 
@@ -37,10 +39,11 @@ export function AccountPage() {
 
   if (!account) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
 
+  const totalEarnedCoins = account.totalEarned / 100;
   const currentLevel = RECOGNITION_LEVELS.find((l, i) =>
-    account.totalEarned >= l.minHours && account.totalEarned < (RECOGNITION_LEVELS[i + 1]?.minHours ?? Infinity)
+    totalEarnedCoins >= l.minHours && totalEarnedCoins < (RECOGNITION_LEVELS[i + 1]?.minHours ?? Infinity)
   ) || RECOGNITION_LEVELS[0];
-  const nextLevel = RECOGNITION_LEVELS.find(l => l.minHours > account.totalEarned);
+  const nextLevel = RECOGNITION_LEVELS.find(l => l.minHours > totalEarnedCoins);
 
   return (
     <div className="p-4 lg:p-6">
@@ -56,20 +59,20 @@ export function AccountPage() {
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 dark:border-transparent dark:from-[oklch(0.488_0.243_264.376)] dark:to-[oklch(0.488_0.243_264.376)]/75 rounded-2xl p-6 text-blue-900 dark:text-white">
             <div className="text-sm text-blue-500 dark:text-white/60 mb-1">{t('student.account.currentBalance')}</div>
             <div className="flex items-end gap-2 mb-5">
-              <span className="text-5xl font-bold">{account.balance}</span>
+              <span className="text-5xl font-bold">{formatCoins(account.balance)}</span>
               <span className="text-lg text-blue-400 dark:text-white/60 mb-1">{t('student.account.coinsBalance')}</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="bg-blue-200/50 dark:bg-white/15 rounded-xl p-2">
-                <div className="text-xl font-semibold">{account.totalEarned}</div>
+                <div className="text-xl font-semibold">{formatCoins(account.totalEarned)}</div>
                 <div className="text-xs text-blue-500 dark:text-white/60">{t('student.account.totalEarned')}</div>
               </div>
               <div className="bg-blue-200/50 dark:bg-white/15 rounded-xl p-2">
-                <div className="text-xl font-semibold">{account.totalRedeemed}</div>
+                <div className="text-xl font-semibold">{formatCoins(account.totalRedeemed)}</div>
                 <div className="text-xs text-blue-500 dark:text-white/60">{t('student.account.exchanged')}</div>
               </div>
               <div className="bg-blue-200/50 dark:bg-white/15 rounded-xl p-2">
-                <div className="text-xl font-semibold">{account.frozen}</div>
+                <div className="text-xl font-semibold">{formatCoins(account.frozen)}</div>
                 <div className="text-xs text-blue-500 dark:text-white/60">{t('student.account.frozen')}</div>
               </div>
             </div>
@@ -80,20 +83,20 @@ export function AccountPage() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-foreground">{t('student.account.honorLevel')}</h3>
               {nextLevel && (
-                <div className="text-xs text-muted-foreground">{nextLevel.minHours - account.totalEarned} {t('student.account.distanceTo')}{t(nextLevel.label)}</div>
+                <div className="text-xs text-muted-foreground">{nextLevel.minHours - totalEarnedCoins} {t('student.account.distanceTo')}{t(nextLevel.label)}</div>
               )}
             </div>
             <div className="flex items-center gap-3 mb-4">
               <span className="text-3xl">{currentLevel.icon}</span>
               <div>
                 <div className="text-foreground font-medium">{t(currentLevel.label)}</div>
-                <div className="text-xs text-muted-foreground">{t('student.account.totalEarnedLabel')}: {account.totalEarned} {t('common.coins')}</div>
+                <div className="text-xs text-muted-foreground">{t('student.account.totalEarnedLabel')}: {formatCoins(account.totalEarned)} {t('common.coins')}</div>
               </div>
             </div>
             <div className="space-y-2">
               {RECOGNITION_LEVELS.slice(1).map(level => {
-                const prog = Math.min(account.totalEarned / level.minHours, 1);
-                const reached = account.totalEarned >= level.minHours;
+                const prog = Math.min(totalEarnedCoins / level.minHours, 1);
+                const reached = totalEarnedCoins >= level.minHours;
                 return (
                   <div key={level.level} className="flex items-center gap-3">
                     <span className="text-lg w-6 text-center shrink-0">{level.icon}</span>
@@ -170,9 +173,9 @@ export function AccountPage() {
                           </td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">{tx.createdAt.slice(0, 10)}</td>
                           <td className={`px-4 py-3 text-right font-medium ${colorMap[typeInfo.color]}`}>
-                            {typeInfo.sign}{tx.amount}
+                            {typeInfo.sign}{formatCoins(tx.amount)}
                           </td>
-                          <td className="px-4 py-3 text-right text-xs text-muted-foreground">{tx.balanceAfter}</td>
+                          <td className="px-4 py-3 text-right text-xs text-muted-foreground">{formatCoins(tx.balanceAfter)}</td>
                         </tr>
                       );
                     })}
@@ -196,7 +199,7 @@ export function AccountPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <span className="text-sm text-foreground">{t(typeInfo.label)}</span>
-                              <span className={`font-semibold ${colorMap[typeInfo.color]}`}>{typeInfo.sign}{tx.amount}</span>
+                              <span className={`font-semibold ${colorMap[typeInfo.color]}`}>{typeInfo.sign}{formatCoins(tx.amount)}</span>
                             </div>
                             <div className="text-xs text-muted-foreground truncate">{tx.relatedRecordTitle || tx.description}</div>
                             <div className="text-xs text-muted-foreground">{tx.createdAt.slice(0, 10)}</div>
@@ -205,8 +208,8 @@ export function AccountPage() {
                         </button>
                         {isExpanded && (
                           <div className="px-4 pb-4 border-t border-border pt-3 space-y-2 text-xs text-muted-foreground">
-                            <div className="flex justify-between"><span>{t('student.account.balanceBefore')}</span><span className="text-foreground">{tx.balanceBefore} {t('common.coins')}</span></div>
-                            <div className="flex justify-between"><span>{t('student.account.balanceAfter')}</span><span className="text-foreground">{tx.balanceAfter} {t('common.coins')}</span></div>
+                            <div className="flex justify-between"><span>{t('student.account.balanceBefore')}</span><span className="text-foreground">{formatCoins(tx.balanceBefore)} {t('common.coins')}</span></div>
+                            <div className="flex justify-between"><span>{t('student.account.balanceAfter')}</span><span className="text-foreground">{formatCoins(tx.balanceAfter)} {t('common.coins')}</span></div>
                             <div className="flex justify-between"><span>{t('student.account.operator')}</span><span className="text-foreground">{tx.operatorName}</span></div>
                             <div><span>{t('student.account.description')}: </span><span className="text-foreground">{tx.description}</span></div>
                           </div>

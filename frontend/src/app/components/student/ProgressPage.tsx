@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { RECOGNITION_LEVELS, GRADE_LABEL_KEYS, type StudentProgress } from '../../mock/data';
+import { RECOGNITION_LEVELS, GRADE_LABEL_KEYS } from '../../mock/data';
+import { type StudentProgress } from '../../api/types';
 import { ChevronRight, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
@@ -49,13 +50,20 @@ export function ProgressPage() {
 
   if (!progress) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
 
-  const annualPct = progress.completedHours / progress.annualRequiredHours;
-  const stagePct = progress.completedHours / progress.stageRequiredHours;
+  // Minutes-only on the wire (APIContract.md §2.1) — hours derived here for display.
+  const completedHours = progress.completedMinutes / 60;
+  const annualRequiredHours = progress.annualRequiredMinutes / 60;
+  const stageRequiredHours = progress.stageRequiredMinutes / 60;
+  const underReviewHours = progress.underReviewMinutes / 60;
+  const gapHours = progress.gapMinutes / 60;
+
+  const annualPct = progress.completedMinutes / progress.annualRequiredMinutes;
+  const stagePct = progress.completedMinutes / progress.stageRequiredMinutes;
 
   const currentLevel = RECOGNITION_LEVELS.find((l, i) =>
-    progress.completedHours >= l.minHours && progress.completedHours < (RECOGNITION_LEVELS[i + 1]?.minHours ?? Infinity)
+    completedHours >= l.minHours && completedHours < (RECOGNITION_LEVELS[i + 1]?.minHours ?? Infinity)
   ) || RECOGNITION_LEVELS[0];
-  const nextLevel = RECOGNITION_LEVELS.find(l => l.minHours > progress.completedHours);
+  const nextLevel = RECOGNITION_LEVELS.find(l => l.minHours > completedHours);
 
   return (
     <div className="p-4 lg:p-6">
@@ -75,7 +83,7 @@ export function ProgressPage() {
             <h3 className="text-foreground mb-4">{t('student.progress.annualReq')}</h3>
             <div className="flex items-center gap-5 mb-5">
               <div className="relative shrink-0">
-                <CircleProgress value={progress.completedHours} max={progress.annualRequiredHours} size={110} />
+                <CircleProgress value={completedHours} max={annualRequiredHours} size={110} />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
                     <div className="text-xl font-bold text-foreground">{Math.round(annualPct * 100)}%</div>
@@ -84,22 +92,22 @@ export function ProgressPage() {
                 </div>
               </div>
               <div className="flex-1">
-                <div className="text-3xl font-semibold text-foreground">{progress.completedHours}</div>
-                <div className="text-muted-foreground text-sm mb-2">/ {progress.annualRequiredHours} {t('common.hours')}</div>
-                {progress.underReviewHours > 0 && (
-                  <div className="text-xs text-blue-500 mb-1">+{progress.underReviewHours}h {t('student.progress.hoursPending')}</div>
+                <div className="text-3xl font-semibold text-foreground">{completedHours}</div>
+                <div className="text-muted-foreground text-sm mb-2">/ {annualRequiredHours} {t('common.hours')}</div>
+                {underReviewHours > 0 && (
+                  <div className="text-xs text-blue-500 mb-1">+{underReviewHours}h {t('student.progress.hoursPending')}</div>
                 )}
                 <div className="text-sm text-muted-foreground">
-                  {t('student.progress.stillNeed')} <span className="text-destructive font-medium">{progress.gapHours}</span> {t('common.hours')}
+                  {t('student.progress.stillNeed')} <span className="text-destructive font-medium">{gapHours}</span> {t('common.hours')}
                 </div>
               </div>
             </div>
 
-            <ProgressBar value={progress.completedHours} max={progress.annualRequiredHours} />
-            {progress.underReviewHours > 0 && (
+            <ProgressBar value={completedHours} max={annualRequiredHours} />
+            {underReviewHours > 0 && (
               <div className="mt-2">
                 <div className="text-xs text-muted-foreground mb-1">{t('student.records.underReview')}</div>
-                <ProgressBar value={progress.completedHours + progress.underReviewHours} max={progress.annualRequiredHours} color="bg-blue-400" showLabel={false} />
+                <ProgressBar value={completedHours + underReviewHours} max={annualRequiredHours} color="bg-blue-400" showLabel={false} />
               </div>
             )}
           </div>
@@ -108,7 +116,7 @@ export function ProgressPage() {
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="text-foreground mb-1">{t('student.progress.graduationReq')}</h3>
             <div className="text-muted-foreground text-sm mb-3">
-              {t('student.progress.completedLabel')} <span className="text-foreground font-semibold">{progress.completedHours}</span> / {progress.stageRequiredHours} {t('common.hours')}
+              {t('student.progress.completedLabel')} <span className="text-foreground font-semibold">{completedHours}</span> / {stageRequiredHours} {t('common.hours')}
             </div>
             <div className="mb-2 relative">
               <div className="h-3 bg-muted rounded-full overflow-hidden">
@@ -116,8 +124,8 @@ export function ProgressPage() {
               </div>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground mb-4">
-              <span>{progress.completedHours}h</span>
-              <span>{progress.stageRequiredHours}h</span>
+              <span>{completedHours}h</span>
+              <span>{stageRequiredHours}h</span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -143,13 +151,13 @@ export function ProgressPage() {
           </div>
 
           {/* Alert */}
-          {progress.gapHours > 50 && (
+          {gapHours > 50 && (
             <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 flex gap-3">
               <AlertCircle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
               <div>
                 <div className="text-sm text-orange-800 dark:text-orange-200 font-medium">{t('student.progress.insufficient')}</div>
                 <div className="text-xs text-orange-700 dark:text-orange-300 mt-0.5">
-                  {t('student.progress.gapMsg')}{progress.gapHours}{t('student.progress.gapSuffix')}
+                  {t('student.progress.gapMsg')}{gapHours}{t('student.progress.gapSuffix')}
                 </div>
                 <button onClick={() => navigate('/student/projects')}
                   className="mt-2 text-xs text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1">
@@ -177,7 +185,7 @@ export function ProgressPage() {
               {nextLevel && (
                 <div className="text-right">
                   <div className="text-xs text-muted-foreground mb-0.5">{t('student.progress.distanceToNext')}</div>
-                  <div className="text-2xl font-bold text-foreground">{nextLevel.minHours - progress.completedHours}h</div>
+                  <div className="text-2xl font-bold text-foreground">{nextLevel.minHours - completedHours}h</div>
                 </div>
               )}
             </div>
@@ -195,7 +203,7 @@ export function ProgressPage() {
                 return (
                   <div key={cat.categoryId}>
                     <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="text-foreground font-medium">{cat.categoryName.startsWith('mock.') ? t(cat.categoryName) : cat.categoryName}</span>
+                      <span className="text-foreground font-medium">{cat.categoryName}</span>
                       <span className="text-muted-foreground">
                         {cat.completedMinutes / 60}h
                         {cat.underReviewMinutes > 0 && <span className="text-blue-500"> +{cat.underReviewMinutes / 60}h</span>}

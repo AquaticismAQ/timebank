@@ -165,9 +165,9 @@ Server must return stable sorting; pagination of the same request must not produ
 
 ### 2.8 Concurrency & Idempotency
 
-- Editable resources return `version` or `ETag`.
-- Updates include `If-Match` or `version`; conflicts return `409 STATE_CONFLICT`.
-- Record creation, review decisions, account adjustments, and import confirmation support `Idempotency-Key`.
+- Editable resources return their current `version` in the response body.
+- Updates and decisions carry the resource's current `version` back as a **request-body field** — `version` on `PATCH`, `recordVersion` on service-record reviews, `proposalVersion` on proposal reviews — never an `If-Match` header; conflicts return `409 STATE_CONFLICT` carrying the current `version` so the client can retry with it.
+- Submission, review decisions, account adjustments/reversal, and import confirmation require `Idempotency-Key`. Record/project/proposal creation does not — see §13.4 for the exact per-endpoint set.
 - Same idempotency key and request body return the same business result; same key with different body returns conflict.
 
 ### 2.9 Deletion Rules
@@ -304,10 +304,12 @@ Core fields:
 - `serviceDate`, `startAt`, `endAt`, `durationMinutes`
 - `location`, `organizationId`, `organizationName`
 - `serviceCategoryId`, `description`
-- `supervisor`, `evidenceFiles`
+- `supervisor`, `evidenceFiles`, `includesTravelTime`
 - `status`, `currentRevision`, `reviewSummary`
 - `creditedUnits`, `accountTransactionId`
 - `version`, `createdAt`, `submittedAt`, `updatedAt`
+
+`includesTravelTime` is a disclosure flag (whether the claimed duration includes travel time), writable at creation and update, not derived.
 
 ### 3.5 Review `Review`
 
@@ -942,18 +944,21 @@ Because no write has been exercised by a client, request shapes are specified he
 
 - **Status fields.** Transitions go through action endpoints (`/submit`, `/publish`, `/reviews`), never through `PATCH`.
 - **Denormalized display names** (§2.11 rule 1) — `projectTitle`, `studentName`, `categoryName`, and the rest are outputs.
-- **Server-computed values** — `enrolledCount`, `durationMinutes` where it is derived from `startAt`/`endAt`, `creditedUnits`, `balanceAfter`, `version` in the body when it belongs in `If-Match`, timestamps, and every `my*` field.
+- **Server-computed values** — `enrolledCount`, `durationMinutes` where it is derived from `startAt`/`endAt`, `creditedUnits`, `balanceAfter`, timestamps, and every `my*` field. `version` (and its per-resource names `recordVersion`/`proposalVersion`) follows the create/update split instead of a blanket rejection: rejected at creation (the server assigns `1`), **required** as a body field on updates and decisions (§2.8) — never an `If-Match` header.
 
 **Additional per-endpoint requirements:**
 
 | Endpoint | Body requirements |
 | --- | --- |
-| `POST /service-records` | `sourceType` plus its required companions (§3.4): `projectId` for `project`, `organizationId`/`organizationName` and supervisor contact for `external`. `serviceDate`, `startAt`, `endAt`, `serviceCategoryId`, `description`, evidence file IDs |
+| `POST /service-records` | `sourceType` plus its required companions (§3.4): `projectId` for `project`, `organizationId`/`organizationName` and supervisor contact for `external`. `serviceDate`, `startAt`, `endAt`, `serviceCategoryId`, `description`, evidence file IDs, `includesTravelTime` |
 | `POST /service-records/{id}/submit` | Empty body; `Idempotency-Key` required. All submission validation (§4.5) runs here, not at create |
 | `POST /service-records/{id}/reviews` | `decision`, `reasonCode`, `comment`, `recordVersion`; `Idempotency-Key` required |
 | `POST /event-proposals/{id}/reviews` | `decision`, `reasonCode`, `comment`, `proposalVersion`; `Idempotency-Key` required |
 | `POST /projects/{projectId}/applications` | Empty or `note` only — the student is the principal, never a body field |
-| `POST /accounts/{id}/adjustments`, `POST /account-transactions/{id}/reverse` | `amount` in centi-coins (signed for adjustments), `reasonCode`, `memo`; `Idempotency-Key` required |
+| `POST /projects`, `PATCH /projects/{id}` | Writable subset of §3.1's core fields (never `status`, which is action-endpoint only). `PATCH` additionally requires `version` |
+| `POST /event-proposals`, `PATCH /event-proposals/{id}` | Writable subset of §3.2's core fields (never `status`). `PATCH` additionally requires `version` |
+| `POST /accounts/{id}/adjustments` | `amount` in signed centi-coins, `reasonCode`, `memo`; `Idempotency-Key` required |
+| `POST /account-transactions/{id}/reverse` | `reasonCode`, `memo` — no `amount`; the reversal mirrors the original transaction's amount. `Idempotency-Key` required |
 | `POST /files/upload-intents` | `filename`, `mimeType`, `sizeBytes`, `purpose` (§4.6) |
 | `PATCH /me/profile` | Self-service fields only, including `preferredLanguage` (§2.10) |
 

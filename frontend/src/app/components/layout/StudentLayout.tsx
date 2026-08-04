@@ -3,7 +3,8 @@ import { Home, FolderOpen, FileText, Wallet, User, Bell, TrendingUp, Lightbulb }
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../App';
 import { api } from '../../api/client';
-import { type StudentProgress, type Account, type Notification } from '../../mock/data';
+import { type StudentProgress, type Account, type Notification } from '../../api/types';
+import { formatCoins, minutesToHours } from '../../lib/format';
 import { AppShell, type ShellNavItem } from './AppShell';
 
 export function StudentLayout() {
@@ -43,11 +44,11 @@ export function StudentLayout() {
   const statsStrip = (
     <div className="grid grid-cols-2 gap-2">
       <div className="bg-sidebar-accent rounded-lg p-2 text-center">
-        <div className="text-sidebar-accent-foreground font-semibold text-sm">{progress?.completedHours ?? '--'}h</div>
+        <div className="text-sidebar-accent-foreground font-semibold text-sm">{progress ? minutesToHours(progress.completedMinutes) : '--'}h</div>
         <div className="text-sidebar-foreground/50 text-xs">{t('layout.student.completed')}</div>
       </div>
       <div className="bg-sidebar-accent rounded-lg p-2 text-center">
-        <div className="text-sidebar-accent-foreground font-semibold text-sm">{account?.balance ?? '--'}</div>
+        <div className="text-sidebar-accent-foreground font-semibold text-sm">{account ? formatCoins(account.balance) : '--'}</div>
         <div className="text-sidebar-foreground/50 text-xs">{t('layout.student.timeCoins')}</div>
       </div>
     </div>

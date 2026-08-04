@@ -44,7 +44,12 @@ public interface AccountService {
     AccountTransactionDto credit(String studentId, String gradeId, String classId, int amountCentiCoins,
                                   String sourceType, String sourceId, String reasonCode, String operatorId);
 
-    AccountTransactionDto adjust(String accountId, AdjustmentRequest request, String actorId);
+    /**
+     * Contract §2.8/§13.4: money-moving, so {@code idempotencyKey} is
+     * mandatory (unlike {@link #adjustForStudent}, an internal call with no
+     * HTTP request of its own to key off).
+     */
+    AccountTransactionDto adjust(String accountId, AdjustmentRequest request, String actorId, String idempotencyKey);
 
     /**
      * B5.2: a manual correction may be the first-ever credit for a student
@@ -57,8 +62,12 @@ public interface AccountService {
     AccountTransactionDto adjustForStudent(String studentId, String gradeId, String classId,
                                             AdjustmentRequest request, String actorId);
 
-    /** Creates an opposite-signed transaction referencing the original; the original row is never touched. */
-    AccountTransactionDto reverse(String transactionId, ReverseRequest request, String actorId);
+    /**
+     * Creates an opposite-signed transaction referencing the original; the
+     * original row is never touched. {@code idempotencyKey} is mandatory,
+     * same reasoning as {@link #adjust}.
+     */
+    AccountTransactionDto reverse(String transactionId, ReverseRequest request, String actorId, String idempotencyKey);
 
     AccountDto freeze(String accountId, FreezeRequest request, String actorId);
 

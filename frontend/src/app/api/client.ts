@@ -14,25 +14,41 @@ import {
   MOCK_ADMIN_STATS,
   MOCK_REPORT_DATA,
   MOCK_PROPOSALS,
-  type User,
-  type Project,
-  type Application,
-  type ServiceRecord,
-  type Account,
-  type AccountTransaction,
-  type StudentProgress,
-  type Notification,
-  type Student,
-  type ReviewQueueItem,
-  type Organization,
-  type AdminStats,
-  type ReportData,
-  type EventProposal,
-  type SchoolInfo,
-  type Role,
+  resolveCategoryName,
 } from '../mock/data';
+import type {
+  User,
+  Project,
+  Application,
+  ServiceRecord,
+  Account,
+  AccountTransaction,
+  StudentProgress,
+  Notification,
+  Student,
+  ReviewQueueItem,
+  Organization,
+  AdminStats,
+  ReportData,
+  EventProposal,
+  SchoolInfo,
+  MeResponse,
+} from './types';
+import { http } from './http';
+import { isRealDomain } from './config';
+import i18n from '../../i18n';
 
 const DELAY = 300;
+
+function stampCategoryName<T extends { categoryId?: string; categoryName?: string }>(obj: T): T {
+  if (!obj.categoryId) return obj;
+  return { ...obj, categoryName: resolveCategoryName(obj.categoryId, i18n.language) };
+}
+
+function stampServiceCategoryName<T extends { serviceCategoryId?: string; serviceCategoryName?: string }>(obj: T): T {
+  if (!obj.serviceCategoryId) return obj;
+  return { ...obj, serviceCategoryName: resolveCategoryName(obj.serviceCategoryId, i18n.language) };
+}
 
 function delay<T>(data: T, ms = DELAY): Promise<T> {
   return new Promise(resolve => setTimeout(() => resolve(data), ms));
@@ -58,7 +74,15 @@ export const api = {
       if (!user) throw new Error('Invalid username or password');
       return delay({ user: clone(user) });
     },
-    async me(): Promise<User> {
+    // I0.7: the one real-branch call this phase proves the transport layer
+    // against (Docs/implementation/10-Integration-I0-ContractPrep.md, exit
+    // criteria). Real `/me`'s shape genuinely differs from the mock `User`
+    // (APIContract.md §2.2) — reconciling that for real consumers is I1-d1's
+    // job, not this phase's.
+    async me(): Promise<User | MeResponse> {
+      if (isRealDomain('auth')) {
+        return http.get<MeResponse>('/me');
+      }
       const stored = localStorage.getItem('timebank-user');
       if (stored) return delay(clone(JSON.parse(stored)));
       throw new Error('Not logged in');
@@ -76,21 +100,22 @@ export const api = {
 
   projects: {
     async list(): Promise<Project[]> {
-      return delay(clone(MOCK_PROJECTS));
+      return delay(clone(MOCK_PROJECTS).map(stampCategoryName));
     },
     async get(id: string): Promise<Project> {
       const p = MOCK_PROJECTS.find(p => p.id === id);
       if (!p) throw new Error('Project not found');
-      return delay(clone(p));
+      return delay(stampCategoryName(clone(p)));
     },
     async create(data: Partial<Project>): Promise<Project> {
+      const categoryId = data.categoryId || 'cat_other';
       const p: Project = {
         id: `proj_${Date.now()}`,
         title: data.title || '',
         summary: data.summary || '',
         description: data.description || '',
-        categoryId: data.categoryId || 'cat_other',
-        categoryName: data.categoryName || 'mock.categories.cat_other',
+        categoryId,
+        categoryName: resolveCategoryName(categoryId, i18n.language),
         organizationId: data.organizationId || 'org_school',
         organizationName: data.organizationName || '',
         ownerId: data.ownerId || '',
@@ -131,24 +156,25 @@ export const api = {
 
   eventProposals: {
     async list(): Promise<EventProposal[]> {
-      return delay(clone(MOCK_PROPOSALS));
+      return delay(clone(MOCK_PROPOSALS).map(stampCategoryName));
     },
     async get(id: string): Promise<EventProposal> {
       const p = MOCK_PROPOSALS.find(p => p.id === id);
       if (!p) throw new Error('Proposal not found');
-      return delay(clone(p));
+      return delay(stampCategoryName(clone(p)));
     },
     async create(data: Partial<EventProposal>): Promise<EventProposal> {
+      const categoryId = data.categoryId || 'cat_other';
       const p: EventProposal = {
         id: `prop_${Date.now()}`,
         title: data.title || '',
         status: 'draft',
         myRole: 'Student Initiator',
-        categoryId: data.categoryId || 'cat_other',
-        categoryName: data.categoryName || 'mock.categories.cat_other',
+        categoryId,
+        categoryName: resolveCategoryName(categoryId, i18n.language),
         plannedDate: data.plannedDate || '',
         location: data.location || '',
-        estimatedDurationHours: data.estimatedDurationHours || 0,
+        estimatedDurationMinutes: data.estimatedDurationMinutes || 0,
         estimatedCapacity: data.estimatedCapacity || 0,
         goal: data.goal || '',
         description: data.description || '',
@@ -167,7 +193,7 @@ export const api = {
         recruitmentMethod: data.recruitmentMethod || '',
         eligibility: data.eligibility || '',
         proofMethod: data.proofMethod || '',
-        suggestedHours: data.suggestedHours || 0,
+        suggestedMinutes: data.suggestedMinutes || 0,
         currentApprovalNode: 'Draft',
         revisionCount: 0,
         createdAt: new Date().toISOString(),
@@ -203,7 +229,7 @@ export const api = {
       if (!p) throw new Error('Proposal not found');
       if (decision === 'approve') p.status = 'approved';
       else if (decision === 'reject') p.status = 'rejected';
-      else if (decision === 'requestChanges') { p.status = 'needsRevision'; p.revisionCount++; }
+      else if (decision === 'requestChanges') { p.status = 'changesRequested'; p.revisionCount++; }
       p.feedback = comment;
       p.updatedAt = new Date().toISOString();
       p.timeline.push({ action: decision, actor: 'Reviewer', time: p.updatedAt, note: comment });
@@ -249,14 +275,15 @@ export const api = {
 
   serviceRecords: {
     async list(): Promise<ServiceRecord[]> {
-      return delay(clone(MOCK_RECORDS));
+      return delay(clone(MOCK_RECORDS).map(stampServiceCategoryName));
     },
     async get(id: string): Promise<ServiceRecord> {
       const r = MOCK_RECORDS.find(r => r.id === id);
       if (!r) throw new Error('Record not found');
-      return delay(clone(r));
+      return delay(stampServiceCategoryName(clone(r)));
     },
     async create(data: Partial<ServiceRecord>): Promise<ServiceRecord> {
+      const serviceCategoryId = data.serviceCategoryId || 'cat_other';
       const r: ServiceRecord = {
         id: `rec_${Date.now()}`,
         studentId: data.studentId || 'std_001',
@@ -271,8 +298,8 @@ export const api = {
         location: data.location || '',
         organizationId: data.organizationId,
         organizationName: data.organizationName || '',
-        serviceCategoryId: data.serviceCategoryId || 'cat_other',
-        serviceCategoryName: data.serviceCategoryName || 'mock.categories.cat_other',
+        serviceCategoryId,
+        serviceCategoryName: resolveCategoryName(serviceCategoryId, i18n.language),
         description: data.description || '',
         supervisorName: data.supervisorName || '',
         supervisorContact: data.supervisorContact || '',
@@ -358,7 +385,9 @@ export const api = {
       return delay(clone(s));
     },
     async progress(id: string): Promise<StudentProgress> {
-      return delay(clone(MOCK_PROGRESS));
+      const progress = clone(MOCK_PROGRESS);
+      progress.byCategory = progress.byCategory.map(c => ({ ...c, categoryName: resolveCategoryName(c.categoryId, i18n.language) }));
+      return delay(progress);
     },
   },
 
@@ -388,11 +417,13 @@ export const api = {
 
   dashboards: {
     async student(): Promise<{ progress: StudentProgress; account: Account; recentRecords: ServiceRecord[]; upcomingProjects: Project[]; notifications: Notification[] }> {
+      const progress = clone(MOCK_PROGRESS);
+      progress.byCategory = progress.byCategory.map(c => ({ ...c, categoryName: resolveCategoryName(c.categoryId, i18n.language) }));
       return delay({
-        progress: clone(MOCK_PROGRESS),
+        progress,
         account: clone(MOCK_ACCOUNT),
-        recentRecords: clone(MOCK_RECORDS.slice(0, 5)),
-        upcomingProjects: clone(MOCK_PROJECTS.filter(p => p.status === 'registrationOpen').slice(0, 3)),
+        recentRecords: clone(MOCK_RECORDS.slice(0, 5)).map(stampServiceCategoryName),
+        upcomingProjects: clone(MOCK_PROJECTS.filter(p => p.status === 'registrationOpen').slice(0, 3)).map(stampCategoryName),
         notifications: clone(MOCK_NOTIFICATIONS),
       });
     },
@@ -400,7 +431,7 @@ export const api = {
       return delay({
         stats: clone(MOCK_ADMIN_STATS),
         pendingReviews: clone(MOCK_REVIEW_QUEUE.slice(0, 5)),
-        activeProjects: clone(MOCK_PROJECTS.filter(p => ['registrationOpen', 'inProgress'].includes(p.status)).slice(0, 3)),
+        activeProjects: clone(MOCK_PROJECTS.filter(p => ['registrationOpen', 'inProgress'].includes(p.status)).slice(0, 3)).map(stampCategoryName),
       });
     },
   },

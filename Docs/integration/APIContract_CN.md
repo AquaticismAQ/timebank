@@ -165,9 +165,9 @@ Web 推荐使用 Secure、HttpOnly、SameSite Cookie 管理会话；如采用访
 
 ### 2.8 并发与幂等
 
-- 可编辑资源返回 `version` 或 `ETag`。
-- 更新时携带 `If-Match` 或 `version`；冲突返回 `409 STATE_CONFLICT`。
-- 创建记录、审核决定、账户调整和导入确认支持 `Idempotency-Key`。
+- 可编辑资源在响应体中返回当前 `version`。
+- 更新与审核决定通过**请求体字段**带回资源当前的 `version`——`PATCH` 用 `version`，服务记录审核用 `recordVersion`，提案审核用 `proposalVersion`——绝不使用 `If-Match` 头；冲突返回 `409 STATE_CONFLICT`，响应体携带当前 `version` 供客户端据此重试。
+- 提交、审核决定、账户调整/冲正、导入确认必须携带 `Idempotency-Key`。记录/项目/提案的创建不需要——具体端点清单见 §13.4。
 - 相同幂等键和请求体返回同一业务结果；相同键不同请求体返回冲突。
 
 ### 2.9 删除规则
@@ -304,10 +304,12 @@ approved → corrected
 - `serviceDate`, `startAt`, `endAt`, `durationMinutes`
 - `location`, `organizationId`, `organizationName`
 - `serviceCategoryId`, `description`
-- `supervisor`, `evidenceFiles`
+- `supervisor`, `evidenceFiles`, `includesTravelTime`
 - `status`, `currentRevision`, `reviewSummary`
 - `creditedUnits`, `accountTransactionId`
 - `version`, `createdAt`, `submittedAt`, `updatedAt`
+
+`includesTravelTime` 是披露标志（申报时长是否包含在途时间），创建与更新时可写，不是派生字段。
 
 ### 3.5 审核 `Review`
 
@@ -942,18 +944,21 @@ Mock Client 有意采取了若干捷径，不得被当作合约行为：
 
 - **状态字段。** 状态流转一律走动作端点（`/submit`、`/publish`、`/reviews`），不走 `PATCH`。
 - **随行展示名称**（§2.11 规则 1）——`projectTitle`、`studentName`、`categoryName` 等只是输出。
-- **服务端计算值**——`enrolledCount`、由 `startAt`/`endAt` 推导的 `durationMinutes`、`creditedUnits`、`balanceAfter`、本应放在 `If-Match` 中的 `version`、各类时间戳，以及全部 `my*` 字段。
+- **服务端计算值**——`enrolledCount`、由 `startAt`/`endAt` 推导的 `durationMinutes`、`creditedUnits`、`balanceAfter`、各类时间戳，以及全部 `my*` 字段。`version`（及其在各资源上的别名 `recordVersion`/`proposalVersion`）不是一律拒绝：创建时拒绝（服务端赋值为 `1`），更新与审核决定时则**必须**作为请求体字段提供（§2.8）——绝不使用 `If-Match` 头。
 
 **各端点的附加要求：**
 
 | 端点 | 请求体要求 |
 | --- | --- |
-| `POST /service-records` | `sourceType` 及其必需伴随字段（§3.4）：`project` 需 `projectId`；`external` 需 `organizationId`/`organizationName` 与负责人联系方式。另需 `serviceDate`、`startAt`、`endAt`、`serviceCategoryId`、`description`、证明文件 ID |
+| `POST /service-records` | `sourceType` 及其必需伴随字段（§3.4）：`project` 需 `projectId`；`external` 需 `organizationId`/`organizationName` 与负责人联系方式。另需 `serviceDate`、`startAt`、`endAt`、`serviceCategoryId`、`description`、证明文件 ID、`includesTravelTime` |
 | `POST /service-records/{id}/submit` | 空请求体；必须携带 `Idempotency-Key`。全部提交校验（§4.5）在此执行，而不是在创建时 |
 | `POST /service-records/{id}/reviews` | `decision`、`reasonCode`、`comment`、`recordVersion`；必须携带 `Idempotency-Key` |
 | `POST /event-proposals/{id}/reviews` | `decision`、`reasonCode`、`comment`、`proposalVersion`；必须携带 `Idempotency-Key` |
 | `POST /projects/{projectId}/applications` | 空请求体或仅 `note`——学生身份取自登录主体，绝不作为请求字段 |
-| `POST /accounts/{id}/adjustments`、`POST /account-transactions/{id}/reverse` | 以分币为单位的 `amount`（调整为带符号整数）、`reasonCode`、`memo`；必须携带 `Idempotency-Key` |
+| `POST /projects`、`PATCH /projects/{id}` | §3.1 核心字段中可写的部分（绝不含 `status`，其只走动作端点）。`PATCH` 另需 `version` |
+| `POST /event-proposals`、`PATCH /event-proposals/{id}` | §3.2 核心字段中可写的部分（绝不含 `status`）。`PATCH` 另需 `version` |
+| `POST /accounts/{id}/adjustments` | 以分币为单位的带符号整数 `amount`、`reasonCode`、`memo`；必须携带 `Idempotency-Key` |
+| `POST /account-transactions/{id}/reverse` | `reasonCode`、`memo`——不含 `amount`，冲正金额与原流水一致。必须携带 `Idempotency-Key` |
 | `POST /files/upload-intents` | `filename`、`mimeType`、`sizeBytes`、`purpose`（§4.6） |
 | `PATCH /me/profile` | 仅自助维护字段，含 `preferredLanguage`（§2.10） |
 

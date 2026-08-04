@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Clock, ChevronRight, Plus, AlertCircle, FileText, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { RECORD_STATUS_LABELS, RECOGNITION_LEVELS, type StudentProgress, type Account, type ServiceRecord, type Project } from '../../mock/data';
+import { RECORD_STATUS_LABELS, RECOGNITION_LEVELS } from '../../mock/data';
+import { type StudentProgress, type Account, type ServiceRecord, type Project } from '../../api/types';
+import { formatCoins, minutesToHours } from '../../lib/format';
 import { useAuth } from '../../App';
 import { api } from '../../api/client';
 
@@ -51,12 +53,13 @@ export function StudentHome() {
 
   if (!progress || !account) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
 
-  const annualPercent = progress.completedHours / progress.annualRequiredHours;
+  const annualPercent = progress.completedMinutes / progress.annualRequiredMinutes;
+  const totalEarnedCoins = account.totalEarned / 100;
 
   const currentLevel = RECOGNITION_LEVELS.find((l, i) =>
-    account.totalEarned >= l.minHours && account.totalEarned < (RECOGNITION_LEVELS[i + 1]?.minHours ?? Infinity)
+    totalEarnedCoins >= l.minHours && totalEarnedCoins < (RECOGNITION_LEVELS[i + 1]?.minHours ?? Infinity)
   ) || RECOGNITION_LEVELS[0];
-  const nextLevel = RECOGNITION_LEVELS.find(l => l.minHours > account.totalEarned);
+  const nextLevel = RECOGNITION_LEVELS.find(l => l.minHours > totalEarnedCoins);
 
   const pendingActions = [
     recentRecords.find(r => r.status === 'returned') && { label: t('student.home.supplementMaterial'), desc: t('student.home.supplementDesc'), to: '/student/records', icon: AlertCircle, color: 'text-orange-500' },
@@ -89,27 +92,27 @@ export function StudentHome() {
               <div className="flex-1">
                 <div className="text-muted-foreground text-xs mb-1">{t('student.home.annualProgress')}</div>
                 <div className="text-foreground mb-0.5">
-                  <span className="text-3xl font-semibold">{progress.completedHours}</span>
-                  <span className="text-muted-foreground text-sm"> / {progress.annualRequiredHours} {t('common.hours')}</span>
+                  <span className="text-3xl font-semibold">{minutesToHours(progress.completedMinutes)}</span>
+                  <span className="text-muted-foreground text-sm"> / {minutesToHours(progress.annualRequiredMinutes)} {t('common.hours')}</span>
                 </div>
-                {progress.underReviewHours > 0 && (
-                  <div className="text-xs text-blue-500">+{progress.underReviewHours} {t('student.home.hoursPending')}</div>
+                {progress.underReviewMinutes > 0 && (
+                  <div className="text-xs text-blue-500">+{minutesToHours(progress.underReviewMinutes)} {t('student.home.hoursPending')}</div>
                 )}
-                <div className="text-xs text-muted-foreground mt-1">{t('student.home.gap')}<span className="text-destructive">{progress.gapHours}</span> {t('common.hours')}</div>
+                <div className="text-xs text-muted-foreground mt-1">{t('student.home.gap')}<span className="text-destructive">{minutesToHours(progress.gapMinutes)}</span> {t('common.hours')}</div>
               </div>
             </div>
 
             <div className="grid grid-cols-4 gap-3 text-center border-t border-border pt-4">
               <div>
-                <div className="text-foreground font-semibold">{progress.completedHours}h</div>
+                <div className="text-foreground font-semibold">{minutesToHours(progress.completedMinutes)}h</div>
                 <div className="text-muted-foreground text-xs">{t('student.home.completedLabel')}</div>
               </div>
               <div className="border-x border-border">
-                <div className="text-blue-500 font-semibold">{progress.underReviewHours}h</div>
+                <div className="text-blue-500 font-semibold">{minutesToHours(progress.underReviewMinutes)}h</div>
                 <div className="text-muted-foreground text-xs">{t('student.home.pending')}</div>
               </div>
               <div className="border-r border-border">
-                <div className="text-foreground font-semibold">{account.balance}</div>
+                <div className="text-foreground font-semibold">{formatCoins(account.balance)}</div>
                 <div className="text-muted-foreground text-xs">{t('student.home.timeCoins')}</div>
               </div>
               <div>
@@ -174,7 +177,7 @@ export function StudentHome() {
                       <div className="text-sm text-foreground truncate">{rec.projectTitle || rec.organizationName}</div>
                       <div className="text-xs text-muted-foreground">{rec.serviceDate} · {rec.durationMinutes / 60}h</div>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color] || colorMap.gray}`}>{status.label}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
                   </div>
                 );
               })}
@@ -223,15 +226,15 @@ export function StudentHome() {
                 <div className="text-foreground font-medium">{t(currentLevel.label)}</div>
                 {nextLevel && (
                   <div className="text-xs text-muted-foreground">
-                    {nextLevel.minHours - account.totalEarned} {t('student.home.distanceTo')}{t(nextLevel.label)}
+                    {nextLevel.minHours - totalEarnedCoins} {t('student.home.distanceTo')}{t(nextLevel.label)}
                   </div>
                 )}
               </div>
             </div>
             <div className="space-y-1.5">
               {RECOGNITION_LEVELS.slice(1).map(level => {
-                const prog = Math.min(account.totalEarned / level.minHours, 1);
-                const reached = account.totalEarned >= level.minHours;
+                const prog = Math.min(totalEarnedCoins / level.minHours, 1);
+                const reached = totalEarnedCoins >= level.minHours;
                 return (
                   <div key={level.level} className="flex items-center gap-2">
                     <span className="text-sm w-5">{level.icon}</span>
@@ -272,14 +275,14 @@ export function StudentHome() {
           {/* Account summary */}
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 dark:border-transparent dark:from-[oklch(0.488_0.243_264.376)] dark:to-[oklch(0.488_0.243_264.376)]/75 rounded-2xl p-5 text-blue-900 dark:text-white">
             <div className="text-xs text-blue-500 dark:text-white/60 mb-1">{t('student.home.coinBalance')}</div>
-            <div className="text-4xl font-bold mb-3">{account.balance}</div>
+            <div className="text-4xl font-bold mb-3">{formatCoins(account.balance)}</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="bg-blue-200/50 dark:bg-white/15 rounded-xl p-2 text-center">
-                <div className="font-semibold">{account.totalEarned}</div>
+                <div className="font-semibold">{formatCoins(account.totalEarned)}</div>
                 <div className="text-xs text-blue-500 dark:text-white/60">{t('student.home.totalEarned')}</div>
               </div>
               <div className="bg-blue-200/50 dark:bg-white/15 rounded-xl p-2 text-center">
-                <div className="font-semibold">{account.totalRedeemed}</div>
+                <div className="font-semibold">{formatCoins(account.totalRedeemed)}</div>
                 <div className="text-xs text-blue-500 dark:text-white/60">{t('student.home.exchanged')}</div>
               </div>
             </div>

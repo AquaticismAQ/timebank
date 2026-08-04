@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Search, X, MapPin, Clock, Users, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADE_LABEL_KEYS, type Project, type ProjectStatus } from '../../mock/data';
+import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADE_LABEL_KEYS, resolveCategoryName } from '../../mock/data';
+import { type Project, type ProjectStatus } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 
@@ -18,7 +19,7 @@ const colorMap: Record<string, string> = {
 type FilterStatus = ProjectStatus | 'all' | 'canApply';
 
 export function ProjectCenter() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
@@ -93,7 +94,7 @@ export function ProjectCenter() {
               className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                 filterCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'text-foreground hover:bg-accent'
               }`}>
-              {cat.name.startsWith('mock.') ? t(cat.name) : cat.name}
+              {resolveCategoryName(cat.id, i18n.language)}
             </button>
           ))}
         </div>
@@ -154,7 +155,7 @@ export function ProjectCenter() {
             {SERVICE_CATEGORIES.map(cat => (
               <button key={cat.id} onClick={() => setFilterCategory(cat.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${filterCategory === cat.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-                {cat.name.startsWith('mock.') ? t(cat.name) : cat.name}
+                {resolveCategoryName(cat.id, i18n.language)}
               </button>
             ))}
           </div>
@@ -201,7 +202,7 @@ export function ProjectCenter() {
                     <div className="p-4 flex-1">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
-                        <span className="text-xs text-muted-foreground">{t(proj.categoryName)}</span>
+                        <span className="text-xs text-muted-foreground">{proj.categoryName}</span>
                       </div>
                       <h3 className="text-sm text-foreground font-medium leading-snug mb-2">{proj.title}</h3>
                       <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{proj.summary}</p>

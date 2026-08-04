@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, ArrowUpRight, ArrowDownLeft, Plus, ChevronDown, ChevronUp } from 'lucide-react';
-import { TRANSACTION_TYPE_LABELS, type Student, type AccountTransaction } from '../../mock/data';
+import { TRANSACTION_TYPE_LABELS } from '../../mock/data';
+import { type Student, type AccountTransaction } from '../../api/types';
+import { formatCoins, minutesToHours } from '../../lib/format';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 
@@ -64,7 +66,7 @@ export function AccountManagement() {
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="text-2xl font-semibold text-foreground">
-            {students.reduce((s, st) => s + st.timeCoinBalance, 0)}
+            {formatCoins(students.reduce((s, st) => s + st.timeCoinBalance, 0))}
           </div>
           <div className="text-xs text-muted-foreground">{t('admin.accounts.totalCirculating')}</div>
         </div>
@@ -76,7 +78,7 @@ export function AccountManagement() {
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="text-2xl font-semibold text-foreground">
-            {Math.round(students.reduce((s, st) => s + st.timeCoinBalance, 0) / students.length * 10) / 10}
+            {formatCoins(Math.round(students.reduce((s, st) => s + st.timeCoinBalance, 0) / students.length))}
           </div>
           <div className="text-xs text-muted-foreground">{t('admin.accounts.avgBalance')}</div>
         </div>
@@ -106,10 +108,10 @@ export function AccountManagement() {
                     <span className="text-sm text-foreground font-medium">{student.name}</span>
                     <span className="text-xs text-muted-foreground">{student.grade} {student.className}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: student.completedHours * 2, redeemed: 0 })}</div>
+                  <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: (student.completedMinutes / 60) * 2, redeemed: 0 })}</div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-lg font-semibold text-foreground">{student.timeCoinBalance}</div>
+                  <div className="text-lg font-semibold text-foreground">{formatCoins(student.timeCoinBalance)}</div>
                   <div className="text-xs text-muted-foreground">{t('admin.accounts.coinsUnit')}</div>
                 </div>
                 {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -131,7 +133,7 @@ export function AccountManagement() {
                             <div className="text-xs text-foreground">{t(typeInfo.label)} · {tx.relatedRecordTitle || tx.description}</div>
                             <div className="text-xs text-muted-foreground">{tx.createdAt.slice(0, 10)}</div>
                           </div>
-                          <div className={`text-sm font-medium ${colorMap[typeInfo.color]}`}>{typeInfo.sign}{tx.amount}</div>
+                          <div className={`text-sm font-medium ${colorMap[typeInfo.color]}`}>{typeInfo.sign}{formatCoins(tx.amount)}</div>
                         </div>
                       );
                     })

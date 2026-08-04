@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Bell, CheckCheck, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { type Notification } from '../../mock/data';
+import { type Notification } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { useAuth } from '../../App';

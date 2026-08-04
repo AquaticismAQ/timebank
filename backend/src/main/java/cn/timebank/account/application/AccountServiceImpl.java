@@ -14,6 +14,7 @@ import cn.timebank.audit.application.AuditEntry;
 import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.common.idempotency.IdempotencyService;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.DataScopeResolver;
 import cn.timebank.security.application.DataScopeSpecifications;
@@ -37,14 +38,17 @@ class AccountServiceImpl implements AccountService {
     private final AccountTransactionRepository transactionRepository;
     private final AuditService auditService;
     private final DataScopeResolver dataScopeResolver;
+    private final IdempotencyService idempotencyService;
     private final AccountScopeFields scopeFields = new AccountScopeFields();
 
     AccountServiceImpl(AccountRepository accountRepository, AccountTransactionRepository transactionRepository,
-                        AuditService auditService, DataScopeResolver dataScopeResolver) {
+                        AuditService auditService, DataScopeResolver dataScopeResolver,
+                        IdempotencyService idempotencyService) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.auditService = auditService;
         this.dataScopeResolver = dataScopeResolver;
+        this.idempotencyService = idempotencyService;
     }
 
     @Override
@@ -102,7 +106,12 @@ class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
-    public AccountTransactionDto adjust(String accountId, AdjustmentRequest request, String actorId) {
+    public AccountTransactionDto adjust(String accountId, AdjustmentRequest request, String actorId, String idempotencyKey) {
+        return idempotencyService.execute(idempotencyKey, actorId, "POST /accounts/" + accountId + "/adjustments",
+                request, AccountTransactionDto.class, () -> doAdjust(accountId, request, actorId));
+    }
+
+    private AccountTransactionDto doAdjust(String accountId, AdjustmentRequest request, String actorId) {
         Account account = lockedOrThrow(accountId);
         if (account.isFrozen()) {
             throw ApiException.stateConflict("Account is frozen; cannot adjust.");
@@ -125,7 +134,12 @@ class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
-    public AccountTransactionDto reverse(String transactionId, ReverseRequest request, String actorId) {
+    public AccountTransactionDto reverse(String transactionId, ReverseRequest request, String actorId, String idempotencyKey) {
+        return idempotencyService.execute(idempotencyKey, actorId, "POST /account-transactions/" + transactionId + "/reverse",
+                request, AccountTransactionDto.class, () -> doReverse(transactionId, request, actorId));
+    }
+
+    private AccountTransactionDto doReverse(String transactionId, ReverseRequest request, String actorId) {
         AccountTransaction original = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> ApiException.notFound("Transaction not found."));
         Account account = lockedOrThrow(original.getAccountId());

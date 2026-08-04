@@ -646,7 +646,7 @@
       "tabAll": "全部",
       "tabDraft": "草稿",
       "tabSubmitted": "待审核",
-      "tabNeedsRevision": "需修改",
+      "tabChangesRequested": "需修改",
       "tabApproved": "已批准",
       "tabRejected": "已驳回",
       "tabWithdrawn": "已撤回",
@@ -1349,7 +1349,8 @@
     "proposalStatus": {
       "draft": "草稿",
       "submitted": "待审核",
-      "needsRevision": "需修改",
+      "underReview": "审核中",
+      "changesRequested": "需修改",
       "approved": "已批准",
       "rejected": "已驳回",
       "withdrawn": "已撤回"

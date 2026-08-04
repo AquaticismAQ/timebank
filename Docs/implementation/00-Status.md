@@ -2,7 +2,7 @@
 
 > **Living document.** The single place to answer "where are we?". The plan lives in `01-Overview.md` and the phase docs; this file holds only state. Update it on phase entry, phase exit, and whenever a gate or risk changes — not in a burst before a review meeting.
 
-**Snapshot as of 2026-08-04 — B0-B2 complete; B3, B4, B5, and B6 backend work all done and live (B6 with named infra-blocked gaps); B7 (database operations) started, mostly blocked on infrastructure that doesn't exist.** Phase 1 (institutional design) is complete. The frontend is built and read-wired against a mock client. The backend has the full draft→submit→review→credit pipeline (B3), the supply side (B4), the complete admin-surface layer (B5), and B6's data-lifecycle/reconciliation/hardening layer (purge, reconciliation, rate limiting, index review, security review) — all proven against real MySQL (134 tests) and live-verified over HTTPS. **B7 is a fundamentally different kind of phase — real infrastructure provisioning and operational rehearsal, not application code** — and the environment this project actually has is one shared test server with no staging/production split, no second database host, and no object-storage account. Per the user's explicit direction (2026-08-04), only what's genuinely buildable without new infrastructure was done: durability settings verified live and pinned explicitly in config (B7.3), and a real handover runbook package written (`Docs/operations/Runbooks.md`) covering failover, patching, backup/restore, cohort purge execution, and alert response — the last two of which describe code that actually exists and has been tested; the first three are documented procedures that have never been rehearsed, honestly labeled as such. Everything needing a second host, an object-storage account, or a staging environment (replication, backups, PITR, restore verification, the G3 drill itself, monitoring) is explicitly blocked, not faked — see §20. **The file module (B3.4/B3.5) uses local-disk storage, not MinIO/OSS** — a deliberate test-stage substitution for D9's S3-compatible recommendation, tracked as its own follow-up phase, `14-Backend-B3F-CloudFileStorage.md` — see §15. Every phase from B4 onward has surfaced and fixed real bugs live — see §16-§20.
+**Snapshot as of 2026-08-04 — B0-B2 complete; B3, B4, B5, and B6 backend work all done and live (B6 with named infra-blocked gaps); B7 (database operations) started, mostly blocked on infrastructure that doesn't exist; I0 (Contract Prep) done, Gate G1 met — I1 (Read Path) can begin.** Phase 1 (institutional design) is complete. The frontend is built and read-wired against a mock client. The backend has the full draft→submit→review→credit pipeline (B3), the supply side (B4), the complete admin-surface layer (B5), and B6's data-lifecycle/reconciliation/hardening layer (purge, reconciliation, rate limiting, index review, security review) — all proven against real MySQL (134 tests) and live-verified over HTTPS. **B7 is a fundamentally different kind of phase — real infrastructure provisioning and operational rehearsal, not application code** — and the environment this project actually has is one shared test server with no staging/production split, no second database host, and no object-storage account. Per the user's explicit direction (2026-08-04), only what's genuinely buildable without new infrastructure was done: durability settings verified live and pinned explicitly in config (B7.3), and a real handover runbook package written (`Docs/operations/Runbooks.md`) covering failover, patching, backup/restore, cohort purge execution, and alert response — the last two of which describe code that actually exists and has been tested; the first three are documented procedures that have never been rehearsed, honestly labeled as such. Everything needing a second host, an object-storage account, or a staging environment (replication, backups, PITR, restore verification, the G3 drill itself, monitoring) is explicitly blocked, not faked — see §20. **The file module (B3.4/B3.5) uses local-disk storage, not MinIO/OSS** — a deliberate test-stage substitution for D9's S3-compatible recommendation, tracked as its own follow-up phase, `14-Backend-B3F-CloudFileStorage.md` — see §15. Every phase from B4 onward has surfaced and fixed real bugs live — see §16-§20.
 
 **Environment:** the shared test server is provisioned and in active use (MySQL 8, Java 21, Maven installed 2026-08-02). **No Docker anywhere** — the app runs as a systemd unit (`timebank-backend.service`, user `timebank`) and all tests run on the server against real MySQL (`01-Overview.md` §6). Server host and credentials live only in the untracked, git-ignored `test-server-credits.md`; they are never repeated in any tracked file, issue, or CI configuration. A **dedicated, scoped MySQL user** (`timebank_app`, privileges limited to `timebank.*` and `timebank_it_%.*`) was created rather than using the shared superuser `dbadmin` from the credentials file — see §11.
 
@@ -24,8 +24,8 @@ A phase is `✅` only when **every** exit-criteria checkbox in its own document 
 
 | | |
 | --- | --- |
-| **Overall state** | In progress — B0-B2 complete; B3, B4, B5, and B6 backend work items all complete and deployed; B7 (parallel track) started (all five held at `▶` by their own open exit criteria — B6's and B7's are genuinely blocked on missing infra, not merely unproven) |
-| **Current phase** | B7 Database Operations (`▶` — a parallel track, not a sequence step; B7.3 done and verified live, B7.9/B7.11/B7.12/B7.14 written but unrehearsed, everything needing a second host/object storage/staging blocked — see `09-Backend-B7-DatabaseOps.md` §4 and §20 below); B6 Hardening stays `▶` (B6.1-B6.5, B6.7-B6.9, B6.12 done; B6.6/B6.10 blocked on the same kind of infra gap, see `08-Backend-B6-Hardening.md` §4 and §19); B5 stays `▶` on its own 500k-row/p95 item (same underlying blocker); B4 Projects & Proposals stays `▶` (4 of 8 exit criteria unchecked, see `06-Backend-B4-Projects.md` §4 and §16); B3 Core Loop also stays `▶` (frontend-demonstration and query-count/EXPLAIN exit criteria remain, see §15); B3F (cloud file storage) not started; B0.14's automated CI trigger remains open |
+| **Overall state** | In progress — B0-B2 complete; B3, B4, B5, and B6 backend work items all complete and deployed; B7 (parallel track) started (all five held at `▶` by their own open exit criteria — B6's and B7's are genuinely blocked on missing infra, not merely unproven); I0 (Contract Prep) done, Gate G1 met |
+| **Current phase** | B7 Database Operations (`▶` — a parallel track, not a sequence step; B7.3 done and verified live, B7.9/B7.11/B7.12/B7.14 written but unrehearsed, everything needing a second host/object storage/staging blocked — see `09-Backend-B7-DatabaseOps.md` §4 and §20 below); B6 Hardening stays `▶` (B6.1-B6.5, B6.7-B6.9, B6.12 done; B6.6/B6.10 blocked on the same kind of infra gap, see `08-Backend-B6-Hardening.md` §4 and §19); B5 stays `▶` on its own 500k-row/p95 item (same underlying blocker); B4 Projects & Proposals stays `▶` (4 of 8 exit criteria unchecked, see `06-Backend-B4-Projects.md` §4 and §16); B3 Core Loop also stays `▶` (frontend-demonstration and query-count/EXPLAIN exit criteria remain, see §15); B3F (cloud file storage) not started; B0.14's automated CI trigger remains open. On the integration side, I0 Contract Prep is `✅` done (2026-08-04, §21) — I1 Read Path can now start domain by domain |
 | **Planned duration** | ~28 weeks to pilot go-live (2 backend + 1 frontend engineer + ~0.2 FTE ops) |
 | **Total effort** | ~72 person-weeks |
 | **Start date** | 2026-08-02 |
@@ -36,7 +36,7 @@ A phase is `✅` only when **every** exit-criteria checkbox in its own document 
 
 | Gate | Meaning | Planned | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| **G1** Contract freeze | Request bodies frozen, types module lifted, divergences 1–4 resolved | W6 | `—` | |
+| **G1** Contract freeze | Request bodies frozen, types module lifted, divergences 1–4 resolved | W6 | `✅` | I0 done 2026-08-04 — `types.ts` lifted, §13.4 request bodies reviewed against actual backend DTOs (found and fixed real drift, see §21), all five divergences resolved in the frontend, transport/envelope/error/idempotency layer built and proven live against `/me` |
 | **G2** Core loop proven | Full record lifecycle with atomic crediting, demonstrated on the real frontend | W15 | `⏸` | Every backend exit-criteria bullet proven against real MySQL and live HTTPS, **including** B3.4/B3.5's file-upload/access ones (§14, §15) — the two still open are "demonstrated on the real frontend" (I2's job, mock client still in place) and the review-queue/record-list query-count + `EXPLAIN` test (not yet written) |
 | **G3** Restore drill | Production-sized restore, timed; RPO/RTO measured | W12, repeat W25 | `—` | Durability config verified/pinned (B7.3); everything else this gate needs (replica, backups, PITR, restore verification, the drill itself) is blocked on infrastructure this session cannot provision — see §20 |
 | **G4** Load test | 300 concurrent, p95 targets met, slow-query log empty | W26 | `—` | B6's non-load-test items are done (purge, reconciliation, rate limiting, index review, security review — §19); the load test itself has not run and cannot on the current shared, resource-constrained test server — needs a production-sized staging environment, not yet provisioned |
@@ -61,7 +61,7 @@ A phase is `✅` only when **every** exit-criteria checkbox in its own document 
 
 | Phase | Doc | Effort | Planned | Status | Owner | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| **I0** Contract prep | `10-` | 3 pw | W4–W6 | `—` | | Carries G1; blocks all integration |
+| **I0** Contract prep | `10-` | 3 pw | W4–W6 | `✅` | | Carries G1 — done 2026-08-04, see §21. All 12 work items complete; frontend still builds and runs entirely on mocks by default (I0.7's toggle is off unless explicitly set) |
 | **I1** Read path | `11-` | 4 pw | W10–W20 | `—` | | Rolling, 8 domains |
 | **I2** Write path | `12-` | 6 pw | W14–W22 | `—` | | No prior validation exists (R12) |
 | **I3** Acceptance & cutover | `13-` | 5 pw | W20–W28 | `—` | | Carries G5 |
@@ -214,22 +214,22 @@ B4's field set for `EventProposal` follows `APIContract.md` §3.2, not the front
 | B7.13 | Deployment mechanics (rolling, expand/contract) | `▶` fat JAR + systemd already true (B0.11); rolling restart across two units is blocked — only one instance exists |
 | B7.14 | Handover package for school IT | `▶` package written (`Docs/operations/Runbooks.md` — backup/restore, failover, patching, purge execution, alert response), not reviewed with anyone — no named school IT staff exist yet |
 
-### I0 · Contract Prep
+### I0 · Contract Prep — `✅` done 2026-08-04, see §21
 
 | ID | Item | Status |
 | --- | --- | --- |
-| I0.1 | Lift types to `api/types.ts` | `—` |
-| I0.2 | **Freeze request bodies (§13.4)** | `—` |
-| I0.3 | HTTP transport layer | `—` |
-| I0.4 | Envelope handling | `—` |
-| I0.5 | Error-to-UI mapping | `—` |
-| I0.6 | Idempotency + `If-Match` helpers | `—` |
-| I0.7 | Per-domain mock/real toggle | `—` |
-| I0.8 | Divergence 1 — proposal status rename | `—` |
-| I0.9 | Divergence 2–3 — centi-coin units | `—` |
-| I0.10 | Divergence 4 — drop `*Hours` from the wire | `—` |
-| I0.11 | Divergence 5 — dictionary names from server | `—` |
-| I0.12 | Dev environment recipe | `—` |
+| I0.1 | Lift types to `api/types.ts` | `✅` |
+| I0.2 | **Freeze request bodies (§13.4)** | `✅` |
+| I0.3 | HTTP transport layer | `✅` |
+| I0.4 | Envelope handling | `✅` |
+| I0.5 | Error-to-UI mapping | `✅` |
+| I0.6 | Idempotency + concurrency helpers | `✅` (body-field `version`, not `If-Match` — see §21) |
+| I0.7 | Per-domain mock/real toggle | `✅` |
+| I0.8 | Divergence 1 — proposal status rename | `✅` |
+| I0.9 | Divergence 2–3 — centi-coin units | `✅` |
+| I0.10 | Divergence 4 — drop `*Hours` from the wire | `✅` |
+| I0.11 | Divergence 5 — dictionary names from server | `✅` |
+| I0.12 | Dev environment recipe | `✅` |
 
 ### I1 · Read Path (by domain)
 
@@ -613,3 +613,32 @@ $ curl https://tb.example.com/api/v1/ping                                       
 ```
 
 **What's still open, honestly.** Ten of fourteen B7 work items are blocked on infrastructure this session cannot provision — see the phase doc's exit criteria for the full list. Gate G3 stays `—` and will stay `—` until a real second host, object storage, and a staging environment exist; nothing in this pass moved that gate, only prepared for it (durability config, runbook drafts). The next concrete step, if this track continues, is provisioning — not more documentation.
+
+## 21. I0 Implementation Findings (2026-08-04) — Contract Prep
+
+**I0.2's request-body freeze surfaced real, previously-undocumented drift between `APIContract.md` and the live backend, not just documentation gaps.** Reviewing §13.4 endpoint by endpoint against the actual DTOs (`ServiceRecordRequests`, `ReviewRequests`, `AccountRequests`, `ProjectRequests`, `ProposalRequests`) found:
+
+- **Concurrency was never `If-Match`.** §2.8 and §13.4 described `If-Match`/`version` headers; the real backend (`ConcurrencyControl.checkVersion`) only ever reads a body field (`version`, `recordVersion`, `proposalVersion`) — `ConcurrencyControl.readIfMatch()` exists but is dead code, called nowhere in `cn.timebank`. Fixed the contract to match the backend (§2.8, §13.4), not the other way around — the backend is live, tested, and internally consistent.
+- **`Idempotency-Key` was missing on money-moving endpoints.** §2.8's own prose lists "account adjustments" as requiring it, and §13.4's table said the same for `POST /accounts/{id}/adjustments` and `POST /account-transactions/{id}/reverse` — but `AccountController` had no `Idempotency-Key` handling at all, despite `IdempotencyService`'s class-level javadoc already claiming "account adjustments... call `execute`." This was a real gap (a duplicate double-click could double-post a correction), not a doc error, so it was fixed in the backend rather than just documented: `AccountServiceImpl.adjust`/`.reverse` now wrap their mutation through `IdempotencyService.execute`, matching the exact pattern `ServiceRecordServiceImpl.submit` already uses (outer `@Transactional` method, private `doAdjust`/`doReverse` as the wrapped body — no new architecture). Two new tests (`AccountLedgerIT`: duplicate-key replay for both adjust and reverse, plus a missing-key rejection test) proved it against real MySQL on the server, then deployed. `adjustForStudent` (the internal path `CaseDecisionTransaction`'s manual-correction flow uses) was deliberately left untouched — it has no HTTP request of its own to key off.
+- **`ReverseRequest` has no `amount`** (mirrors the original transaction automatically) — §13.4's table conflated it with `adjustments` into one row implying both take `amount`; split into two rows. **`includesTravelTime`** is a real, persisted `ServiceRecord` field (its own domain-class javadoc already admitted "not in contract §3.4's headline field list") — added to §3.4 and §13.4. **`POST`/`PATCH /projects` and `/event-proposals`** were entirely missing from §13.4's table despite `PATCH` requiring a mandatory `version` body field — added.
+
+**I0.11's category-name fix was implemented as per-request server-side-style resolution, not a static translation.** The contract requires dictionary names to come already-localized from the server, keyed by a stable `categoryId`. Since the mock stands in for that server, `mock/data.ts`'s `SERVICE_CATEGORIES` now holds both language variants directly (`{ en, zh }`, no i18n-key indirection), and `client.ts` stamps `categoryName`/`serviceCategoryName` onto every category-bearing response at the moment it's returned, based on the current `i18next` language — the same "resolved per request language" behavior a real backend would exhibit, including that switching language client-side doesn't retroactively relabel already-fetched state without a refetch (matching reality, not a regression).
+
+**Manual click-through verification (Playwright, headless Chromium, both portals, both roles) caught two real bugs before they shipped, both outside the diff's obvious surface:**
+1. `StudentHome.tsx` has *two* separate "honor level" renderings (a compact hero-card one and a full reference-list one below it) — the centi-coin conversion sweep only fixed the first; the second still divided/compared the raw (now ×100) `account.totalEarned` against `RECOGNITION_LEVELS`' hour-scale thresholds, showing "**-575** away from bronze" instead of "19". Fixed by reusing the same `totalEarnedCoins` local in both places.
+2. A **pre-existing** bug, not introduced by I0: `StudentHome.tsx`'s desktop recent-records list rendered a status label's raw i18n key (`{status.label}`) instead of `{t(status.label)}` — two lines below, the mobile view already did it correctly. Left everything else pre-existing alone per this phase's own "don't improve screens while touching them" rule, but fixed this one line since it was directly adjacent to code already being edited and the fix is a one-token, zero-risk parity match with the line right below it.
+
+**Found but explicitly not fixed (out of I0's scope):** `StudentList.tsx` and `AccountManagement.tsx` (admin portal) both have a `useMemo` whose dependency array omits `students` — since `students` starts as `[]` and is only populated after an async fetch resolves, the memoized `filtered`/list-rendering result never recomputes when the fetch lands, so both tables render empty until the user changes a search/filter/sort control. Confirmed pre-existing (the dependency arrays are untouched by this phase's diff) via Playwright: `AccountManagement`'s summary stats correctly read `10`/`523`/etc. from the *unmemoized* `students` array, while the table body directly below renders zero rows. Left as a named follow-up, not fixed here, per the same scope discipline as above — it's a React bug unrelated to the mock↔contract wiring this phase exists to do.
+
+**I0.12's dev-proxy recipe needed one more fix than `changeOrigin: true`.** Proving the recipe actually works (not just writing it) — Playwright driving the real SPA through the Vite proxy against `tb.example.com`, using a disposable admin user created via SQL and deleted afterward — found that a real browser's `fetch()` always sends its own `Origin: http://localhost:5173` header, which isn't on the backend's `RequestOriginFilter` allow-list (`timebank.security.allowed-origins`, defaults to `https://tb.example.com` only, contract §2.3) and got a `403 FORBIDDEN` **before CSRF was even evaluated** — invisible to `curl`, which doesn't send an `Origin` header by default and so never hit this path in initial testing. Fixed in `vite.config.ts`'s proxy `configure` hook, rewriting the outbound `Origin` to the target — `changeOrigin` alone only rewrites `Host`. Also discovered and documented the CSRF "prime, then retry" requirement: the `XSRF-TOKEN` cookie is only generated/saved by Spring's `CsrfFilter` while validating a state-changing request, not on a plain `GET`, so the first `POST /auth/login` attempt with no cookie yet legitimately 403s and that response is what seeds the cookie for the real attempt. Both are documented in `frontend/README.md` with the reasoning, not just the workaround.
+
+**Live verification, for reference** (disposable admin user created directly via SQL for this check — bcrypt hash for `password` at cost 12 via `htpasswd -nbBC 12`, since no seeded/persistent login exists on this server — then deleted):
+```
+$ curl (no Origin header) https://tb.example.com/api/v1/auth/login → works first try (RequestOriginFilter's "no Origin/Referer header" branch allows it)
+$ Playwright, real Chromium, through the Vite dev proxy with the Origin-rewrite fix:
+    POST /api/v1/auth/login (primed, then retried with X-XSRF-TOKEN) → 200
+    GET  /api/v1/me                                                   → 200, {"data":{"user":{...},"workspaces":["admin"],"preferredLanguage":"zh-CN","featureFlags":{...}},"meta":{"requestId":"..."}}
+```
+`mvn test` (35) and `mvn verify` (full IT suite against real MySQL, including the two new `AccountLedgerIT` idempotency tests) both pass; `pnpm build` and a standalone `tsc --noEmit` (not part of this project's configured scripts — see `frontend/README.md`) are both clean.
+
+**What's still open, honestly.** I0 changes no screen's default behavior by design (`VITE_API_REAL_DOMAINS` defaults empty) — I1 is the phase that actually swaps a real read into a screen, domain by domain. The two admin-portal `useMemo` bugs found above are real and user-visible today but out of scope here. `EventProposal`'s `estimatedDurationMinutes`/`suggestedMinutes` fields aren't wired to any real write path yet (no component calls `eventProposals.create`/`.update`) — consistent with §13.2's "entire write surface unvalidated" note, unchanged by this phase.

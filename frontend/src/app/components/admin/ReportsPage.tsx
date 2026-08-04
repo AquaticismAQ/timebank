@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, BarChart2, TrendingUp, Users, Clock } from 'lucide-react';
-import { type ReportData, type AdminStats } from '../../mock/data';
+import { type ReportData, type AdminStats } from '../../api/types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 
 const TOTAL_BAR_COLOR = '#94a3b8'; // slate-400 — visible in both light and dark

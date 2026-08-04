@@ -646,7 +646,7 @@
       "tabAll": "All",
       "tabDraft": "Draft",
       "tabSubmitted": "Pending Review",
-      "tabNeedsRevision": "Needs Revision",
+      "tabChangesRequested": "Needs Revision",
       "tabApproved": "Approved",
       "tabRejected": "Rejected",
       "tabWithdrawn": "Withdrawn",
@@ -1349,7 +1349,8 @@
     "proposalStatus": {
       "draft": "Draft",
       "submitted": "Pending Review",
-      "needsRevision": "Needs Revision",
+      "underReview": "Under Review",
+      "changesRequested": "Changes Requested",
       "approved": "Approved",
       "rejected": "Rejected",
       "withdrawn": "Withdrawn"

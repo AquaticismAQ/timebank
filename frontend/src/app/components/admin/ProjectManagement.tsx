@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Search, MapPin, Clock, Users, MoreHorizontal, CheckCircle, X, Edit, Archive } from 'lucide-react';
-import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADES, GRADE_LABEL_KEYS, type Project, type ProjectStatus, type Organization } from '../../mock/data';
+import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADES, GRADE_LABEL_KEYS, resolveCategoryName } from '../../mock/data';
+import { type Project, type ProjectStatus, type Organization } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 
@@ -68,7 +69,7 @@ interface EditModalProps {
 }
 
 function EditModal({ project, form, onChange, onClose, onSave, organizations }: EditModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const set = (patch: Partial<EditForm>) => onChange(patch);
 
   const toggleGrade = (g: string) => {
@@ -120,7 +121,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations }: 
               <div>
                 <label className={LABEL}>{t('admin.projects.serviceCategory')}</label>
                 <select value={form.categoryId} onChange={e => set({ categoryId: e.target.value })} className={INPUT}>
-                  {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{t(c.name)}</option>)}
+                  {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{resolveCategoryName(c.id, i18n.language)}</option>)}
                 </select>
               </div>
               <div>
@@ -235,7 +236,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations }: 
 }
 
 export function ProjectManagement() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [schoolName, setSchoolName] = useState('');
@@ -286,7 +287,7 @@ export function ProjectManagement() {
     setProjects(prev => prev.map(p => p.id === editProject.id ? {
       ...p,
       ...editForm,
-      categoryName: category?.name ?? p.categoryName,
+      categoryName: category ? resolveCategoryName(category.id, i18n.language) : p.categoryName,
       organizationName: org?.name ?? p.organizationName,
       startAt: editForm.startAt + ':00',
       endAt: editForm.endAt + ':00',
@@ -340,7 +341,7 @@ export function ProjectManagement() {
         <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.projects.allCategories')}</option>
-          {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{t(c.name)}</option>)}
+          {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{resolveCategoryName(c.id, i18n.language)}</option>)}
         </select>
       </div>
 
@@ -370,7 +371,7 @@ export function ProjectManagement() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color]}`}>{t(status.label)}</span>
-                    <span className="text-xs text-muted-foreground">{t(proj.categoryName)}</span>
+                    <span className="text-xs text-muted-foreground">{proj.categoryName}</span>
                   </div>
                   <div className="text-sm text-foreground font-medium mb-1">{proj.title}</div>
                   <div className="text-xs text-muted-foreground mb-2">{proj.summary}</div>
@@ -479,7 +480,7 @@ export function ProjectManagement() {
                 <div>
                   <label className={LABEL}>{t('admin.projects.serviceCategory')}</label>
                   <select className={INPUT}>
-                    {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{t(c.name)}</option>)}
+                    {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{resolveCategoryName(c.id, i18n.language)}</option>)}
                   </select>
                 </div>
                 <div>

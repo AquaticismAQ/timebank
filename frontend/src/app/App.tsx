@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Toaster } from 'sonner';
-import { type User } from './mock/data';
+import { type User } from './api/types';
 import { api } from './api/client';
 
 // ── Shared operation log ───────────────────────────────────────────────────

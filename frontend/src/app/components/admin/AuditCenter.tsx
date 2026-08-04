@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, CheckCircle, XCircle, RotateCcw, AlertTriangle, Clock, ChevronDown, ChevronUp, Send } from 'lucide-react';
-import { type ReviewQueueItem, GRADE_LABEL_KEYS } from '../../mock/data';
+import { GRADE_LABEL_KEYS } from '../../mock/data';
+import { type ReviewQueueItem } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 

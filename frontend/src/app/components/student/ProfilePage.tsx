@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router';
 import { LogOut, ChevronRight, Bell, Shield, HelpCircle, Moon, Sun, Monitor, Mail, FolderOpen, Wallet, Lightbulb, Clock, X, Lock, Eye, Database, UserCheck, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth, useTheme } from '../../App';
-import { type StudentProgress, type Account, type SchoolInfo } from '../../mock/data';
+import { type StudentProgress, type Account, type SchoolInfo } from '../../api/types';
+import { formatCoins, minutesToHours } from '../../lib/format';
 import { api } from '../../api/client';
 
 export function ProfilePage() {
@@ -87,15 +88,15 @@ export function ProfilePage() {
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-card border border-border rounded-xl p-3 text-center">
-          <div className="text-foreground font-semibold text-xl">{progress.completedHours}</div>
+          <div className="text-foreground font-semibold text-xl">{minutesToHours(progress.completedMinutes)}</div>
           <div className="text-xs text-muted-foreground">{t('student.profile.completedHours')}</div>
         </div>
         <div className="bg-card border border-border rounded-xl p-3 text-center">
-          <div className="text-foreground font-semibold text-xl">{account.balance}</div>
+          <div className="text-foreground font-semibold text-xl">{formatCoins(account.balance)}</div>
           <div className="text-xs text-muted-foreground">{t('student.profile.coinBalance')}</div>
         </div>
         <div className="bg-card border border-border rounded-xl p-3 text-center">
-          <div className="text-foreground font-semibold text-xl">{Math.round((progress.completedHours / progress.annualRequiredHours) * 100)}%</div>
+          <div className="text-foreground font-semibold text-xl">{Math.round((progress.completedMinutes / progress.annualRequiredMinutes) * 100)}%</div>
           <div className="text-xs text-muted-foreground">{t('student.profile.annualProgress')}</div>
         </div>
       </div>

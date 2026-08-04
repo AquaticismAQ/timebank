@@ -40,13 +40,13 @@ Close the two gaps identified in `APIContract.md` §13.2 while they are still ch
 
 ## 4. Exit Criteria — Gate G1
 
-- [ ] `types.ts` exists in the API layer; no component imports types from `mock/`.
-- [ ] The frontend still builds and every screen still works **entirely on mocks** — I0 changes no behaviour.
-- [ ] Request bodies for every §13.4 endpoint are reviewed and signed off by both sides, and the contract is updated where the review changed anything.
-- [ ] A single call can be pointed at a real backend by flipping one domain's toggle.
-- [ ] Envelope unwrapping, typed errors, idempotency keys, and `If-Match` are exercised by at least one call against B1's `/me`.
-- [ ] Statuses, coin units, hour derivation, and dictionary naming match the contract.
-- [ ] A developer following the written recipe reaches a working SPA-against-test-server session in one attempt, including login cookies and CSRF.
+- [x] `types.ts` exists in the API layer; no component imports types from `mock/`.
+- [x] The frontend still builds and every screen still works **entirely on mocks** — I0 changes no behaviour. (Verified via `pnpm build`, a standalone `tsc --noEmit`, and a Playwright click-through of both portals in default/mock config — see `00-Status.md` §21.)
+- [x] Request bodies for every §13.4 endpoint are reviewed and signed off by both sides, and the contract is updated where the review changed anything. (Found and fixed real drift, not just doc gaps — see `00-Status.md` §21.)
+- [x] A single call can be pointed at a real backend by flipping one domain's toggle.
+- [x] Envelope unwrapping, typed errors, idempotency keys, and concurrency are exercised by at least one call against B1's `/me`. (Concurrency is body-field `version`, never `If-Match` — the real backend never reads that header; contract corrected to match, see `00-Status.md` §21.)
+- [x] Statuses, coin units, hour derivation, and dictionary naming match the contract.
+- [x] A developer following the written recipe reaches a working SPA-against-test-server session in one attempt, including login cookies and CSRF. (Proven live via Playwright through the dev proxy with a disposable test user, then deleted — see `00-Status.md` §21 for two proxy-specific fixes the recipe needed beyond `changeOrigin`.)
 
 ## 5. Risks and Watch-Outs
 
