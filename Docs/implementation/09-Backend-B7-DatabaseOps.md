@@ -40,15 +40,15 @@ Make self-hosted MySQL operable by a small team with basic DevOps experience: ex
 
 ## 4. Exit Criteria — Gate G3 and Handover
 
-- [ ] Replication running with monitored lag; replica confirmed as the backup source.
-- [ ] Durability settings verified on the live instances, not just in a config file in the repository.
-- [ ] Nightly backups landing in object storage with alerting on failure.
-- [ ] PITR demonstrated: recovery to a chosen point in time on staging.
-- [ ] Weekly automated restore verification running and reporting.
-- [ ] **A production-sized restore performed and timed; RPO and RTO measured and recorded.**
-- [ ] Failover runbook executed on staging by someone who did not write it.
-- [ ] Patching rehearsed once on staging.
-- [ ] Handover package reviewed with the staff who will operate it after go-live.
+- [ ] Replication running with monitored lag; replica confirmed as the backup source — **blocked**: no second MySQL host exists to replicate to. Needs B7.1/B7.2 (environment provisioning), neither of which this session can do (no cloud account, no budget authority, no second host).
+- [x] Durability settings verified on the live instances, not just in a config file in the repository — verified via `SHOW VARIABLES` (`innodb_flush_log_at_trx_commit=1`, `sync_binlog=1`, `binlog_format=ROW`, `log_bin=ON`, 30-day binlog retention) and then **pinned explicitly** in `/etc/mysql/mysql.conf.d/mysqld.cnf` (previously correct only by MySQL 8 default, which a future package upgrade could have silently changed) — see `00-Status.md` §20.
+- [ ] Nightly backups landing in object storage with alerting on failure — **blocked**: no object-storage account exists. Needs B7.5 and the same environment gap as above.
+- [ ] PITR demonstrated: recovery to a chosen point in time on staging — **blocked**: no staging environment, no object storage for binlog shipping.
+- [ ] Weekly automated restore verification running and reporting — **blocked**: needs B7.5-B7.6 and a scratch instance.
+- [ ] **A production-sized restore performed and timed; RPO and RTO measured and recorded** — **blocked**: no backup exists yet to restore (see above), and no production-sized dataset exists to restore (same gap named for B6.10's load test).
+- [ ] Failover runbook executed on staging by someone who did not write it — the runbook itself is written (`Docs/operations/Runbooks.md` §2) but **not rehearsed**: no staging/replica topology exists to rehearse on, and no second person has reviewed or run it.
+- [ ] Patching rehearsed once on staging — the procedure is written (`Docs/operations/Runbooks.md` §3) but **not rehearsed**, same reason.
+- [ ] Handover package reviewed with the staff who will operate it after go-live — the package exists (`Docs/operations/Runbooks.md`, covering backup/restore, failover, patching, purge execution, and alert response) but **has not been reviewed with anyone** — no named school IT staff exist yet to review it with.
 
 ## 5. Risks and Watch-Outs
 
