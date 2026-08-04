@@ -52,6 +52,10 @@ public class ApiException extends RuntimeException {
         return new ApiException(ApiErrorCode.FILE_TOO_LARGE, message, List.of());
     }
 
+    public static ApiException rateLimited(String message) {
+        return new ApiException(ApiErrorCode.RATE_LIMITED, message, List.of());
+    }
+
     public ApiErrorCode code() {
         return code;
     }

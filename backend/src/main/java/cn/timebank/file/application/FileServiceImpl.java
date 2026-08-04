@@ -106,6 +106,9 @@ class FileServiceImpl implements FileService {
                 file.getDeclaredSizeBytes(), file.getDeclaredMimeType());
 
         if (result.accepted()) {
+            if (isImageType(file.getDeclaredMimeType())) {
+                stripImageMetadata(file);
+            }
             file.setSha256Hash(sha256(file.getStorageKey()));
             file.setStatus(FileStatus.READY);
         } else {
@@ -114,6 +117,38 @@ class FileServiceImpl implements FileService {
         }
         file.setUpdatedAt(Instant.now());
         return toDto(file);
+    }
+
+    private boolean isImageType(String mimeType) {
+        return "image/jpeg".equals(mimeType) || "image/png".equals(mimeType);
+    }
+
+    /**
+     * B6.12 security review: evidence photos come straight from a
+     * student's phone camera and can carry EXIF GPS coordinates and device
+     * identifiers — exactly the kind of minor's-location data this
+     * project's privacy posture exists to protect (`06-Legal.md`).
+     * Decoding via {@code ImageIO} and re-encoding drops all metadata by
+     * construction (nothing here copies {@code IIOMetadata} across) — no
+     * new dependency, the JDK's own image codecs are enough. A decode
+     * failure is treated as a rejection, not a silent pass-through: safer
+     * to refuse an evidence photo than to store one with its metadata
+     * intact because stripping failed quietly.
+     */
+    private void stripImageMetadata(EvidenceFile file) {
+        try (InputStream in = fileStorage.open(file.getStorageKey())) {
+            java.awt.image.BufferedImage image = javax.imageio.ImageIO.read(in);
+            if (image == null) {
+                throw new IOException("Could not decode image for metadata stripping");
+            }
+            String formatName = "image/png".equals(file.getDeclaredMimeType()) ? "png" : "jpg";
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(image, formatName, out);
+            fileStorage.store(file.getStorageKey(), new java.io.ByteArrayInputStream(out.toByteArray()));
+            file.setActualSizeBytes((long) out.size());
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException("Failed to strip image metadata for file " + file.getId(), e);
+        }
     }
 
     @Override
@@ -158,6 +193,17 @@ class FileServiceImpl implements FileService {
         }
         fileStorage.delete(file.getStorageKey());
         repository.delete(file);
+    }
+
+    @Override
+    @Transactional
+    public int forcePurge(List<String> fileIds) {
+        List<EvidenceFile> files = repository.findAllById(fileIds);
+        for (EvidenceFile file : files) {
+            fileStorage.delete(file.getStorageKey());
+        }
+        repository.deleteAll(files);
+        return files.size();
     }
 
     @Override

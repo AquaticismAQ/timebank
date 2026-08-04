@@ -36,9 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
 
-    private static final byte[] VALID_JPEG = {
-            (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00, 0x01, 0x02, 0x03, 0x04,
-            0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
+    private static final byte[] VALID_JPEG = cn.timebank.testsupport.TestImages.validJpegBytes();
 
     @Autowired
     private StudentService studentService;

@@ -53,7 +53,9 @@ INSERT IGNORE INTO permission (id, code, description) VALUES
     ('perm_auditLogs_read', 'auditLogs.read', 'View the operation audit log'),
     ('perm_securityLogs_read', 'securityLogs.read', 'View login logs'),
     ('perm_settings_read', 'settings.read', 'View system settings'),
-    ('perm_settings_manage', 'settings.manage', 'Update system settings');
+    ('perm_settings_manage', 'settings.manage', 'Update system settings'),
+    ('perm_lifecycle_purge', 'lifecycle.purge', 'Trigger a cohort retention purge (dry-run or real)'),
+    ('perm_lifecycle_reconcile', 'lifecycle.reconcile', 'Trigger a ledger reconciliation run and view its results');
 
 -- Session timeout: 720 min (12h) for student, 480 min (8h) for staff roles,
 -- matching contract §2.2's default — configurable per role from here on.
@@ -136,6 +138,8 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_admin', 'perm_roles_read'),
     ('role_admin', 'perm_auditLogs_read'),
     ('role_admin', 'perm_settings_read'),
+    ('role_admin', 'perm_lifecycle_purge'),
+    ('role_admin', 'perm_lifecycle_reconcile'),
     ('role_sysadmin', 'perm_projects_read'),
     ('role_sysadmin', 'perm_eventProposals_read'),
     ('role_sysadmin', 'perm_applications_read'),
@@ -156,4 +160,6 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_sysadmin', 'perm_auditLogs_read'),
     ('role_sysadmin', 'perm_securityLogs_read'),
     ('role_sysadmin', 'perm_settings_read'),
-    ('role_sysadmin', 'perm_settings_manage');
+    ('role_sysadmin', 'perm_settings_manage'),
+    ('role_sysadmin', 'perm_lifecycle_purge'),
+    ('role_sysadmin', 'perm_lifecycle_reconcile');

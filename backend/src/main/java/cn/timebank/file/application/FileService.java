@@ -33,4 +33,14 @@ public interface FileService {
      * the result (deleted, or never existed) must be treated as not-ready.
      */
     Map<String, String> statusesOf(List<String> fileIds);
+
+    /**
+     * B6.5: the cohort purge's object-deletion step. Unlike {@link #delete},
+     * this is unconditional — no ownership check, no "bound to a submitted
+     * record" guard — since the purge deletes the referencing record in the
+     * same pass; a file this deep into a graduated cohort's retention
+     * window has no reachable owner to check against anyway. Missing ids
+     * are silently skipped (already gone), not an error.
+     */
+    int forcePurge(List<String> fileIds);
 }

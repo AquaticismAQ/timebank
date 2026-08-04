@@ -45,4 +45,18 @@ public class ServiceRecordReferenceRepository {
                 (rs, rowNum) -> new Reference(rs.getString("id"), rs.getString("status"),
                         rs.getString("student_id"), rs.getString("grade_id"), rs.getString("class_id")));
     }
+
+    /** B6.5: every evidence file id attached to any of a student's service records, across every record regardless of status — the purge needs all of them, not just draft-eligible ones. */
+    public List<String> findFileIdsForStudent(String studentId) {
+        String sql = """
+                select evidence_file_ids from service_record where student_id = :studentId and evidence_file_ids is not null
+                """;
+        List<String> jsonArrays = jdbcTemplate.queryForList(sql, new MapSqlParameterSource("studentId", studentId), String.class);
+        return jsonArrays.stream()
+                .flatMap(json -> java.util.Arrays.stream(json.replaceAll("[\\[\\]\"]", "").split(",")))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .toList();
+    }
 }

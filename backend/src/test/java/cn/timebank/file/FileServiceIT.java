@@ -42,9 +42,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class FileServiceIT extends AbstractIntegrationTest {
 
     // Real JPEG signature (FF D8 FF) padded out — BasicFileScanner reads up to 16 header bytes.
-    private static final byte[] VALID_JPEG = {
-            (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00, 0x01, 0x02, 0x03, 0x04,
-            0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
+    private static final byte[] VALID_JPEG = cn.timebank.testsupport.TestImages.validJpegBytes();
     private static final byte[] NOT_A_JPEG = "this is definitely not a jpeg".getBytes();
 
     @Autowired
@@ -163,7 +161,11 @@ class FileServiceIT extends AbstractIntegrationTest {
 
         DownloadResult result = fileService.downloadContent(token);
         byte[] downloaded = result.content().readAllBytes();
-        assertThat(downloaded).isEqualTo(VALID_JPEG);
+        // Not byte-identical to the upload: B6.12's EXIF-stripping pass
+        // decodes and re-encodes every image on `complete()`, so the stored
+        // bytes are a fresh (re-)encoding, not the original upload. What
+        // must still hold is that the result is a real, decodable image.
+        assertThat(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(downloaded))).isNotNull();
     }
 
     private String uploadReady(String actorId) {

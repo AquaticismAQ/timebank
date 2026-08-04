@@ -40,16 +40,16 @@ Two jobs that must exist (retention purge, ledger reconciliation), one measureme
 
 ## 4. Exit Criteria — Gate G4
 
-- [ ] p95 < 300 ms for list and detail endpoints and < 1 s for dashboards, at 300 concurrent users on production-sized data.
-- [ ] The slow-query log is **empty** for the duration of the load test.
-- [ ] No virtual-thread pinning observed under load (D3 caveat closed).
-- [ ] A 500k-row import completes with bounded heap, resumes after a forced restart, and leaves interactive p95 within target.
-- [ ] The purge job's dry run against a seeded graduated cohort reports exactly the expected rows and objects — and reports **zero** rows for currently enrolled students.
-- [ ] Purge and reconciliation both alert when they do not run.
-- [ ] Reconciliation detects a deliberately injected drift and names the account.
-- [ ] Log partition pruning demonstrated on the seeded dataset.
-- [ ] Rate limits verified against both application instances.
-- [ ] Security review findings closed or explicitly accepted with a named owner.
+- [ ] p95 < 300 ms for list and detail endpoints and < 1 s for dashboards, at 300 concurrent users on production-sized data — **blocked, not attempted**: no production-sized staging environment exists (the shared test server is 2 CPUs/3.8 GB RAM, already flagged unsuitable for this back in B0 — `00-Status.md` §11). User's explicit direction (2026-08-04): build everything genuinely testable now, defer what needs infra rather than fake a small-scale substitute. Blocked on a real staging environment (B7-adjacent, not yet planned).
+- [ ] The slow-query log is **empty** for the duration of the load test — blocked, same reason (no load test has run).
+- [ ] No virtual-thread pinning observed under load (D3 caveat closed) — blocked, same reason.
+- [ ] A 500k-row import completes with bounded heap, resumes after a forced restart, and leaves interactive p95 within target — **partially verified**: bounded-heap streaming design and a real (if small-scale) checkpoint-resume proof exist from B5.9/B5.10 (`ImportExportIT`); an actual 500k-row run, a forced `kill -9`, and any p95-under-load measurement are blocked on the same missing staging environment.
+- [x] The purge job's dry run against a seeded graduated cohort reports exactly the expected rows and objects — and reports **zero** rows for currently enrolled students. `CohortPurgeIT.dryRunReportsExactCountsAndRealRunDeletesEverythingLeavingSiblingsUntouched` proves exact per-table counts for a graduated cohort and complete absence of a currently-enrolled sibling from the results; live-verified over HTTPS (`00-Status.md` §19).
+- [x] Purge and reconciliation both alert when they do not run. `LifecycleWatchdogJob` checks both `purge_run`/`reconciliation_run` for a successful run within 36 hours and logs a structured `ERROR` if not — a real gap was caught live here: the purge only wrote an audit row per *eligible* cohort, so on the (overwhelmingly common) day with nothing eligible, no row was ever written and the watchdog could not distinguish "ran, nothing to do" from "never ran"; fixed with an explicit "0 eligible" heartbeat row. See §19.
+- [x] Reconciliation detects a deliberately injected drift and names the account. `LifecycleJobsIT.reconciliationDetectsAndNamesADeliberatelyInjectedDrift` corrupts `account.balance` directly (bypassing `AccountService` entirely) and confirms the mismatch is reported with the correct stored/computed balances and the divergent transaction id; a clean sibling account is confirmed absent from the same run's results.
+- [x] Log partition pruning demonstrated on the seeded dataset. `LifecycleJobsIT.droppingAPartitionRemovesExactlyItsRowsAndNoOthers` proves `DROP PARTITION` removes exactly the targeted month's rows and leaves an adjacent partition's rows untouched; `ensuringAFuturePartitionAddsExactlyOneNamedPartition` proves the ahead-of-need `REORGANIZE PARTITION` path.
+- [ ] Rate limits verified against both application instances — **partially verified**: Bucket4j enforcement is proven correct for a single instance (`RateLimitInterceptorTest`, per-principal buckets, correct 429 on the 6th request within a window); a live two-instance test is not possible on this environment (one systemd instance exists). The per-instance limitation itself is an accepted design trade-off (D1: "soft rate limits are per-instance"), not a defect to close.
+- [x] Security review findings closed or explicitly accepted with a named owner. See `00-Status.md` §19 for the full findings list — one real gap found (EXIF/metadata stripping was entirely missing) and fixed this pass; everything else reviewed and confirmed already correct.
 
 ## 5. Risks and Watch-Outs
 
