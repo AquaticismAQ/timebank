@@ -1,10 +1,15 @@
 package cn.timebank.servicerecord;
 
+import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.file.application.FileService;
 import cn.timebank.file.application.dto.FileRequests.CreateUploadIntentRequest;
 import cn.timebank.file.application.dto.UploadIntentDto;
+import cn.timebank.iam.application.UserService;
+import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.security.application.CookieSessionUserDetails;
+import cn.timebank.security.domain.TeacherScopeAssignment;
+import cn.timebank.security.infrastructure.TeacherScopeAssignmentRepository;
 import cn.timebank.servicerecord.application.ServiceRecordService;
 import cn.timebank.servicerecord.application.dto.ServiceRecordDto;
 import cn.timebank.servicerecord.application.dto.ServiceRecordRequests.CreateServiceRecordRequest;
@@ -47,6 +52,10 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
     private ServiceRecordService serviceRecordService;
     @Autowired
     private FileService fileService;
+    @Autowired
+    private UserService userService;
+    @Autowired
+    private TeacherScopeAssignmentRepository scopeAssignmentRepository;
 
     private static final AtomicInteger SEQ = new AtomicInteger();
 
@@ -228,6 +237,65 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
         assertThat(searchNoMatch.getContent()).isEmpty();
 
         assertThat(recordB.status()).isEqualTo("DRAFT");
+    }
+
+    /**
+     * `APIContract.md` §11 acceptance scenario 8: a teacher scoped to one
+     * grade must not be able to read a record belonging to a different
+     * grade — neither directly by id (an invisible {@code 404}, B1.8) nor
+     * through the list, which must silently narrow rather than 403 or leak
+     * a total count. Mirrors the same proof already written for Cases
+     * (`CaseDecisionTransactionIT.outOfScopeTeacherGetsAnInvisible404OnACase`)
+     * — this is the equivalent for the resource contract scenario 8 actually
+     * names, "records."
+     */
+    @Test
+    void outOfScopeTeacherGetsAnInvisible404OnAServiceRecordAndTheListIsSilentlyNarrowed() {
+        StudentDetailDto inScopeStudent = createStudent(); // grade_6/class_6A
+        StudentDetailDto outOfScopeStudent = createStudentInGrade9();
+        ServiceRecordDto inScopeRecord = submitRecord(inScopeStudent);
+        ServiceRecordDto outOfScopeRecord = submitRecord(outOfScopeStudent);
+
+        Authentication teacherAuth = teacherScopedToGrade6();
+
+        assertThatThrownBy(() -> serviceRecordService.getDetail(outOfScopeRecord.id(), teacherAuth, "zh-CN"))
+                .isInstanceOf(ApiException.class);
+        // The in-scope record is readable by the same teacher — proves the
+        // scope narrows rather than blocking the teacher outright.
+        assertThat(serviceRecordService.getDetail(inScopeRecord.id(), teacherAuth, "zh-CN").id())
+                .isEqualTo(inScopeRecord.id());
+
+        Page<ServiceRecordDto> list = serviceRecordService.list(
+                PageRequest.of(0, 20), teacherAuth, null, null, null, null, "zh-CN");
+        assertThat(list.getContent()).extracting(ServiceRecordDto::id)
+                .contains(inScopeRecord.id())
+                .doesNotContain(outOfScopeRecord.id());
+    }
+
+    private ServiceRecordDto submitRecord(StudentDetailDto student) {
+        ServiceRecordDto draft = createDraft(student, List.of(readyFile()), false);
+        return serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-scope-" + draft.id(), "zh-CN");
+    }
+
+    private Authentication teacherScopedToGrade6() {
+        var teacher = userService.create(new CreateUserRequest(
+                "scope_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Scope Teacher", null,
+                Set.of("teacher"), "zh-CN"), "usr_test_admin");
+        scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
+                "serviceRecords", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", Instant.now()));
+        cn.timebank.iam.application.dto.AuthenticatedUserView view = new cn.timebank.iam.application.dto.AuthenticatedUserView(
+                teacher.id(), teacher.id(), "hash", "Scope Teacher", true, false, "zh-CN",
+                Set.of("teacher"), Set.of(), null, 480);
+        CookieSessionUserDetails principal = new CookieSessionUserDetails(view);
+        return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+    }
+
+    private StudentDetailDto createStudentInGrade9() {
+        int n = SEQ.incrementAndGet();
+        CreateStudentRequest request = new CreateStudentRequest(
+                "stu_submit9_" + n, "Submit Student " + n, null, "grade_9", "class_9A", "ay_2025_2026",
+                2026, LocalDate.of(2025, 9, 1), null, null);
+        return studentService.create(request, "usr_test_admin", "zh-CN");
     }
 
     private ServiceRecordDto createDraft(StudentDetailDto student, List<String> evidenceFileIds, boolean includesTravelTime) {

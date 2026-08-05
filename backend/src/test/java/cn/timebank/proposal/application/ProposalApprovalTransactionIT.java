@@ -1,5 +1,6 @@
 package cn.timebank.proposal.application;
 
+import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.iam.application.dto.AuthenticatedUserView;
@@ -16,6 +17,8 @@ import cn.timebank.proposal.application.dto.ProposalRequests.DecideRequest;
 import cn.timebank.proposal.infrastructure.EventProposalRepository;
 import cn.timebank.proposal.infrastructure.ProposalReviewEventRepository;
 import cn.timebank.security.application.CookieSessionUserDetails;
+import cn.timebank.security.domain.TeacherScopeAssignment;
+import cn.timebank.security.infrastructure.TeacherScopeAssignmentRepository;
 import cn.timebank.student.application.StudentService;
 import cn.timebank.student.application.dto.StudentDetailDto;
 import cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest;
@@ -66,6 +69,8 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
     private UserService userService;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private TeacherScopeAssignmentRepository scopeAssignmentRepository;
 
     private static final AtomicInteger SEQ = new AtomicInteger();
 
@@ -162,6 +167,37 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
         Page<ProposalDto> byUnmatchedSearch = proposalService.list(PageRequest.of(0, 50), staffAuth("admin"),
                 null, null, "NoSuchProposalTitleZZZ", "zh-CN");
         assertThat(byUnmatchedSearch.getContent()).isEmpty();
+    }
+
+    /** `APIContract.md` §11 acceptance scenario 8, for the proposal queue — see the equivalent test on `ServiceRecordSubmissionIT`. */
+    @Test
+    void outOfScopeTeacherGetsAnInvisible404OnAProposal() {
+        StudentDetailDto inScopeStudent = createStudent(); // grade_6/class_6A
+        StudentDetailDto outOfScopeStudent = createStudentInGrade9();
+        ProposalDto inScopeProposal = createAndSubmitProposal(inScopeStudent, "In-Scope Cleanup");
+        ProposalDto outOfScopeProposal = createAndSubmitProposal(outOfScopeStudent, "Out-Of-Scope Cleanup");
+
+        var teacher = userService.create(new CreateUserRequest(
+                "proposal_scope_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Scope Teacher", null,
+                Set.of("teacher"), "zh-CN"), "usr_test_admin");
+        scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
+                "eventProposals", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", Instant.now()));
+        Authentication teacherAuth = authFor(teacher.id(), null, Set.of("teacher"));
+
+        assertThatThrownBy(() -> proposalService.getDetail(outOfScopeProposal.id(), teacherAuth, "zh-CN"))
+                .isInstanceOf(ApiException.class);
+        assertThat(proposalService.getDetail(inScopeProposal.id(), teacherAuth, "zh-CN").id())
+                .isEqualTo(inScopeProposal.id());
+    }
+
+    private StudentDetailDto createStudentInGrade9() {
+        int n = SEQ.incrementAndGet();
+        CreateStudentRequest request = new CreateStudentRequest(
+                "stu_proposal9_" + n, "Proposal Student " + n, null, "grade_9", "class_9A", "ay_2025_2026",
+                2026, LocalDate.of(2025, 9, 1), null, null);
+        StudentDetailDto student = studentService.create(request, "usr_test_admin", "zh-CN");
+        createLinkedUser(student.id());
+        return student;
     }
 
     private ProposalDto createAndSubmitProposal(StudentDetailDto student) {

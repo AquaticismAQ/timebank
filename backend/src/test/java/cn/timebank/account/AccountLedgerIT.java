@@ -6,7 +6,12 @@ import cn.timebank.account.application.dto.AccountRequests.AdjustmentRequest;
 import cn.timebank.account.application.dto.AccountRequests.FreezeRequest;
 import cn.timebank.account.application.dto.AccountRequests.ReverseRequest;
 import cn.timebank.account.application.dto.AccountTransactionDto;
+import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.iam.application.UserService;
+import cn.timebank.iam.application.dto.CreateUserRequest;
+import cn.timebank.security.domain.TeacherScopeAssignment;
+import cn.timebank.security.infrastructure.TeacherScopeAssignmentRepository;
 import cn.timebank.student.application.StudentService;
 import cn.timebank.student.application.dto.StudentDetailDto;
 import cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest;
@@ -37,6 +42,10 @@ class AccountLedgerIT extends AbstractIntegrationTest {
     private StudentService studentService;
     @Autowired
     private AccountService accountService;
+    @Autowired
+    private UserService userService;
+    @Autowired
+    private TeacherScopeAssignmentRepository scopeAssignmentRepository;
 
     private static final AtomicInteger SEQ = new AtomicInteger();
 
@@ -189,6 +198,21 @@ class AccountLedgerIT extends AbstractIntegrationTest {
         assertThat(filtered.getContent().get(0).studentId()).isEqualTo(studentId);
     }
 
+    /** `APIContract.md` §11 acceptance scenario 8, for the accounts resource — see the equivalent test on `ServiceRecordSubmissionIT`. */
+    @Test
+    void outOfScopeTeacherGetsAnInvisible404OnAnAccount() {
+        String inScopeStudentId = createStudent(); // grade_6/class_6A
+        String outOfScopeStudentId = createStudentInGrade9();
+        accountService.credit(inScopeStudentId, "grade_6", "class_6A", 100, "test", "src_1", "SERVICE_APPROVED", "usr_test_admin");
+        accountService.credit(outOfScopeStudentId, "grade_9", "class_9A", 100, "test", "src_2", "SERVICE_APPROVED", "usr_test_admin");
+
+        Authentication teacherAuth = teacherScopedToGrade6();
+
+        assertThatThrownBy(() -> accountService.getByStudentId(outOfScopeStudentId, teacherAuth))
+                .isInstanceOf(ApiException.class);
+        assertThat(accountService.getByStudentId(inScopeStudentId, teacherAuth).studentId()).isEqualTo(inScopeStudentId);
+    }
+
     private String createStudent() {
         int n = SEQ.incrementAndGet();
         CreateStudentRequest request = new CreateStudentRequest(
@@ -196,6 +220,29 @@ class AccountLedgerIT extends AbstractIntegrationTest {
                 2029, LocalDate.of(2025, 9, 1), null, null);
         StudentDetailDto student = studentService.create(request, "usr_test_admin", "zh-CN");
         return student.id();
+    }
+
+    private String createStudentInGrade9() {
+        int n = SEQ.incrementAndGet();
+        CreateStudentRequest request = new CreateStudentRequest(
+                "stu_ledger9_" + n, "Ledger Student " + n, null, "grade_9", "class_9A", "ay_2025_2026",
+                2026, LocalDate.of(2025, 9, 1), null, null);
+        StudentDetailDto student = studentService.create(request, "usr_test_admin", "zh-CN");
+        return student.id();
+    }
+
+    private Authentication teacherScopedToGrade6() {
+        var teacher = userService.create(new CreateUserRequest(
+                "acct_scope_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Scope Teacher", null,
+                Set.of("teacher"), "zh-CN"), "usr_test_admin");
+        scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
+                "accounts", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", java.time.Instant.now()));
+        cn.timebank.iam.application.dto.AuthenticatedUserView view = new cn.timebank.iam.application.dto.AuthenticatedUserView(
+                teacher.id(), teacher.id(), "hash", "Scope Teacher", true, false, "zh-CN",
+                Set.of("teacher"), Set.of(), null, 480);
+        cn.timebank.security.application.CookieSessionUserDetails principal =
+                new cn.timebank.security.application.CookieSessionUserDetails(view);
+        return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 
     private Authentication adminAuth() {
