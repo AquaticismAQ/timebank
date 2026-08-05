@@ -1,57 +1,68 @@
 ---
-description: Integration phase work items (I0-I3) — the current implementation focus
+description: Integration phase work items (I0-I3) — I3 is the next focus
 alwaysApply: true
 ---
 
-# Integration Phases — Next Work
+# Integration Phases — I2 Write Path Done & E2E Verified, I3 Next
 
-All integration phases are `—` (not started). This is the primary implementation focus.
+I0 `✅` done. I1 `▶` (5/7 exit criteria, functionality complete). **I2 `▶` (all 8 domains wired, E2E verified against real backend).** I3 `—` next.
 
-## I0 · Contract Prep (blocks everything else)
+## I0 · Contract Prep — `✅` done (2026-08-04, §21)
 
-| ID | Item |
-|----|------|
-| I0.1 | Lift types from `mock/data.ts` → `api/types.ts` (types only, fixtures stay) |
-| I0.2 | Freeze request bodies (joint review of APIContract §13.4) |
-| I0.3 | HTTP transport — `fetch` wrapper (base URL, `credentials: 'include'`, CSRF, `Accept-Language`) |
-| I0.4 | Envelope handling — unwrap `{data}`, surface `{page}`, map `{error}` to typed `ApiError` |
-| I0.5 | Error-to-UI mapping — 422→field errors, 409→conflict, 403/404→not-available, 429→retry, 5xx→generic |
-| I0.6 | Idempotency + `If-Match` helpers |
-| I0.7 | Per-domain mock/real toggle (`VITE_API_BASE_URL` + domain switch) |
-| I0.8–I0.11 | Fix divergences: proposal statuses, centi-coins, drop `*Hours`, server dictionary names |
-| I0.12 | Dev environment recipe (Vite proxy/CORS, cookie behavior for SPA against remote test server) |
+Built: `api/types.ts` (lifted), `api/http.ts` (transport), `api/config.ts` (toggle), enum mapping, dev-proxy recipe. Gate G1 met.
 
-**Gate G1:** request bodies frozen, types lifted, divergences fixed, one call proven against B1's `/me`.
+## I1 · Read Path — `▶` mostly done (2026-08-05, §22)
 
-## I1 · Read Path (8 domains, sequential by backend readiness)
+All 8 domains swapped (18 methods, 10 screens). Backend gained `FilterSpecifications` + per-domain filter/search. Shared infra: `usePagedApi`, `PageControls`, `ListStateBanner`, `fromBackendEnum`/`toBackendEnum`.
 
-| Order | Domain | Key methods |
-|-------|--------|-------------|
-| 1 | Session & school | `auth.login/me/logout`, `school.getInfo` |
-| 2 | Dictionaries | categories, grades, classes, organizations |
-| 3 | Students & progress | `students.list/get/progress` |
-| 4 | Accounts | `accounts.get/transactions` |
-| 5 | Records & review | `serviceRecords.list/get`, `reviewQueue.list/summary` |
-| 6 | Projects & proposals | `projects.list/get`, `eventProposals.list/get`, `applications.list` |
-| 7 | Notifications | `notifications.*` |
-| 8 | Dashboards & reports | `dashboards.*`, `reports.data` |
+Two exit criteria open (verification only): full bilingual re-audit, live `304` polling check.
 
-Each domain: swap client method bodies → add pagination → server-side filter/sort → loading/error states → localization check → delete mock fixture.
+## I2 · Write Path — `▶` all 8 domains wired and E2E verified (2026-08-05, §23)
 
-## I2 · Write Path (8 domains, highest risk — R12)
+### What's done
 
-Wire every `toast.success()` stub to a real mutation. Key rules:
-- No optimistic UI on ledger operations
-- `Idempotency-Key` per user intent, not per HTTP attempt
-- Validation errors on the right form fields, preserve user input
-- 409 → "someone else changed this" + refresh, never silent overwrite
-- Action endpoints, never `PATCH {status}`
-- Bulk actions: partial-failure rendered row by row
+All mutation flows wired with real branches in `client.ts` + component handlers, E2E verified against the real deployed backend:
 
-## I3 · Acceptance
+| Domain | Methods wired | Key patterns |
+|--------|--------------|--------------|
+| Service records | create, update, delete, submit, withdraw | Idempotency on submit; `withVersion` on update |
+| Evidence upload | uploadIntent, uploadContent, complete, upload (convenience) | 3-step flow; raw PUT for binary |
+| Review decisions | decide (approve/return/reject/escalate) | Idempotency; `recordVersion` in body |
+| Account operations | adjust, reverse, freeze, unfreeze | Signed centi-coins; idempotency on adjust/reverse |
+| Projects | create, update, publish, close, archive | `withVersion`; `ActionRequest { version }` on actions |
+| Registrations | create, cancel, confirm, reject | Student is principal, not body field |
+| Proposals | create, update, submit, withdraw, review | Field mapping (hours→min, goal→objective); idempotency |
+| Notifications | markRead, markAllRead | PATCH/POST real branches |
 
-Evidence upload flow, localization sweep, 12 acceptance scenarios (§11), historical import rehearsal, UAT with real users, cutover plan.
+### d8 completion
 
-## Sequencing Rule
+- User CRUD — `GET/POST/PATCH /users`, `POST /users/{id}/reset-password`; delete = deactivate (no DELETE endpoint)
+- Import/export — template download, file upload → validate → commit/cancel; async export → poll → download
+- Student profile edit — `PATCH /students/{id}` for profile fields; ledger fields shown read-only (record/account-derived)
+- Feature flags — `toast.info('not available')` (no backend write endpoint)
+- Rules — `api.rules.*` methods in client.ts ready; UI needs UX redesign (draft→publish vs in-place edit)
 
-I0 blocks I1/I2/I3. Each I1 domain swap blocks the same domain in I2. I2 blocks I3.
+### Remaining I2 exit criteria (polish for I3)
+
+- [ ] Validation errors → per-field display (mechanism built, rendering not wired)
+- [ ] Conflict 409 → "refresh" UX (caught as toast, no refresh offer)
+- [ ] Two-step flow display (proposal→project, review→credit shown in UI)
+- [ ] Bulk action partial-failure per-row reporting
+- [ ] Permission-aware affordances
+
+## I3 · Acceptance & Cutover — `—` NEXT
+
+| ID | Item | Notes |
+|----|------|-------|
+| I3.1 | Evidence upload flow (UI built from nothing) | `api.files.upload()` exists; needs component |
+| I3.2 | Upload failure states | 413, wrong type, scan rejected, interrupted |
+| I3.3 | Evidence viewing (short-lived URLs) | `GET /files/{id}`, never cache |
+| I3.4 | `preferredLanguage` persistence | Read from `/me`, write via `PATCH /me/profile` |
+| I3.5 | Localization sweep (both languages) | Every screen, zh-CN + en |
+| I3.6 | Notification template rendering | `templateCode` + params |
+| I3.7 | **12 acceptance scenarios** (§11) | Both languages, mobile + desktop |
+| I3.8 | **Historical import rehearsal** | Real data, balance reconciliation |
+| I3.9 | **UAT with real users** | Teachers + students + admin |
+| I3.10 | Production data seeding | Students, staff, classes, categories, rules |
+| I3.11 | Cutover plan + rollback | Term boundary, communications |
+| I3.12 | Post-launch watch | Reconciliation, SLA, error rates |

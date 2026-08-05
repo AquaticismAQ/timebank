@@ -8,5 +8,6 @@ public record ReviewQueueItemDto(String id, String studentId, String studentName
                                   LocalDate serviceDate, int durationMinutes,
                                   String serviceCategoryId, String serviceCategoryName,
                                   String status, Instant submittedAt, long daysWaiting, String priority,
-                                  boolean hasAnomaly, String anomalyNote, String assignedReviewerId) {
+                                  boolean hasAnomaly, String anomalyNote, String assignedReviewerId,
+                                  long recordVersion) {
 }

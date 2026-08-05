@@ -1,13 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Search, MapPin, Clock, Users, MoreHorizontal, CheckCircle, X, Edit, Archive } from 'lucide-react';
-import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADES, GRADE_LABEL_KEYS, resolveCategoryName } from '../../mock/data';
+import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADES, GRADE_LABEL_KEYS, resolveCategoryName, gradeNameToId } from '../../mock/data';
 import { type Project, type ProjectStatus, type Organization } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { useFieldErrors, FieldError, handleMutationError } from '../../api/useFieldErrors';
+import { usePermissions } from '../../App';
+import { localDatetimeLocalToISO } from '../../lib/datetime';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
+import { ProjectRegistrants } from './ProjectRegistrants';
 
 const colorMap: Record<string, string> = {
   gray:   'bg-muted text-muted-foreground',
@@ -69,11 +73,15 @@ interface EditModalProps {
   onClose: () => void;
   onSave: () => void;
   organizations: Organization[];
+  getFieldError?: (...fields: string[]) => string | undefined;
+  onFieldEdit?: (field: string) => void;
 }
 
-function EditModal({ project, form, onChange, onClose, onSave, organizations }: EditModalProps) {
+function EditModal({ project, form, onChange, onClose, onSave, organizations, getFieldError, onFieldEdit }: EditModalProps) {
   const { t, i18n } = useTranslation();
   const set = (patch: Partial<EditForm>) => onChange(patch);
+  const fe = (field: string, ...aliases: string[]) => getFieldError?.(field, ...aliases);
+  const edit = (field: string, patch: Partial<EditForm>) => { onFieldEdit?.(field); set(patch); };
 
   const toggleGrade = (g: string) => {
     set({ eligibleGrades: form.eligibleGrades.includes(g) ? form.eligibleGrades.filter(x => x !== g) : [...form.eligibleGrades, g] });
@@ -105,44 +113,51 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations }: 
 
             <div>
               <label className={LABEL}>{t('admin.projects.projectName')}</label>
-              <input type="text" value={form.title} onChange={e => set({ title: e.target.value })} className={INPUT} />
+              <input type="text" value={form.title} onChange={e => edit('title', { title: e.target.value })} className={INPUT} />
+              <FieldError message={fe('title')} />
             </div>
 
             <div>
               <label className={LABEL}>{t('admin.projects.projectSummary')}</label>
-              <textarea rows={2} value={form.summary} onChange={e => set({ summary: e.target.value })}
+              <textarea rows={2} value={form.summary} onChange={e => edit('summary', { summary: e.target.value })}
                 className={INPUT + ' resize-none'} />
+              <FieldError message={fe('summary')} />
             </div>
 
             <div>
               <label className={LABEL}>{t('admin.projects.projectDescription')}</label>
-              <textarea rows={3} value={form.description} onChange={e => set({ description: e.target.value })}
+              <textarea rows={3} value={form.description} onChange={e => edit('description', { description: e.target.value })}
                 className={INPUT + ' resize-none'} />
+              <FieldError message={fe('description')} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={LABEL}>{t('admin.projects.serviceCategory')}</label>
-                <select value={form.categoryId} onChange={e => set({ categoryId: e.target.value })} className={INPUT}>
+                <select value={form.categoryId} onChange={e => edit('categoryId', { categoryId: e.target.value })} className={INPUT}>
                   {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{resolveCategoryName(c.id, i18n.language)}</option>)}
                 </select>
+                <FieldError message={fe('categoryId')} />
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.partnerOrg')}</label>
-                <select value={form.organizationId} onChange={e => set({ organizationId: e.target.value })} className={INPUT}>
+                <select value={form.organizationId} onChange={e => edit('organizationId', { organizationId: e.target.value })} className={INPUT}>
                   {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                 </select>
+                <FieldError message={fe('organizationId')} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={LABEL}>{t('admin.projects.location')}</label>
-                <input type="text" value={form.location} onChange={e => set({ location: e.target.value })} className={INPUT} />
+                <input type="text" value={form.location} onChange={e => edit('location', { location: e.target.value })} className={INPUT} />
+                <FieldError message={fe('location')} />
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.ownerName')}</label>
-                <input type="text" value={form.ownerName} onChange={e => set({ ownerName: e.target.value })} className={INPUT} />
+                <input type="text" value={form.ownerName} onChange={e => edit('ownerName', { ownerName: e.target.value })} className={INPUT} />
+                <FieldError message={fe('ownerName')} />
               </div>
             </div>
           </section>
@@ -154,34 +169,40 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations }: 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={LABEL}>{t('admin.projects.startAt')}</label>
-                <input type="datetime-local" value={form.startAt} onChange={e => set({ startAt: e.target.value })} className={INPUT} />
+                <input type="datetime-local" value={form.startAt} onChange={e => edit('startAt', { startAt: e.target.value })} className={INPUT} />
+                <FieldError message={fe('startAt')} />
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.endAt')}</label>
-                <input type="datetime-local" value={form.endAt} onChange={e => set({ endAt: e.target.value })} className={INPUT} />
+                <input type="datetime-local" value={form.endAt} onChange={e => edit('endAt', { endAt: e.target.value })} className={INPUT} />
+                <FieldError message={fe('endAt')} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={LABEL}>{t('admin.projects.regOpenAt')}</label>
-                <input type="datetime-local" value={form.registrationOpenAt} onChange={e => set({ registrationOpenAt: e.target.value })} className={INPUT} />
+                <input type="datetime-local" value={form.registrationOpenAt} onChange={e => edit('registrationOpenAt', { registrationOpenAt: e.target.value })} className={INPUT} />
+                <FieldError message={fe('registrationOpenAt')} />
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.regCloseAt')}</label>
-                <input type="datetime-local" value={form.registrationCloseAt} onChange={e => set({ registrationCloseAt: e.target.value })} className={INPUT} />
+                <input type="datetime-local" value={form.registrationCloseAt} onChange={e => edit('registrationCloseAt', { registrationCloseAt: e.target.value })} className={INPUT} />
+                <FieldError message={fe('registrationCloseAt')} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={LABEL}>{t('admin.projects.capacity')}</label>
-                <input type="number" min={1} value={form.capacity} onChange={e => set({ capacity: Number(e.target.value) })} className={INPUT} />
+                <input type="number" min={1} value={form.capacity} onChange={e => edit('capacity', { capacity: Number(e.target.value) })} className={INPUT} />
+                <FieldError message={fe('capacity')} />
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.verifiedHours')}</label>
                 <input type="number" min={0.5} step={0.5} value={form.recognizedMinutes / 60}
-                  onChange={e => set({ recognizedMinutes: Math.round(Number(e.target.value) * 60) })} className={INPUT} />
+                  onChange={e => edit('recognizedMinutes', { recognizedMinutes: Math.round(Number(e.target.value) * 60) })} className={INPUT} />
+                <FieldError message={fe('recognizedMinutes')} />
               </div>
             </div>
           </section>
@@ -245,7 +266,20 @@ const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['enrolledCount'];
 
 export function ProjectManagement() {
   const { t, i18n } = useTranslation();
-  const { items, page, loading, error, setFilter, setSearch: setPagedSearch, setSort, setPage } =
+  const { hasPermission } = usePermissions();
+  // Backend gates create/update/publish/close/archive on four distinct
+  // permissions (ProjectController's @PreAuthorize) — role_teacher's seed
+  // grant has create/update/publish but not close/archive, so a single
+  // combined flag showed a teacher "Close"/"Archive" menu items that would
+  // 403 on click. Split to match.
+  const canManage = hasPermission('projects.create');
+  const canUpdate = hasPermission('projects.update');
+  const canPublish = hasPermission('projects.publish');
+  const canClose = hasPermission('projects.close');
+  const canArchive = hasPermission('projects.archive');
+  const canViewRegistrants = hasPermission('applications.read');
+  const fieldErrors = useFieldErrors();
+  const { items, page, loading, error, setFilter, setSearch: setPagedSearch, setSort, setPage, refetch } =
     usePagedApi<Project>(api.projects.list, {});
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -264,9 +298,12 @@ export function ProjectManagement() {
   const [sortKey, setSortKey] = useState<SortKey>('createdAt');
   const [sortDesc, setSortDesc] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [newForm, setNewForm] = useState({ title: '', summary: '', categoryId: 'cat_community', recognizedMinutes: 120, startAt: '', endAt: '', location: '', capacity: 20, organizationId: '' });
+  const [newFormSaving, setNewFormSaving] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [registrantsProject, setRegistrantsProject] = useState<Project | null>(null);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -304,46 +341,59 @@ export function ProjectManagement() {
 
   const openEdit = (proj: Project) => {
     setMenuOpenId(null);
+    fieldErrors.clearAll();
     setEditProject(proj);
     setEditForm(toForm(proj));
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editProject || !editForm) return;
     if (!editForm.title.trim()) { toast.error(t('admin.projects.errorNameEmpty')); return; }
     if (editForm.capacity < 1) { toast.error(t('admin.projects.errorCapacityMin')); return; }
     if (editForm.eligibleGrades.length === 0) { toast.error(t('admin.projects.errorNoGrade')); return; }
 
-    const category = SERVICE_CATEGORIES.find(c => c.id === editForm.categoryId);
-    const org = organizations.find(o => o.id === editForm.organizationId);
-
-    setProjects(prev => prev.map(p => p.id === editProject.id ? {
-      ...p,
-      ...editForm,
-      categoryName: category ? resolveCategoryName(category.id, i18n.language) : p.categoryName,
-      organizationName: org?.name ?? p.organizationName,
-      startAt: editForm.startAt + ':00',
-      endAt: editForm.endAt + ':00',
-      registrationOpenAt: editForm.registrationOpenAt + ':00',
-      registrationCloseAt: editForm.registrationCloseAt + ':00',
-      updatedAt: new Date().toISOString(),
-    } : p));
-
-    toast.success(t('admin.projects.toastUpdated', { title: editForm.title }));
-    setEditProject(null);
-    setEditForm(null);
+    try {
+      await api.projects.update(editProject.id, {
+        title: editForm.title,
+        summary: editForm.summary,
+        description: editForm.description,
+        categoryId: editForm.categoryId,
+        organizationId: editForm.organizationId,
+        location: editForm.location,
+        capacity: editForm.capacity,
+        recognizedMinutes: editForm.recognizedMinutes,
+        startAt: editForm.startAt ? localDatetimeLocalToISO(editForm.startAt) : editProject.startAt,
+        endAt: editForm.endAt ? localDatetimeLocalToISO(editForm.endAt) : editProject.endAt,
+        registrationOpenAt: editForm.registrationOpenAt ? localDatetimeLocalToISO(editForm.registrationOpenAt) : editProject.registrationOpenAt,
+        registrationCloseAt: editForm.registrationCloseAt ? localDatetimeLocalToISO(editForm.registrationCloseAt) : editProject.registrationCloseAt,
+        eligibleGrades: editForm.eligibleGrades.map(gradeNameToId),
+        evidenceRequirements: editForm.evidenceRequirements,
+        version: editProject.version,
+      });
+      toast.success(t('admin.projects.toastUpdated', { title: editForm.title }));
+      fieldErrors.clearAll();
+      setEditProject(null);
+      setEditForm(null);
+      refetch();
+      return;
+    } catch (err) {
+      handleMutationError(err, { fieldErrors, refetch, fallbackMessage: t('common.unknownError') });
+    }
   };
 
-  const handleAction = (proj: Project, action: string) => {
+  const handleAction = async (proj: Project, action: string) => {
     setMenuOpenId(null);
     if (action === 'edit') { openEdit(proj); return; }
-    const statusMap: Partial<Record<string, ProjectStatus>> = { publish: 'published', close: 'closed', archive: 'archived' };
-    const newStatus = statusMap[action];
-    if (newStatus) {
-      setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, status: newStatus } : p));
-    }
     const labels: Record<string, string> = { publish: t('admin.projects.published'), close: t('admin.projects.closed'), archive: t('admin.projects.archived') };
-    toast.success(t('admin.projects.toastAction', { action: labels[action] || action, title: proj.title }));
+    try {
+      if (action === 'publish') await api.projects.publish(proj.id, proj.version);
+      else if (action === 'close') await api.projects.close(proj.id, proj.version);
+      else if (action === 'archive') await api.projects.archive(proj.id, proj.version);
+      toast.success(t('admin.projects.toastAction', { action: labels[action] || action, title: proj.title }));
+      refetch();
+    } catch (err) {
+      handleMutationError(err, { refetch, fallbackMessage: t('common.unknownError') });
+    }
   };
 
   if (loading && items.length === 0) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
@@ -355,10 +405,12 @@ export function ProjectManagement() {
           <h1 className="text-foreground">{t('admin.projects.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('admin.projects.count', { count: projects.length })}</p>
         </div>
-        <button onClick={() => setShowForm(true)}
-          className="flex items-center gap-1.5 px-4 py-2 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90">
-          <Plus className="w-4 h-4" /> {t('admin.projects.newProject')}
-        </button>
+        {canManage && (
+          <button onClick={() => { fieldErrors.clearAll(); setShowForm(true); }}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90">
+            <Plus className="w-4 h-4" /> {t('admin.projects.newProject')}
+          </button>
+        )}
       </div>
 
       {/* Search & filters */}
@@ -450,23 +502,31 @@ export function ProjectManagement() {
                   </button>
                   {menuOpenId === proj.id && (
                     <div className="absolute right-0 top-8 bg-card border border-border rounded-xl shadow-lg z-10 w-40 overflow-hidden">
-                      <button onClick={() => handleAction(proj, 'edit')}
-                        className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-accent">
-                        <Edit className="w-3.5 h-3.5" /> {t('admin.projects.edit')}
-                      </button>
-                      {proj.status === 'draft' && (
+                      {canViewRegistrants && (
+                        <button onClick={() => { setMenuOpenId(null); setRegistrantsProject(proj); }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-accent">
+                          <Users className="w-3.5 h-3.5" /> {t('admin.projects.registrants')}
+                        </button>
+                      )}
+                      {canUpdate && (
+                        <button onClick={() => handleAction(proj, 'edit')}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-accent">
+                          <Edit className="w-3.5 h-3.5" /> {t('admin.projects.edit')}
+                        </button>
+                      )}
+                      {canPublish && proj.status === 'draft' && (
                         <button onClick={() => handleAction(proj, 'publish')}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
                           <CheckCircle className="w-3.5 h-3.5" /> {t('admin.projects.publish')}
                         </button>
                       )}
-                      {['published', 'registrationOpen', 'inProgress'].includes(proj.status) && (
+                      {canClose && ['published', 'registrationOpen', 'inProgress'].includes(proj.status) && (
                         <button onClick={() => handleAction(proj, 'close')}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
                           <X className="w-3.5 h-3.5" /> {t('admin.projects.closeEarly')}
                         </button>
                       )}
-                      {proj.status === 'completed' && (
+                      {canArchive && proj.status === 'completed' && (
                         <button onClick={() => handleAction(proj, 'archive')}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground hover:bg-accent">
                           <Archive className="w-3.5 h-3.5" /> {t('admin.projects.archive')}
@@ -498,6 +558,8 @@ export function ProjectManagement() {
           onClose={() => { setEditProject(null); setEditForm(null); }}
           onSave={saveEdit}
           organizations={organizations}
+          getFieldError={fieldErrors.getError}
+          onFieldEdit={fieldErrors.clearField}
         />
       )}
 
@@ -510,64 +572,102 @@ export function ProjectManagement() {
             <div className="space-y-3">
               <div>
                 <label className={LABEL}>{t('admin.projects.projectName')}</label>
-                <input type="text" placeholder={t('admin.projects.newProjectPlaceholder', { school: schoolName })} className={INPUT} />
+                <input type="text" value={newForm.title} onChange={e => { fieldErrors.clearField('title'); setNewForm(f => ({ ...f, title: e.target.value })); }} placeholder={t('admin.projects.newProjectPlaceholder', { school: schoolName })} className={INPUT} />
+                <FieldError message={fieldErrors.getError('title')} />
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.projectSummary')}</label>
-                <textarea rows={3} placeholder={t('admin.projects.summaryPlaceholder')} className={INPUT + ' resize-none'} />
+                <textarea rows={3} value={newForm.summary} onChange={e => { fieldErrors.clearField('summary'); setNewForm(f => ({ ...f, summary: e.target.value })); }} placeholder={t('admin.projects.summaryPlaceholder')} className={INPUT + ' resize-none'} />
+                <FieldError message={fieldErrors.getError('summary')} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>{t('admin.projects.serviceCategory')}</label>
-                  <select className={INPUT}>
+                  <select value={newForm.categoryId} onChange={e => setNewForm(f => ({ ...f, categoryId: e.target.value }))} className={INPUT}>
                     {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{resolveCategoryName(c.id, i18n.language)}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className={LABEL}>{t('admin.projects.verifiedHours')}</label>
-                  <input type="number" min="0.5" step="0.5" placeholder="2" className={INPUT} />
+                  <input type="number" min="0.5" step="0.5" value={newForm.recognizedMinutes / 60} onChange={e => setNewForm(f => ({ ...f, recognizedMinutes: Number(e.target.value) * 60 }))} placeholder="2" className={INPUT} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>{t('admin.projects.startAt')}</label>
-                  <input type="datetime-local" className={INPUT} />
+                  <input type="datetime-local" value={newForm.startAt} onChange={e => setNewForm(f => ({ ...f, startAt: e.target.value }))} className={INPUT} />
                 </div>
                 <div>
                   <label className={LABEL}>{t('admin.projects.endAt')}</label>
-                  <input type="datetime-local" className={INPUT} />
+                  <input type="datetime-local" value={newForm.endAt} onChange={e => setNewForm(f => ({ ...f, endAt: e.target.value }))} className={INPUT} />
                 </div>
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.location')}</label>
-                <input type="text" placeholder={t('admin.projects.locationPlaceholder')} className={INPUT} />
+                <input type="text" value={newForm.location} onChange={e => setNewForm(f => ({ ...f, location: e.target.value }))} placeholder={t('admin.projects.locationPlaceholder')} className={INPUT} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>{t('admin.projects.capacity')}</label>
-                  <input type="number" min="1" placeholder="20" className={INPUT} />
+                  <input type="number" min="1" value={newForm.capacity} onChange={e => setNewForm(f => ({ ...f, capacity: Number(e.target.value) }))} placeholder="20" className={INPUT} />
                 </div>
                 <div>
                   <label className={LABEL}>{t('admin.projects.partnerOrg')}</label>
-                  <select className={INPUT}>
+                  <select value={newForm.organizationId} onChange={e => setNewForm(f => ({ ...f, organizationId: e.target.value }))} className={INPUT}>
+                    <option value="">{t('admin.projects.selectOrg')}</option>
                     {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                   </select>
                 </div>
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowForm(false)}
+              <button onClick={() => setShowForm(false)} disabled={newFormSaving}
                 className="flex-1 py-3 rounded-xl border border-border text-foreground hover:bg-accent text-sm">{t('common.cancel')}</button>
-              <button onClick={() => { toast.success(t('admin.projects.toastDraftCreated')); setShowForm(false); }}
-                className="flex-1 py-3 rounded-xl border border-border text-foreground hover:bg-accent text-sm">{t('admin.projects.saveDraft')}</button>
-              <button onClick={() => { toast.success(t('admin.projects.toastPublished')); setShowForm(false); }}
-                className="flex-1 py-3 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90 text-sm">{t('admin.projects.publish')}</button>
+              <button disabled={newFormSaving} onClick={async () => {
+                setNewFormSaving(true);
+                try {
+                  await api.projects.create({
+                    title: newForm.title, summary: newForm.summary, categoryId: newForm.categoryId, recognizedMinutes: newForm.recognizedMinutes,
+                    startAt: newForm.startAt ? localDatetimeLocalToISO(newForm.startAt) : '', endAt: newForm.endAt ? localDatetimeLocalToISO(newForm.endAt) : '',
+                    location: newForm.location, capacity: newForm.capacity, organizationId: newForm.organizationId || undefined,
+                    registrationOpenAt: newForm.startAt ? localDatetimeLocalToISO(newForm.startAt) : '', registrationCloseAt: newForm.endAt ? localDatetimeLocalToISO(newForm.endAt) : '',
+                  });
+                  fieldErrors.clearAll();
+                  toast.success(t('admin.projects.toastDraftCreated'));
+                  setShowForm(false);
+                  refetch();
+                } catch (err) { handleMutationError(err, { fieldErrors, refetch, fallbackMessage: t('common.unknownError') }); }
+                finally { setNewFormSaving(false); }
+              }}
+                className="flex-1 py-3 rounded-xl border border-border text-foreground hover:bg-accent text-sm disabled:opacity-50">{newFormSaving ? t('common.saving', { defaultValue: 'Saving...' }) : t('admin.projects.saveDraft')}</button>
+              <button disabled={newFormSaving} onClick={async () => {
+                setNewFormSaving(true);
+                try {
+                  const proj = await api.projects.create({
+                    title: newForm.title, summary: newForm.summary, categoryId: newForm.categoryId, recognizedMinutes: newForm.recognizedMinutes,
+                    startAt: newForm.startAt ? localDatetimeLocalToISO(newForm.startAt) : '', endAt: newForm.endAt ? localDatetimeLocalToISO(newForm.endAt) : '',
+                    location: newForm.location, capacity: newForm.capacity, organizationId: newForm.organizationId || undefined,
+                    registrationOpenAt: newForm.startAt ? localDatetimeLocalToISO(newForm.startAt) : '', registrationCloseAt: newForm.endAt ? localDatetimeLocalToISO(newForm.endAt) : '',
+                  });
+                  await api.projects.publish(proj.id, proj.version);
+                  fieldErrors.clearAll();
+                  toast.success(t('admin.projects.toastPublished'));
+                  setShowForm(false);
+                  refetch();
+                } catch (err) { handleMutationError(err, { fieldErrors, refetch, fallbackMessage: t('common.unknownError') }); }
+                finally { setNewFormSaving(false); }
+              }}
+                className="flex-1 py-3 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90 text-sm disabled:opacity-50">{newFormSaving ? t('common.publishing', { defaultValue: 'Publishing...' }) : t('admin.projects.publish')}</button>
             </div>
           </div>
         </div>
       )}
 
       {menuOpenId && <div className="fixed inset-0 z-5" onClick={() => setMenuOpenId(null)} />}
+
+      {registrantsProject && (
+        <ProjectRegistrants projectId={registrantsProject.id} projectTitle={registrantsProject.title} onClose={() => setRegistrantsProject(null)} />
+      )}
     </div>
   );
 }

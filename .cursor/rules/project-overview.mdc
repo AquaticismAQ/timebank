@@ -7,34 +7,28 @@ alwaysApply: true
 
 TimeBank (时间银行) is a middle-school volunteer service recording system. Service hours → "time coins" (non-financial, never call them tokens/currency).
 
-## Current State (2026-08-04)
+## Current State (2026-08-05)
 
 **Backend (B0–B6 work items done, deployed, live on test server):**
 - B0 Foundation, B1 Identity, B2 Base Data: `✅`
-- B3 Core Loop (records, review, ledger, progress): all 13 work items `✅`
-- B4 Projects & Proposals: all 12 work items `✅`
-- B5 Admin Surface: all 12 work items `✅`
-- B6 Hardening: most items done; load test (B6.10) blocked on staging infra
+- B3–B5 all work items `✅`, phases `▶` on exit criteria (frontend demos, scale tests)
+- B6 Hardening: most done; load test blocked on staging infra
 - B7 Database Ops: mostly blocked on infrastructure
 - B3F Cloud File Storage: not started (local-disk adapter in use)
+- I1 backend: `FilterSpecifications` utility + filter/search wired across all list endpoints
 
-**Frontend:** React SPA complete, reads from in-memory mocks via `api.*` client. No real HTTP calls yet.
-
-**Integration (I0–I3): ALL `—` not started — this is the next focus.**
+**Frontend:**
+- I0 `✅` — types lifted to `api/types.ts`, HTTP transport (`http.ts`), envelope/error handling, per-domain mock/real toggle, divergences fixed, dev-proxy recipe proven
+- I1 `▶` (5/7 exit criteria met) — all 8 read domains swapped (18 methods, 10 screens), shared pagination infra (`usePagedApi`, `PageControls`, `ListStateBanner`), enum mapping layer. Two open: full bilingual re-audit, live `304` polling check
+- I2 `▶` (all 8 domains wired, E2E verified) — all mutations (service records, reviews, accounts, projects, registrations, proposals, evidence upload, notifications, users, import/export, student profile) wired with real API calls, idempotency, versioning, error handling, and verified end-to-end against the real deployed backend.
 
 ## What Comes Next
 
-The **integration phases** (I0 → I1 → I2 → I3) wire the finished frontend to the finished backend:
+**I3 Acceptance & Cutover** — evidence upload component (UI built from nothing), localization sweep (both languages), 12 E2E acceptance scenarios, historical import rehearsal, UAT with real users, production seeding, cutover plan
 
-1. **I0 Contract Prep** — lift types, build HTTP transport, fix divergences, per-domain toggle
-2. **I1 Read Path** — swap 20+ read calls from mock to real backend, domain by domain
-3. **I2 Write Path** — wire every mutation (currently just `toast.success()` stubs)
-4. **I3 Acceptance** — evidence upload, localization, E2E scenarios, UAT
-
-Also remaining backend-side:
-- Open exit criteria on B3–B5 phases (frontend demos, query-count/EXPLAIN tests)
-- B3F cloud file storage migration
-- B7 infrastructure provisioning (blocked externally)
+**Remaining I2 polish (can fold into I3):**
+- Validation error → per-field display, conflict 409 → refresh UX, permission-aware affordances
+- Rules UI redesign (backend's draft→publish lifecycle vs UI's in-place edit)
 
 ## Key Documents
 

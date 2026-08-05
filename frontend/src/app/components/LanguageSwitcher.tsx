@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Globe } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import { changeLanguage } from '../lib/language';
 
 export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
   const { i18n } = useTranslation();
@@ -24,8 +25,7 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
   const current = languages.find(l => l.code === i18n.language) ?? languages[0];
 
   const changeLang = (code: string) => {
-    i18n.changeLanguage(code);
-    localStorage.setItem('timebank-lang', code);
+    changeLanguage(code as 'zh' | 'en');
     setOpen(false);
   };
 

@@ -47,7 +47,7 @@ public class EnrollmentController {
             PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<EnrollmentDto> page = enrollmentService.list(pageable, query.filter("status"), auth, resolveLanguage(acceptLanguage, auth));
+        Page<EnrollmentDto> page = enrollmentService.list(pageable, query.filter("status"), query.filter("projectId"), auth, resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

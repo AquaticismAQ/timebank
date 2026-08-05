@@ -102,13 +102,13 @@ class ProposalApprovalTransaction {
         }
 
         // Effect: the notification, to the proposer.
-        notifyProposer(proposal, decision, resolvedLanguage);
+        notifyProposer(proposal, decision);
 
         repository.saveAndFlush(proposal);
         return toDto(proposal, resolvedLanguage);
     }
 
-    private void notifyProposer(EventProposal proposal, ProposalDecision decision, String resolvedLanguage) {
+    private void notifyProposer(EventProposal proposal, ProposalDecision decision) {
         String templateCode = switch (decision) {
             case APPROVE -> "eventProposal.approved";
             case REQUEST_CHANGES -> "eventProposal.changesRequested";
@@ -119,8 +119,7 @@ class ProposalApprovalTransaction {
             return;
         }
         userService.findUserIdByStudentId(proposal.getProposerStudentId())
-                .ifPresent(recipientUserId -> notificationService.notify(recipientUserId, templateCode,
-                        "eventProposal", proposal.getId(), resolvedLanguage));
+                .ifPresent(recipientUserId -> notificationService.notify(recipientUserId, templateCode, "eventProposal", proposal.getId()));
     }
 
     private ProposalDecision parseDecision(String raw) {

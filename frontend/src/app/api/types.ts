@@ -26,6 +26,9 @@ export interface User {
   studentId?: string;
   email: string;
   avatar?: string;
+  permissions?: string[];
+  /** I3.4: server-authoritative; `localStorage['timebank-lang']` is only a pre-login-response cache, never the source of truth once a real session exists. */
+  preferredLanguage?: 'zh-CN' | 'en';
   featureFlags: {
     pov: boolean;
     redemption: boolean;
@@ -113,6 +116,7 @@ export interface ServiceRecord {
   updatedAt: string;
   returnReason?: string;
   rejectReason?: string;
+  includesTravelTime?: boolean;
 }
 
 export interface EvidenceFile {
@@ -122,6 +126,24 @@ export interface EvidenceFile {
   size: number;
   url: string;
   uploadedAt: string;
+  /** Real `FileStatus` (PENDING/PROCESSING/READY/REJECTED) — I3.2, only meaningful for a file uploaded this session. */
+  status?: 'pending' | 'processing' | 'ready' | 'rejected';
+  rejectionReason?: string;
+}
+
+/** `GET /files/{id}` / `POST /files/{id}/complete` (contract §4.6) — `downloadUrl` is only present once `status === 'ready'`, and is a fresh 5-minute token every time, never to be cached (I3.3). */
+export interface FileMetadata {
+  id: string;
+  uploaderId: string;
+  purpose: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: 'pending' | 'processing' | 'ready' | 'rejected';
+  rejectionReason?: string;
+  downloadUrl?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** `amount`/`balanceBefore`/`balanceAfter` are integer centi-coins (APIContract.md §2.1) — format via `formatCoins`. */
@@ -208,6 +230,7 @@ export interface Student {
   joinedAt: string;
   guardianName?: string;
   guardianContact?: string;
+  version?: number;
 }
 
 export type ReviewStatus = 'pending' | 'underReview' | 'approved' | 'returned' | 'rejected';
@@ -228,6 +251,27 @@ export interface ReviewQueueItem {
   daysWaiting: number;
   hasAnomaly: boolean;
   anomalyNote?: string;
+  recordVersion?: number;
+}
+
+/** Contract §3.6/§4.8 — appeals, supplements, and staff-filed manual corrections share one state machine and one endpoint family. */
+export interface Case {
+  id: string;
+  type: 'appeal' | 'supplement' | 'manualCorrection';
+  studentId: string;
+  studentName: string;
+  subjectType?: string;
+  subjectId?: string;
+  title: string;
+  description: string;
+  requestedAmountCentiCoins?: number;
+  reasonCode: string;
+  status: 'draft' | 'submitted' | 'inReview' | 'needsInformation' | 'resolved' | 'rejected';
+  assignedReviewerId?: string;
+  version: number;
+  createdAt: string;
+  submittedAt?: string;
+  updatedAt: string;
 }
 
 export interface Organization {
@@ -308,6 +352,7 @@ export interface EventProposal {
   linkedProjectId?: string;
   linkedProjectTitle?: string;
   revisionCount: number;
+  version?: number;
   createdAt: string;
   updatedAt: string;
   submittedAt?: string;

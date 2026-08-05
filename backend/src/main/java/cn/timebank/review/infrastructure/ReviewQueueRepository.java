@@ -50,7 +50,7 @@ public class ReviewQueueRepository {
                        sr.source_type, p.title as project_title, sr.organization_name,
                        sr.service_date, sr.duration_minutes,
                        sr.service_category_id, sc.name_zh, sc.name_en, sr.status, sr.submitted_at,
-                       sr.has_anomaly, sr.anomaly_note, sr.assigned_reviewer_id
+                       sr.has_anomaly, sr.anomaly_note, sr.assigned_reviewer_id, sr.version
                 from service_record sr
                 join service_category sc on sc.id = sr.service_category_id
                 left join grade g on g.id = sr.grade_id
@@ -76,7 +76,8 @@ public class ReviewQueueRepository {
                     rs.getInt("duration_minutes"), rs.getString("service_category_id"),
                     LocalizedNames.pick(resolvedLanguage, rs.getString("name_zh"), rs.getString("name_en")),
                     rs.getString("status"), submittedAt, daysWaiting, priority, anomaly,
-                    rs.getString("anomaly_note"), rs.getString("assigned_reviewer_id"));
+                    rs.getString("anomaly_note"), rs.getString("assigned_reviewer_id"),
+                    rs.getLong("version"));
         });
     }
 

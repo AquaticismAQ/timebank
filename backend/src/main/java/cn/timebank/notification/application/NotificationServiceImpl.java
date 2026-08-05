@@ -29,17 +29,15 @@ class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional
-    public void notify(String recipientUserId, String templateCode, String relatedResourceType,
-                        String relatedResourceId, String resolvedLanguage) {
-        RenderedNotification rendered = templateService.render(templateCode, resolvedLanguage);
+    public void notify(String recipientUserId, String templateCode, String relatedResourceType, String relatedResourceId) {
         Notification notification = new Notification(OpaqueIds.generate("ntf"), recipientUserId, templateCode,
-                rendered.title(), rendered.body(), relatedResourceType, relatedResourceId, Instant.now());
+                relatedResourceType, relatedResourceId, Instant.now());
         repository.save(notification);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<NotificationDto> listForUser(String userId, Pageable pageable, String read, String templateCode) {
+    public Page<NotificationDto> listForUser(String userId, Pageable pageable, String read, String templateCode, String resolvedLanguage) {
         Specification<Notification> spec = FilterSpecifications.and(
                 FilterSpecifications.equalTo("recipientUserId", userId),
                 FilterSpecifications.equalToBoolean("read", read),
@@ -47,7 +45,7 @@ class NotificationServiceImpl implements NotificationService {
         Pageable effectivePageable = pageable.getSort().isUnsorted()
                 ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(Sort.Direction.DESC, "createdAt"))
                 : pageable;
-        return repository.findAll(spec, effectivePageable).map(this::toDto);
+        return repository.findAll(spec, effectivePageable).map(n -> toDto(n, resolvedLanguage));
     }
 
     @Override
@@ -58,7 +56,7 @@ class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional
-    public NotificationDto markRead(String id, String userId) {
+    public NotificationDto markRead(String id, String userId, String resolvedLanguage) {
         Notification notification = repository.findById(id)
                 .orElseThrow(() -> ApiException.notFound("Notification not found."));
         if (!notification.getRecipientUserId().equals(userId)) {
@@ -66,7 +64,7 @@ class NotificationServiceImpl implements NotificationService {
         }
         notification.setRead(true);
         repository.saveAndFlush(notification);
-        return toDto(notification);
+        return toDto(notification, resolvedLanguage);
     }
 
     @Override
@@ -75,8 +73,20 @@ class NotificationServiceImpl implements NotificationService {
         repository.markAllReadForRecipient(userId);
     }
 
-    private NotificationDto toDto(Notification n) {
-        return new NotificationDto(n.getId(), n.getTemplateCode(), n.getTitle(), n.getBody(),
+    /**
+     * I3.6: rendered fresh on every read, in the *reader's* resolved
+     * language — never stored. A template that's been renamed/removed
+     * since a historical notification was created falls back to the
+     * template code itself rather than 500ing the whole list over one row.
+     */
+    private NotificationDto toDto(Notification n, String resolvedLanguage) {
+        RenderedNotification rendered;
+        try {
+            rendered = templateService.render(n.getTemplateCode(), resolvedLanguage);
+        } catch (RuntimeException e) {
+            rendered = new RenderedNotification(n.getTemplateCode(), "");
+        }
+        return new NotificationDto(n.getId(), n.getTemplateCode(), rendered.title(), rendered.body(),
                 n.getRelatedResourceType(), n.getRelatedResourceId(), n.isRead(), n.getCreatedAt());
     }
 }

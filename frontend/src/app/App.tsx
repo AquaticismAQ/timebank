@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { Toaster } from 'sonner';
 import { type User } from './api/types';
 import { api } from './api/client';
+import i18n from '../i18n';
 
 // ── Shared operation log ───────────────────────────────────────────────────
 
@@ -56,6 +57,8 @@ import { NotificationsPage } from './components/student/NotificationsPage';
 import { EventProposals } from './components/student/EventProposals';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AuditCenter } from './components/admin/AuditCenter';
+import { CaseReview } from './components/admin/CaseReview';
+import { ProposalReview } from './components/admin/ProposalReview';
 import { ProjectManagement } from './components/admin/ProjectManagement';
 import { StudentList } from './components/admin/StudentList';
 import { ReportsPage } from './components/admin/ReportsPage';
@@ -97,6 +100,16 @@ export const AuthContext = createContext<AuthContextValue>({
 
 export const useAuth = () => useContext(AuthContext);
 export const useTheme = () => useContext(ThemeContext);
+
+/** Permission check from `/me` (or mock user fixtures). Undefined permissions → allow all (legacy sessions). */
+export function usePermissions() {
+  const { user } = useContext(AuthContext);
+  const hasPermission = useCallback((code: string) => {
+    if (!user?.permissions) return true;
+    return user.permissions.includes(code);
+  }, [user]);
+  return { hasPermission, permissions: user?.permissions ?? [] };
+}
 
 function getSystemTheme(): 'light' | 'dark' {
   const hour = new Date().getHours();
@@ -141,6 +154,15 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       const { user: found } = await api.auth.login(username, password);
       setUser(found);
       localStorage.setItem('timebank-user', JSON.stringify(found));
+      // I3.4: the server's preferredLanguage is authoritative once a real
+      // session exists — sync it now rather than leaving whatever
+      // localStorage['timebank-lang'] happened to hold from a previous
+      // device/session/incognito window.
+      if (found.preferredLanguage) {
+        const code = found.preferredLanguage === 'zh-CN' ? 'zh' : 'en';
+        i18n.changeLanguage(code);
+        localStorage.setItem('timebank-lang', code);
+      }
       if (found.workspaces.length === 1) {
         setCurrentWorkspaceState(found.workspaces[0]);
         localStorage.setItem('timebank-workspace', found.workspaces[0]);
@@ -214,6 +236,8 @@ export default function App() {
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />
               <Route path="audit" element={<AuditCenter />} />
+              <Route path="cases" element={<CaseReview />} />
+              <Route path="proposals" element={<ProposalReview />} />
               <Route path="projects" element={<ProjectManagement />} />
               <Route path="students" element={<StudentList />} />
               <Route path="accounts" element={<AccountManagement />} />

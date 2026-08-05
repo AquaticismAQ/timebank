@@ -45,10 +45,11 @@ public class NotificationController {
 
     @GetMapping("/api/v1/notifications")
     @PreAuthorize("isAuthenticated()")
-    public ApiResponse<List<NotificationDto>> list(PageQuery query, Authentication auth) {
+    public ApiResponse<List<NotificationDto>> list(
+            PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
         Page<NotificationDto> page = notificationService.listForUser(principalId(auth), pageable,
-                query.filter("read"), query.filter("templateCode"));
+                query.filter("read"), query.filter("templateCode"), resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 
@@ -78,8 +79,9 @@ public class NotificationController {
 
     @PatchMapping("/api/v1/notifications/{id}")
     @PreAuthorize("isAuthenticated()")
-    public ApiResponse<NotificationDto> markRead(@PathVariable String id, Authentication auth) {
-        return ApiResponse.of(notificationService.markRead(id, principalId(auth)));
+    public ApiResponse<NotificationDto> markRead(
+            @PathVariable String id, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
+        return ApiResponse.of(notificationService.markRead(id, principalId(auth), resolveLanguage(acceptLanguage, auth)));
     }
 
     @PostMapping("/api/v1/notifications/read-all")
@@ -93,8 +95,12 @@ public class NotificationController {
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<List<AnnouncementDto>> announcements(
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
+        return ApiResponse.of(announcementService.listActive(resolveLanguage(acceptLanguage, auth)));
+    }
+
+    private String resolveLanguage(String acceptLanguage, Authentication auth) {
         String preferred = auth.getPrincipal() instanceof CookieSessionUserDetails p ? p.preferredLanguage() : null;
-        return ApiResponse.of(announcementService.listActive(requestLanguageService.resolve(acceptLanguage, preferred)));
+        return requestLanguageService.resolve(acceptLanguage, preferred);
     }
 
     private String principalId(Authentication auth) {

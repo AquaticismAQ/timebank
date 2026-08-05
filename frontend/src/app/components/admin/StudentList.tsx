@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, ChevronDown, ChevronUp, Download, Upload, AlertCircle, Pencil, X, Save } from 'lucide-react';
-import { GRADES, GRADE_LABEL_KEYS, gradeNameToId } from '../../mock/data';
+import { GRADES, GRADE_LABEL_KEYS, gradeNameToId, classNameToId } from '../../mock/data';
 import { type Student } from '../../api/types';
 import { formatCoins, minutesToHours } from '../../lib/format';
 import { toast } from 'sonner';
 import { useAuth, useLogs } from '../../App';
 import { api } from '../../api/client';
+import { handleMutationError } from '../../api/useFieldErrors';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
@@ -48,7 +49,7 @@ export function StudentList() {
   const [editStudent, setEditStudent] = useState<Student | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
 
-  const { items, page, loading, error, setPage, setSearch: setApiSearch, setFilter, setSort } =
+  const { items, page, loading, error, setPage, setSearch: setApiSearch, setFilter, setSort, refetch } =
     usePagedApi<Student>(api.students.list, {});
 
   // Only `completedHours`/`timeCoinBalance` sorts have no real-backend column to sort on server-side —
@@ -94,7 +95,7 @@ export function StudentList() {
     });
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editStudent || !editForm) return;
     if (editForm.completedHours < 0) { toast.error('Completed hours cannot be negative'); return; }
     if (editForm.timeCoinBalance < 0) { toast.error('Time coins cannot be negative'); return; }
@@ -103,38 +104,56 @@ export function StudentList() {
     const priorTimeCoinBalance = (editStudent.timeCoinBalance ?? 0) / 100;
 
     const changes: string[] = [];
-    if (editForm.studentNumber !== editStudent.studentNumber)
-      changes.push(`Student No. ${editStudent.studentNumber}→${editForm.studentNumber}`);
-    if (editForm.completedHours !== priorCompletedHours)
-      changes.push(`Completed hours ${priorCompletedHours}h→${editForm.completedHours}h`);
-    if (editForm.timeCoinBalance !== priorTimeCoinBalance)
-      changes.push(`Time coins ${priorTimeCoinBalance}→${editForm.timeCoinBalance}`);
     if (editForm.name !== editStudent.name) changes.push(`Name changed to "${editForm.name}"`);
     if (editForm.grade !== editStudent.grade || editForm.className !== editStudent.className)
       changes.push(`Class changed to ${editForm.grade} ${editForm.className}`);
+    if (editForm.completedHours !== priorCompletedHours)
+      changes.push(`Completed hours ${priorCompletedHours}h→${editForm.completedHours}h (display only — hours are record-derived)`);
+    if (editForm.timeCoinBalance !== priorTimeCoinBalance)
+      changes.push(`Time coins ${priorTimeCoinBalance}→${editForm.timeCoinBalance} (use Account Management for balance adjustments)`);
 
-    setStudents(prev => prev.map(s => s.id === editStudent.id ? {
-      ...s,
-      name: editForm.name,
-      email: editForm.email,
-      studentNumber: editForm.studentNumber,
-      grade: editForm.grade,
-      className: editForm.className,
-      completedMinutes: Math.round(editForm.completedHours * 60),
-      timeCoinBalance: Math.round(editForm.timeCoinBalance * 100),
-    } : s));
+    try {
+      const hasProfileChanges = editForm.name !== editStudent.name || editForm.email !== editStudent.email ||
+        editForm.grade !== editStudent.grade || editForm.className !== editStudent.className;
 
-    addLog({
-      operator: user?.displayName ?? 'Admin',
-      action: `Edit student profile${changes.length ? ': ' + changes.join(', ') : ''}`,
-      target: `${editStudent.name} (${editStudent.studentNumber})`,
-      category: 'student',
-      memo: editForm.memo.trim() || undefined,
-    });
+      if (hasProfileChanges) {
+        // Resolve from the (possibly just-changed) form value first, not the
+        // student's stale id — `editStudent.gradeId` is always truthy for a
+        // real student, so putting it first meant a grade/class change in
+        // this form was silently never sent to the backend even though the
+        // list below optimistically showed it as changed.
+        await api.students.update(editStudent.id, {
+          displayName: editForm.name,
+          email: editForm.email,
+          gradeId: gradeNameToId(editForm.grade) || editStudent.gradeId || undefined,
+          classId: classNameToId(editForm.className) || editStudent.classId || undefined,
+          version: editStudent.version ?? 1,
+        });
+      }
 
-    toast.success(t('admin.students.toastUpdated', { name: editForm.name }));
-    setEditStudent(null);
-    setEditForm(null);
+      setStudents(prev => prev.map(s => s.id === editStudent.id ? {
+        ...s,
+        name: editForm.name,
+        email: editForm.email,
+        grade: editForm.grade,
+        className: editForm.className,
+      } : s));
+
+      addLog({
+        operator: user?.displayName ?? 'Admin',
+        action: `Edit student profile${changes.length ? ': ' + changes.join(', ') : ''}`,
+        target: `${editStudent.name} (${editStudent.studentNumber})`,
+        category: 'student',
+        memo: editForm.memo.trim() || undefined,
+      });
+
+      toast.success(t('admin.students.toastUpdated', { name: editForm.name }));
+      setEditStudent(null);
+      setEditForm(null);
+      refetch();
+    } catch (err) {
+      handleMutationError(err, { refetch, fallbackMessage: String(err) });
+    }
   };
 
   const sortValue = (s: Student, key: SortKey): string | number =>

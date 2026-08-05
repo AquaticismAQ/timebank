@@ -13,7 +13,7 @@ import java.util.List;
 /** The `enrollment` module's published interface (Design.md §6) — the contract's `Application`, REST path `/applications`. */
 public interface EnrollmentService {
 
-    Page<EnrollmentDto> list(Pageable pageable, String status, Authentication auth, String resolvedLanguage);
+    Page<EnrollmentDto> list(Pageable pageable, String status, String projectId, Authentication auth, String resolvedLanguage);
 
     EnrollmentDto getDetail(String id, Authentication auth, String resolvedLanguage);
 

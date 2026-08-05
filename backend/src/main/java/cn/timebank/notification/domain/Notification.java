@@ -13,10 +13,16 @@ import java.time.Instant;
 
 /**
  * B3.12's fifth approval effect needs somewhere to write to — B2 built only
- * template rendering ("the notification row itself... is B5's"). Rendered
- * at creation time (title/body are a snapshot), since re-rendering per
- * request would need the recipient's language resolved at *read* time,
- * which no read endpoint exists to do yet (B5's).
+ * template rendering ("the notification row itself... is B5's"). I3.6:
+ * title/body are rendered on every read from {@code templateCode} + the
+ * reader's resolved language, not stored — {@code NotificationTemplate}'s
+ * own rendering has never taken interpolation params, so the template code
+ * alone is enough to reconstruct either language's text at any time. This
+ * used to store a creation-time snapshot instead (V5), explicitly flagged
+ * in this class's own prior doc comment as deferred "since re-rendering
+ * per request would need the recipient's language resolved at read time,
+ * which no read endpoint exists to do yet" — B5/I1 built that endpoint
+ * since, closing the gap (V12 drops the now-wrong stored columns).
  */
 @Entity
 @Table(name = "notification")
@@ -34,12 +40,6 @@ public class Notification {
     @Column(name = "template_code", length = 64, nullable = false, updatable = false)
     private String templateCode;
 
-    @Column(name = "title", nullable = false, updatable = false)
-    private String title;
-
-    @Column(name = "body", nullable = false, updatable = false)
-    private String body;
-
     @Column(name = "related_resource_type", updatable = false)
     private String relatedResourceType;
 
@@ -53,13 +53,11 @@ public class Notification {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    public Notification(String id, String recipientUserId, String templateCode, String title, String body,
+    public Notification(String id, String recipientUserId, String templateCode,
                          String relatedResourceType, String relatedResourceId, Instant now) {
         this.id = id;
         this.recipientUserId = recipientUserId;
         this.templateCode = templateCode;
-        this.title = title;
-        this.body = body;
         this.relatedResourceType = relatedResourceType;
         this.relatedResourceId = relatedResourceId;
         this.read = false;

@@ -4,6 +4,7 @@ import { LogOut, ChevronRight, Bell, Shield, HelpCircle, Moon, Sun, Monitor, Mai
 import { useTranslation } from 'react-i18next';
 import { useAuth, useTheme } from '../../App';
 import { type SchoolInfo } from '../../api/types';
+import { changeLanguage } from '../../lib/language';
 import { api } from '../../api/client';
 
 export function AdminProfilePage() {
@@ -50,8 +51,7 @@ export function AdminProfilePage() {
   ];
 
   const changeLang = (code: string) => {
-    i18n.changeLanguage(code);
-    localStorage.setItem('timebank-lang', code);
+    changeLanguage(code as 'zh' | 'en');
   };
 
   const roleLabels: Record<string, string> = {

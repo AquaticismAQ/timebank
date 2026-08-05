@@ -49,12 +49,13 @@ class EnrollmentServiceImpl implements EnrollmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<EnrollmentDto> list(Pageable pageable, String status, Authentication auth, String resolvedLanguage) {
+    public Page<EnrollmentDto> list(Pageable pageable, String status, String projectId, Authentication auth, String resolvedLanguage) {
         TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
         Specification<Enrollment> scopeSpec = isManager(principal) ? null
                 : (root, query, cb) -> cb.equal(root.get("studentId"), principal.studentId());
         Specification<Enrollment> spec = FilterSpecifications.and(
-                scopeSpec, FilterSpecifications.equalToEnum("status", EnrollmentStatus.class, status));
+                scopeSpec, FilterSpecifications.equalToEnum("status", EnrollmentStatus.class, status),
+                FilterSpecifications.equalTo("projectId", projectId));
         Page<Enrollment> page = repository.findAll(spec, pageable);
 
         Map<String, String> projectTitles = projectService.titlesOf(page.getContent().stream().map(Enrollment::getProjectId).distinct().toList());

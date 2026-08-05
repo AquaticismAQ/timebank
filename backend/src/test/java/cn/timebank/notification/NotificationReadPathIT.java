@@ -42,7 +42,7 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
     @Test
     void unreadCountIsAccurateAndReturnsARealNotModifiedOnceMarkedRead() {
         UserDto user = createUser("notif_read_1");
-        notificationService.notify(user.id(), "case.resolved", "case", "case_fake", "zh-CN");
+        notificationService.notify(user.id(), "case.resolved", "case", "case_fake");
         String sessionCookie = login(user.username(), "InitialPass123!");
 
         ResponseEntity<String> first = getWithSession("/api/v1/notifications/unread-count", sessionCookie);
@@ -55,7 +55,7 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
         ResponseEntity<String> replay = getWithSessionAndIfNoneMatch("/api/v1/notifications/unread-count", sessionCookie, etag);
         assertThat(replay.getStatusCode()).isEqualTo(HttpStatus.NOT_MODIFIED);
 
-        NotificationDto notification = notificationService.listForUser(user.id(), PageRequest.of(0, 10), null, null)
+        NotificationDto notification = notificationService.listForUser(user.id(), PageRequest.of(0, 10), null, null, "zh-CN")
                 .getContent().get(0);
         String csrfCookie = fetchCsrfCookie();
         HttpHeaders patchHeaders = new HttpHeaders();
@@ -74,8 +74,8 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
     @Test
     void markAllReadClearsEveryUnreadNotificationInOneCall() {
         UserDto user = createUser("notif_read_2");
-        notificationService.notify(user.id(), "case.resolved", "case", "case_fake_1", "zh-CN");
-        notificationService.notify(user.id(), "case.rejected", "case", "case_fake_2", "zh-CN");
+        notificationService.notify(user.id(), "case.resolved", "case", "case_fake_1");
+        notificationService.notify(user.id(), "case.rejected", "case", "case_fake_2");
         assertThat(notificationService.unreadCount(user.id())).isEqualTo(2);
 
         String sessionCookie = login(user.username(), "InitialPass123!");
@@ -93,11 +93,11 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
     @Test
     void listForUserFiltersByReadStatusAndStaysNewestFirstWithNoExplicitSort() throws InterruptedException {
         UserDto user = createUser("notif_read_3");
-        notificationService.notify(user.id(), "case.resolved", "case", "case_fake_older", "zh-CN");
+        notificationService.notify(user.id(), "case.resolved", "case", "case_fake_older");
         Thread.sleep(5); // guarantee a distinct createdAt from the previous notify()
-        notificationService.notify(user.id(), "case.rejected", "case", "case_fake_newer", "zh-CN");
+        notificationService.notify(user.id(), "case.rejected", "case", "case_fake_newer");
 
-        List<NotificationDto> unfiltered = notificationService.listForUser(user.id(), PageRequest.of(0, 10), null, null)
+        List<NotificationDto> unfiltered = notificationService.listForUser(user.id(), PageRequest.of(0, 10), null, null, "zh-CN")
                 .getContent();
         assertThat(unfiltered).hasSize(2);
         // No explicit sort was requested; the service must still order newest-first.
@@ -105,17 +105,56 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
         assertThat(unfiltered.get(1).relatedResourceId()).isEqualTo("case_fake_older");
 
         NotificationDto older = unfiltered.get(1);
-        notificationService.markRead(older.id(), user.id());
+        notificationService.markRead(older.id(), user.id(), "zh-CN");
 
-        List<NotificationDto> unreadOnly = notificationService.listForUser(user.id(), PageRequest.of(0, 10), "false", null)
+        List<NotificationDto> unreadOnly = notificationService.listForUser(user.id(), PageRequest.of(0, 10), "false", null, "zh-CN")
                 .getContent();
         assertThat(unreadOnly).hasSize(1);
         assertThat(unreadOnly.get(0).relatedResourceId()).isEqualTo("case_fake_newer");
 
-        List<NotificationDto> readOnly = notificationService.listForUser(user.id(), PageRequest.of(0, 10), "true", null)
+        List<NotificationDto> readOnly = notificationService.listForUser(user.id(), PageRequest.of(0, 10), "true", null, "zh-CN")
                 .getContent();
         assertThat(readOnly).hasSize(1);
         assertThat(readOnly.get(0).relatedResourceId()).isEqualTo("case_fake_older");
+    }
+
+    /**
+     * I3.6: the exact bug being fixed — a notification created once must
+     * render in *either* language depending on who's reading it and in
+     * which language, not the language in effect when it was created.
+     * Directly through the real HTTP `Accept-Language` path (contract
+     * §2.10), not just the service layer, since the language resolution
+     * happens in the controller.
+     */
+    @Test
+    void sameNotificationRendersInWhicheverLanguageTheReaderRequests() {
+        UserDto user = createUser("notif_read_4");
+        notificationService.notify(user.id(), "case.resolved", "case", "case_fake_lang");
+        String sessionCookie = login(user.username(), "InitialPass123!");
+
+        ResponseEntity<String> zh = getWithSessionAndLanguage("/api/v1/notifications", sessionCookie, "zh-CN");
+        ResponseEntity<String> en = getWithSessionAndLanguage("/api/v1/notifications", sessionCookie, "en");
+
+        assertThat(zh.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(en.getStatusCode()).isEqualTo(HttpStatus.OK);
+        // Same underlying row (same id, same templateCode) — different rendered text.
+        assertThat(zh.getBody()).isNotEqualTo(en.getBody());
+        assertThat(zh.getBody()).doesNotContain(extractField(en.getBody(), "title"));
+    }
+
+    private ResponseEntity<String> getWithSessionAndLanguage(String path, String sessionCookie, String acceptLanguage) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.COOKIE, sessionCookie);
+        headers.add(HttpHeaders.ACCEPT_LANGUAGE, acceptLanguage);
+        return restTemplate.exchange(path, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+    }
+
+    private String extractField(String json, String field) {
+        int idx = json.indexOf("\"" + field + "\":\"");
+        assertThat(idx).as(field + " present in " + json).isGreaterThanOrEqualTo(0);
+        int start = idx + field.length() + 4;
+        int end = json.indexOf('"', start);
+        return json.substring(start, end);
     }
 
     private UserDto createUser(String username) {

@@ -5,6 +5,7 @@ import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADE_LABEL_KEYS, resolveCat
 import { type Project, type ProjectStatus } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { ApiError, mapApiError } from '../../api/http';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
@@ -23,7 +24,7 @@ type FilterStatus = ProjectStatus | 'all' | 'canApply';
 
 export function ProjectCenter() {
   const { t, i18n } = useTranslation();
-  const { items, page, loading, error, setSearch: setPagedSearch, setFilter, setPage } = usePagedApi(api.projects.list, {});
+  const { items, page, loading, error, setSearch: setPagedSearch, setFilter, setPage, refetch } = usePagedApi(api.projects.list, {});
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -46,11 +47,41 @@ export function ProjectCenter() {
     setPagedSearch(val);
   };
 
-  const handleApply = (proj: Project) => {
+  const handleApply = async (proj: Project) => {
     if (applied.has(proj.id) || proj.myApplicationStatus) { toast.info(t('student.projects.alreadyApplied')); return; }
     if (proj.status !== 'registrationOpen') { toast.error(t('student.projects.notAccepting')); return; }
-    setApplied(prev => new Set([...prev, proj.id]));
-    toast.success(t('student.projects.appliedSuccess', { title: proj.title }));
+    try {
+      await api.applications.create(proj.id);
+      setApplied(prev => new Set([...prev, proj.id]));
+      toast.success(t('student.projects.appliedSuccess', { title: proj.title }));
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(t('common.unknownError'));
+    }
+  };
+
+  // `applications.cancel` was fully wired in client.ts (I2-d6) but this
+  // screen never called it — a student who registered had no way to back
+  // out. Resolves the enrollment id via the scoped list (the backend
+  // scopes /applications to the caller's own rows for a student
+  // principal, so this never leaks another student's registration).
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const handleCancel = async (proj: Project) => {
+    setCancelling(proj.id);
+    try {
+      const page = await api.applications.list({ filter: { projectId: proj.id }, pageSize: 1 });
+      const application = page.data[0];
+      if (!application) throw new Error('Application not found');
+      await api.applications.cancel(application.id);
+      setApplied(prev => { const next = new Set(prev); next.delete(proj.id); return next; });
+      toast.success(t('student.projects.cancelSuccess'));
+      refetch();
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(t('common.unknownError'));
+    } finally {
+      setCancelling(null);
+    }
   };
 
   const getApplyBtnText = (proj: Project) => {
@@ -256,6 +287,12 @@ export function ProjectCenter() {
                         }`}>
                         {btnText}
                       </button>
+                      {proj.myApplicationStatus && ['pending', 'confirmed', 'waitlisted'].includes(proj.myApplicationStatus) && (
+                        <button onClick={() => handleCancel(proj)} disabled={cancelling === proj.id}
+                          className="px-4 py-1.5 rounded-xl text-xs border border-border text-muted-foreground hover:bg-accent disabled:opacity-50">
+                          {t('student.projects.cancelRegistration')}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

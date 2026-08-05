@@ -1,43 +1,71 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, ArrowUpRight, ArrowDownLeft, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { TRANSACTION_TYPE_LABELS } from '../../mock/data';
-import { type Student, type AccountTransaction } from '../../api/types';
+import { type Student, type Account, type AccountTransaction } from '../../api/types';
 import { formatCoins, minutesToHours } from '../../lib/format';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
+import { usePermissions } from '../../App';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 
 export function AccountManagement() {
   const { t } = useTranslation();
-  const { items, page, loading, error, setPage, setSearch: setApiSearch } = usePagedApi<Student>(api.students.list, {});
+  const { hasPermission } = usePermissions();
+  const canManage = hasPermission('accounts.adjust');
+  const { items, page, loading, error, setPage, setSearch: setApiSearch, refetch } = usePagedApi<Student>(api.students.list, {});
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const [balanceMap, setBalanceMap] = useState<Record<string, number>>({});
+  const enrichWithBalances = useCallback(async (students: Student[]) => {
+    try {
+      const accountPage = await api.accounts.list({ pageSize: 200 });
+      const map: Record<string, number> = {};
+      for (const acct of accountPage.data) {
+        map[acct.studentId] = acct.balance;
+      }
+      setBalanceMap(map);
+    } catch { /* accounts may not be accessible, fallback to 0 */ }
+  }, []);
+
+  useEffect(() => {
+    if (items.length > 0) enrichWithBalances(items);
+  }, [items, enrichWithBalances]);
   const [showAdjust, setShowAdjust] = useState(false);
+  const [adjustStudentId, setAdjustStudentId] = useState('');
   const [adjustStudent, setAdjustStudent] = useState('');
   const [adjustAmount, setAdjustAmount] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
   const [adjustNote, setAdjustNote] = useState('');
+  const [adjustSaving, setAdjustSaving] = useState(false);
+  const adjustKeyRef = useRef(newIdempotencyKey());
 
   // Per-row transaction preview — there's no bulk "all accounts' transactions" endpoint on the real
   // backend, so recent transactions are fetched lazily for one student at a time, only when its row
   // is expanded (resolve accountId via api.accounts.get, then a small pageSize:10 preview fetch).
   const [expandedTx, setExpandedTx] = useState<AccountTransaction[]>([]);
   const [expandedTxLoading, setExpandedTxLoading] = useState(false);
+  const [expandedAccount, setExpandedAccount] = useState<Account | null>(null);
 
   useEffect(() => {
     if (!expandedId) {
       setExpandedTx([]);
+      setExpandedAccount(null);
       return;
     }
     let cancelled = false;
     setExpandedTxLoading(true);
     api.accounts.get(expandedId)
-      .then(account => api.accounts.transactions(account.id, { pageSize: 10 }))
+      .then(account => {
+        if (!cancelled) setExpandedAccount(account);
+        return api.accounts.transactions(account.id, { pageSize: 10 });
+      })
       .then(result => { if (!cancelled) setExpandedTx(result.data); })
-      .catch(() => { if (!cancelled) setExpandedTx([]); })
+      .catch(() => { if (!cancelled) { setExpandedTx([]); setExpandedAccount(null); } })
       .finally(() => { if (!cancelled) setExpandedTxLoading(false); });
     return () => { cancelled = true; };
   }, [expandedId]);
@@ -47,12 +75,11 @@ export function AccountManagement() {
     setApiSearch(value);
   };
 
-  // Sorted by timeCoinBalance descending — the real /students list endpoint doesn't return
-  // timeCoinBalance at all, so this can only ever be a client-side sort of the current page,
-  // tolerating undefined via `?? 0` (same reasoning as StudentList.tsx's CLIENT_ONLY_SORT_KEYS).
+  const getBalance = useCallback((s: Student) => balanceMap[s.id] ?? s.timeCoinBalance ?? 0, [balanceMap]);
+
   const filtered = useMemo(() => {
-    return [...items].sort((a, b) => (b.timeCoinBalance ?? 0) - (a.timeCoinBalance ?? 0));
-  }, [items]);
+    return [...items].sort((a, b) => getBalance(b) - getBalance(a));
+  }, [items, getBalance]);
 
   const colorMap: Record<string, string> = {
     green: 'text-green-600 dark:text-green-400',
@@ -91,20 +118,20 @@ export function AccountManagement() {
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="text-2xl font-semibold text-foreground">
-            {formatCoins(items.reduce((s, st) => s + (st.timeCoinBalance ?? 0), 0))}
+            {formatCoins(items.reduce((s, st) => s + getBalance(st), 0))}
           </div>
           <div className="text-xs text-muted-foreground">{t('admin.accounts.totalCirculating')}</div>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="text-2xl font-semibold text-foreground">
-            {items.filter(s => (s.timeCoinBalance ?? 0) > 0).length}
+            {items.filter(s => getBalance(s) > 0).length}
           </div>
           <div className="text-xs text-muted-foreground">{t('admin.accounts.accountsWithBalance')}</div>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="text-2xl font-semibold text-foreground">
             {items.length > 0
-              ? formatCoins(Math.round(items.reduce((s, st) => s + (st.timeCoinBalance ?? 0), 0) / items.length))
+              ? formatCoins(Math.round(items.reduce((s, st) => s + getBalance(st), 0) / items.length))
               : formatCoins(0)}
           </div>
           <div className="text-xs text-muted-foreground">{t('admin.accounts.avgBalance')}</div>
@@ -140,7 +167,7 @@ export function AccountManagement() {
                   <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: ((student.completedMinutes ?? 0) / 60) * 2, redeemed: 0 })}</div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-lg font-semibold text-foreground">{formatCoins(student.timeCoinBalance ?? 0)}</div>
+                  <div className="text-lg font-semibold text-foreground">{formatCoins(getBalance(student))}</div>
                   <div className="text-xs text-muted-foreground">{t('admin.accounts.coinsUnit')}</div>
                 </div>
                 {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -169,16 +196,34 @@ export function AccountManagement() {
                       );
                     })
                   )}
+                  {canManage && (
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => { setAdjustStudent(student.name); setShowAdjust(true); }}
+                    <button onClick={() => { setAdjustStudentId(student.id); setAdjustStudent(student.name); setShowAdjust(true); }}
                       className="text-xs px-3 py-1.5 border border-border rounded-lg text-muted-foreground hover:bg-accent">
                       {t('admin.accounts.manualAdjust')}
                     </button>
-                    <button onClick={() => toast.info(t('admin.accounts.freezeComingSoon'))}
+                    <button onClick={async () => {
+                      try {
+                        const account = expandedAccount?.id ? expandedAccount : await api.accounts.get(student.id);
+                        const isFrozen = expandedAccount?.frozen ? expandedAccount.frozen > 0 : false;
+                        if (isFrozen) {
+                          await api.accounts.unfreeze(account.id, 'ADMIN_ACTION', t('admin.accounts.unfrozenByAdmin'));
+                          toast.success(t('admin.accounts.accountUnfrozen', { name: student.name }));
+                        } else {
+                          await api.accounts.freeze(account.id, 'ADMIN_ACTION', t('admin.accounts.frozenByAdmin'));
+                          toast.success(t('admin.accounts.accountFrozen', { name: student.name }));
+                        }
+                        if (expandedId === student.id) setExpandedAccount(await api.accounts.get(student.id));
+                      } catch (err) {
+                        if (err instanceof ApiError) toast.error(mapApiError(err).message);
+                        else toast.error(t('common.unknownError'));
+                      }
+                    }}
                       className="text-xs px-3 py-1.5 border border-border rounded-lg text-muted-foreground hover:bg-accent">
-                      {t('admin.accounts.freeze')}
+                      {expandedId === student.id && expandedAccount?.frozen ? t('admin.accounts.unfreeze') : t('admin.accounts.freeze')}
                     </button>
                   </div>
+                  )}
                 </div>
               )}
             </div>
@@ -228,19 +273,33 @@ export function AccountManagement() {
             <div className="flex gap-3 mt-4">
               <button onClick={() => setShowAdjust(false)} className="flex-1 py-3 rounded-xl border border-border text-foreground hover:bg-accent text-sm">{t('common.cancel')}</button>
               <button
-                onClick={() => {
+                disabled={adjustSaving}
+                onClick={async () => {
                   if (!adjustStudent || !adjustAmount || !adjustReason || !adjustNote) {
                     toast.error(t('admin.accounts.fillAllFields'));
                     return;
                   }
-                  toast.success(t('admin.accounts.adjustSuccess', { name: adjustStudent, action: Number(adjustAmount) > 0 ? t('admin.accounts.credited') : t('admin.accounts.deducted'), amount: Math.abs(Number(adjustAmount)) }));
-                  setShowAdjust(false);
-                  setAdjustStudent('');
-                  setAdjustAmount('');
-                  setAdjustReason('');
-                  setAdjustNote('');
+                  setAdjustSaving(true);
+                  try {
+                    const account = await api.accounts.get(adjustStudentId);
+                    const centiCoins = Math.round(Number(adjustAmount) * 100);
+                    await api.accounts.adjust(account.id, centiCoins, adjustReason, adjustNote, adjustKeyRef.current);
+                    adjustKeyRef.current = newIdempotencyKey();
+                    toast.success(t('admin.accounts.adjustSuccess', { name: adjustStudent, action: Number(adjustAmount) > 0 ? t('admin.accounts.credited') : t('admin.accounts.deducted'), amount: Math.abs(Number(adjustAmount)) }));
+                    setShowAdjust(false);
+                    setAdjustStudent('');
+                    setAdjustStudentId('');
+                    setAdjustAmount('');
+                    setAdjustReason('');
+                    setAdjustNote('');
+                  } catch (err) {
+                    if (err instanceof ApiError) toast.error(mapApiError(err).message);
+                    else toast.error(t('common.unknownError'));
+                  } finally {
+                    setAdjustSaving(false);
+                  }
                 }}
-                className="flex-1 py-3 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90 text-sm"
+                className="flex-1 py-3 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90 text-sm disabled:opacity-50"
               >
                 {t('admin.accounts.confirmAdjust')}
               </button>

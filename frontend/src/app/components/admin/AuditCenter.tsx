@@ -1,26 +1,45 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, CheckCircle, XCircle, RotateCcw, AlertTriangle, Clock, ChevronDown, ChevronUp, Send } from 'lucide-react';
 import { GRADE_LABEL_KEYS } from '../../mock/data';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
+import { handleMutationError } from '../../api/useFieldErrors';
+import { usePermissions } from '../../App';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
+import { EvidenceLink } from '../EvidenceLink';
+import { type EvidenceFile } from '../../api/types';
 
 type SortKey = 'daysWaiting' | 'submittedAt' | 'durationMinutes';
 
+interface BulkFailure {
+  id: string;
+  name: string;
+  message: string;
+}
+
 export function AuditCenter() {
   const { t } = useTranslation();
+  const { hasPermission } = usePermissions();
+  const canDecide = hasPermission('reviews.decide');
   const [filterGrade, setFilterGrade] = useState('all');
   const [showAnomaly, setShowAnomaly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('daysWaiting');
   const [sortDesc, setSortDesc] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // I3.3: the expanded row previously showed two hardcoded fake labels
+  // ("Service Confirmation" / "Activity Photos") no matter what evidence
+  // was actually uploaded — a reviewer had no way to see the real files.
+  const [expandedEvidence, setExpandedEvidence] = useState<EvidenceFile[]>([]);
+  const [expandedEvidenceLoading, setExpandedEvidenceLoading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [decisionModal, setDecisionModal] = useState<{ id: string; action: 'approve' | 'return' | 'reject' } | null>(null);
   const [decisionComment, setDecisionComment] = useState('');
   const [decisionReason, setDecisionReason] = useState('');
+  const [bulkFailures, setBulkFailures] = useState<BulkFailure[]>([]);
 
   const { items, page, loading, error, params, setPage, setSearch, setFilter, refetch } = usePagedApi(api.reviewQueue.list, {});
 
@@ -46,6 +65,19 @@ export function AuditCenter() {
     else { setSortKey(key); setSortDesc(true); }
   };
 
+  useEffect(() => {
+    if (!expandedId) { setExpandedEvidence([]); return; }
+    const item = items.find(i => i.id === expandedId);
+    const recordId = item?.serviceRecordId ?? expandedId;
+    let cancelled = false;
+    setExpandedEvidenceLoading(true);
+    api.serviceRecords.get(recordId)
+      .then(record => { if (!cancelled) setExpandedEvidence(record.evidenceFiles); })
+      .catch(() => { if (!cancelled) setExpandedEvidence([]); })
+      .finally(() => { if (!cancelled) setExpandedEvidenceLoading(false); });
+    return () => { cancelled = true; };
+  }, [expandedId, items]);
+
   const toggleSelect = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -61,18 +93,56 @@ export function AuditCenter() {
     setDecisionReason('');
   };
 
-  const submitDecision = () => {
+  const decisionKeyRef = useRef(newIdempotencyKey());
+
+  const submitDecision = async () => {
     if (!decisionModal) return;
     const { id, action } = decisionModal;
-    const actionLabels: Record<string, string> = { approve: t('admin.audit.approved'), return: t('admin.audit.returned'), reject: t('admin.audit.rejected') };
-    toast.success(t('admin.audit.recordDecision', { action: actionLabels[action] }));
-    setDecisionModal(null);
-    setExpandedId(null);
-    refetch();
+    const item = items.find(i => i.id === id);
+    try {
+      const record = await api.reviewQueue.decide(
+        item?.serviceRecordId ?? id,
+        action,
+        decisionComment || undefined,
+        decisionReason || undefined,
+        item?.recordVersion,
+        decisionKeyRef.current,
+      );
+      decisionKeyRef.current = newIdempotencyKey();
+      if (action === 'approve' && record.creditedUnits != null) {
+        toast.success(`Approved — credited ${record.creditedUnits} units`);
+      } else {
+        const actionLabels: Record<string, string> = { approve: t('admin.audit.approved'), return: t('admin.audit.returned'), reject: t('admin.audit.rejected') };
+        toast.success(t('admin.audit.recordDecision', { action: actionLabels[action] }));
+      }
+      setDecisionModal(null);
+      setExpandedId(null);
+      refetch();
+    } catch (err) {
+      handleMutationError(err, { refetch, fallbackMessage: t('common.unknownError') });
+    }
   };
 
-  const bulkApprove = () => {
-    toast.success(t('admin.audit.batchApproved', { count: selected.size }));
+  const bulkApprove = async () => {
+    let succeeded = 0;
+    const failures: BulkFailure[] = [];
+    for (const id of selected) {
+      const item = items.find(i => i.id === id);
+      try {
+        const key = newIdempotencyKey();
+        await api.reviewQueue.decide(item?.serviceRecordId ?? id, 'approve', undefined, 'BATCH_APPROVE', item?.recordVersion, key);
+        succeeded++;
+      } catch (err) {
+        const message = err instanceof ApiError ? mapApiError(err).message : t('common.unknownError');
+        failures.push({ id, name: item?.studentName ?? id, message });
+      }
+    }
+    setBulkFailures(failures);
+    if (failures.length === 0) {
+      toast.success(t('admin.audit.batchApproved', { count: succeeded }));
+    } else {
+      toast.warning(`${succeeded} approved, ${failures.length} failed`);
+    }
     setSelected(new Set());
     refetch();
   };
@@ -87,7 +157,7 @@ export function AuditCenter() {
           <h1 className="text-foreground">{t('admin.audit.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('admin.audit.pendingCount', { count: page?.totalItems ?? items.length })}</p>
         </div>
-        {selected.size > 0 && (
+        {canDecide && selected.size > 0 && (
           <button onClick={bulkApprove}
             className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-xl text-sm hover:bg-green-700 transition-colors">
             <CheckCircle className="w-4 h-4" />
@@ -95,6 +165,17 @@ export function AuditCenter() {
           </button>
         )}
       </div>
+
+      {bulkFailures.length > 0 && (
+        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-3 text-sm">
+          <p className="text-orange-800 dark:text-orange-200 font-medium mb-1">{t('admin.audit.batchFailedTitle', { defaultValue: 'Some approvals failed' })}</p>
+          <ul className="text-xs text-orange-700 dark:text-orange-300 space-y-0.5">
+            {bulkFailures.map(f => (
+              <li key={f.id}>{f.name}: {f.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Filters row */}
       <div className="flex flex-wrap gap-2">
@@ -198,20 +279,22 @@ export function AuditCenter() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-1 justify-end">
-                          <button onClick={() => handleDecision(item.id, 'return')}
-                            className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1">
-                            <RotateCcw className="w-3 h-3" /> {t('admin.audit.return')}
-                          </button>
-                          <button onClick={() => handleDecision(item.id, 'reject')}
-                            className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1">
-                            <XCircle className="w-3 h-3" /> {t('admin.audit.reject')}
-                          </button>
-                          <button onClick={() => handleDecision(item.id, 'approve')}
-                            className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-green-50 hover:text-green-600 hover:border-green-300 dark:hover:bg-green-900/20 transition-colors flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3" /> {t('admin.audit.approve')}
-                          </button>
-                        </div>
+                        {canDecide ? (
+                          <div className="flex gap-1 justify-end">
+                            <button onClick={() => handleDecision(item.id, 'return')}
+                              className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1">
+                              <RotateCcw className="w-3 h-3" /> {t('admin.audit.return')}
+                            </button>
+                            <button onClick={() => handleDecision(item.id, 'reject')}
+                              className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1">
+                              <XCircle className="w-3 h-3" /> {t('admin.audit.reject')}
+                            </button>
+                            <button onClick={() => handleDecision(item.id, 'approve')}
+                              className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-green-50 hover:text-green-600 hover:border-green-300 dark:hover:bg-green-900/20 transition-colors flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" /> {t('admin.audit.approve')}
+                            </button>
+                          </div>
+                        ) : null}
                       </td>
                     </tr>
                   );
@@ -265,8 +348,15 @@ export function AuditCenter() {
                             <p>{t('admin.audit.organization')}: {item.organizationName}</p>
                             <p>{t('admin.audit.submitted')}: {item.submittedAt.slice(0, 16).replace('T', ' ')}</p>
                             <div className="flex gap-2 flex-wrap mt-2">
-                              <span className="px-2 py-1 bg-muted rounded text-foreground">📄 {t('admin.audit.serviceConfirmation')}</span>
-                              <span className="px-2 py-1 bg-muted rounded text-foreground">🖼 {t('admin.audit.activityPhotos')}</span>
+                              {expandedEvidenceLoading && <span className="text-muted-foreground">{t('common.loading')}</span>}
+                              {!expandedEvidenceLoading && expandedEvidence.length === 0 && (
+                                <span className="text-muted-foreground">{t('admin.audit.noEvidence')}</span>
+                              )}
+                              {expandedEvidence.map(f => (
+                                <span key={f.id} className="px-2 py-1 bg-muted rounded">
+                                  <EvidenceLink fileId={f.id} name={f.name} />
+                                </span>
+                              ))}
                             </div>
                           </div>
                         )}
@@ -276,18 +366,22 @@ export function AuditCenter() {
                             {isExpanded ? <><ChevronUp className="w-3 h-3" /> {t('admin.audit.collapse')}</> : <><ChevronDown className="w-3 h-3" /> {t('admin.audit.viewMaterials')}</>}
                           </button>
                           <div className="flex gap-2">
-                            <button onClick={() => handleDecision(item.id, 'return')}
-                              className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1">
-                              <RotateCcw className="w-3 h-3" /> {t('admin.audit.return')}
-                            </button>
-                            <button onClick={() => handleDecision(item.id, 'reject')}
-                              className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1">
-                              <XCircle className="w-3 h-3" /> {t('admin.audit.reject')}
-                            </button>
-                            <button onClick={() => handleDecision(item.id, 'approve')}
-                              className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-green-50 hover:text-green-600 hover:border-green-300 dark:hover:bg-green-900/20 transition-colors flex items-center gap-1">
-                              <CheckCircle className="w-3 h-3" /> {t('admin.audit.approve')}
-                            </button>
+                            {canDecide && (
+                              <>
+                                <button onClick={() => handleDecision(item.id, 'return')}
+                                  className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1">
+                                  <RotateCcw className="w-3 h-3" /> {t('admin.audit.return')}
+                                </button>
+                                <button onClick={() => handleDecision(item.id, 'reject')}
+                                  className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1">
+                                  <XCircle className="w-3 h-3" /> {t('admin.audit.reject')}
+                                </button>
+                                <button onClick={() => handleDecision(item.id, 'approve')}
+                                  className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-green-50 hover:text-green-600 hover:border-green-300 dark:hover:bg-green-900/20 transition-colors flex items-center gap-1">
+                                  <CheckCircle className="w-3 h-3" /> {t('admin.audit.approve')}
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>

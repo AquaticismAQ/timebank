@@ -18,6 +18,7 @@ import {
 } from '../mock/data';
 import type {
   User,
+  Role,
   Project,
   Application,
   ServiceRecord,
@@ -27,17 +28,22 @@ import type {
   Notification,
   Student,
   ReviewQueueItem,
+  Case,
   Organization,
   AdminStats,
   ReportData,
   EventProposal,
   SchoolInfo,
   MeResponse,
+  EvidenceFile,
+  FileMetadata,
 } from './types';
-import { http, buildListQuery, getWithEtag, type PageResult } from './http';
+import { http, ApiError, buildListQuery, getWithEtag, withVersion, type PageResult } from './http';
 import { isRealDomain } from './config';
 import { paginateMock, toBackendEnum, fromBackendEnum, type ListParams } from '../lib/pagination';
+import { localDateTimeToISO } from '../lib/datetime';
 import i18n from '../../i18n';
+import { toast } from 'sonner';
 
 const DELAY = 300;
 
@@ -93,6 +99,24 @@ function fromAccountDto(dto: AccountDtoWire): Account {
   };
 }
 
+/**
+ * The proposal form only collects a single date (`plannedDate`, no time
+ * fields) but `CreateProposalRequest`/`UpdateProposalRequest` require
+ * distinct `plannedStartAt`/`plannedEndAt` instants, with the backend
+ * rejecting `plannedEndAt <= plannedStartAt` (`ProposalServiceImpl`'s
+ * INVALID_RANGE check). Sending `plannedDate` verbatim for both — as bare
+ * date strings, not even ISO instants — guaranteed a validation failure on
+ * every single proposal create/update against the real backend (found live,
+ * not by inspection). Defaults to a 9am local start and derives the end
+ * from the proposal's own duration estimate.
+ */
+function plannedStartEnd(plannedDate: string | undefined, durationMinutes: number): { plannedStartAt?: string; plannedEndAt?: string } {
+  if (!plannedDate) return {};
+  const plannedStartAt = localDateTimeToISO(plannedDate, '09:00');
+  const plannedEndAt = new Date(new Date(plannedStartAt).getTime() + Math.max(durationMinutes, 1) * 60000).toISOString();
+  return { plannedStartAt, plannedEndAt };
+}
+
 function categoryFromTemplateCode(templateCode: string): Notification['category'] {
   const code = templateCode.toUpperCase();
   if (code.includes('REVIEW')) return 'review';
@@ -116,6 +140,23 @@ function fromStudentDto(dto: StudentListItemDtoWire): Student {
     joinedAt: dto.joinedAt ?? '',
     guardianName: dto.guardianName,
     guardianContact: dto.guardianContact,
+    version: dto.version,
+  };
+}
+
+function meResponseToUser(me: MeResponse, username: string): User {
+  const roleMap: Record<string, Role> = { admin: 'admin', teacher: 'teacher', student: 'student', sysadmin: 'admin' };
+  return {
+    id: me.user.id,
+    username,
+    password: '',
+    displayName: me.user.displayName,
+    roles: me.user.roles.map(r => roleMap[r.toLowerCase()] ?? 'admin') as Role[],
+    workspaces: me.workspaces,
+    email: '',
+    permissions: me.user.permissions,
+    preferredLanguage: me.preferredLanguage,
+    featureFlags: me.featureFlags,
   };
 }
 
@@ -134,15 +175,16 @@ export interface LoginResponse {
 export const api = {
   auth: {
     async login(username: string, password: string): Promise<LoginResponse> {
+      if (isRealDomain('auth')) {
+        await http.get<void>('/auth/csrf');
+        const me = await http.post<MeResponse>('/auth/login', { username, password });
+        const user: User = meResponseToUser(me, username);
+        return { user };
+      }
       const user = MOCK_USERS.find(u => u.username === username && u.password === password);
       if (!user) throw new Error('Invalid username or password');
       return delay({ user: clone(user) });
     },
-    // I0.7: the one real-branch call this phase proves the transport layer
-    // against (Docs/implementation/10-Integration-I0-ContractPrep.md, exit
-    // criteria). Real `/me`'s shape genuinely differs from the mock `User`
-    // (APIContract.md §2.2) — reconciling that for real consumers is I1-d1's
-    // job, not this phase's.
     async me(): Promise<User | MeResponse> {
       if (isRealDomain('auth')) {
         return http.get<MeResponse>('/me');
@@ -152,6 +194,21 @@ export const api = {
       throw new Error('Not logged in');
     },
     async logout(): Promise<void> {
+      if (isRealDomain('auth')) {
+        await http.post<void>('/auth/logout');
+        return;
+      }
+      return delay(undefined);
+    },
+    // I3.4: `PATCH /me/profile` — self-service fields only (displayName/
+    // email/preferredLanguage). `localStorage['timebank-lang']` stays as a
+    // cache for the pre-login paint only; once a real session exists this
+    // is the source of truth, read back via `/me` on next login.
+    async updateProfile(data: { displayName?: string; email?: string; preferredLanguage?: 'zh-CN' | 'en' }): Promise<void> {
+      if (isRealDomain('auth')) {
+        await http.patch<void>('/me/profile', data);
+        return;
+      }
       return delay(undefined);
     },
   },
@@ -192,6 +249,26 @@ export const api = {
       return delay(stampCategoryName(clone(p)));
     },
     async create(data: Partial<Project>): Promise<Project> {
+      if (isRealDomain('projects')) {
+        const body = {
+          title: data.title,
+          summary: data.summary,
+          description: data.description,
+          categoryId: data.categoryId,
+          organizationId: data.organizationId,
+          startAt: data.startAt,
+          endAt: data.endAt,
+          location: data.location,
+          capacity: data.capacity,
+          recognizedMinutes: data.recognizedMinutes,
+          eligibleGradeIds: data.eligibleGrades,
+          evidenceRequirements: data.evidenceRequirements,
+          registrationOpenAt: data.registrationOpenAt,
+          registrationCloseAt: data.registrationCloseAt,
+        };
+        const dto = await http.post<Project>('/projects', body);
+        return mapEnumFields(dto, ['status']);
+      }
       const categoryId = data.categoryId || 'cat_other';
       const p: Project = {
         id: `proj_${Date.now()}`,
@@ -222,18 +299,50 @@ export const api = {
       return delay(clone(p));
     },
     async update(id: string, data: Partial<Project>): Promise<Project> {
+      if (isRealDomain('projects')) {
+        const body = withVersion({
+          title: data.title,
+          summary: data.summary,
+          description: data.description,
+          categoryId: data.categoryId,
+          organizationId: data.organizationId,
+          startAt: data.startAt,
+          endAt: data.endAt,
+          location: data.location,
+          capacity: data.capacity,
+          recognizedMinutes: data.recognizedMinutes,
+          eligibleGradeIds: data.eligibleGrades,
+          evidenceRequirements: data.evidenceRequirements,
+          registrationOpenAt: data.registrationOpenAt,
+          registrationCloseAt: data.registrationCloseAt,
+        }, data.version!);
+        const dto = await http.patch<Project>(`/projects/${id}`, body);
+        return mapEnumFields(dto, ['status']);
+      }
       const p = MOCK_PROJECTS.find(p => p.id === id);
       if (!p) throw new Error('Project not found');
       Object.assign(p, data, { updatedAt: new Date().toISOString(), version: p.version + 1 });
       return delay(clone(p));
     },
-    async publish(id: string): Promise<Project> {
+    async publish(id: string, version?: number): Promise<Project> {
+      if (isRealDomain('projects')) {
+        const dto = await http.post<Project>(`/projects/${id}/publish`, { version });
+        return mapEnumFields(dto, ['status']);
+      }
       return this.update(id, { status: 'published' });
     },
-    async close(id: string): Promise<Project> {
+    async close(id: string, version?: number): Promise<Project> {
+      if (isRealDomain('projects')) {
+        const dto = await http.post<Project>(`/projects/${id}/close`, { version });
+        return mapEnumFields(dto, ['status']);
+      }
       return this.update(id, { status: 'closed' });
     },
-    async archive(id: string): Promise<Project> {
+    async archive(id: string, version?: number): Promise<Project> {
+      if (isRealDomain('projects')) {
+        const dto = await http.post<Project>(`/projects/${id}/archive`, { version });
+        return mapEnumFields(dto, ['status']);
+      }
       return this.update(id, { status: 'archived' });
     },
   },
@@ -284,6 +393,33 @@ export const api = {
       return delay(stampCategoryName(clone(p)));
     },
     async create(data: Partial<EventProposal>): Promise<EventProposal> {
+      if (isRealDomain('eventProposals')) {
+        const proposedRecognizedMinutes = data.suggestedMinutes || data.estimatedDurationMinutes || 60;
+        const body = {
+          title: data.title,
+          objective: data.goal,
+          description: data.description,
+          expectedOutcome: data.expectedOutcomes,
+          categoryId: data.categoryId,
+          ...plannedStartEnd(data.plannedDate, proposedRecognizedMinutes),
+          location: data.location,
+          format: data.activityFormat,
+          targetParticipants: data.targetParticipants,
+          capacity: data.estimatedCapacity,
+          volunteerTasks: data.volunteerTasks,
+          proposedSupervisorId: data.mentorTeacher,
+          organizationId: data.partnerOrg,
+          externalContact: data.contactInfo,
+          safetyPlan: data.riskMeasures,
+          resourceNeeds: [data.materialNeeds, data.budgetNeeds].filter(Boolean).join('\n'),
+          recruitmentPlan: data.recruitmentMethod,
+          proposedRecognizedMinutes,
+          evidencePlan: data.proofMethod,
+          coOrganizerStudentIds: [],
+        };
+        const dto = await http.post<EventProposal>('/event-proposals', body);
+        return mapEnumFields(dto, ['status']);
+      }
       const categoryId = data.categoryId || 'cat_other';
       const p: EventProposal = {
         id: `prop_${Date.now()}`,
@@ -323,12 +459,43 @@ export const api = {
       return delay(clone(p));
     },
     async update(id: string, data: Partial<EventProposal>): Promise<EventProposal> {
+      if (isRealDomain('eventProposals')) {
+        const proposedRecognizedMinutes = data.suggestedMinutes || data.estimatedDurationMinutes;
+        const body = withVersion({
+          title: data.title,
+          objective: data.goal,
+          description: data.description,
+          expectedOutcome: data.expectedOutcomes,
+          categoryId: data.categoryId,
+          ...plannedStartEnd(data.plannedDate, proposedRecognizedMinutes || 60),
+          location: data.location,
+          format: data.activityFormat,
+          targetParticipants: data.targetParticipants,
+          capacity: data.estimatedCapacity,
+          volunteerTasks: data.volunteerTasks,
+          proposedSupervisorId: data.mentorTeacher,
+          organizationId: data.partnerOrg,
+          externalContact: data.contactInfo,
+          safetyPlan: data.riskMeasures,
+          resourceNeeds: [data.materialNeeds, data.budgetNeeds].filter(Boolean).join('\n'),
+          recruitmentPlan: data.recruitmentMethod,
+          proposedRecognizedMinutes,
+          evidencePlan: data.proofMethod,
+          coOrganizerStudentIds: [],
+        }, data.version ?? 0);
+        const dto = await http.patch<EventProposal>(`/event-proposals/${id}`, body);
+        return mapEnumFields(dto, ['status']);
+      }
       const p = MOCK_PROPOSALS.find(p => p.id === id);
       if (!p) throw new Error('Proposal not found');
       Object.assign(p, data, { updatedAt: new Date().toISOString() });
       return delay(clone(p));
     },
-    async submit(id: string): Promise<EventProposal> {
+    async submit(id: string, idempotencyKey?: string): Promise<EventProposal> {
+      if (isRealDomain('eventProposals')) {
+        const dto = await http.post<EventProposal>(`/event-proposals/${id}/submit`, undefined, idempotencyKey);
+        return mapEnumFields(dto, ['status']);
+      }
       const p = MOCK_PROPOSALS.find(p => p.id === id);
       if (!p) throw new Error('Proposal not found');
       p.status = 'submitted';
@@ -338,16 +505,46 @@ export const api = {
       return delay(clone(p));
     },
     async withdraw(id: string): Promise<EventProposal> {
+      if (isRealDomain('eventProposals')) {
+        const dto = await http.post<EventProposal>(`/event-proposals/${id}/withdraw`);
+        return mapEnumFields(dto, ['status']);
+      }
       const p = MOCK_PROPOSALS.find(p => p.id === id);
       if (!p) throw new Error('Proposal not found');
       p.status = 'withdrawn';
       p.updatedAt = new Date().toISOString();
       return delay(clone(p));
     },
-    async review(id: string, decision: string, comment?: string): Promise<EventProposal> {
+    async review(id: string, decision: string, comment?: string, reasonCode?: string, proposalVersion?: number, idempotencyKey?: string): Promise<EventProposal> {
+      if (isRealDomain('eventProposals')) {
+        const decisionMap: Record<string, string> = { approve: 'APPROVE', reject: 'REJECT', requestChanges: 'REQUEST_CHANGES', recommendApproval: 'RECOMMEND_APPROVAL' };
+        const body = {
+          decision: decisionMap[decision] ?? toBackendEnum(decision),
+          reasonCode: reasonCode || decision.toUpperCase(),
+          comment,
+          proposalVersion: proposalVersion!,
+        };
+        type ProposalReviewDto = EventProposal & { approvedProjectId?: string };
+        const dto = await http.post<ProposalReviewDto>(`/event-proposals/${id}/reviews`, body, idempotencyKey);
+        const mapped = mapEnumFields({
+          ...dto,
+          linkedProjectId: dto.approvedProjectId ?? dto.linkedProjectId,
+        }, ['status']);
+        if (decision === 'approve') {
+          const projectId = dto.approvedProjectId ?? mapped.linkedProjectId;
+          if (projectId) {
+            toast.success(`Approved — project draft ${projectId} created`);
+          }
+        }
+        return mapped;
+      }
       const p = MOCK_PROPOSALS.find(p => p.id === id);
       if (!p) throw new Error('Proposal not found');
-      if (decision === 'approve') p.status = 'approved';
+      if (decision === 'approve') {
+        p.status = 'approved';
+        p.linkedProjectId = p.linkedProjectId ?? `proj_${Date.now()}`;
+        toast.success(`Approved — project draft ${p.linkedProjectId} created`);
+      }
       else if (decision === 'reject') p.status = 'rejected';
       else if (decision === 'requestChanges') { p.status = 'changesRequested'; p.revisionCount++; }
       p.feedback = comment;
@@ -366,18 +563,22 @@ export const api = {
         return { data: page.data.map(a => mapEnumFields(a, ['status'])), page: page.page };
       }
       return paginateMock(clone(MOCK_APPLICATIONS), params, {
-        filters: { status: (a, v) => a.status === v },
+        filters: { status: (a, v) => a.status === v, projectId: (a, v) => a.projectId === v },
       });
     },
-    async create(projectId: string, studentId: string, studentName: string): Promise<Application> {
+    async create(projectId: string, _studentId?: string, _studentName?: string, note?: string): Promise<Application> {
+      if (isRealDomain('applications')) {
+        const dto = await http.post<Application>(`/projects/${projectId}/applications`, note ? { note } : {});
+        return mapEnumFields(dto, ['status']);
+      }
       const proj = MOCK_PROJECTS.find(p => p.id === projectId);
       if (!proj) throw new Error('项目不存在');
       const app: Application = {
         id: `app_${Date.now()}`,
         projectId,
         projectTitle: proj.title,
-        studentId,
-        studentName,
+        studentId: _studentId || '',
+        studentName: _studentName || '',
         status: 'pending',
         appliedAt: new Date().toISOString(),
       };
@@ -386,6 +587,10 @@ export const api = {
       return delay(clone(app));
     },
     async cancel(id: string): Promise<Application> {
+      if (isRealDomain('applications')) {
+        const dto = await http.post<Application>(`/applications/${id}/cancel`);
+        return mapEnumFields(dto, ['status']);
+      }
       const app = MOCK_APPLICATIONS.find(a => a.id === id);
       if (!app) throw new Error('Application not found');
       app.status = 'cancelled';
@@ -393,11 +598,39 @@ export const api = {
       return delay(clone(app));
     },
     async confirm(id: string): Promise<Application> {
+      if (isRealDomain('applications')) {
+        const dto = await http.post<Application>(`/applications/${id}/confirm`);
+        return mapEnumFields(dto, ['status']);
+      }
       const app = MOCK_APPLICATIONS.find(a => a.id === id);
       if (!app) throw new Error('Application not found');
       app.status = 'confirmed';
       app.confirmedAt = new Date().toISOString();
       return delay(clone(app));
+    },
+    async reject(id: string): Promise<Application> {
+      if (isRealDomain('applications')) {
+        const dto = await http.post<Application>(`/applications/${id}/reject`);
+        return mapEnumFields(dto, ['status']);
+      }
+      const app = MOCK_APPLICATIONS.find(a => a.id === id);
+      if (!app) throw new Error('Application not found');
+      app.status = 'rejected';
+      return delay(clone(app));
+    },
+    // `action` is the backend's own bulk-action vocabulary (confirm/reject/
+    // markComplete — cn.timebank.enrollment.application
+    // .EnrollmentBulkActionTransaction), not the frontend's camelCase enum
+    // style, since it's a direct passthrough with no other mapping needed.
+    async bulkActions(ids: string[], action: 'confirm' | 'reject' | 'markComplete', reasonCode?: string, comment?: string): Promise<{ id: string; success: boolean; error?: string }[]> {
+      if (isRealDomain('applications')) {
+        return http.post(`/applications/bulk-actions`, { ids, action, reasonCode, comment });
+      }
+      return delay(ids.map(id => {
+        const app = MOCK_APPLICATIONS.find(a => a.id === id);
+        if (app) app.status = action === 'confirm' ? 'confirmed' : action === 'reject' ? 'rejected' : 'completed';
+        return { id, success: !!app, error: app ? undefined : 'Application not found' };
+      }));
     },
   },
 
@@ -427,11 +660,48 @@ export const api = {
       });
     },
     async get(id: string): Promise<ServiceRecord> {
+      if (isRealDomain('serviceRecords')) {
+        const dto = await http.get<ServiceRecord & { evidenceFileIds?: string[] }>(`/service-records/${id}`);
+        // I3.3: the detail view is exactly where evidence needs real
+        // names/ids to be viewable (AuditCenter's expanded row previously
+        // showed two hardcoded fake labels — "📄 Service Confirmation" /
+        // "🖼 Activity Photos" — regardless of what was actually uploaded,
+        // since nothing here ever resolved the real evidenceFileIds).
+        const files = await Promise.all(
+          (dto.evidenceFileIds ?? []).map(fileId =>
+            api.files.get(fileId).then(
+              meta => ({ id: fileId, name: meta.filename, type: meta.mimeType, size: meta.sizeBytes, url: '', uploadedAt: meta.createdAt, status: meta.status }),
+              () => ({ id: fileId, name: fileId, type: '', size: 0, url: '', uploadedAt: '' }),
+            ),
+          ),
+        );
+        return fromServiceRecordDto({ ...dto, evidenceFiles: files });
+      }
       const r = MOCK_RECORDS.find(r => r.id === id);
       if (!r) throw new Error('Record not found');
       return delay(stampServiceCategoryName(clone(r)));
     },
     async create(data: Partial<ServiceRecord>): Promise<ServiceRecord> {
+      if (isRealDomain('serviceRecords')) {
+        const body = {
+          sourceType: toBackendEnum(data.sourceType || 'self'),
+          projectId: data.projectId,
+          organizationId: data.organizationId,
+          organizationName: data.organizationName,
+          serviceDate: data.serviceDate,
+          startAt: data.startAt,
+          endAt: data.endAt,
+          location: data.location,
+          serviceCategoryId: data.serviceCategoryId,
+          description: data.description,
+          supervisorName: data.supervisorName,
+          supervisorContact: data.supervisorContact,
+          evidenceFileIds: (data.evidenceFiles ?? []).map(f => f.id),
+          includesTravelTime: false,
+        };
+        const dto = await http.post<ServiceRecord & { evidenceFileIds?: string[] }>('/service-records', body);
+        return fromServiceRecordDto(dto);
+      }
       const serviceCategoryId = data.serviceCategoryId || 'cat_other';
       const r: ServiceRecord = {
         id: `rec_${Date.now()}`,
@@ -462,21 +732,59 @@ export const api = {
       return delay(clone(r));
     },
     async update(id: string, data: Partial<ServiceRecord>): Promise<ServiceRecord> {
+      if (isRealDomain('serviceRecords')) {
+        const body = withVersion({
+          projectId: data.projectId,
+          organizationId: data.organizationId,
+          organizationName: data.organizationName,
+          serviceDate: data.serviceDate,
+          startAt: data.startAt,
+          endAt: data.endAt,
+          location: data.location,
+          serviceCategoryId: data.serviceCategoryId,
+          description: data.description,
+          supervisorName: data.supervisorName,
+          supervisorContact: data.supervisorContact,
+          evidenceFileIds: data.evidenceFiles?.map(f => f.id),
+          includesTravelTime: data.includesTravelTime,
+        }, data.version!);
+        const dto = await http.patch<ServiceRecord & { evidenceFileIds?: string[] }>(`/service-records/${id}`, body);
+        return fromServiceRecordDto(dto);
+      }
       const r = MOCK_RECORDS.find(r => r.id === id);
       if (!r) throw new Error('Record not found');
       Object.assign(r, data, { updatedAt: new Date().toISOString(), version: r.version + 1 });
       return delay(clone(r));
     },
     async delete(id: string): Promise<void> {
+      if (isRealDomain('serviceRecords')) {
+        await http.delete<void>(`/service-records/${id}`);
+        return;
+      }
       const idx = MOCK_RECORDS.findIndex(r => r.id === id);
       if (idx >= 0) MOCK_RECORDS.splice(idx, 1);
       return delay(undefined);
     },
-    async submit(id: string): Promise<ServiceRecord> {
+    async submit(id: string, idempotencyKey?: string): Promise<ServiceRecord> {
+      if (isRealDomain('serviceRecords')) {
+        const dto = await http.post<ServiceRecord & { evidenceFileIds?: string[] }>(`/service-records/${id}/submit`, undefined, idempotencyKey);
+        return fromServiceRecordDto(dto);
+      }
       const r = MOCK_RECORDS.find(r => r.id === id);
       if (!r) throw new Error('Record not found');
       r.status = 'submitted';
       r.submittedAt = new Date().toISOString();
+      r.updatedAt = new Date().toISOString();
+      return delay(clone(r));
+    },
+    async withdraw(id: string): Promise<ServiceRecord> {
+      if (isRealDomain('serviceRecords')) {
+        const dto = await http.post<ServiceRecord & { evidenceFileIds?: string[] }>(`/service-records/${id}/withdraw`);
+        return fromServiceRecordDto(dto);
+      }
+      const r = MOCK_RECORDS.find(r => r.id === id);
+      if (!r) throw new Error('Record not found');
+      r.status = 'draft';
       r.updatedAt = new Date().toISOString();
       return delay(clone(r));
     },
@@ -516,14 +824,25 @@ export const api = {
       const avgDays = Math.round(MOCK_REVIEW_QUEUE.reduce((s, r) => s + r.daysWaiting, 0) / pending * 10) / 10;
       return delay({ pending, urgent, avgDays });
     },
-    async decide(recordId: string, decision: string, comment?: string): Promise<ServiceRecord> {
+    async decide(recordId: string, decision: string, comment?: string, reasonCode?: string, recordVersion?: number, idempotencyKey?: string): Promise<ServiceRecord> {
+      if (isRealDomain('reviewQueue')) {
+        const decisionMap: Record<string, string> = { approve: 'APPROVE', return: 'RETURN_FOR_CHANGES', returnForChanges: 'RETURN_FOR_CHANGES', reject: 'REJECT', escalate: 'ESCALATE' };
+        const body = {
+          decision: decisionMap[decision] ?? toBackendEnum(decision),
+          reasonCode: reasonCode || decision.toUpperCase(),
+          comment,
+          recordVersion: recordVersion!,
+        };
+        const dto = await http.post<ServiceRecord & { evidenceFileIds?: string[] }>(`/service-records/${recordId}/reviews`, body, idempotencyKey);
+        return fromServiceRecordDto(dto);
+      }
       const r = MOCK_RECORDS.find(r => r.id === recordId);
       if (!r) throw new Error('Record not found');
       if (decision === 'approve') {
         r.status = 'approved';
         r.reviewSummary = comment || 'Approved';
         r.reviewedAt = new Date().toISOString();
-      } else if (decision === 'returnForChanges') {
+      } else if (decision === 'returnForChanges' || decision === 'return') {
         r.status = 'returned';
         r.returnReason = comment || 'Please provide additional documentation';
         r.reviewedAt = new Date().toISOString();
@@ -540,6 +859,41 @@ export const api = {
   },
 
   accounts: {
+    async list(params?: ListParams): Promise<PageResult<Account>> {
+      if (isRealDomain('accounts')) {
+        const page = await http.getPage<AccountDtoWire>('/accounts', buildListQuery(params));
+        return { data: page.data.map(fromAccountDto), page: page.page };
+      }
+      return paginateMock(clone(MOCK_STUDENTS).map(s => ({ id: 'acct_' + s.id, studentId: s.id, balance: s.timeCoinBalance ?? 0, totalEarned: s.timeCoinBalance ?? 0, totalRedeemed: 0, borrowed: 0, frozen: 0, updatedAt: new Date().toISOString() })), params, {});
+    },
+    async adjust(accountId: string, amount: number, reasonCode: string, memo?: string, idempotencyKey?: string): Promise<void> {
+      if (isRealDomain('accounts')) {
+        await http.post<void>(`/accounts/${accountId}/adjustments`, { amount, reasonCode, memo }, idempotencyKey);
+        return;
+      }
+      return delay(undefined);
+    },
+    async reverse(transactionId: string, reasonCode: string, memo?: string, idempotencyKey?: string): Promise<void> {
+      if (isRealDomain('accounts')) {
+        await http.post<void>(`/account-transactions/${transactionId}/reverse`, { reasonCode, memo }, idempotencyKey);
+        return;
+      }
+      return delay(undefined);
+    },
+    async freeze(accountId: string, reasonCode: string, memo?: string): Promise<void> {
+      if (isRealDomain('accounts')) {
+        await http.post<void>(`/accounts/${accountId}/freeze`, { reasonCode, memo });
+        return;
+      }
+      return delay(undefined);
+    },
+    async unfreeze(accountId: string, reasonCode: string, memo?: string): Promise<void> {
+      if (isRealDomain('accounts')) {
+        await http.post<void>(`/accounts/${accountId}/unfreeze`, { reasonCode, memo });
+        return;
+      }
+      return delay(undefined);
+    },
     // Contract §13.1: keyed by account id server-side, resolved here via
     // filter[studentId] then the returned accountId — not a student-scoped
     // account endpoint.
@@ -620,6 +974,13 @@ export const api = {
       const s = MOCK_STUDENTS.find(s => s.id === id);
       if (!s) throw new Error('Student not found');
       return delay(clone(s));
+    },
+    async update(id: string, data: { displayName?: string; email?: string; gradeId?: string; classId?: string; guardianName?: string; guardianContact?: string; version: number }): Promise<Student> {
+      if (isRealDomain('students')) {
+        const dto = await http.patch<StudentListItemDtoWire>(`/students/${id}`, data);
+        return fromStudentDto(dto);
+      }
+      return delay({} as Student);
     },
     async progress(id: string): Promise<StudentProgress> {
       if (isRealDomain('students')) {
@@ -709,11 +1070,19 @@ export const api = {
       return delay({ count, etag });
     },
     async markRead(id: string): Promise<void> {
+      if (isRealDomain('notifications')) {
+        await http.patch<void>(`/notifications/${id}`);
+        return;
+      }
       const n = MOCK_NOTIFICATIONS.find(n => n.id === id);
       if (n) n.isRead = true;
       return delay(undefined);
     },
     async markAllRead(): Promise<void> {
+      if (isRealDomain('notifications')) {
+        await http.post<void>('/notifications/read-all');
+        return;
+      }
       MOCK_NOTIFICATIONS.forEach(n => { n.isRead = true; });
       return delay(undefined);
     },
@@ -832,9 +1201,290 @@ export const api = {
     },
   },
 
-  users: {
-    async list(): Promise<User[]> {
-      return delay(clone(MOCK_USERS));
+  cases: {
+    async list(params?: ListParams): Promise<PageResult<Case>> {
+      if (isRealDomain('cases')) {
+        const filter = { ...params?.filter };
+        if (filter.status) filter.status = toBackendEnum(filter.status);
+        const page = await http.getPage<Case>('/cases', buildListQuery({ ...params, filter }));
+        return { data: page.data.map(c => mapEnumFields(c, ['status', 'type'])), page: page.page };
+      }
+      return paginateMock<Case>([], params, {});
+    },
+    async get(id: string): Promise<Case> {
+      if (isRealDomain('cases')) {
+        const dto = await http.get<Case>(`/cases/${id}`);
+        return mapEnumFields(dto, ['status', 'type']);
+      }
+      throw new Error('Case not found');
+    },
+    async create(data: { studentId?: string; type: string; subjectType?: string; subjectId?: string; title: string; description?: string; requestedAmountCentiCoins?: number; reasonCode: string }): Promise<Case> {
+      if (isRealDomain('cases')) {
+        const body = { ...data, type: toBackendEnum(data.type) };
+        const dto = await http.post<Case>('/cases', body);
+        return mapEnumFields(dto, ['status', 'type']);
+      }
+      throw new Error('Cases are not available in mock mode');
+    },
+    async update(id: string, data: { title?: string; description?: string; requestedAmountCentiCoins?: number; reasonCode?: string; version: number }): Promise<Case> {
+      if (isRealDomain('cases')) {
+        const dto = await http.patch<Case>(`/cases/${id}`, data);
+        return mapEnumFields(dto, ['status', 'type']);
+      }
+      throw new Error('Cases are not available in mock mode');
+    },
+    async submit(id: string, idempotencyKey?: string): Promise<Case> {
+      if (isRealDomain('cases')) {
+        const dto = await http.post<Case>(`/cases/${id}/submit`, undefined, idempotencyKey);
+        return mapEnumFields(dto, ['status', 'type']);
+      }
+      throw new Error('Cases are not available in mock mode');
+    },
+    // Decision vocabulary is CaseDecision (contract §4.8) — distinct from ReviewQueue's Decision enum,
+    // not reused even though 'reject' overlaps, since the two case shapes diverge (RESOLVE/REQUEST_INFORMATION here).
+    async decide(id: string, decision: 'resolve' | 'requestInformation' | 'reject', reasonCode: string, comment: string | undefined, caseVersion: number, idempotencyKey?: string): Promise<Case> {
+      if (isRealDomain('cases')) {
+        const body = { decision: toBackendEnum(decision), reasonCode, comment, caseVersion };
+        const dto = await http.post<Case>(`/cases/${id}/decisions`, body, idempotencyKey);
+        return mapEnumFields(dto, ['status', 'type']);
+      }
+      throw new Error('Cases are not available in mock mode');
+    },
+    async timeline(id: string): Promise<{ type: string; description: string; actorId: string; occurredAt: string }[]> {
+      if (isRealDomain('cases')) {
+        return http.get(`/cases/${id}/timeline`);
+      }
+      return delay([]);
     },
   },
+
+  files: {
+    // Real UploadIntentDto is (fileId, uploadUrl, uploadHeaders, expiresAt)
+    // — no `id` field at all. Never had a UI caller until this pass, so
+    // this mismatch (every upload would PUT to `/files/undefined/content`)
+    // shipped silently; caught live driving the first real evidence-upload
+    // flow through the browser, not by inspection.
+    async uploadIntent(filename: string, mimeType: string, sizeBytes: number, purpose: string): Promise<{ fileId: string; uploadUrl: string }> {
+      if (isRealDomain('files')) {
+        return http.post<{ fileId: string; uploadUrl: string }>('/files/upload-intents', { filename, mimeType, sizeBytes, purpose });
+      }
+      return delay({ fileId: `file_${Date.now()}`, uploadUrl: '' });
+    },
+    async uploadContent(fileId: string, file: File): Promise<void> {
+      if (isRealDomain('files')) {
+        // Raw fetch (not http.ts's JSON-only wrapper, since this sends a
+        // binary body) — needs the same manual CSRF attachment
+        // imports.create() already uses for its own raw multipart fetch;
+        // PUT is state-changing and 403s without it.
+        const csrfToken = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1];
+        const headers: Record<string, string> = { 'Content-Type': file.type };
+        if (csrfToken) headers['X-XSRF-TOKEN'] = decodeURIComponent(csrfToken);
+        const response = await fetch(`/api/v1/files/${fileId}/content`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers,
+          body: file,
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          const parsed = text ? JSON.parse(text) : {};
+          throw new ApiError(parsed.error ?? { code: 'UPLOAD_FAILED', message: 'File upload failed', requestId: '' });
+        }
+        return;
+      }
+      return delay(undefined);
+    },
+    // `complete()`'s real response is a FileMetadataDto carrying the scan
+    // outcome (status READY/REJECTED, rejectionReason) — previously
+    // discarded (`Promise<void>`), so a scan-rejected file (bad magic
+    // bytes, size mismatch) looked identical to a successful upload right
+    // up until the record's own submit failed with no explanation (I3.2).
+    async complete(fileId: string): Promise<FileMetadata> {
+      if (isRealDomain('files')) {
+        const dto = await http.post<FileMetadata>(`/files/${fileId}/complete`);
+        return mapEnumFields(dto, ['status']);
+      }
+      return delay({ id: fileId, filename: '', mimeType: '', sizeBytes: 0, status: 'ready' as const, uploaderId: '', purpose: '', createdAt: '', updatedAt: '' });
+    },
+    async get(fileId: string): Promise<FileMetadata> {
+      if (isRealDomain('files')) {
+        const dto = await http.get<FileMetadata>(`/files/${fileId}`);
+        return mapEnumFields(dto, ['status']);
+      }
+      throw new Error('Files are not available in mock mode');
+    },
+    /** Throws (ApiError-shaped) if the scan rejects the file — callers must not treat a resolved upload() as "attached", only as "uploaded", until this settles. */
+    async upload(file: File, purpose: string): Promise<EvidenceFile> {
+      const intent = await this.uploadIntent(file.name, file.type, file.size, purpose);
+      await this.uploadContent(intent.fileId, file);
+      const meta = await this.complete(intent.fileId);
+      if (meta.status === 'rejected') {
+        throw new ApiError({ code: 'FILE_REJECTED', message: meta.rejectionReason || 'File was rejected.', requestId: '' });
+      }
+      return { id: meta.id, name: file.name, type: file.type, size: file.size, url: '', uploadedAt: new Date().toISOString(), status: meta.status };
+    },
+  },
+
+  users: {
+    async list(params?: ListParams): Promise<PageResult<{ id: string; username: string; displayName: string; email: string; roles: string[]; status: string; lastLoginAt?: string; version: number }>> {
+      if (isRealDomain('users')) {
+        type UserDtoWire = { id: string; username: string; displayName: string; email: string; roles: { code: string }[]; status: string; lastLoginAt?: string; version: number };
+        const page = await http.getPage<UserDtoWire>('/users', buildListQuery(params));
+        return {
+          data: page.data.map(u => ({
+            id: u.id, username: u.username, displayName: u.displayName, email: u.email,
+            roles: u.roles.map(r => r.code), status: fromBackendEnum(u.status),
+            lastLoginAt: u.lastLoginAt, version: u.version,
+          })),
+          page: page.page,
+        };
+      }
+      return delay({ data: MOCK_USERS.map(u => ({ id: u.id, username: u.username, displayName: u.displayName ?? u.username, email: '', roles: u.roles ?? [], status: 'active', version: 1 })), page: { number: 1, size: 20, totalItems: MOCK_USERS.length, totalPages: 1 } });
+    },
+    async create(data: { username: string; initialPassword: string; displayName: string; email: string; roleCodes: string[]; preferredLanguage?: string }): Promise<{ id: string }> {
+      if (isRealDomain('users')) {
+        return http.post<{ id: string }>('/users', data);
+      }
+      return delay({ id: `u${Date.now()}` });
+    },
+    async update(id: string, data: { displayName?: string; email?: string; status?: string; roleCodes?: string[]; version: number }): Promise<void> {
+      if (isRealDomain('users')) {
+        const body = { ...data, status: data.status ? toBackendEnum(data.status) : undefined };
+        await http.patch<void>(`/users/${id}`, body);
+        return;
+      }
+      return delay(undefined);
+    },
+    async resetPassword(id: string): Promise<{ temporaryPassword: string }> {
+      if (isRealDomain('users')) {
+        return http.post<{ temporaryPassword: string }>(`/users/${id}/reset-password`);
+      }
+      return delay({ temporaryPassword: 'TempPass123!' });
+    },
+    async unlock(id: string): Promise<void> {
+      if (isRealDomain('users')) {
+        await http.post<void>(`/users/${id}/unlock`);
+        return;
+      }
+      return delay(undefined);
+    },
+  },
+
+  rules: {
+    async list(params?: ListParams): Promise<PageResult<{ id: string; status: string; effectiveFrom?: string; coinConversionRate: number; minimumRoundingMinutes: number; version: number; createdAt: string }>> {
+      if (isRealDomain('rules')) {
+        const page = await http.getPage<{ id: string; status: string; effectiveFrom?: string; coinConversionRate: number; minimumRoundingMinutes: number; version: number; createdAt: string }>('/rules', buildListQuery(params));
+        return { data: page.data.map(r => mapEnumFields(r, ['status'])), page: page.page };
+      }
+      return delay({ data: [], page: { number: 1, size: 20, totalItems: 0, totalPages: 0 } });
+    },
+    async create(data: Record<string, unknown>): Promise<{ id: string }> {
+      if (isRealDomain('rules')) {
+        return http.post<{ id: string }>('/rules', data);
+      }
+      return delay({ id: `rule_${Date.now()}` });
+    },
+    async update(id: string, data: Record<string, unknown>): Promise<void> {
+      if (isRealDomain('rules')) {
+        await http.patch<void>(`/rules/${id}`, data);
+        return;
+      }
+      return delay(undefined);
+    },
+    async validate(id: string): Promise<{ valid: boolean; issues: string[]; affectedRecordCount: number }> {
+      if (isRealDomain('rules')) {
+        return http.post<{ valid: boolean; issues: string[]; affectedRecordCount: number }>(`/rules/${id}/validate`);
+      }
+      return delay({ valid: true, issues: [], affectedRecordCount: 0 });
+    },
+    async publish(id: string, effectiveFrom: string, version: number): Promise<void> {
+      if (isRealDomain('rules')) {
+        await http.post<void>(`/rules/${id}/publish`, { effectiveFrom, version });
+        return;
+      }
+      return delay(undefined);
+    },
+  },
+
+  imports: {
+    async template(type: string): Promise<Blob> {
+      const response = await fetch(`/api/v1/imports/templates/${type}`, { credentials: 'include' });
+      if (!response.ok) throw new ApiError({ code: 'DOWNLOAD_FAILED', message: 'Template download failed', requestId: '' });
+      return response.blob();
+    },
+    async create(type: string, file: File): Promise<{ id: string; status: string; totalRows: number; validRows: number; invalidRows: number }> {
+      if (isRealDomain('imports')) {
+        const formData = new FormData();
+        formData.append('type', type);
+        formData.append('file', file);
+        const csrfToken = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1];
+        const headers: Record<string, string> = { 'Accept-Language': i18n.language };
+        if (csrfToken) headers['X-XSRF-TOKEN'] = decodeURIComponent(csrfToken);
+        const response = await fetch('/api/v1/imports', {
+          method: 'POST', credentials: 'include', headers, body: formData,
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          const parsed = text ? JSON.parse(text) : {};
+          throw new ApiError(parsed.error ?? { code: 'IMPORT_FAILED', message: 'Import failed', requestId: '' });
+        }
+        const json = await response.json();
+        return json.data;
+      }
+      return delay({ id: `imp_${Date.now()}`, status: 'uploaded', totalRows: 0, validRows: 0, invalidRows: 0 });
+    },
+    async get(id: string): Promise<{ id: string; status: string; totalRows: number; validRows: number; invalidRows: number }> {
+      if (isRealDomain('imports')) {
+        return http.get(`/imports/${id}`);
+      }
+      return delay({ id, status: 'validated', totalRows: 10, validRows: 9, invalidRows: 1 });
+    },
+    async validate(id: string): Promise<{ id: string; status: string; totalRows: number; validRows: number; invalidRows: number }> {
+      if (isRealDomain('imports')) {
+        return http.post(`/imports/${id}/validate`);
+      }
+      return delay({ id, status: 'validated', totalRows: 10, validRows: 9, invalidRows: 1 });
+    },
+    async errors(id: string): Promise<{ errors: { row: number; field: string; message: string }[] }> {
+      if (isRealDomain('imports')) {
+        return http.get(`/imports/${id}/errors`);
+      }
+      return delay({ errors: [] });
+    },
+    async commit(id: string, idempotencyKey: string): Promise<{ id: string; status: string; committedRows: number }> {
+      if (isRealDomain('imports')) {
+        return http.post(`/imports/${id}/commit`, undefined, idempotencyKey);
+      }
+      return delay({ id, status: 'committed', committedRows: 9 });
+    },
+    async cancel(id: string): Promise<void> {
+      if (isRealDomain('imports')) {
+        await http.post<void>(`/imports/${id}/cancel`);
+        return;
+      }
+      return delay(undefined);
+    },
+  },
+
+  exports: {
+    async create(reportType: string): Promise<{ jobId: string; status: string }> {
+      if (isRealDomain('exports')) {
+        return http.post<{ jobId: string; status: string }>('/exports', { reportType });
+      }
+      return delay({ jobId: `exp_${Date.now()}`, status: 'processing' });
+    },
+    async get(jobId: string): Promise<{ jobId: string; status: string; downloadUrl?: string }> {
+      if (isRealDomain('exports')) {
+        return http.get(`/exports/${jobId}`);
+      }
+      return delay({ jobId, status: 'succeeded', downloadUrl: '#' });
+    },
+    async download(jobId: string): Promise<{ downloadUrl: string; token: string }> {
+      if (isRealDomain('exports')) {
+        return http.get(`/exports/${jobId}/download`);
+      }
+      return delay({ downloadUrl: '#', token: 'mock' });
+    },
+  },
+
 };

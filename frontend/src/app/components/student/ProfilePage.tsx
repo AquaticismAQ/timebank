@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth, useTheme } from '../../App';
 import { type StudentProgress, type Account, type SchoolInfo } from '../../api/types';
 import { formatCoins, minutesToHours } from '../../lib/format';
+import { changeLanguage } from '../../lib/language';
 import { api } from '../../api/client';
 
 export function ProfilePage() {
@@ -63,8 +64,7 @@ export function ProfilePage() {
   ];
 
   const changeLang = (code: string) => {
-    i18n.changeLanguage(code);
-    localStorage.setItem('timebank-lang', code);
+    changeLanguage(code as 'zh' | 'en');
   };
 
   if (!progress || !account) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;

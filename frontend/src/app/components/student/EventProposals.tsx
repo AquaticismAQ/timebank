@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Plus, ChevronDown, ChevronUp, ChevronRight, Edit, Send, Copy, X, FileText, CheckCircle, AlertTriangle, Clock, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PROPOSAL_STATUS_LABELS, SERVICE_CATEGORIES, resolveCategoryName } from '../../mock/data';
 import { type EventProposal, type ProposalStatus } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { newIdempotencyKey } from '../../api/http';
+import { useFieldErrors, FieldError, handleMutationError } from '../../api/useFieldErrors';
 import { usePagedApi } from '../../api/useApi';
 import { minutesToHours } from '../../lib/format';
 import { PageControls } from '../PageControls';
@@ -96,34 +98,115 @@ export function EventProposals() {
     setView('form');
   };
 
-  const handleSaveDraft = () => {
-    toast.success(t('student.proposals.draftSaved'));
-    setView('list');
-    setStep(0);
+  const [saving, setSaving] = useState(false);
+  const submitKeyRef = useRef(newIdempotencyKey());
+  const fieldErrors = useFieldErrors();
+
+  const formToApiData = (): Partial<EventProposal> => ({
+    title: formData.title,
+    goal: formData.goal,
+    categoryId: formData.categoryId,
+    description: formData.description,
+    expectedOutcomes: formData.expectedOutcomes,
+    plannedDate: formData.plannedDate,
+    location: formData.location,
+    activityFormat: formData.activityFormat,
+    estimatedDurationMinutes: formData.estimatedDurationHours * 60,
+    estimatedCapacity: formData.estimatedCapacity,
+    targetParticipants: formData.targetParticipants,
+    volunteerTasks: formData.volunteerTasks,
+    coOrganizers: formData.coOrganizers,
+    mentorTeacher: formData.mentorTeacher,
+    partnerOrg: formData.partnerOrg,
+    contactInfo: formData.contactInfo,
+    riskMeasures: formData.riskMeasures,
+    materialNeeds: formData.materialNeeds,
+    budgetNeeds: formData.budgetNeeds,
+    recruitmentMethod: formData.recruitmentMethod,
+    eligibility: formData.eligibility,
+    proofMethod: formData.proofMethod,
+    suggestedMinutes: formData.suggestedHours * 60,
+  });
+
+  const handleSaveDraft = async () => {
+    setSaving(true);
+    try {
+      await api.eventProposals.create(formToApiData());
+      fieldErrors.clearAll();
+      toast.success(t('student.proposals.draftSaved'));
+      setView('list');
+      setStep(0);
+      refetch();
+    } catch (err) {
+      handleMutationError(err, { fieldErrors, refetch, fallbackMessage: t('common.unknownError') });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!declared) { toast.error(t('student.proposals.checkDeclaration')); return; }
-    toast.success(t('student.proposals.submitSuccess'));
-    setView('list');
-    setStep(0);
+    setSaving(true);
+    try {
+      const proposal = await api.eventProposals.create(formToApiData());
+      await api.eventProposals.submit(proposal.id, submitKeyRef.current);
+      submitKeyRef.current = newIdempotencyKey();
+      fieldErrors.clearAll();
+      toast.success(t('student.proposals.submitSuccess'));
+      setView('list');
+      setStep(0);
+      refetch();
+    } catch (err) {
+      handleMutationError(err, { fieldErrors, refetch, fallbackMessage: t('common.unknownError') });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleWithdraw = (p: EventProposal) => {
-    if (p.status === 'submitted') {
+  const handleWithdraw = async (p: EventProposal) => {
+    try {
+      await api.eventProposals.withdraw(p.id);
       toast.success(t('student.proposals.withdrawn'));
       refetch();
       setView('list');
-    } else {
-      toast.info(t('student.proposals.withdrawRequest'));
+    } catch (err) {
+      handleMutationError(err, { refetch, fallbackMessage: t('common.unknownError') });
     }
+  };
+
+  const apiFieldForFormKey: Partial<Record<keyof typeof formData, string>> = {
+    title: 'title',
+    goal: 'objective',
+    categoryId: 'categoryId',
+    description: 'description',
+    expectedOutcomes: 'expectedOutcome',
+    plannedDate: 'plannedStartAt',
+    location: 'location',
+    activityFormat: 'format',
+    estimatedDurationHours: 'proposedRecognizedMinutes',
+    estimatedCapacity: 'capacity',
+    targetParticipants: 'targetParticipants',
+    volunteerTasks: 'volunteerTasks',
+    mentorTeacher: 'proposedSupervisorId',
+    partnerOrg: 'organizationId',
+    contactInfo: 'externalContact',
+    riskMeasures: 'safetyPlan',
+    materialNeeds: 'resourceNeeds',
+    budgetNeeds: 'resourceNeeds',
+    recruitmentMethod: 'recruitmentPlan',
+    eligibility: 'eligibility',
+    proofMethod: 'evidencePlan',
+    suggestedHours: 'proposedRecognizedMinutes',
   };
 
   const field = (
     label: string,
     key: keyof typeof formData,
     opts?: { placeholder?: string; type?: string; rows?: number; required?: boolean }
-  ) => (
+  ) => {
+    const apiField = apiFieldForFormKey[key] ?? String(key);
+    const errMsg = fieldErrors.getError(apiField, String(key));
+    return (
     <div>
       <label className="block text-xs text-muted-foreground mb-1.5">
         {label}{opts?.required !== false && <span className="text-destructive ml-0.5">*</span>}
@@ -132,7 +215,7 @@ export function EventProposals() {
         <textarea
           rows={opts.rows}
           value={String(formData[key])}
-          onChange={e => setFormData(f => ({ ...f, [key]: e.target.value }))}
+          onChange={e => { fieldErrors.clearField(apiField); setFormData(f => ({ ...f, [key]: e.target.value })); }}
           placeholder={opts.placeholder}
           className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none overflow-y-auto"
         />
@@ -140,13 +223,14 @@ export function EventProposals() {
         <input
           type={opts?.type || 'text'}
           value={String(formData[key])}
-          onChange={e => setFormData(f => ({ ...f, [key]: opts?.type === 'number' ? Number(e.target.value) : e.target.value }))}
+          onChange={e => { fieldErrors.clearField(apiField); setFormData(f => ({ ...f, [key]: opts?.type === 'number' ? Number(e.target.value) : e.target.value })); }}
           placeholder={opts?.placeholder}
           className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
         />
       )}
+      <FieldError message={errMsg} />
     </div>
-  );
+  );};
 
   // ── Form view ──────────────────────────────────────────────────────────────
   if (view === 'form') {
@@ -486,7 +570,17 @@ export function EventProposals() {
               )}
 
               {p.status === 'draft' && (
-                <button onClick={() => { toast.success(t('student.proposals.submittedForReview')); setView('list'); }}
+                <button onClick={async () => {
+                  try {
+                    const key = newIdempotencyKey();
+                    await api.eventProposals.submit(p.id, key);
+                    toast.success(t('student.proposals.submittedForReview'));
+                    refetch();
+                    setView('list');
+                  } catch (err) {
+                    handleMutationError(err, { refetch, fallbackMessage: t('common.unknownError') });
+                  }
+                }}
                   className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border text-foreground text-sm hover:bg-accent transition-colors">
                   <Send className="w-4 h-4" /> {t('student.proposals.submitForReview')}
                 </button>

@@ -36,12 +36,15 @@ export function NotificationsPage() {
   };
 
   const markRead = (id: string) => {
-    api.notifications.markRead(id).then(refetch).catch(() => {});
+    api.notifications.markRead(id).then(refetch).catch((err) => {
+      if (err?.message) toast.error(err.message);
+    });
   };
 
   const markAllRead = () => {
-    api.notifications.markAllRead().then(refetch).catch(() => {});
-    toast.success(t('student.notifications.allMarkedRead'));
+    api.notifications.markAllRead()
+      .then(() => { toast.success(t('student.notifications.allMarkedRead')); refetch(); })
+      .catch((err) => { if (err?.message) toast.error(err.message); });
   };
 
   return (

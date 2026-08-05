@@ -98,12 +98,12 @@ class ReviewDecisionTransaction {
 
             // Effect 5: the notification.
             if (recipientUserId != null) {
-                notificationService.notify(recipientUserId, "serviceRecord.approved", "serviceRecord", recordId, resolvedLanguage);
+                notificationService.notify(recipientUserId, "serviceRecord.approved", "serviceRecord", recordId);
             }
         } else if (decision == Decision.RETURN_FOR_CHANGES && recipientUserId != null) {
-            notificationService.notify(recipientUserId, "serviceRecord.returned", "serviceRecord", recordId, resolvedLanguage);
+            notificationService.notify(recipientUserId, "serviceRecord.returned", "serviceRecord", recordId);
         } else if (decision == Decision.REJECT && recipientUserId != null) {
-            notificationService.notify(recipientUserId, "serviceRecord.rejected", "serviceRecord", recordId, resolvedLanguage);
+            notificationService.notify(recipientUserId, "serviceRecord.rejected", "serviceRecord", recordId);
         }
         // ESCALATE: an internal reviewer action — no student-facing notification.
 

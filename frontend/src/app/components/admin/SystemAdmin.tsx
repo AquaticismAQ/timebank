@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Trash2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth, useLogs } from '../../App';
+import { useAuth, useLogs, usePermissions } from '../../App';
 import { api } from '../../api/client';
+import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 
 // ── Rule config types ──────────────────────────────────────────────────────
 
@@ -168,14 +169,15 @@ interface AdminUser {
   roles: UserRole[];
   status: UserStatus;
   lastLogin: string;
+  version: number;
 }
 
 const INITIAL_USERS: AdminUser[] = [
-  { id: 'u1', name: 'Wei 陈老师', email: 'wei.chen@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-27' },
-  { id: 'u2', name: 'Alex 林', email: 'alex.lin@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-26' },
-  { id: 'u3', name: 'Mei 赵老师', email: 'mei.zhao@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-25' },
-  { id: 'u4', name: 'Jordan', email: 'jordan@example-school.cn', roles: ['teacher', 'student'], status: 'active', lastLogin: '2026-07-24' },
-  { id: 'u5', name: 'Nina 江', email: 'nina.jiang@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-20' },
+  { id: 'u1', name: 'Wei 陈老师', email: 'wei.chen@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-27', version: 1 },
+  { id: 'u2', name: 'Alex 林', email: 'alex.lin@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-26', version: 1 },
+  { id: 'u3', name: 'Mei 赵老师', email: 'mei.zhao@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-25', version: 1 },
+  { id: 'u4', name: 'Jordan', email: 'jordan@example-school.cn', roles: ['teacher', 'student'], status: 'active', lastLogin: '2026-07-24', version: 1 },
+  { id: 'u5', name: 'Nina 江', email: 'nina.jiang@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-20', version: 1 },
 ];
 
 
@@ -411,6 +413,8 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
 export function SystemAdmin() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canManageUsers = hasPermission('users.manage');
   const { logs, addLog } = useLogs();
   const isAdmin = user?.roles?.includes('admin') ?? false;
   const [schoolName, setSchoolName] = useState('');
@@ -425,10 +429,25 @@ export function SystemAdmin() {
   const [rules, setRules] = useState<RuleSection[]>(INITIAL_RULES);
   const [editingRule, setEditingRule] = useState<RuleSection | null>(null);
   const [features, setFeatures] = useState({ pov: false, redemption: false, borrowing: false, appreciation: false });
+  const [saving, setSaving] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const studentImportFileRef = useRef<HTMLInputElement>(null);
+  const [importType, setImportType] = useState<string>('');
 
-  const toggleFeature = (key: keyof typeof features) => {
-    setFeatures(prev => ({ ...prev, [key]: !prev[key] }));
-    toast.success(t('admin.system.featureToggleUpdated'));
+  useEffect(() => {
+    api.users.list().then(result => {
+      setUsers(result.data.map(u => ({
+        id: u.id, name: u.displayName, email: u.email,
+        roles: u.roles.map(r => r.toLowerCase()) as UserRole[],
+        status: (u.status as UserStatus) || 'active',
+        lastLogin: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : '—',
+        version: u.version,
+      })));
+    }).catch(() => {});
+  }, []);
+
+  const toggleFeature = (_key: keyof typeof features) => {
+    toast.info(t('admin.system.featureToggleNotAvailable') || 'Feature flag management is not yet available');
   };
 
   const handleRuleSave = (updated: RuleSection) => {
@@ -438,39 +457,138 @@ export function SystemAdmin() {
     toast.success(t('admin.system.ruleUpdated', { title: t(updated.title) }));
   };
 
-  const handleCreate = (form: UserFormState) => {
-    const newUser: AdminUser = {
-      id: `u${Date.now()}`,
-      name: form.name.trim(),
-      email: form.email.trim(),
-      roles: form.roles,
-      status: 'active',
-      lastLogin: '—',
-    };
-    setUsers(prev => [...prev, newUser]);
-    addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logCreateUser'), target: `${newUser.name} (${newUser.email})`, category: 'system' });
-    setCreateOpen(false);
-    toast.success(t('admin.system.userCreated', { name: newUser.name }));
+  const handleCreate = async (form: UserFormState) => {
+    setSaving(true);
+    try {
+      const result = await api.users.create({
+        username: form.email.split('@')[0],
+        initialPassword: form.password,
+        displayName: form.name.trim(),
+        email: form.email.trim(),
+        roleCodes: form.roles.map(r => r.toUpperCase()),
+      });
+      setUsers(prev => [...prev, {
+        id: result.id, name: form.name.trim(), email: form.email.trim(),
+        roles: form.roles, status: 'active', lastLogin: '—', version: 1,
+      }]);
+      addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logCreateUser'), target: `${form.name.trim()} (${form.email.trim()})`, category: 'system' });
+      setCreateOpen(false);
+      toast.success(t('admin.system.userCreated', { name: form.name.trim() }));
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(String(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleEdit = (form: UserFormState) => {
+  const handleEdit = async (form: UserFormState) => {
     if (!editTarget) return;
-    setUsers(prev => prev.map(u => u.id === editTarget.id
-      ? { ...u, name: form.name.trim(), email: form.email.trim(), roles: form.roles, status: form.status }
-      : u
-    ));
-    addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logEditUser'), target: `${form.name.trim()} (${form.email.trim()})`, category: 'system' });
-    setEditTarget(null);
-    toast.success(t('admin.system.userUpdated'));
-    if (form.showResetPwd && form.password) toast.success(t('admin.system.passwordReset'));
+    setSaving(true);
+    try {
+      await api.users.update(editTarget.id, {
+        displayName: form.name.trim(),
+        email: form.email.trim(),
+        status: form.status,
+        roleCodes: form.roles.map(r => r.toUpperCase()),
+        version: editTarget.version,
+      });
+      if (form.showResetPwd && form.password) {
+        const result = await api.users.resetPassword(editTarget.id);
+        toast.success(t('admin.system.passwordReset') + (result.temporaryPassword ? `: ${result.temporaryPassword}` : ''));
+      }
+      setUsers(prev => prev.map(u => u.id === editTarget.id
+        ? { ...u, name: form.name.trim(), email: form.email.trim(), roles: form.roles, status: form.status, version: u.version + 1 }
+        : u
+      ));
+      addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logEditUser'), target: `${form.name.trim()} (${form.email.trim()})`, category: 'system' });
+      setEditTarget(null);
+      toast.success(t('admin.system.userUpdated'));
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(String(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!editTarget) return;
-    addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logDeleteUser'), target: `${editTarget.name} (${editTarget.email})`, category: 'system' });
-    setUsers(prev => prev.filter(u => u.id !== editTarget.id));
-    setEditTarget(null);
-    toast.success(t('admin.system.userDeleted', { name: editTarget.name }));
+    setSaving(true);
+    try {
+      await api.users.update(editTarget.id, { status: 'inactive', version: editTarget.version });
+      addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logDeleteUser'), target: `${editTarget.name} (${editTarget.email})`, category: 'system' });
+      setUsers(prev => prev.map(u => u.id === editTarget.id ? { ...u, status: 'inactive' as UserStatus, version: u.version + 1 } : u));
+      setEditTarget(null);
+      toast.success(t('admin.system.userDeleted', { name: editTarget.name }));
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTemplateDownload = async (type: string) => {
+    try {
+      const blob = await api.imports.template(type);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${type}-template.csv`;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+      toast.success(t('admin.system.templateDownloaded'));
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(String(err));
+    }
+  };
+
+  const handleImportUpload = async (file: File, type: string) => {
+    setSaving(true);
+    try {
+      const job = await api.imports.create(type, file);
+      const validated = await api.imports.validate(job.id);
+      if (validated.invalidRows > 0) {
+        const errResult = await api.imports.errors(job.id);
+        toast.error(`${validated.invalidRows} invalid rows: ${errResult.errors.slice(0, 3).map(e => `Row ${e.row}: ${e.message}`).join('; ')}`);
+      }
+      if (validated.validRows > 0) {
+        const committed = await api.imports.commit(job.id, newIdempotencyKey());
+        toast.success(`Import complete: ${committed.committedRows} rows committed`);
+      } else {
+        await api.imports.cancel(job.id);
+        toast.error('No valid rows to import');
+      }
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleExport = async (reportType: string) => {
+    try {
+      const job = await api.exports.create(reportType);
+      const poll = async (): Promise<void> => {
+        const status = await api.exports.get(job.jobId);
+        if (status.status === 'SUCCEEDED' || status.status === 'succeeded') {
+          const dl = await api.exports.download(job.jobId);
+          window.open(`/api/v1/exports/${job.jobId}/content?token=${dl.token}`, '_blank');
+          toast.success(t('admin.system.exportTaskCreated', { label: reportType }));
+        } else if (status.status === 'FAILED' || status.status === 'failed') {
+          toast.error('Export failed');
+        } else {
+          setTimeout(poll, 2000);
+        }
+      };
+      toast.info('Export started...');
+      setTimeout(poll, 1000);
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(String(err));
+    }
   };
 
   const tabs: { key: Tab; label: string; icon: typeof Users }[] = [
@@ -506,10 +624,12 @@ export function SystemAdmin() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">{t('admin.system.userCount', { count: users.length })}</p>
+            {canManageUsers && (
             <button onClick={() => setCreateOpen(true)}
               className="flex items-center gap-1.5 px-4 py-2 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90 transition-opacity">
               <Plus className="w-4 h-4" /> {t('admin.system.createUser')}
             </button>
+            )}
           </div>
 
           {/* Desktop table */}
@@ -541,10 +661,12 @@ export function SystemAdmin() {
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{u.lastLogin}</td>
                     <td className="px-4 py-3">
+                      {canManageUsers && (
                       <button onClick={() => setEditTarget(u)}
                         className="text-xs text-[oklch(0.488_0.243_264.376)] hover:opacity-70 transition-opacity">
                         {t('admin.system.edit')}
                       </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -571,10 +693,12 @@ export function SystemAdmin() {
                       ))}
                     </div>
                   </div>
+                  {canManageUsers && (
                   <button onClick={() => setEditTarget(u)}
                     className="text-xs px-3 py-1.5 border border-border rounded-lg text-muted-foreground hover:bg-accent shrink-0">
                     {t('admin.system.edit')}
                   </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -633,12 +757,15 @@ export function SystemAdmin() {
               <h3 className="text-foreground mb-1">{t('admin.system.importHistoricalRecords')}</h3>
               <p className="text-xs text-muted-foreground mb-4">{t('admin.system.importHistoricalDesc')}</p>
               <div className="space-y-2">
-                <button onClick={() => toast.success(t('admin.system.templateDownloaded'))}
+                <button onClick={() => handleTemplateDownload('serviceRecordsHistorical')}
                   className="w-full py-2.5 border border-border rounded-xl text-sm text-muted-foreground hover:bg-accent text-center">
                   {t('admin.system.downloadTemplate')}
                 </button>
-                <button onClick={() => toast.info(t('admin.system.downloadTemplateFirst'))}
-                  className="w-full py-2.5 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90">
+                <input ref={importFileRef} type="file" accept=".csv,.xlsx" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleImportUpload(f, importType); e.target.value = ''; }} />
+                <button onClick={() => { setImportType('serviceRecordsHistorical'); importFileRef.current?.click(); }}
+                  disabled={saving}
+                  className="w-full py-2.5 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90 disabled:opacity-40">
                   {t('admin.system.uploadDataFile')}
                 </button>
               </div>
@@ -649,12 +776,15 @@ export function SystemAdmin() {
               <h3 className="text-foreground mb-1">{t('admin.system.importStudentInfo')}</h3>
               <p className="text-xs text-muted-foreground mb-4">{t('admin.system.importStudentDesc')}</p>
               <div className="space-y-2">
-                <button onClick={() => toast.success(t('admin.system.studentTemplateDownloaded'))}
+                <button onClick={() => handleTemplateDownload('students')}
                   className="w-full py-2.5 border border-border rounded-xl text-sm text-muted-foreground hover:bg-accent text-center">
                   {t('admin.system.downloadStudentTemplate')}
                 </button>
-                <button onClick={() => toast.info(t('admin.system.downloadTemplateFirst'))}
-                  className="w-full py-2.5 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90">
+                <input ref={studentImportFileRef} type="file" accept=".csv,.xlsx" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleImportUpload(f, 'students'); e.target.value = ''; }} />
+                <button onClick={() => studentImportFileRef.current?.click()}
+                  disabled={saving}
+                  className="w-full py-2.5 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90 disabled:opacity-40">
                   {t('admin.system.uploadStudentFile')}
                 </button>
               </div>
@@ -665,10 +795,15 @@ export function SystemAdmin() {
               <h3 className="text-foreground mb-1">{t('admin.system.exportData')}</h3>
               <p className="text-xs text-muted-foreground mb-4">{t('admin.system.exportDesc')}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[t('admin.system.exportAllRecords'), t('admin.system.exportTransactions'), t('admin.system.exportReports'), t('admin.system.exportAuditLogs')].map(label => (
-                  <button key={label} onClick={() => toast.success(t('admin.system.exportTaskCreated', { label }))}
+                {([
+                  { label: t('admin.system.exportAllRecords'), type: 'serviceRecords' },
+                  { label: t('admin.system.exportTransactions'), type: 'serviceHours' },
+                  { label: t('admin.system.exportReports'), type: 'participation' },
+                  { label: t('admin.system.exportAuditLogs'), type: 'completion' },
+                ] as const).map(item => (
+                  <button key={item.type} onClick={() => handleExport(item.type)}
                     className="py-2 border border-border rounded-xl text-sm text-foreground hover:bg-accent flex items-center justify-between px-4">
-                    {label}
+                    {item.label}
                     <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                   </button>
                 ))}
@@ -777,7 +912,7 @@ export function SystemAdmin() {
           initial={userToForm(editTarget)}
           onClose={() => setEditTarget(null)}
           onSave={handleEdit}
-          onDelete={handleDelete}
+          onDelete={canManageUsers ? handleDelete : undefined}
         />
       )}
 

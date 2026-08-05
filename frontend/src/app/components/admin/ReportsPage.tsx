@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 const TOTAL_BAR_COLOR = '#94a3b8'; // slate-400 — visible in both light and dark
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { ApiError, mapApiError } from '../../api/http';
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
@@ -57,7 +58,26 @@ export function ReportsPage() {
             <option value="2025-2026">{t('admin.reports.academicYear', { year: '2025-2026' })}</option>
             <option value="2024-2025">{t('admin.reports.academicYear', { year: '2024-2025' })}</option>
           </select>
-          <button onClick={() => toast.success(t('admin.reports.exportToast'))}
+          <button onClick={async () => {
+            try {
+              const job = await api.exports.create('participation');
+              toast.info('Export started...');
+              const poll = async () => {
+                const status = await api.exports.get(job.jobId);
+                if (status.status === 'SUCCEEDED' || status.status === 'succeeded') {
+                  const dl = await api.exports.download(job.jobId);
+                  window.open(`/api/v1/exports/${job.jobId}/content?token=${dl.token}`, '_blank');
+                  toast.success(t('admin.reports.exportToast'));
+                } else if (status.status === 'FAILED' || status.status === 'failed') {
+                  toast.error('Export failed');
+                } else { setTimeout(poll, 2000); }
+              };
+              setTimeout(poll, 1000);
+            } catch (err) {
+              if (err instanceof ApiError) toast.error(mapApiError(err).message);
+              else toast.error(String(err));
+            }
+          }}
             className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-xl text-sm text-muted-foreground hover:bg-accent">
             <Download className="w-4 h-4" /> {t('admin.reports.export')}
           </button>

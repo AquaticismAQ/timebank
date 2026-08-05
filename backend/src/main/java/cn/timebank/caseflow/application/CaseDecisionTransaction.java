@@ -92,21 +92,20 @@ class CaseDecisionTransaction {
         }
 
         // Effect: the notification, to the case's student.
-        notifyStudent(c, decision, resolvedLanguage);
+        notifyStudent(c, decision);
 
         repository.saveAndFlush(c);
         return toDto(c, resolvedLanguage);
     }
 
-    private void notifyStudent(Case c, CaseDecision decision, String resolvedLanguage) {
+    private void notifyStudent(Case c, CaseDecision decision) {
         String templateCode = switch (decision) {
             case RESOLVE -> "case.resolved";
             case REQUEST_INFORMATION -> "case.needsInformation";
             case REJECT -> "case.rejected";
         };
         userService.findUserIdByStudentId(c.getStudentId())
-                .ifPresent(recipientUserId -> notificationService.notify(recipientUserId, templateCode,
-                        "case", c.getId(), resolvedLanguage));
+                .ifPresent(recipientUserId -> notificationService.notify(recipientUserId, templateCode, "case", c.getId()));
     }
 
     private CaseDecision parseDecision(String raw) {

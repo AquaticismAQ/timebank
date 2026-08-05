@@ -10,21 +10,32 @@ React 18 + Vite 6 + Tailwind CSS v4 + shadcn/Radix UI. Path alias `@` → `front
 
 ## Data Flow
 
-All data goes through `frontend/src/app/api/client.ts` which exports a single `api` object:
+All data goes through `frontend/src/app/api/client.ts` which exports a single `api` object with dual-branch methods (mock/real per domain toggle in `config.ts`).
 
-```typescript
-api.projects.list()         // → Promise<Project[]>
-api.serviceRecords.create() // → Promise<ServiceRecord>
-api.auth.login()            // → Promise<LoginResponse>
+### File layout (post-I0/I1)
+
+```
+api/client.ts    — api.* facade, mock/real branches, DTO mappers
+api/config.ts    — isRealDomain() toggle via VITE_API_REAL_DOMAINS
+api/http.ts      — fetch transport, ApiError, mapApiError, idempotency/version helpers
+api/types.ts     — authoritative payload types (lifted from mock/data.ts)
+api/useApi.ts    — usePagedApi hook (primary), unused useApi
+lib/pagination.ts — ListParams, toBackendEnum/fromBackendEnum, paginateMock
+lib/format.ts    — formatCoins, minutesToHours
 ```
 
-**Currently backed by in-memory mocks** from `frontend/src/app/mock/data.ts`. Types and fixtures live together in that file — I0.1 will split them.
+### Integration Status (2026-08-05)
 
-## Integration Status
+- **I0 `✅`:** types lifted, HTTP transport (`http.ts`), envelope/error handling, per-domain toggle, divergences fixed
+- **I1 `▶`:** all 8 read domains swapped (18 methods), shared `usePagedApi`/`PageControls`/`ListStateBanner`
+- **I2 starting:** all mutations are still mock-only (`toast.success()` stubs in components)
 
-- **Read calls:** ~20 methods wired through `api.*`, components use `useState`+`useEffect`
-- **Write calls:** methods defined in `client.ts` but **components don't call them** — mutations show `toast.success()` stubs
-- **No real HTTP transport yet** — no `fetch`, no CSRF, no cookies, no error handling
+### Key patterns established by I1
+
+- **Enum mapping:** `toBackendEnum('underReview')` → `'UNDER_REVIEW'` (outbound), `fromBackendEnum` (inbound)
+- **DTO mappers:** `fromServiceRecordDto`, `fromReviewQueueItemDto`, `fromAccountDto`, etc.
+- **Version control:** `withVersion(body, ver)` — merges into body, NOT `If-Match` header
+- **Idempotency:** `newIdempotencyKey()` — `crypto.randomUUID()`, generate once per intent
 
 ## Component Organization
 
@@ -43,24 +54,26 @@ components/ui/       shadcn/Radix primitives — treat as vendored
 
 Auth persisted to `localStorage` (no session cookies yet — I0 adds real auth).
 
-## Integration Rules (I0–I3)
+## I2 Write Path Rules (current focus)
 
-1. **Only change `client.ts` method bodies** when swapping mock → real — no component changes for the swap itself
-2. **Types go in `api/types.ts`** (after I0.1 lift), not in mock/data.ts
-3. **Per-domain toggle** (`VITE_API_BASE_URL` + domain switch) for incremental swap
-4. **Envelope unwrap in one place** — `{data, page, meta}` from backend
-5. **Error mapping in one place** — 422→field errors, 409→conflict, 403/404→not-available
-6. **Never render raw error objects** — student-facing phrasing in both languages
-7. **Idempotency keys generated once per user intent**, reused on retry
-8. **No optimistic UI on ledger operations** — show result from server response, not local prediction
-9. **`If-Match`/version on updates** — handle 409 with "someone else changed this" + refresh
+1. **Add `isRealDomain` branch in `client.ts`** beside existing mock logic — same dual-branch pattern as reads
+2. **Replace component `toast.success()` stubs** with real `api.*` calls + error handling
+3. **Use action endpoints**, never `PATCH {status}` — `POST .../submit`, `POST .../publish`
+4. **`Idempotency-Key` via `newIdempotencyKey()`** — generate once per intent (useRef), reuse on retry
+5. **`withVersion(body, version)`** on all updates — backend reads version from body, not `If-Match`
+6. **`toBackendEnum()`** on enum fields in outbound request bodies
+7. **No optimistic UI on ledger operations** — show server response, not local prediction
+8. **`mapApiError(err)`** to classify errors → wire `fieldErrors` to form fields, `conflict` to refresh prompt
+9. **Request bodies: writable fields only** — never send status, computed values, display names
+10. **Never render raw error objects** — student-facing phrasing in both languages
 
-## Known Divergences (I0 must fix)
+## Known DTO Shape Gaps (discovered in I1, documented in §22)
 
-- Proposal status `needsRevision` → `changesRequested`, add `underReview`
-- Coin amounts → integer centi-coins (1 coin = 100 units)
-- Drop `*Hours` fields from wire types (hours derived from minutes)
-- Category/dictionary names from server, not hardcoded constants
+- `EventProposal` — ~15 fields missing from backend DTO vs frontend type
+- `Notification` — field names differ significantly (templateCode vs category, etc.)
+- `Account` — no `totalEarned`/`totalRedeemed` (Phase 4); `frozen` is boolean, not amount
+- `Progress` — no `academicYear`/`byCategory` from backend
+- All enums: backend sends `UPPER_SNAKE`, frontend uses `camelCase` — map both directions
 
 ## Styling
 

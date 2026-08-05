@@ -31,6 +31,7 @@ export const MOCK_USERS: User[] = [
     workspaces: ['student'],
     studentId: 'std_001',
     email: 'jiaming@example-school.cn',
+    permissions: ['serviceRecords.create', 'projects.read'],
     featureFlags: { pov: false, redemption: false, borrowing: false, appreciation: false },
   },
   {
@@ -42,6 +43,7 @@ export const MOCK_USERS: User[] = [
     workspaces: ['student'],
     studentId: 'std_002',
     email: 'yunli@example-school.cn',
+    permissions: ['serviceRecords.create', 'projects.read'],
     featureFlags: { pov: false, redemption: false, borrowing: false, appreciation: false },
   },
   {
@@ -52,6 +54,12 @@ export const MOCK_USERS: User[] = [
     roles: ['teacher'],
     workspaces: ['admin'],
     email: 'alex.lin@example-school.cn',
+    // Matches role_teacher's real grant (R__seed_permissions_and_roles.sql)
+    // — 'projects.manage'/'accounts.manage' below aren't real permission
+    // codes (nothing in R__seed_permissions_and_roles.sql grants them), so
+    // every UI gate keyed on the real granular codes silently hid its
+    // button in mock mode regardless of role.
+    permissions: ['reviews.decide', 'reviews.assign', 'projects.create', 'projects.update', 'projects.publish', 'projects.read', 'students.read'],
     featureFlags: { pov: false, redemption: false, borrowing: false, appreciation: false },
   },
   {
@@ -62,6 +70,8 @@ export const MOCK_USERS: User[] = [
     roles: ['admin'],
     workspaces: ['admin'],
     email: 'wei.chen@example-school.cn',
+    // Matches role_admin's real grant — see the teacher fixture's note above.
+    permissions: ['reviews.decide', 'reviews.assign', 'projects.create', 'projects.update', 'projects.publish', 'projects.close', 'projects.archive', 'projects.read', 'accounts.adjust', 'accounts.freeze', 'accounts.reverse', 'users.manage', 'students.read', 'roles.read'],
     featureFlags: { pov: false, redemption: false, borrowing: false, appreciation: false },
   },
   {
@@ -73,6 +83,7 @@ export const MOCK_USERS: User[] = [
     workspaces: ['student', 'admin'],
     studentId: 'std_003',
     email: 'jordan@example-school.cn',
+    permissions: ['serviceRecords.create', 'projects.read', 'reviews.decide', 'projects.create', 'projects.update', 'projects.publish', 'students.read'],
     featureFlags: { pov: false, redemption: false, borrowing: false, appreciation: false },
   },
 ];

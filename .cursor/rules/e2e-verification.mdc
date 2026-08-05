@@ -1,0 +1,89 @@
+---
+description: E2E verification against the real test server — credentials, workflow, and safety rules
+globs: ["frontend/**", "backend/**"]
+alwaysApply: false
+---
+
+# E2E Verification — Test Server Access & Rules
+
+## Server Credentials
+
+**Credentials live ONLY in `test-server-credits.md` (git-ignored, untracked).** Read that file at runtime when needed. NEVER:
+- Embed credentials in code, docs, commit messages, cursor rules, or agent transcripts
+- Hardcode host/port/password/username in any tracked file
+- Echo credentials in shell commands that get logged (use env vars instead)
+
+## Test Server Environment
+
+- **Host:** see `test-server-credits.md` for SSH and DB access
+- **Backend:** runs as a systemd unit (`timebank-backend.service`, user `timebank`)
+- **Database:** MySQL 8 on localhost:3306, app schema `timebank`
+- **Frontend proxy:** Vite dev proxy → `https://tb.example.com/api/v1/*`
+- **No Docker** — everything runs natively
+
+## E2E Verification Workflow
+
+### 1. Pre-flight
+
+```bash
+# Verify backend is running
+curl https://tb.example.com/api/v1/ping
+# Should return: {"status":"ok"}
+
+# Start frontend in real-domain mode
+cd frontend
+echo 'VITE_API_REAL_DOMAINS=auth,school,students,accounts,serviceRecords,reviewQueue,projects,eventProposals,applications,notifications,dashboards,reports,files,users,rules,imports,exports' > .env.local
+pnpm dev
+```
+
+### 2. Test User Setup
+
+Create throwaway test users via SQL (SSH to server, use mysql CLI with app credentials from `test-server-credits.md`). Use bcrypt hashes generated via `htpasswd -nbBC 12 '' 'password'`. **Delete all test data after verification.**
+
+Pattern from prior phases (I0 §21, I1 §22):
+- Admin user: `e2e_admin` with `SYSTEM_ADMIN` + `SCHOOL_ADMIN` roles
+- Student user: `e2e_student` with `STUDENT` role, linked to a real `student` row
+- Teacher user: `e2e_teacher` with `TEACHER` role
+
+### 3. Verification Checklist (I2 Write Path)
+
+For each domain, verify the real branch works end-to-end through the UI:
+
+| Domain | Actions to verify | Key check |
+|--------|------------------|-----------|
+| **Service records** | Create draft, save, submit, withdraw | Idempotency key prevents double-submit |
+| **Evidence upload** | Upload file → intent → PUT → complete | File appears in record's evidence list |
+| **Review decisions** | Approve, return, reject a record | Credited amount shown from server response |
+| **Account operations** | Manual adjustment, freeze | Balance changes reflected immediately |
+| **Projects** | Create, update, publish, close, archive | Status transitions work correctly |
+| **Registrations** | Apply to project | Application appears in list |
+| **Proposals** | Create, submit, withdraw | Proposal status changes server-side |
+| **Users** | List from API, create, edit, deactivate | User appears in list after creation |
+| **Import/export** | Template download, file upload, export job | Import validates and commits; export downloads |
+| **Notifications** | Mark read, mark all read | Unread count decreases |
+| **Student profile** | Edit name/email/grade | Profile updated server-side |
+
+### 4. What to Look For
+
+- **Console errors:** Open DevTools → Console; no red errors during any action
+- **Network tab:** Every mutation sends to `/api/v1/*`, not to mock
+- **Idempotency:** Double-click submit → only one record created
+- **Error handling:** Invalid input → server error shown as toast, form preserved
+- **Optimistic locking:** Edit same record in two tabs → second edit shows conflict toast
+- **Enum casing:** No raw UPPER_SNAKE values visible in UI
+
+### 5. Post-verification Cleanup
+
+```sql
+-- Delete all test data created during verification
+-- Users, students, service records, accounts, etc.
+-- Always clean up; never leave test data on the shared server
+```
+
+### 6. Reporting
+
+Record findings in `Docs/implementation/00-Status.md` §23 or a new §24, following the established pattern:
+- What was verified (with curl/Playwright evidence)
+- Bugs found and fixed
+- What's still open, honestly
+- Test count if backend tests were run
