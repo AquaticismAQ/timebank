@@ -12,7 +12,8 @@ import org.springframework.security.core.Authentication;
 /** The `account` module's published interface (Design.md §6). */
 public interface AccountService {
 
-    Page<AccountDto> list(Pageable pageable, Authentication auth);
+    /** {@code studentId} is contract §13.1's account-by-student resolution path (frontend `accounts.get`). */
+    Page<AccountDto> list(Pageable pageable, String studentId, Authentication auth);
 
     AccountDto getById(String id, Authentication auth);
 

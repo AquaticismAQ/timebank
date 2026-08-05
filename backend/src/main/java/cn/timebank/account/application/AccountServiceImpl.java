@@ -15,6 +15,7 @@ import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.idempotency.IdempotencyService;
+import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.DataScopeResolver;
 import cn.timebank.security.application.DataScopeSpecifications;
@@ -53,9 +54,11 @@ class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<AccountDto> list(Pageable pageable, Authentication auth) {
+    public Page<AccountDto> list(Pageable pageable, String studentId, Authentication auth) {
         Specification<Account> scopeSpec = scopeSpecification(auth);
-        return accountRepository.findAll(scopeSpec, pageable).map(this::toDto);
+        Specification<Account> filterSpec = FilterSpecifications.equalTo("studentId", studentId);
+        Specification<Account> combined = FilterSpecifications.and(scopeSpec, filterSpec);
+        return accountRepository.findAll(combined, pageable).map(this::toDto);
     }
 
     @Override

@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, ChevronDown, ChevronUp, ChevronRight, Edit, Send, Copy, X, FileText, CheckCircle, AlertTriangle, Clock, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PROPOSAL_STATUS_LABELS, SERVICE_CATEGORIES, resolveCategoryName } from '../../mock/data';
 import { type EventProposal, type ProposalStatus } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { usePagedApi } from '../../api/useApi';
 import { minutesToHours } from '../../lib/format';
+import { PageControls } from '../PageControls';
+import { ListStateBanner } from '../ListStateBanner';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -54,13 +57,8 @@ export function EventProposals() {
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [declared, setDeclared] = useState(false);
-  const [proposals, setProposals] = useState<EventProposal[]>([]);
+  const { items: proposals, page, loading, error, setFilter, setPage, refetch } = usePagedApi(api.eventProposals.list, {});
 
-  useEffect(() => {
-    api.eventProposals.list().then(setProposals).catch(() => {});
-  }, []);
-
-  const filtered = proposals.filter(p => filterStatus === 'all' || p.status === filterStatus);
   const detailProposal = proposals.find(p => p.id === detailId);
 
   const openForm = (template?: EventProposal) => {
@@ -113,8 +111,8 @@ export function EventProposals() {
 
   const handleWithdraw = (p: EventProposal) => {
     if (p.status === 'submitted') {
-      setProposals(prev => prev.map(x => x.id === p.id ? { ...x, status: 'withdrawn' as ProposalStatus } : x));
       toast.success(t('student.proposals.withdrawn'));
+      refetch();
       setView('list');
     } else {
       toast.info(t('student.proposals.withdrawRequest'));
@@ -534,6 +532,8 @@ export function EventProposals() {
   }
 
   // ── List view ──────────────────────────────────────────────────────────────
+  if (loading && proposals.length === 0) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
+
   return (
     <div className="p-4 lg:p-6">
       <div className="flex items-center justify-between mb-5">
@@ -557,28 +557,23 @@ export function EventProposals() {
           ['approved', t('student.proposals.tabApproved')],
           ['rejected', t('student.proposals.tabRejected')],
           ['withdrawn', t('student.proposals.tabWithdrawn')],
-        ] as const).map(([val, label]) => {
-          const count = proposals.filter(p => p.status === val).length;
-          return (
-            <button key={val} onClick={() => setFilterStatus(val as ProposalStatus | 'all')}
-              className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
-                filterStatus === val ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'
-              }`}>
-              {label}
-              {val !== 'all' && count > 0 && <span className="ml-1 opacity-60">({count})</span>}
-            </button>
-          );
-        })}
+        ] as const).map(([val, label]) => (
+          <button key={val} onClick={() => {
+            setFilterStatus(val as ProposalStatus | 'all');
+            setFilter('status', val === 'all' ? undefined : val);
+          }}
+            className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
+              filterStatus === val ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'
+            }`}>
+            {label}
+          </button>
+        ))}
       </div>
 
+      <ListStateBanner error={error} empty={!loading && proposals.length === 0} emptyLabel={t('student.proposals.noProposals')} />
+
       {/* Proposals list — desktop table / mobile cards */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <FileText className="w-10 h-10 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">{t('student.proposals.noProposals')}</p>
-          <button onClick={() => openForm()} className="mt-3 text-primary text-sm hover:underline">+ {t('student.proposals.createFirst')}</button>
-        </div>
-      ) : (
+      {proposals.length === 0 ? null : (
         <>
           {/* Desktop table */}
           <div className="hidden lg:block bg-card border border-border rounded-2xl overflow-hidden">
@@ -595,7 +590,7 @@ export function EventProposals() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map(p => {
+                {proposals.map(p => {
                   const statusInfo = PROPOSAL_STATUS_LABELS[p.status];
                   return (
                     <tr key={p.id} className="hover:bg-muted/30 transition-colors cursor-pointer"
@@ -634,7 +629,7 @@ export function EventProposals() {
 
           {/* Mobile cards */}
           <div className="lg:hidden space-y-3">
-            {filtered.map(p => {
+            {proposals.map(p => {
               const statusInfo = PROPOSAL_STATUS_LABELS[p.status];
               return (
                 <div key={p.id} className="bg-card border border-border rounded-2xl p-4"
@@ -683,6 +678,8 @@ export function EventProposals() {
           </div>
         </>
       )}
+
+      <PageControls page={page} onPageChange={setPage} />
     </div>
   );
 }

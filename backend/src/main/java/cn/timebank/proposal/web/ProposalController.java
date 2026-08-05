@@ -53,7 +53,8 @@ public class ProposalController {
             PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<ProposalDto> page = proposalService.list(pageable, auth, resolveLanguage(acceptLanguage, auth));
+        Page<ProposalDto> page = proposalService.list(pageable, auth, query.filter("status"), query.filter("categoryId"),
+                query.search(), resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

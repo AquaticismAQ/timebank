@@ -99,6 +99,43 @@ async function requestPage<T>(path: string, options: RequestOptions = {}): Promi
   return { data: parsed.data, page: parsed.page };
 }
 
+/** Flattens a `ListParams` (frontend/src/app/lib/pagination.ts) into the flat `page[number]`/`filter[x]` query shape the wire uses (APIContract.md §2.7). */
+export function buildListQuery(params?: {
+  page?: number; pageSize?: number; sort?: string; filter?: Record<string, string | undefined>; search?: string;
+}): Record<string, string | number | undefined> {
+  const query: Record<string, string | number | undefined> = {};
+  if (!params) return query;
+  if (params.page !== undefined) query['page[number]'] = params.page;
+  if (params.pageSize !== undefined) query['page[size]'] = params.pageSize;
+  if (params.sort !== undefined) query.sort = params.sort;
+  if (params.search !== undefined) query.search = params.search;
+  if (params.filter) {
+    for (const [key, value] of Object.entries(params.filter)) {
+      if (value !== undefined && value !== '') query[`filter[${key}]`] = value;
+    }
+  }
+  return query;
+}
+
+/**
+ * I1.7's conditional-GET polling helper — sends the previous response's
+ * `ETag` back as `If-None-Match` and returns `unchanged: true` on a real
+ * `304` instead of re-parsing/re-setting state (`/notifications/unread
+ * -count` already returns a real ETag and honors this server-side).
+ */
+export async function getWithEtag<T>(path: string, previousEtag: string | undefined): Promise<{ data: T; etag: string | undefined } | { unchanged: true }> {
+  const headers: Record<string, string> = { 'Accept-Language': i18n.language === 'zh' ? 'zh-CN' : 'en' };
+  if (previousEtag) headers['If-None-Match'] = previousEtag;
+  const response = await fetch(buildUrl(path), { method: 'GET', credentials: 'include', headers });
+  if (response.status === 304) return { unchanged: true };
+  const text = await response.text();
+  const parsed = text ? JSON.parse(text) : {};
+  if (!response.ok || parsed.error) {
+    throw new ApiError(parsed.error ?? { code: 'INTERNAL_ERROR', message: response.statusText, requestId: '' });
+  }
+  return { data: parsed.data as T, etag: response.headers.get('ETag') ?? undefined };
+}
+
 export const http = {
   get: <T>(path: string, query?: RequestOptions['query']) => request<T>(path, { method: 'GET', query }),
   getPage: <T>(path: string, query?: RequestOptions['query']) => requestPage<T>(path, { method: 'GET', query }),

@@ -42,7 +42,7 @@ export function AdminDashboard() {
       setPendingReviews(d.pendingReviews);
       setActiveProjects(d.activeProjects);
     }).catch(() => {});
-    api.reviewQueue.list().then(setAllReviews).catch(() => {});
+    api.reviewQueue.list({ pageSize: 100 }).then(result => setAllReviews(result.data)).catch(() => {});
   }, []);
 
   if (!stats) return <div className="p-4 lg:p-6">{t('common.loading')}</div>;
@@ -84,7 +84,7 @@ export function AdminDashboard() {
           <div className="text-xs text-muted-foreground mt-0.5">{t('admin.dashboard.totalHours')}</div>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
-          <div className="text-2xl font-semibold text-foreground">{Math.round(stats.avgCompletionRate * 100)}%</div>
+          <div className="text-2xl font-semibold text-foreground">{stats.avgCompletionRate != null ? `${Math.round(stats.avgCompletionRate * 100)}%` : '—'}</div>
           <div className="text-xs text-muted-foreground mt-0.5">{t('admin.dashboard.completionRate')}</div>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
@@ -147,7 +147,7 @@ export function AdminDashboard() {
                 {pendingReviews.map(r => (
                   <tr key={r.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
-                      <div className={`w-2 h-2 rounded-full ${r.priority === 'high' ? 'bg-red-500' : r.priority === 'normal' ? 'bg-yellow-500' : 'bg-green-500'}`} />
+                      <div className={`w-2 h-2 rounded-full ${r.priority === 'high' ? 'bg-red-500' : r.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}`} />
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-sm text-foreground">{r.studentName}</div>
@@ -169,7 +169,7 @@ export function AdminDashboard() {
           <div className="lg:hidden space-y-2">
             {pendingReviews.map(r => (
               <div key={r.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full shrink-0 ${r.priority === 'high' ? 'bg-red-500' : r.priority === 'normal' ? 'bg-yellow-500' : 'bg-green-500'}`} />
+                <div className={`w-2 h-2 rounded-full shrink-0 ${r.priority === 'high' ? 'bg-red-500' : r.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm text-foreground">{r.studentName}</span>

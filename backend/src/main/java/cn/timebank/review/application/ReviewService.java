@@ -15,7 +15,8 @@ import java.util.List;
 /** The `review` module's published interface (Design.md §6). Hosts B3.12's approval transaction. */
 public interface ReviewService {
 
-    Page<ReviewQueueItemDto> queue(Pageable pageable, Authentication auth, String resolvedLanguage);
+    /** {@code hasAnomaly}/{@code search} are contract §2.7's filter/search — see {@code ReviewQueueRepository.queryPage}. */
+    Page<ReviewQueueItemDto> queue(Pageable pageable, Boolean hasAnomaly, String search, Authentication auth, String resolvedLanguage);
 
     ReviewQueueSummaryDto summary(Authentication auth);
 

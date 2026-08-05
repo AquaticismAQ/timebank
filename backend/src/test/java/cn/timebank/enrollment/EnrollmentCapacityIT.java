@@ -14,6 +14,8 @@ import cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
@@ -85,6 +87,39 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
         } finally {
             executor.shutdown();
         }
+    }
+
+    /** I1: `GET /applications?filter[status]=...` must actually narrow the result set, not silently discard the param. */
+    @Test
+    void statusFilterNarrowsResultsToMatchingEnrollments() {
+        int capacity = 1;
+
+        Instant start = Instant.now().plus(6, ChronoUnit.DAYS);
+        CreateProjectRequest request = new CreateProjectRequest(
+                "Status Filter Test Project", "summary", "description", "cat_campus", null,
+                start, start.plusSeconds(7200), "Hall", capacity, 100, null, null,
+                Instant.now().minusSeconds(60), start);
+        ProjectDto draft = projectService.createDraft(request, "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        // Force the lazy time-sync to REGISTRATION_OPEN before registering.
+        projectService.getDetail(published.id(), adminAuth(), "zh-CN");
+
+        Authentication firstStudent = studentAuth(createStudent(200).id());
+        Authentication secondStudent = studentAuth(createStudent(201).id());
+
+        // First registration takes the only seat (CONFIRMED); the second, over capacity, is WAITLISTED.
+        EnrollmentDto confirmedEnrollment = enrollmentService.register(published.id(), new RegisterRequest(null), firstStudent, "zh-CN");
+        EnrollmentDto waitlistedEnrollment = enrollmentService.register(published.id(), new RegisterRequest(null), secondStudent, "zh-CN");
+        assertThat(confirmedEnrollment.status()).isEqualTo("CONFIRMED");
+        assertThat(waitlistedEnrollment.status()).isEqualTo("WAITLISTED");
+
+        Page<EnrollmentDto> confirmedOnly = enrollmentService.list(PageRequest.of(0, 100), "CONFIRMED", adminAuth(), "zh-CN");
+        assertThat(confirmedOnly.getContent()).extracting(EnrollmentDto::id).contains(confirmedEnrollment.id());
+        assertThat(confirmedOnly.getContent()).extracting(EnrollmentDto::id).doesNotContain(waitlistedEnrollment.id());
+
+        Page<EnrollmentDto> waitlistedOnly = enrollmentService.list(PageRequest.of(0, 100), "WAITLISTED", adminAuth(), "zh-CN");
+        assertThat(waitlistedOnly.getContent()).extracting(EnrollmentDto::id).contains(waitlistedEnrollment.id());
+        assertThat(waitlistedOnly.getContent()).extracting(EnrollmentDto::id).doesNotContain(confirmedEnrollment.id());
     }
 
     private StudentDetailDto createStudent(int n) {

@@ -31,17 +31,31 @@ public class ReviewQueueRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public List<ReviewQueueItemDto> queryPage(ScopeDescriptor scope, String resolvedLanguage, int limit, int offset) {
+    /**
+     * {@code hasAnomaly}/{@code search} are contract §2.7's {@code
+     * filter[...]}/{@code search} (I1) — {@code search} matches student
+     * name, organization name, or linked project title. {@code status}
+     * isn't filterable: the queue is always the SUBMITTED/UNDER_REVIEW set
+     * by definition (§4.7).
+     */
+    public List<ReviewQueueItemDto> queryPage(ScopeDescriptor scope, Boolean hasAnomaly, String search,
+                                               String resolvedLanguage, int limit, int offset) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("limit", limit).addValue("offset", offset);
-        String where = scopeClause(scope, params);
+        String where = scopeClause(scope, params) + filterClause(hasAnomaly, search, params);
 
         String sql = """
-                select sr.id, sr.student_id, sr.student_name, sr.source_type, sr.service_date, sr.duration_minutes,
+                select sr.id, sr.student_id, sr.student_name, g.name_zh as grade_name_zh, g.name_en as grade_name_en,
+                       c.name_zh as class_name_zh, c.name_en as class_name_en,
+                       sr.source_type, p.title as project_title, sr.organization_name,
+                       sr.service_date, sr.duration_minutes,
                        sr.service_category_id, sc.name_zh, sc.name_en, sr.status, sr.submitted_at,
                        sr.has_anomaly, sr.anomaly_note, sr.assigned_reviewer_id
                 from service_record sr
                 join service_category sc on sc.id = sr.service_category_id
+                left join grade g on g.id = sr.grade_id
+                left join class c on c.id = sr.class_id
+                left join project p on p.id = sr.project_id
                 where sr.status in ('SUBMITTED', 'UNDER_REVIEW')""" + where + """
 
                 order by sr.submitted_at asc
@@ -50,21 +64,50 @@ public class ReviewQueueRepository {
 
         return jdbcTemplate.query(sql, params, (rs, rowNum) -> {
             Instant submittedAt = rs.getTimestamp("submitted_at") != null ? rs.getTimestamp("submitted_at").toInstant() : null;
-            boolean hasAnomaly = rs.getBoolean("has_anomaly");
+            boolean anomaly = rs.getBoolean("has_anomaly");
             long daysWaiting = submittedAt != null ? ChronoUnit.DAYS.between(submittedAt, Instant.now()) : 0;
-            String priority = hasAnomaly || daysWaiting > 3 ? "high" : daysWaiting > 1 ? "medium" : "low";
+            String priority = anomaly || daysWaiting > 3 ? "high" : daysWaiting > 1 ? "medium" : "low";
             return new ReviewQueueItemDto(
                     rs.getString("id"), rs.getString("student_id"), rs.getString("student_name"),
-                    rs.getString("source_type"), rs.getObject("service_date", LocalDate.class),
+                    LocalizedNames.pick(resolvedLanguage, rs.getString("grade_name_zh"), rs.getString("grade_name_en")),
+                    LocalizedNames.pick(resolvedLanguage, rs.getString("class_name_zh"), rs.getString("class_name_en")),
+                    rs.getString("source_type"), rs.getString("project_title"), rs.getString("organization_name"),
+                    rs.getObject("service_date", LocalDate.class),
                     rs.getInt("duration_minutes"), rs.getString("service_category_id"),
                     LocalizedNames.pick(resolvedLanguage, rs.getString("name_zh"), rs.getString("name_en")),
-                    rs.getString("status"), submittedAt, daysWaiting, priority, hasAnomaly,
+                    rs.getString("status"), submittedAt, daysWaiting, priority, anomaly,
                     rs.getString("anomaly_note"), rs.getString("assigned_reviewer_id"));
         });
     }
 
+    private String filterClause(Boolean hasAnomaly, String search, MapSqlParameterSource params) {
+        StringBuilder clause = new StringBuilder();
+        if (hasAnomaly != null) {
+            params.addValue("hasAnomaly", hasAnomaly);
+            clause.append(" and sr.has_anomaly = :hasAnomaly");
+        }
+        if (search != null && !search.isBlank()) {
+            params.addValue("search", "%" + search.toLowerCase() + "%");
+            clause.append(" and (lower(sr.student_name) like :search or lower(sr.organization_name) like :search"
+                    + " or lower(coalesce(p.title, '')) like :search)");
+        }
+        return clause.toString();
+    }
+
     public long countPending(ScopeDescriptor scope) {
         return count(scope, "sr.status in ('SUBMITTED', 'UNDER_REVIEW')");
+    }
+
+    /** Same filters as {@link #queryPage} — the page envelope's `totalItems` must reflect the filtered set, not the whole queue. */
+    public long countMatching(ScopeDescriptor scope, Boolean hasAnomaly, String search) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        String where = scopeClause(scope, params) + filterClause(hasAnomaly, search, params);
+        String sql = """
+                select count(*) from service_record sr
+                left join project p on p.id = sr.project_id
+                where sr.status in ('SUBMITTED', 'UNDER_REVIEW')""" + where;
+        Long result = jdbcTemplate.queryForObject(sql, params, Long.class);
+        return result == null ? 0 : result;
     }
 
     public long countAnomalies(ScopeDescriptor scope) {

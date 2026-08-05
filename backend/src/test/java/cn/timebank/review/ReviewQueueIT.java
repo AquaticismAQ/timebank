@@ -65,7 +65,7 @@ class ReviewQueueIT extends AbstractIntegrationTest {
         StudentDetailDto student = createStudent();
         ServiceRecordDto submitted = createAndSubmitRecord(student);
 
-        var page = reviewService.queue(PageRequest.of(0, 20), adminAuth(), "zh-CN");
+        var page = reviewService.queue(PageRequest.of(0, 20), null, null, adminAuth(), "zh-CN");
 
         assertThat(page.getContent()).extracting(ReviewQueueItemDto::id).contains(submitted.id());
         ReviewQueueItemDto item = page.getContent().stream().filter(i -> i.id().equals(submitted.id())).findFirst().orElseThrow();
@@ -97,8 +97,27 @@ class ReviewQueueIT extends AbstractIntegrationTest {
                 "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
 
-        var page = reviewService.queue(PageRequest.of(0, 50), adminAuth(), "zh-CN");
+        var page = reviewService.queue(PageRequest.of(0, 50), null, null, adminAuth(), "zh-CN");
         assertThat(page.getContent()).extracting(ReviewQueueItemDto::id).doesNotContain(draft.id());
+    }
+
+    @Test
+    void queueFiltersByAnomalyAndSearchesStudentNameAndOrganization() {
+        StudentDetailDto student = createStudent();
+        ServiceRecordDto submitted = createAndSubmitRecord(student);
+
+        var byAnomaly = reviewService.queue(PageRequest.of(0, 50), true, null, adminAuth(), "zh-CN");
+        assertThat(byAnomaly.getContent()).extracting(ReviewQueueItemDto::id).doesNotContain(submitted.id());
+
+        var notAnomaly = reviewService.queue(PageRequest.of(0, 50), false, null, adminAuth(), "zh-CN");
+        assertThat(notAnomaly.getContent()).extracting(ReviewQueueItemDto::id).contains(submitted.id());
+
+        var bySearch = reviewService.queue(PageRequest.of(0, 50), null, student.displayName(), adminAuth(), "zh-CN");
+        assertThat(bySearch.getContent()).extracting(ReviewQueueItemDto::id).contains(submitted.id());
+        assertThat(bySearch.getTotalElements()).isEqualTo(bySearch.getContent().size());
+
+        var noMatch = reviewService.queue(PageRequest.of(0, 50), null, "no-such-person", adminAuth(), "zh-CN");
+        assertThat(noMatch.getContent()).isEmpty();
     }
 
     private StudentDetailDto createStudent() {

@@ -16,7 +16,7 @@ public interface NotificationService {
     void notify(String recipientUserId, String templateCode, String relatedResourceType, String relatedResourceId,
                 String resolvedLanguage);
 
-    Page<NotificationDto> listForUser(String userId, Pageable pageable);
+    Page<NotificationDto> listForUser(String userId, Pageable pageable, String read, String templateCode);
 
     /** The polled endpoint's single covering-index count query (B5.5). */
     long unreadCount(String userId);

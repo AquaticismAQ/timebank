@@ -51,7 +51,7 @@ public class AccountController {
     @PreAuthorize("hasAuthority('accounts.read')")
     public ApiResponse<List<AccountDto>> list(PageQuery query, Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<AccountDto> page = accountService.list(pageable, auth);
+        Page<AccountDto> page = accountService.list(pageable, query.filter("studentId"), auth);
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

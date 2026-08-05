@@ -16,7 +16,16 @@ import java.util.Map;
 /** The `project` module's published interface (Design.md §6). */
 public interface ProjectService {
 
-    Page<ProjectDto> list(Pageable pageable, Authentication auth, String resolvedLanguage);
+    /**
+     * {@code status} and {@code categoryId} are contract §2.7's
+     * {@code filter[...]}, {@code search} matches {@code title} only
+     * (organization name is resolved separately, post-query, from another
+     * module — see {@code ProjectServiceImpl}); null/blank means
+     * unfiltered, an unrecognized {@code status} matches nothing rather
+     * than throwing.
+     */
+    Page<ProjectDto> list(Pageable pageable, String status, String categoryId, String search,
+                           Authentication auth, String resolvedLanguage);
 
     ProjectDto getDetail(String id, Authentication auth, String resolvedLanguage);
 

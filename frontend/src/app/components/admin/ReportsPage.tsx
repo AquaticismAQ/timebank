@@ -68,7 +68,7 @@ export function ReportsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: t('admin.reports.totalServiceHours'), value: `${stats.totalServiceHours.toLocaleString()}h`, icon: Clock, color: 'text-blue-500 bg-blue-100 dark:bg-blue-900/30' },
-          { label: t('admin.reports.participationRate'), value: `${Math.round(stats.avgCompletionRate * 100)}%`, icon: Users, color: 'text-green-500 bg-green-100 dark:bg-green-900/30' },
+          { label: t('admin.reports.participationRate'), value: stats.avgCompletionRate != null ? `${Math.round(stats.avgCompletionRate * 100)}%` : '—', icon: Users, color: 'text-green-500 bg-green-100 dark:bg-green-900/30' },
           { label: t('admin.reports.activeProjects'), value: stats.activeProjects, icon: BarChart2, color: 'text-purple-500 bg-purple-100 dark:bg-purple-900/30' },
           { label: t('admin.reports.approvedThisMonth'), value: stats.approvedThisMonth, icon: TrendingUp, color: 'text-orange-500 bg-orange-100 dark:bg-orange-900/30' },
         ].map((item, i) => (

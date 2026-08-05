@@ -6,6 +6,7 @@ import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.i18n.LocalizedNames;
+import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.organization.application.OrganizationService;
 import cn.timebank.organization.application.ServiceCategoryService;
 import cn.timebank.organization.application.dto.ServiceCategoryDto;
@@ -75,8 +76,17 @@ class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     // Not readOnly: syncTimeBasedStatus conditionally writes (the B2 lesson).
-    public Page<ProjectDto> list(Pageable pageable, Authentication auth, String resolvedLanguage) {
-        Page<Project> page = repository.findAll(visibilitySpec(auth), pageable);
+    public Page<ProjectDto> list(Pageable pageable, String status, String categoryId, String search,
+                                  Authentication auth, String resolvedLanguage) {
+        // search only matches title: Project stores organizationId as a plain
+        // string FK (no JPA relationship — cross-module joins aren't allowed
+        // per this codebase's module-boundary ArchUnit rule), and there's no
+        // denormalized organization name column to search against here.
+        Specification<Project> filterSpec = FilterSpecifications.and(
+                FilterSpecifications.equalToEnum("status", ProjectStatus.class, status),
+                FilterSpecifications.equalTo("categoryId", categoryId),
+                FilterSpecifications.searchAnyContains(search, "title"));
+        Page<Project> page = repository.findAll(FilterSpecifications.and(visibilitySpec(auth), filterSpec), pageable);
         page.getContent().forEach(this::syncTimeBasedStatus);
         // Same reason as getDetail's flush — any row's version here might be
         // chained straight into an action call.

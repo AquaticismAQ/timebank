@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ArrowUpRight, ArrowDownLeft, Lock, ChevronDown, ChevronUp, Gift, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { TRANSACTION_TYPE_LABELS, RECOGNITION_LEVELS } from '../../mock/data';
@@ -6,6 +6,11 @@ import { type Account, type AccountTransaction } from '../../api/types';
 import { formatCoins } from '../../lib/format';
 import { api } from '../../api/client';
 import { useAuth } from '../../App';
+import { usePagedApi } from '../../api/useApi';
+import type { PageResult } from '../../api/http';
+import type { ListParams } from '../../lib/pagination';
+import { PageControls } from '../PageControls';
+import { ListStateBanner } from '../ListStateBanner';
 
 const colorMap: Record<string, string> = {
   green: 'text-green-600 dark:text-green-400',
@@ -29,13 +34,35 @@ export function AccountPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [account, setAccount] = useState<Account | null>(null);
-  const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     api.accounts.get(user?.studentId || 'std_001').then(setAccount).catch(() => {});
-    api.accounts.transactions(user?.studentId || 'std_001').then(setTransactions).catch(() => {});
   }, [user?.studentId]);
+
+  const accountId = account?.id;
+
+  const fetchTransactions = useCallback(
+    (params: ListParams) => {
+      if (!accountId) {
+        return Promise.resolve<PageResult<AccountTransaction>>({
+          data: [],
+          page: { number: params?.page ?? 1, size: params?.pageSize ?? 20, totalItems: 0, totalPages: 1 },
+        });
+      }
+      return api.accounts.transactions(accountId, params);
+    },
+    [accountId]
+  );
+
+  const { items: transactions, page, loading, error, setPage, refetch } = usePagedApi(fetchTransactions, {});
+
+  // The transactions fetch depends on `accountId`, which only becomes known
+  // after api.accounts.get() resolves — re-trigger once it does (the hook's
+  // own effect only re-runs on params/tick change, not on `fn` identity).
+  useEffect(() => {
+    if (accountId) refetch();
+  }, [accountId, refetch]);
 
   if (!account) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
 
@@ -138,9 +165,9 @@ export function AccountPage() {
               <h3 className="text-sm font-medium text-foreground">{t('student.account.transactions')}</h3>
             </div>
 
-            {transactions.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground text-sm">{t('student.account.noTransactions')}</div>
-            ) : (
+            <ListStateBanner error={error} empty={!loading && transactions.length === 0} emptyLabel={t('student.account.noTransactions')} />
+
+            {transactions.length > 0 && (
               <>
                 {/* Desktop table view */}
                 <table className="hidden lg:table w-full text-sm">
@@ -220,6 +247,10 @@ export function AccountPage() {
                 </div>
               </>
             )}
+
+            <div className="px-4 pb-4">
+              <PageControls page={page} onPageChange={setPage} />
+            </div>
           </div>
         </div>
       </div>

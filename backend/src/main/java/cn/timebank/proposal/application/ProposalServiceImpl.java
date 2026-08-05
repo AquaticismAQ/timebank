@@ -7,6 +7,7 @@ import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.common.idempotency.IdempotencyService;
+import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.organization.application.OrganizationService;
 import cn.timebank.organization.application.ServiceCategoryService;
@@ -90,8 +91,14 @@ class ProposalServiceImpl implements ProposalService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProposalDto> list(Pageable pageable, Authentication auth, String resolvedLanguage) {
-        Page<EventProposal> page = repository.findAll(scopeSpecification(auth), pageable);
+    public Page<ProposalDto> list(Pageable pageable, Authentication auth, String status, String categoryId,
+                                   String search, String resolvedLanguage) {
+        Specification<EventProposal> filterSpec = FilterSpecifications.and(
+                FilterSpecifications.equalToEnum("status", ProposalStatus.class, status),
+                FilterSpecifications.equalTo("categoryId", categoryId),
+                FilterSpecifications.searchAnyContains(search, "title"));
+        Specification<EventProposal> spec = FilterSpecifications.and(scopeSpecification(auth), filterSpec);
+        Page<EventProposal> page = repository.findAll(spec, pageable);
         return page.map(p -> toDto(p, resolvedLanguage));
     }
 

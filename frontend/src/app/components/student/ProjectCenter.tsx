@@ -1,10 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState } from 'react';
 import { Search, X, MapPin, Clock, Users, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADE_LABEL_KEYS, resolveCategoryName } from '../../mock/data';
 import { type Project, type ProjectStatus } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { usePagedApi } from '../../api/useApi';
+import { PageControls } from '../PageControls';
+import { ListStateBanner } from '../ListStateBanner';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -20,7 +23,7 @@ type FilterStatus = ProjectStatus | 'all' | 'canApply';
 
 export function ProjectCenter() {
   const { t, i18n } = useTranslation();
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { items, page, loading, error, setSearch: setPagedSearch, setFilter, setPage } = usePagedApi(api.projects.list, {});
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -28,18 +31,20 @@ export function ProjectCenter() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [applied, setApplied] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    api.projects.list().then(setProjects).catch(() => {});
-  }, []);
+  const applyStatusFilter = (val: FilterStatus) => {
+    setFilterStatus(val);
+    setFilter('status', val === 'all' ? undefined : val === 'canApply' ? 'registrationOpen' : val);
+  };
 
-  const filtered = useMemo(() => {
-    return projects.filter(p => {
-      const matchSearch = !search || p.title.includes(search) || p.organizationName.includes(search) || p.location.includes(search);
-      const matchStatus = filterStatus === 'all' ? true : filterStatus === 'canApply' ? p.status === 'registrationOpen' : p.status === filterStatus;
-      const matchCat = filterCategory === 'all' || p.categoryId === filterCategory;
-      return matchSearch && matchStatus && matchCat;
-    });
-  }, [search, filterStatus, filterCategory]);
+  const applyCategoryFilter = (val: string) => {
+    setFilterCategory(val);
+    setFilter('categoryId', val === 'all' ? undefined : val);
+  };
+
+  const applySearch = (val: string) => {
+    setSearch(val);
+    setPagedSearch(val);
+  };
 
   const handleApply = (proj: Project) => {
     if (applied.has(proj.id) || proj.myApplicationStatus) { toast.info(t('student.projects.alreadyApplied')); return; }
@@ -71,7 +76,7 @@ export function ProjectCenter() {
         <div className="text-xs text-muted-foreground font-medium mb-2">{t('student.projects.statusFilter')}</div>
         <div className="flex flex-col gap-1">
           {statusOptions.map(opt => (
-            <button key={opt.value} onClick={() => setFilterStatus(opt.value as FilterStatus)}
+            <button key={opt.value} onClick={() => applyStatusFilter(opt.value as FilterStatus)}
               className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                 filterStatus === opt.value ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'text-foreground hover:bg-accent'
               }`}>
@@ -83,14 +88,14 @@ export function ProjectCenter() {
       <div>
         <div className="text-xs text-muted-foreground font-medium mb-2">{t('student.projects.serviceCategory')}</div>
         <div className="flex flex-col gap-1">
-          <button onClick={() => setFilterCategory('all')}
+          <button onClick={() => applyCategoryFilter('all')}
             className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
               filterCategory === 'all' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'text-foreground hover:bg-accent'
             }`}>
             {t('student.projects.allCategories')}
           </button>
           {SERVICE_CATEGORIES.map(cat => (
-            <button key={cat.id} onClick={() => setFilterCategory(cat.id)}
+            <button key={cat.id} onClick={() => applyCategoryFilter(cat.id)}
               className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                 filterCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'text-foreground hover:bg-accent'
               }`}>
@@ -102,12 +107,14 @@ export function ProjectCenter() {
     </div>
   );
 
+  if (loading && items.length === 0) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
+
   return (
     <div className="p-4 lg:p-6">
       <div className="mb-4 lg:mb-5 flex items-center justify-between">
         <div>
           <h2 className="text-foreground">{t('student.projects.title')}</h2>
-          <p className="text-sm text-muted-foreground">{t('student.projects.count', { count: filtered.length })}</p>
+          <p className="text-sm text-muted-foreground">{t('student.projects.count', { count: items.length })}</p>
         </div>
       </div>
 
@@ -115,11 +122,11 @@ export function ProjectCenter() {
       <div className="flex gap-2 mb-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+          <input type="text" value={search} onChange={e => applySearch(e.target.value)}
             placeholder={t('student.projects.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
           {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <button onClick={() => applySearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X className="w-3 h-3" />
             </button>
           )}
@@ -139,7 +146,7 @@ export function ProjectCenter() {
         <div className="lg:hidden bg-card border border-border rounded-xl p-4 mb-4">
           <div className="flex gap-2 flex-wrap mb-3">
             {statusOptions.map(opt => (
-              <button key={opt.value} onClick={() => setFilterStatus(opt.value as FilterStatus)}
+              <button key={opt.value} onClick={() => applyStatusFilter(opt.value as FilterStatus)}
                 className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
                   filterStatus === opt.value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
                 }`}>
@@ -148,12 +155,12 @@ export function ProjectCenter() {
             ))}
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setFilterCategory('all')}
+            <button onClick={() => applyCategoryFilter('all')}
               className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${filterCategory === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
               {t('student.projects.allCategories')}
             </button>
             {SERVICE_CATEGORIES.map(cat => (
-              <button key={cat.id} onClick={() => setFilterCategory(cat.id)}
+              <button key={cat.id} onClick={() => applyCategoryFilter(cat.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${filterCategory === cat.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
                 {resolveCategoryName(cat.id, i18n.language)}
               </button>
@@ -170,7 +177,7 @@ export function ProjectCenter() {
           <div className="bg-card border border-border rounded-2xl p-4 sticky top-4">
             <FilterPanel />
             {(filterStatus !== 'all' || filterCategory !== 'all') && (
-              <button onClick={() => { setFilterStatus('all'); setFilterCategory('all'); }}
+              <button onClick={() => { applyStatusFilter('all'); applyCategoryFilter('all'); }}
                 className="mt-3 w-full text-xs text-muted-foreground hover:text-destructive transition-colors text-center">
                 {t('student.projects.clearFilter')}
               </button>
@@ -180,18 +187,18 @@ export function ProjectCenter() {
 
         {/* Project grid */}
         <div className="flex-1 min-w-0">
-          {filtered.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">
-              <Search className="w-10 h-10 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">{t('student.projects.noMatch')}</p>
-              <button onClick={() => { setSearch(''); setFilterStatus('all'); setFilterCategory('all'); }}
+          <ListStateBanner error={error} empty={!loading && items.length === 0} emptyLabel={t('student.projects.noMatch')} />
+          {!loading && !error && items.length === 0 && (search || filterStatus !== 'all' || filterCategory !== 'all') && (
+            <div className="text-center -mt-8">
+              <button onClick={() => { applySearch(''); applyStatusFilter('all'); applyCategoryFilter('all'); }}
                 className="mt-2 text-xs text-primary hover:underline">
                 {t('student.projects.clearAllFilters')}
               </button>
             </div>
-          ) : (
+          )}
+          {items.length > 0 && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {filtered.map(proj => {
+              {items.map(proj => {
                 const status = PROJECT_STATUS_LABELS[proj.status];
                 const isExpanded = expandedId === proj.id;
                 const btnText = getApplyBtnText(proj);
@@ -255,6 +262,7 @@ export function ProjectCenter() {
               })}
             </div>
           )}
+          <PageControls page={page} onPageChange={setPage} />
         </div>
       </div>
     </div>

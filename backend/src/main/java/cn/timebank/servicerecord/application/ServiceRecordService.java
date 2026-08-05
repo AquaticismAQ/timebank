@@ -17,7 +17,8 @@ import java.util.List;
 /** The `servicerecord` module's published interface (Design.md §6). */
 public interface ServiceRecordService {
 
-    Page<ServiceRecordDto> list(Pageable pageable, Authentication auth, String resolvedLanguage);
+    Page<ServiceRecordDto> list(Pageable pageable, Authentication auth, String status, String sourceType,
+                                 String serviceCategoryId, String search, String resolvedLanguage);
 
     ServiceRecordDto getDetail(String id, Authentication auth, String resolvedLanguage);
 

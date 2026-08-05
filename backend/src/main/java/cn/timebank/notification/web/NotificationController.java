@@ -47,7 +47,8 @@ public class NotificationController {
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<List<NotificationDto>> list(PageQuery query, Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<NotificationDto> page = notificationService.listForUser(principalId(auth), pageable);
+        Page<NotificationDto> page = notificationService.listForUser(principalId(auth), pageable,
+                query.filter("read"), query.filter("templateCode"));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

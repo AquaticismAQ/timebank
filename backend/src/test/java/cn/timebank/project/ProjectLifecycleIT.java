@@ -8,6 +8,8 @@ import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
@@ -69,11 +71,40 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         assertThat(closed.status()).isEqualTo("CLOSED");
     }
 
+    @Test
+    void listFiltersByStatusAndSearchesByTitleOnly() {
+        ProjectDto draftProject = createDraft("Filter Test Draft Alpha",
+                Instant.now().plusSeconds(1000), Instant.now().plusSeconds(2000));
+        ProjectDto toClose = createDraft("Filter Test Draft Beta",
+                Instant.now().minusSeconds(10), Instant.now().plusSeconds(1000));
+        ProjectDto published = projectService.publish(toClose.id(), toClose.version(), "usr_test_admin", "zh-CN");
+        ProjectDto closedProject = projectService.close(published.id(), published.version(), "usr_test_admin", "zh-CN");
+
+        // status filter narrows results: the still-draft project is included, the closed one is not.
+        Page<ProjectDto> draftOnly = projectService.list(PageRequest.of(0, 100), "DRAFT", null, null, adminAuth(), "zh-CN");
+        assertThat(draftOnly.getContent()).extracting(ProjectDto::id).contains(draftProject.id());
+        assertThat(draftOnly.getContent()).extracting(ProjectDto::id).doesNotContain(closedProject.id());
+
+        // search matches title.
+        Page<ProjectDto> searchMatch = projectService.list(PageRequest.of(0, 100), null, null,
+                "Filter Test Draft Alpha", adminAuth(), "zh-CN");
+        assertThat(searchMatch.getContent()).extracting(ProjectDto::id).containsExactly(draftProject.id());
+
+        // an unmatched search returns an empty page, not an error.
+        Page<ProjectDto> searchNoMatch = projectService.list(PageRequest.of(0, 100), null, null,
+                "NoSuchProjectTitleXYZ", adminAuth(), "zh-CN");
+        assertThat(searchNoMatch.getContent()).isEmpty();
+    }
+
     private ProjectDto createDraft(Instant registrationOpenAt, Instant registrationCloseAt) {
+        return createDraft("Test Project", registrationOpenAt, registrationCloseAt);
+    }
+
+    private ProjectDto createDraft(String title, Instant registrationOpenAt, Instant registrationCloseAt) {
         Instant start = Instant.now().plus(5, ChronoUnit.DAYS);
         Instant end = start.plusSeconds(7200);
         CreateProjectRequest request = new CreateProjectRequest(
-                "Test Project", "A summary", "A description", "cat_campus", null,
+                title, "A summary", "A description", "cat_campus", null,
                 start, end, "Main Hall", 10, 100, null, null, registrationOpenAt, registrationCloseAt);
         return projectService.createDraft(request, "usr_test_admin", "zh-CN");
     }

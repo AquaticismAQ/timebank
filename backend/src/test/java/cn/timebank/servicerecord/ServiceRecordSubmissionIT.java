@@ -15,6 +15,9 @@ import cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
@@ -189,6 +192,42 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
         assertThatThrownBy(() -> serviceRecordService.updateDraft(draft.id(), staleUpdate, studentAuth(student.id()), "zh-CN"))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("version");
+    }
+
+    @Test
+    void listFiltersByStatusAndSearchesByOrganizationName() {
+        StudentDetailDto student = createStudent();
+
+        Instant end = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant start = end.minusSeconds(3600);
+        CreateServiceRecordRequest requestA = new CreateServiceRecordRequest(
+                "SELF", null, null, "Sunrise Shelter", LocalDate.now().minusDays(1), start, end,
+                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
+        ServiceRecordDto recordA = serviceRecordService.createDraft(requestA, student.id(), student.id(), "zh-CN");
+        serviceRecordService.submit(recordA.id(), studentAuth(student.id()), "idem-list-a", "zh-CN");
+
+        CreateServiceRecordRequest requestB = new CreateServiceRecordRequest(
+                "SELF", null, null, "Riverside Library", LocalDate.now().minusDays(1), start, end,
+                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
+        // recordB is left in DRAFT status (not submitted).
+        ServiceRecordDto recordB = serviceRecordService.createDraft(requestB, student.id(), student.id(), "zh-CN");
+
+        Pageable pageable = PageRequest.of(0, 20);
+        Authentication auth = studentAuth(student.id());
+
+        // A status filter narrows results to only the SUBMITTED record.
+        Page<ServiceRecordDto> submittedOnly = serviceRecordService.list(pageable, auth, "SUBMITTED", null, null, null, "zh-CN");
+        assertThat(submittedOnly.getContent()).extracting(ServiceRecordDto::id).containsExactly(recordA.id());
+
+        // A search substring matches on organizationName.
+        Page<ServiceRecordDto> searchMatch = serviceRecordService.list(pageable, auth, null, null, null, "sunrise", "zh-CN");
+        assertThat(searchMatch.getContent()).extracting(ServiceRecordDto::id).containsExactly(recordA.id());
+
+        // An unmatched search returns an empty page.
+        Page<ServiceRecordDto> searchNoMatch = serviceRecordService.list(pageable, auth, null, null, null, "no-such-organization", "zh-CN");
+        assertThat(searchNoMatch.getContent()).isEmpty();
+
+        assertThat(recordB.status()).isEqualTo("DRAFT");
     }
 
     private ServiceRecordDto createDraft(StudentDetailDto student, List<String> evidenceFileIds, boolean includesTravelTime) {

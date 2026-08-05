@@ -13,6 +13,8 @@ import cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
@@ -172,6 +174,19 @@ class AccountLedgerIT extends AbstractIntegrationTest {
         AccountTransactionDto reversal = accountService.reverse(original.id(),
                 new ReverseRequest("CORRECTION_ERROR", "Fixing while frozen"), "usr_test_admin", "idem-frozen-" + original.id());
         assertThat(reversal.amount()).isEqualTo(-200);
+    }
+
+    @Test
+    void listFiltersByStudentIdForTheAccountsGetResolutionPath() {
+        String studentId = createStudent();
+        accountService.credit(studentId, "grade_6", "class_6A", 100, "test", "src_1", "SERVICE_APPROVED", "usr_test_admin");
+        String otherStudentId = createStudent();
+        accountService.credit(otherStudentId, "grade_6", "class_6A", 100, "test", "src_2", "SERVICE_APPROVED", "usr_test_admin");
+
+        Page<AccountDto> filtered = accountService.list(PageRequest.of(0, 20), studentId, adminAuth());
+
+        assertThat(filtered.getContent()).hasSize(1);
+        assertThat(filtered.getContent().get(0).studentId()).isEqualTo(studentId);
     }
 
     private String createStudent() {

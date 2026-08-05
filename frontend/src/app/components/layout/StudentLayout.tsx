@@ -3,7 +3,7 @@ import { Home, FolderOpen, FileText, Wallet, User, Bell, TrendingUp, Lightbulb }
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../App';
 import { api } from '../../api/client';
-import { type StudentProgress, type Account, type Notification } from '../../api/types';
+import { type StudentProgress, type Account } from '../../api/types';
 import { formatCoins, minutesToHours } from '../../lib/format';
 import { AppShell, type ShellNavItem } from './AppShell';
 
@@ -12,15 +12,13 @@ export function StudentLayout() {
   const { user } = useAuth();
   const [progress, setProgress] = useState<StudentProgress | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     api.students.progress(user?.studentId || 'std_001').then(setProgress).catch(() => {});
     api.accounts.get(user?.studentId || 'std_001').then(setAccount).catch(() => {});
-    api.notifications.list().then(setNotifications).catch(() => {});
+    api.notifications.unreadCount().then(setUnreadCount).catch(() => {});
   }, [user?.studentId]);
-
-  const unreadCount = notifications.filter(n => n.userId === user?.id && !n.isRead).length;
 
   const bottomNavItems = useMemo((): ShellNavItem[] => [
     { to: '/student/home', icon: Home, label: t('layout.student.home') },

@@ -6,11 +6,13 @@ import { type Student, type AccountTransaction } from '../../api/types';
 import { formatCoins, minutesToHours } from '../../lib/format';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { usePagedApi } from '../../api/useApi';
+import { PageControls } from '../PageControls';
+import { ListStateBanner } from '../ListStateBanner';
 
 export function AccountManagement() {
   const { t } = useTranslation();
-  const [students, setStudents] = useState<Student[]>([]);
-  const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
+  const { items, page, loading, error, setPage, setSearch: setApiSearch } = usePagedApi<Student>(api.students.list, {});
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAdjust, setShowAdjust] = useState(false);
@@ -19,16 +21,38 @@ export function AccountManagement() {
   const [adjustReason, setAdjustReason] = useState('');
   const [adjustNote, setAdjustNote] = useState('');
 
-  useEffect(() => {
-    api.students.list().then(setStudents).catch(() => {});
-    api.accounts.transactions('all').then(setTransactions).catch(() => {});
-  }, []);
+  // Per-row transaction preview — there's no bulk "all accounts' transactions" endpoint on the real
+  // backend, so recent transactions are fetched lazily for one student at a time, only when its row
+  // is expanded (resolve accountId via api.accounts.get, then a small pageSize:10 preview fetch).
+  const [expandedTx, setExpandedTx] = useState<AccountTransaction[]>([]);
+  const [expandedTxLoading, setExpandedTxLoading] = useState(false);
 
+  useEffect(() => {
+    if (!expandedId) {
+      setExpandedTx([]);
+      return;
+    }
+    let cancelled = false;
+    setExpandedTxLoading(true);
+    api.accounts.get(expandedId)
+      .then(account => api.accounts.transactions(account.id, { pageSize: 10 }))
+      .then(result => { if (!cancelled) setExpandedTx(result.data); })
+      .catch(() => { if (!cancelled) setExpandedTx([]); })
+      .finally(() => { if (!cancelled) setExpandedTxLoading(false); });
+    return () => { cancelled = true; };
+  }, [expandedId]);
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setApiSearch(value);
+  };
+
+  // Sorted by timeCoinBalance descending — the real /students list endpoint doesn't return
+  // timeCoinBalance at all, so this can only ever be a client-side sort of the current page,
+  // tolerating undefined via `?? 0` (same reasoning as StudentList.tsx's CLIENT_ONLY_SORT_KEYS).
   const filtered = useMemo(() => {
-    return students.filter(s =>
-      !search || s.name.includes(search) || s.studentNumber.includes(search)
-    ).sort((a, b) => b.timeCoinBalance - a.timeCoinBalance);
-  }, [search]);
+    return [...items].sort((a, b) => (b.timeCoinBalance ?? 0) - (a.timeCoinBalance ?? 0));
+  }, [items]);
 
   const colorMap: Record<string, string> = {
     green: 'text-green-600 dark:text-green-400',
@@ -62,23 +86,26 @@ export function AccountManagement() {
         </button>
       </div>
 
-      {/* Summary */}
+      {/* Summary — computed from the current page only; there's no aggregate-stats endpoint and the
+          real /students list is paginated, not fetched in full (same caveat as StudentList.tsx). */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="text-2xl font-semibold text-foreground">
-            {formatCoins(students.reduce((s, st) => s + st.timeCoinBalance, 0))}
+            {formatCoins(items.reduce((s, st) => s + (st.timeCoinBalance ?? 0), 0))}
           </div>
           <div className="text-xs text-muted-foreground">{t('admin.accounts.totalCirculating')}</div>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="text-2xl font-semibold text-foreground">
-            {students.filter(s => s.timeCoinBalance > 0).length}
+            {items.filter(s => (s.timeCoinBalance ?? 0) > 0).length}
           </div>
           <div className="text-xs text-muted-foreground">{t('admin.accounts.accountsWithBalance')}</div>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="text-2xl font-semibold text-foreground">
-            {formatCoins(Math.round(students.reduce((s, st) => s + st.timeCoinBalance, 0) / students.length))}
+            {items.length > 0
+              ? formatCoins(Math.round(items.reduce((s, st) => s + (st.timeCoinBalance ?? 0), 0) / items.length))
+              : formatCoins(0)}
           </div>
           <div className="text-xs text-muted-foreground">{t('admin.accounts.avgBalance')}</div>
         </div>
@@ -87,15 +114,17 @@ export function AccountManagement() {
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder={t('admin.accounts.searchPlaceholder')}
+        <input type="text" value={search} onChange={e => handleSearchChange(e.target.value)} placeholder={t('admin.accounts.searchPlaceholder')}
           className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
       </div>
+
+      <ListStateBanner error={error} empty={!loading && filtered.length === 0} emptyLabel="No students" />
 
       {/* Account list */}
       <div className="space-y-2">
         {filtered.map(student => {
           const isExpanded = expandedId === student.id;
-          const studentTxs = transactions.filter(t => t.accountId === `acc_${student.id.split('_')[1]}`);
+          const studentTxs = isExpanded ? expandedTx : [];
 
           return (
             <div key={student.id} className="bg-card border border-border rounded-xl overflow-hidden">
@@ -108,10 +137,10 @@ export function AccountManagement() {
                     <span className="text-sm text-foreground font-medium">{student.name}</span>
                     <span className="text-xs text-muted-foreground">{student.grade} {student.className}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: (student.completedMinutes / 60) * 2, redeemed: 0 })}</div>
+                  <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: ((student.completedMinutes ?? 0) / 60) * 2, redeemed: 0 })}</div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-lg font-semibold text-foreground">{formatCoins(student.timeCoinBalance)}</div>
+                  <div className="text-lg font-semibold text-foreground">{formatCoins(student.timeCoinBalance ?? 0)}</div>
                   <div className="text-xs text-muted-foreground">{t('admin.accounts.coinsUnit')}</div>
                 </div>
                 {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -119,7 +148,9 @@ export function AccountManagement() {
 
               {isExpanded && (
                 <div className="px-4 pb-4 border-t border-border pt-3 space-y-3">
-                  {studentTxs.length === 0 ? (
+                  {expandedTxLoading ? (
+                    <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
+                  ) : studentTxs.length === 0 ? (
                     <p className="text-xs text-muted-foreground">{t('admin.accounts.noTransactions')}</p>
                   ) : (
                     studentTxs.map(tx => {
@@ -154,6 +185,8 @@ export function AccountManagement() {
           );
         })}
       </div>
+
+      <PageControls page={page} onPageChange={setPage} />
 
       {/* Adjust modal */}
       {showAdjust && (

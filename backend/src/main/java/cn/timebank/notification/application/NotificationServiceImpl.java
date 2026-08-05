@@ -2,11 +2,15 @@ package cn.timebank.notification.application;
 
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.notification.application.dto.NotificationDto;
 import cn.timebank.notification.domain.Notification;
 import cn.timebank.notification.infrastructure.NotificationRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,8 +39,15 @@ class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<NotificationDto> listForUser(String userId, Pageable pageable) {
-        return repository.findByRecipientUserIdOrderByCreatedAtDesc(userId, pageable).map(this::toDto);
+    public Page<NotificationDto> listForUser(String userId, Pageable pageable, String read, String templateCode) {
+        Specification<Notification> spec = FilterSpecifications.and(
+                FilterSpecifications.equalTo("recipientUserId", userId),
+                FilterSpecifications.equalToBoolean("read", read),
+                FilterSpecifications.equalTo("templateCode", templateCode));
+        Pageable effectivePageable = pageable.getSort().isUnsorted()
+                ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(Sort.Direction.DESC, "createdAt"))
+                : pageable;
+        return repository.findAll(spec, effectivePageable).map(this::toDto);
     }
 
     @Override

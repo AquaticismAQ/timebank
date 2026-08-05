@@ -7,6 +7,7 @@ import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.common.idempotency.IdempotencyService;
+import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.file.application.FileService;
 import cn.timebank.organization.application.ServiceCategoryService;
 import cn.timebank.organization.application.dto.ServiceCategoryDto;
@@ -86,9 +87,15 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ServiceRecordDto> list(Pageable pageable, Authentication auth, String resolvedLanguage) {
+    public Page<ServiceRecordDto> list(Pageable pageable, Authentication auth, String status, String sourceType,
+                                        String serviceCategoryId, String search, String resolvedLanguage) {
         Specification<ServiceRecord> scopeSpec = scopeSpecification(auth);
-        Page<ServiceRecord> page = repository.findAll(scopeSpec, pageable);
+        Specification<ServiceRecord> filterSpec = FilterSpecifications.and(
+                FilterSpecifications.equalToEnum("status", ServiceRecordStatus.class, status),
+                FilterSpecifications.equalToEnum("sourceType", SourceType.class, sourceType),
+                FilterSpecifications.equalTo("serviceCategoryId", serviceCategoryId),
+                FilterSpecifications.searchAnyContains(search, "studentName", "organizationName"));
+        Page<ServiceRecord> page = repository.findAll(FilterSpecifications.and(scopeSpec, filterSpec), pageable);
         Map<String, String> categoryNames = categoryNameMap(resolvedLanguage);
         return page.map(r -> toDto(r, categoryNames));
     }

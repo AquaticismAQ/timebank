@@ -5,6 +5,9 @@ import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADES, GRADE_LABEL_KEYS, re
 import { type Project, type ProjectStatus, type Organization } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { usePagedApi } from '../../api/useApi';
+import { PageControls } from '../PageControls';
+import { ListStateBanner } from '../ListStateBanner';
 
 const colorMap: Record<string, string> = {
   gray:   'bg-muted text-muted-foreground',
@@ -235,39 +238,69 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations }: 
   );
 }
 
+type SortKey = 'createdAt' | 'startAt' | 'enrolledCount';
+// `enrolledCount` is a computed field with no backend column to sort on (ProjectController's SORTABLE
+// set only allows id/startAt/registrationOpenAt/status/createdAt), so it stays client-side, current-page-only.
+const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['enrolledCount'];
+
 export function ProjectManagement() {
   const { t, i18n } = useTranslation();
+  const { items, page, loading, error, setFilter, setSearch: setPagedSearch, setSort, setPage } =
+    usePagedApi<Project>(api.projects.list, {});
+
   const [projects, setProjects] = useState<Project[]>([]);
+  // keep a local editable copy of the current page so admin edits/status actions reflect immediately without a refetch
+  useEffect(() => { setProjects(items); }, [items]);
+
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [schoolName, setSchoolName] = useState('');
   useEffect(() => {
-    api.projects.list().then(setProjects).catch(() => {});
-    api.organizations.list().then(setOrganizations).catch(() => {});
+    api.organizations.list({ pageSize: 100 }).then(result => setOrganizations(result.data)).catch(() => {});
     api.school.getInfo().then(info => setSchoolName(info.name)).catch(() => {});
   }, []);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<ProjectStatus | 'all'>('all');
   const [filterCategory, setFilterCategory] = useState('all');
-  const [sortKey, setSortKey] = useState<'createdAt' | 'startAt' | 'enrolledCount'>('createdAt');
+  const [sortKey, setSortKey] = useState<SortKey>('createdAt');
   const [sortDesc, setSortDesc] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
 
-  const filtered = useMemo(() => {
-    let items = projects.filter(p => {
-      const matchSearch = !search || p.title.includes(search) || p.organizationName.includes(search);
-      const matchStatus = filterStatus === 'all' || p.status === filterStatus;
-      const matchCat = filterCategory === 'all' || p.categoryId === filterCategory;
-      return matchSearch && matchStatus && matchCat;
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPagedSearch(value);
+  };
+
+  const handleStatusChange = (value: ProjectStatus | 'all') => {
+    setFilterStatus(value);
+    setFilter('status', value === 'all' ? undefined : value);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setFilterCategory(value);
+    setFilter('categoryId', value === 'all' ? undefined : value);
+  };
+
+  const handleSortClick = (key: SortKey) => {
+    const nextDesc = sortKey === key ? !sortDesc : true;
+    setSortKey(key);
+    setSortDesc(nextDesc);
+    if (!CLIENT_ONLY_SORT_KEYS.includes(key)) setSort(nextDesc ? `-${key}` : key);
+    else setSort(undefined);
+  };
+
+  // Search/status/category filtering happen server-side (see handle*Change above). Server-sortable keys
+  // arrive pre-sorted in `projects`; enrolledCount has no backend column, so it's sorted locally, page-only.
+  const sorted = useMemo(() => {
+    if (!CLIENT_ONLY_SORT_KEYS.includes(sortKey)) return projects;
+    return [...projects].sort((a, b) => {
+      const av = a[sortKey] as number;
+      const bv = b[sortKey] as number;
+      return sortDesc ? bv - av : av - bv;
     });
-    return [...items].sort((a, b) => {
-      const av = a[sortKey] as string | number;
-      const bv = b[sortKey] as string | number;
-      return sortDesc ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
-    });
-  }, [projects, search, filterStatus, filterCategory, sortKey, sortDesc]);
+  }, [projects, sortKey, sortDesc]);
 
   const openEdit = (proj: Project) => {
     setMenuOpenId(null);
@@ -313,6 +346,8 @@ export function ProjectManagement() {
     toast.success(t('admin.projects.toastAction', { action: labels[action] || action, title: proj.title }));
   };
 
+  if (loading && items.length === 0) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
+
   return (
     <div className="p-4 lg:p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -330,15 +365,15 @@ export function ProjectManagement() {
       <div className="flex gap-2 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input type="text" value={search} onChange={e => setSearch(e.target.value)}          placeholder={t('admin.projects.searchPlaceholder')}
+          <input type="text" value={search} onChange={e => handleSearchChange(e.target.value)}          placeholder={t('admin.projects.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as ProjectStatus | 'all')}
+        <select value={filterStatus} onChange={e => handleStatusChange(e.target.value as ProjectStatus | 'all')}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.projects.allStatuses')}</option>
           {Object.entries(PROJECT_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{t(v.label)}</option>)}
         </select>
-        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+        <select value={filterCategory} onChange={e => handleCategoryChange(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.projects.allCategories')}</option>
           {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{resolveCategoryName(c.id, i18n.language)}</option>)}
@@ -347,21 +382,25 @@ export function ProjectManagement() {
 
       {/* Sort */}
       <div className="flex gap-2">
-        {[
-          { key: 'createdAt', label: t('admin.projects.sortCreated') },
-          { key: 'startAt', label: t('admin.projects.sortStartAt') },
-          { key: 'enrolledCount', label: t('admin.projects.sortEnrolled') },
-        ].map(({ key, label }) => (
-          <button key={key} onClick={() => { if (sortKey === key) setSortDesc(!sortDesc); else { setSortKey(key as any); setSortDesc(true); } }}
+        {(
+          [
+            { key: 'createdAt' as SortKey, label: t('admin.projects.sortCreated') },
+            { key: 'startAt' as SortKey, label: t('admin.projects.sortStartAt') },
+            { key: 'enrolledCount' as SortKey, label: t('admin.projects.sortEnrolled') },
+          ]
+        ).map(({ key, label }) => (
+          <button key={key} onClick={() => handleSortClick(key)}
             className={`px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition-colors ${sortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
             {label} {sortKey === key && (sortDesc ? '↓' : '↑')}
           </button>
         ))}
       </div>
 
+      <ListStateBanner error={error} empty={!loading && items.length === 0} emptyLabel="No projects" />
+
       {/* Project grid */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-        {filtered.map(proj => {
+        {sorted.map(proj => {
           const status = PROJECT_STATUS_LABELS[proj.status];
           const fillPct = (proj.enrolledCount / proj.capacity) * 100;
 
@@ -448,6 +487,7 @@ export function ProjectManagement() {
           );
         })}
       </div>
+      <PageControls page={page} onPageChange={setPage} />
 
       {/* Edit modal */}
       {editProject && editForm && (

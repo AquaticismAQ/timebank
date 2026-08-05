@@ -1,16 +1,17 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, CheckCircle, XCircle, RotateCcw, AlertTriangle, Clock, ChevronDown, ChevronUp, Send } from 'lucide-react';
 import { GRADE_LABEL_KEYS } from '../../mock/data';
-import { type ReviewQueueItem } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { usePagedApi } from '../../api/useApi';
+import { PageControls } from '../PageControls';
+import { ListStateBanner } from '../ListStateBanner';
 
 type SortKey = 'daysWaiting' | 'submittedAt' | 'durationMinutes';
 
 export function AuditCenter() {
   const { t } = useTranslation();
-  const [search, setSearch] = useState('');
   const [filterGrade, setFilterGrade] = useState('all');
   const [showAnomaly, setShowAnomaly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('daysWaiting');
@@ -20,29 +21,25 @@ export function AuditCenter() {
   const [decisionModal, setDecisionModal] = useState<{ id: string; action: 'approve' | 'return' | 'reject' } | null>(null);
   const [decisionComment, setDecisionComment] = useState('');
   const [decisionReason, setDecisionReason] = useState('');
-  const [queue, setQueue] = useState<ReviewQueueItem[]>([]);
 
-  useEffect(() => {
-    api.reviewQueue.list().then(setQueue).catch(() => {});
-  }, []);
+  const { items, page, loading, error, params, setPage, setSearch, setFilter, refetch } = usePagedApi(api.reviewQueue.list, {});
 
-  const grades = [...new Set(queue.map(r => r.grade))];;
+  // No server-side `grade` filter exists on /review-queue — kept client-side,
+  // so this only narrows within the currently fetched page, not the whole dataset.
+  const grades = [...new Set(items.map(r => r.grade))];
 
+  // ReviewController's SORTABLE whitelist is currently empty (Set.of()), so no field
+  // is sortable server-side — sorting stays entirely client-side on the current page.
   const filtered = useMemo(() => {
-    let items = queue.filter(r => {
-      const matchSearch = !search || r.studentName.includes(search) || r.organizationName.includes(search) || (r.projectTitle || '').includes(search);
-      const matchGrade = filterGrade === 'all' || r.grade === filterGrade;
-      const matchAnomaly = !showAnomaly || r.hasAnomaly;
-      return matchSearch && matchGrade && matchAnomaly;
-    });
-    items = [...items].sort((a, b) => {
+    let rows = items.filter(r => filterGrade === 'all' || r.grade === filterGrade);
+    rows = [...rows].sort((a, b) => {
       const aVal = a[sortKey] as number | string;
       const bVal = b[sortKey] as number | string;
       if (sortDesc) return bVal > aVal ? 1 : -1;
       return aVal > bVal ? 1 : -1;
     });
-    return items;
-  }, [search, filterGrade, showAnomaly, sortKey, sortDesc, queue]);
+    return rows;
+  }, [items, filterGrade, sortKey, sortDesc]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDesc(!sortDesc);
@@ -68,27 +65,27 @@ export function AuditCenter() {
     if (!decisionModal) return;
     const { id, action } = decisionModal;
     const actionLabels: Record<string, string> = { approve: t('admin.audit.approved'), return: t('admin.audit.returned'), reject: t('admin.audit.rejected') };
-    setQueue(prev => prev.filter(r => r.id !== id));
     toast.success(t('admin.audit.recordDecision', { action: actionLabels[action] }));
     setDecisionModal(null);
     setExpandedId(null);
+    refetch();
   };
 
   const bulkApprove = () => {
-    setQueue(prev => prev.filter(r => !selected.has(r.id)));
     toast.success(t('admin.audit.batchApproved', { count: selected.size }));
     setSelected(new Set());
+    refetch();
   };
 
-  const priorityColors = { high: 'bg-red-500', normal: 'bg-yellow-500', low: 'bg-green-500' };
-  const priorityLabels = { high: t('admin.audit.priorityHigh'), normal: t('admin.audit.priorityNormal'), low: t('admin.audit.priorityLow') };
+  const priorityColors = { high: 'bg-red-500', medium: 'bg-yellow-500', low: 'bg-green-500' };
+  const priorityLabels = { high: t('admin.audit.priorityHigh'), medium: t('admin.audit.priorityNormal'), low: t('admin.audit.priorityLow') };
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-foreground">{t('admin.audit.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('admin.audit.pendingCount', { count: queue.length })}</p>
+          <p className="text-sm text-muted-foreground">{t('admin.audit.pendingCount', { count: page?.totalItems ?? items.length })}</p>
         </div>
         {selected.size > 0 && (
           <button onClick={bulkApprove}
@@ -103,7 +100,7 @@ export function AuditCenter() {
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder={t('admin.audit.searchPlaceholder')}
+          <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)} placeholder={t('admin.audit.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
         <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)}
@@ -112,7 +109,11 @@ export function AuditCenter() {
           {grades.map(g => <option key={g} value={g}>{t(GRADE_LABEL_KEYS[g])}</option>)}
         </select>
         <button
-          onClick={() => setShowAnomaly(!showAnomaly)}
+          onClick={() => {
+            const next = !showAnomaly;
+            setShowAnomaly(next);
+            setFilter('hasAnomaly', next ? 'true' : undefined);
+          }}
           className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm transition-colors ${
             showAnomaly ? 'bg-red-100 dark:bg-red-900/30 border-red-300 text-red-700 dark:text-red-400' : 'border-border text-muted-foreground hover:bg-accent'
           }`}
@@ -144,13 +145,10 @@ export function AuditCenter() {
       {/* Results */}
       <div className="text-xs text-muted-foreground">{t('admin.audit.recordsCount', { count: filtered.length })}</div>
 
+      <ListStateBanner error={error} empty={!loading && items.length === 0} emptyLabel={t('admin.audit.queueEmpty')} />
+
       {/* Review items */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <CheckCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">{t('admin.audit.queueEmpty')}</p>
-        </div>
-      ) : (
+      {!error && !(!loading && items.length === 0) && (
         <>
           {/* Desktop: table view */}
           <div className="hidden lg:block bg-card border border-border rounded-2xl overflow-hidden">
@@ -220,6 +218,9 @@ export function AuditCenter() {
                 })}
               </tbody>
             </table>
+            <div className="px-4 pb-4">
+              <PageControls page={page} onPageChange={setPage} />
+            </div>
           </div>
 
           {/* Mobile: card view */}
@@ -295,6 +296,7 @@ export function AuditCenter() {
                 </div>
               );
             })}
+            <PageControls page={page} onPageChange={setPage} />
           </div>
         </>
       )}

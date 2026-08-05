@@ -64,7 +64,9 @@ public class ServiceRecordController {
             PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<ServiceRecordDto> page = serviceRecordService.list(pageable, auth, resolveLanguage(acceptLanguage, auth));
+        Page<ServiceRecordDto> page = serviceRecordService.list(pageable, auth, query.filter("status"),
+                query.filter("sourceType"), query.filter("serviceCategoryId"), query.search(),
+                resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

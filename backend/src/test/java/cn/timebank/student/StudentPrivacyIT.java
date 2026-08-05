@@ -37,8 +37,25 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
         // StudentListItemDto has no email/guardianName/guardianContact accessors
         // at all — this is a compile-time guarantee, not a runtime check. The
         // live assertion here is that the list actually returns the row.
-        Page<StudentListItemDto> page = studentService.list(PageRequest.of(0, 20), "zh-CN");
+        Page<StudentListItemDto> page = studentService.list(PageRequest.of(0, 20), null, null, null, null, "zh-CN");
         assertThat(page.getContent()).anyMatch(s -> s.studentNumber().equals("stu_privacy_1"));
+    }
+
+    @Test
+    void listFiltersByGradeAndSearchesByNameOrStudentNumber() {
+        createStudent("stu_privacy_4");
+
+        Page<StudentListItemDto> byGrade = studentService.list(PageRequest.of(0, 20), "grade_6", null, null, null, "zh-CN");
+        assertThat(byGrade.getContent()).anyMatch(s -> s.studentNumber().equals("stu_privacy_4"));
+
+        Page<StudentListItemDto> wrongGrade = studentService.list(PageRequest.of(0, 20), "grade_9", null, null, null, "zh-CN");
+        assertThat(wrongGrade.getContent()).noneMatch(s -> s.studentNumber().equals("stu_privacy_4"));
+
+        Page<StudentListItemDto> bySearch = studentService.list(PageRequest.of(0, 20), null, null, null, "privacy_4", "zh-CN");
+        assertThat(bySearch.getContent()).anyMatch(s -> s.studentNumber().equals("stu_privacy_4"));
+
+        Page<StudentListItemDto> noMatch = studentService.list(PageRequest.of(0, 20), null, null, null, "no-such-student", "zh-CN");
+        assertThat(noMatch.getContent()).isEmpty();
     }
 
     @Test

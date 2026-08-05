@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Bell, CheckCheck, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { type Notification } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
-import { useAuth } from '../../App';
+import { usePagedApi } from '../../api/useApi';
+import { PageControls } from '../PageControls';
+import { ListStateBanner } from '../ListStateBanner';
 
 const categoryColors: Record<string, string> = {
   review: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
@@ -24,27 +25,22 @@ const categoryLabels: Record<string, string> = {
 
 export function NotificationsPage() {
   const { t } = useTranslation();
-  const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'unread'>('all');
+  const { items, page, loading, error, setPage, setFilter, refetch } = usePagedApi(api.notifications.list, {});
 
-  useEffect(() => {
-    api.notifications.list().then(list => {
-      setNotifications(list.filter(n => n.userId === user?.id));
-    }).catch(() => {});
-  }, [user?.id]);
+  const unreadCount = items.filter(n => !n.isRead).length;
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-  const filtered = filter === 'unread' ? notifications.filter(n => !n.isRead) : notifications;
+  const selectFilterTab = (val: 'all' | 'unread') => {
+    setFilterTab(val);
+    setFilter('read', val === 'unread' ? 'false' : undefined);
+  };
 
   const markRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    api.notifications.markRead(id).catch(() => {});
+    api.notifications.markRead(id).then(refetch).catch(() => {});
   };
 
   const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    api.notifications.markAllRead().catch(() => {});
+    api.notifications.markAllRead().then(refetch).catch(() => {});
     toast.success(t('student.notifications.allMarkedRead'));
   };
 
@@ -66,9 +62,9 @@ export function NotificationsPage() {
       {/* Filter tabs */}
       <div className="flex gap-2">
         {[['all', t('student.notifications.all')], ['unread', t('student.notifications.unreadTab')]].map(([val, label]) => (
-          <button key={val} onClick={() => setFilter(val as 'all' | 'unread')}
+          <button key={val} onClick={() => selectFilterTab(val as 'all' | 'unread')}
             className={`px-4 py-1.5 rounded-full text-sm transition-colors ${
-              filter === val ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
+              filterTab === val ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
             }`}>
             {label}
           </button>
@@ -77,13 +73,7 @@ export function NotificationsPage() {
 
       {/* Notifications */}
       <div className="space-y-2">
-        {filtered.length === 0 ? (
-          <div className="text-center py-12">
-            <Bell className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-30" />
-            <p className="text-sm text-muted-foreground">{filter === 'unread' ? t('student.notifications.noUnread') : t('student.notifications.noNotifications')}</p>
-          </div>
-        ) : (
-          filtered.map(notif => (
+        {items.map(notif => (
             <div
               key={notif.id}
               onClick={() => markRead(notif.id)}
@@ -107,9 +97,10 @@ export function NotificationsPage() {
                 </div>
               </div>
             </div>
-          ))
-        )}
+        ))}
       </div>
+      <ListStateBanner error={error} empty={!loading && items.length === 0} emptyLabel={t('student.notifications.noNotifications')} />
+      <PageControls page={page} onPageChange={setPage} />
     </div>
   );
 }

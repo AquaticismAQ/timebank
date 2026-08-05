@@ -51,7 +51,8 @@ public class ReviewController {
             PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<ReviewQueueItemDto> page = reviewService.queue(pageable, auth, resolveLanguage(acceptLanguage, auth));
+        Boolean hasAnomaly = query.filter("hasAnomaly") == null ? null : Boolean.valueOf(query.filter("hasAnomaly"));
+        Page<ReviewQueueItemDto> page = reviewService.queue(pageable, hasAnomaly, query.search(), auth, resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

@@ -23,6 +23,8 @@ import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -136,11 +138,41 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
         assertThat(rejected.approvedProjectId()).isNull();
     }
 
+    @Test
+    void listSupportsStatusFilterAndTitleSearch() {
+        StudentDetailDto student = createStudent();
+        ProposalDto submitted = createAndSubmitProposal(student, "Search Filter Canary Cleanup");
+
+        // status filter narrows results to the submitted proposal's status
+        Page<ProposalDto> byStatus = proposalService.list(PageRequest.of(0, 50), staffAuth("admin"),
+                "SUBMITTED", null, null, "zh-CN");
+        assertThat(byStatus.getContent()).extracting(ProposalDto::id).contains(submitted.id());
+        assertThat(byStatus.getContent()).allMatch(p -> p.status().equals("SUBMITTED"));
+
+        Page<ProposalDto> byOtherStatus = proposalService.list(PageRequest.of(0, 50), staffAuth("admin"),
+                "APPROVED", null, null, "zh-CN");
+        assertThat(byOtherStatus.getContent()).extracting(ProposalDto::id).doesNotContain(submitted.id());
+
+        // search matches the title
+        Page<ProposalDto> bySearch = proposalService.list(PageRequest.of(0, 50), staffAuth("admin"),
+                null, null, "Canary", "zh-CN");
+        assertThat(bySearch.getContent()).extracting(ProposalDto::id).contains(submitted.id());
+
+        // an unmatched search returns empty
+        Page<ProposalDto> byUnmatchedSearch = proposalService.list(PageRequest.of(0, 50), staffAuth("admin"),
+                null, null, "NoSuchProposalTitleZZZ", "zh-CN");
+        assertThat(byUnmatchedSearch.getContent()).isEmpty();
+    }
+
     private ProposalDto createAndSubmitProposal(StudentDetailDto student) {
+        return createAndSubmitProposal(student, "Campus Cleanup Drive");
+    }
+
+    private ProposalDto createAndSubmitProposal(StudentDetailDto student, String title) {
         Instant start = Instant.now().plus(10, ChronoUnit.DAYS);
         Instant end = start.plusSeconds(7200);
         CreateProposalRequest request = new CreateProposalRequest(
-                List.of(), "Campus Cleanup Drive", "Improve campus cleanliness", "A student-led cleanup effort",
+                List.of(), title, "Improve campus cleanliness", "A student-led cleanup effort",
                 "A cleaner campus", "cat_campus", start, end, "Main Quad", "onsite", "All grades", 20,
                 "Sorting and collecting litter", "usr_test_admin", null, null,
                 "Adult supervision by a teacher at all times; first-aid kit on site",

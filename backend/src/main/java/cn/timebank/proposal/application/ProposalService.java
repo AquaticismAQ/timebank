@@ -18,7 +18,14 @@ import java.util.List;
 /** The `proposal` module's published interface (Design.md §6). Hosts B4.11's atomic project-generation transaction. */
 public interface ProposalService {
 
-    Page<ProposalDto> list(Pageable pageable, Authentication auth, String resolvedLanguage);
+    /**
+     * {@code status}/{@code categoryId} and {@code search} (matches {@code
+     * title}) are contract §2.7's {@code filter[...]}/{@code search} —
+     * null/blank means unfiltered, an unrecognized {@code status} matches
+     * nothing rather than throwing.
+     */
+    Page<ProposalDto> list(Pageable pageable, Authentication auth, String status, String categoryId, String search,
+                            String resolvedLanguage);
 
     ProposalDto getDetail(String id, Authentication auth, String resolvedLanguage);
 

@@ -5,11 +5,13 @@
 // changesRequested, coin amounts as centi-coins, minutes-only durations,
 // dictionary names, list envelope) — see APIContract.md §13.5.
 
+/** `fullName` is mock-only (unused by any screen, not in the real `SchoolInfoDto`); `academicYear` is real-only. */
 export interface SchoolInfo {
   name: string;
-  fullName: string;
+  fullName?: string;
   studentDevCenter: string;
   contact: string;
+  academicYear?: string;
 }
 
 export type Role = 'student' | 'teacher' | 'admin' | 'sysadmin';
@@ -181,20 +183,28 @@ export interface Notification {
   createdAt: string;
 }
 
-/** Minutes-only on the wire; derive hours via `minutesToHours`. `timeCoinBalance` is centi-coins. Guardian fields omitted from lists (APIContract.md §9). */
+/**
+ * Minutes-only on the wire; derive hours via `minutesToHours`. `timeCoinBalance` is centi-coins. Guardian fields
+ * omitted from lists (APIContract.md §9). The real `GET /students` list item (`StudentListItemDto`) does not
+ * carry progress/balance fields at all — those live on `StudentProgress`/`Account`, fetched separately per
+ * contract's resource separation (I1 finding, see `Docs/implementation/00-Status.md`) — so the progress fields
+ * here are optional and only ever populated by the mock; a real-backed list renders "—" for them.
+ */
 export interface Student {
   id: string;
   studentNumber: string;
   name: string;
+  gradeId: string;
   grade: string;
+  classId: string;
   className: string;
   email: string;
   status: 'active' | 'inactive' | 'graduated';
-  completedMinutes: number;
-  pendingMinutes: number;
-  annualRequiredMinutes: number;
-  stageRequiredMinutes: number;
-  timeCoinBalance: number;
+  completedMinutes?: number;
+  pendingMinutes?: number;
+  annualRequiredMinutes?: number;
+  stageRequiredMinutes?: number;
+  timeCoinBalance?: number;
   joinedAt: string;
   guardianName?: string;
   guardianContact?: string;
@@ -214,7 +224,7 @@ export interface ReviewQueueItem {
   durationMinutes: number;
   submittedAt: string;
   status: ReviewStatus;
-  priority: 'high' | 'normal' | 'low';
+  priority: 'high' | 'medium' | 'low';
   daysWaiting: number;
   hasAnomaly: boolean;
   anomalyNote?: string;
@@ -233,6 +243,7 @@ export interface Organization {
   createdAt: string;
 }
 
+/** `avgCompletionRate` is mock-only — the real `AdminStatsDto` has no aggregate completion rate (`/reports/completion` has a per-grade one); optional so a real-backed dashboard can omit it rather than fake a value. */
 export interface AdminStats {
   totalStudents: number;
   activeStudents: number;
@@ -241,7 +252,7 @@ export interface AdminStats {
   pendingReviews: number;
   approvedThisMonth: number;
   totalServiceHours: number;
-  avgCompletionRate: number;
+  avgCompletionRate?: number;
   reviewAvgDays: number;
 }
 

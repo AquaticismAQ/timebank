@@ -575,26 +575,26 @@ export const MOCK_NOTIFICATIONS: Notification[] = [
 // conventions as above.
 
 export const MOCK_STUDENTS: Student[] = [
-  { id: 'std_001', studentNumber: '2024001', name: 'Jia Ming', grade: 'Grade 10', className: '10A', email: 'jiaming@example-school.cn', status: 'active', completedMinutes: 300, pendingMinutes: 240, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 600, joinedAt: '2023-09-01', guardianName: 'Zhang Daqiang', guardianContact: '139xxxx1234' },
-  { id: 'std_002', studentNumber: '2024002', name: 'Yun Li', grade: 'Grade 10', className: '10A', email: 'yunli@example-school.cn', status: 'active', completedMinutes: 2520, pendingMinutes: 480, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 4500, joinedAt: '2023-09-01', guardianName: 'Li Guoqiang', guardianContact: '138xxxx5678' },
-  { id: 'std_003', studentNumber: '2024003', name: 'Wang Haotian', grade: 'Grade 10', className: '10B', email: 'wanghaotian@example-school.cn', status: 'active', completedMinutes: 4680, pendingMinutes: 0, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 8200, joinedAt: '2023-09-01' },
-  { id: 'std_004', studentNumber: '2024004', name: 'Chen Meiling', grade: 'Grade 9', className: '9A', email: 'chenmei@example-school.cn', status: 'active', completedMinutes: 1800, pendingMinutes: 300, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 3200, joinedAt: '2024-09-01' },
-  { id: 'std_005', studentNumber: '2024005', name: 'Liu Yufei', grade: 'Grade 9', className: '9B', email: 'liuyufei@example-school.cn', status: 'active', completedMinutes: 900, pendingMinutes: 120, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 1600, joinedAt: '2024-09-01' },
-  { id: 'std_006', studentNumber: '2023001', name: 'Huang Zihan', grade: 'Grade 11', className: '11A', email: 'huangzihan@example-school.cn', status: 'active', completedMinutes: 11100, pendingMinutes: 600, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 19800, joinedAt: '2022-09-01' },
-  { id: 'std_007', studentNumber: '2023002', name: 'Zhao Siyuan', grade: 'Grade 11', className: '11B', email: 'zhaosy@example-school.cn', status: 'active', completedMinutes: 5520, pendingMinutes: 900, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 9500, joinedAt: '2022-09-01' },
-  { id: 'std_008', studentNumber: '2025001', name: 'Sun Wenting', grade: 'Grade 7', className: '7A', email: 'sunwenting@example-school.cn', status: 'active', completedMinutes: 1080, pendingMinutes: 0, annualRequiredMinutes: 1500, stageRequiredMinutes: 4500, timeCoinBalance: 1800, joinedAt: '2025-09-01' },
-  { id: 'std_009', studentNumber: '2025002', name: 'Zhou Junjie', grade: 'Grade 7', className: '7A', email: 'zhoujunjie@example-school.cn', status: 'active', completedMinutes: 480, pendingMinutes: 180, annualRequiredMinutes: 1500, stageRequiredMinutes: 4500, timeCoinBalance: 800, joinedAt: '2025-09-01' },
-  { id: 'std_010', studentNumber: '2025003', name: 'Wu Yaqi', grade: 'Grade 8', className: '8A', email: 'wuyaqi@example-school.cn', status: 'active', completedMinutes: 1320, pendingMinutes: 300, annualRequiredMinutes: 1500, stageRequiredMinutes: 4500, timeCoinBalance: 2300, joinedAt: '2024-09-01' },
+  { id: 'std_001', studentNumber: '2024001', name: 'Jia Ming', gradeId: 'grade_10', grade: 'Grade 10', classId: 'class_10A', className: '10A', email: 'jiaming@example-school.cn', status: 'active', completedMinutes: 300, pendingMinutes: 240, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 600, joinedAt: '2023-09-01', guardianName: 'Zhang Daqiang', guardianContact: '139xxxx1234' },
+  { id: 'std_002', studentNumber: '2024002', name: 'Yun Li', gradeId: 'grade_10', grade: 'Grade 10', classId: 'class_10A', className: '10A', email: 'yunli@example-school.cn', status: 'active', completedMinutes: 2520, pendingMinutes: 480, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 4500, joinedAt: '2023-09-01', guardianName: 'Li Guoqiang', guardianContact: '138xxxx5678' },
+  { id: 'std_003', studentNumber: '2024003', name: 'Wang Haotian', gradeId: 'grade_10', grade: 'Grade 10', classId: 'class_10B', className: '10B', email: 'wanghaotian@example-school.cn', status: 'active', completedMinutes: 4680, pendingMinutes: 0, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 8200, joinedAt: '2023-09-01' },
+  { id: 'std_004', studentNumber: '2024004', name: 'Chen Meiling', gradeId: 'grade_9', grade: 'Grade 9', classId: 'class_9A', className: '9A', email: 'chenmei@example-school.cn', status: 'active', completedMinutes: 1800, pendingMinutes: 300, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 3200, joinedAt: '2024-09-01' },
+  { id: 'std_005', studentNumber: '2024005', name: 'Liu Yufei', gradeId: 'grade_9', grade: 'Grade 9', classId: 'class_9B', className: '9B', email: 'liuyufei@example-school.cn', status: 'active', completedMinutes: 900, pendingMinutes: 120, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 1600, joinedAt: '2024-09-01' },
+  { id: 'std_006', studentNumber: '2023001', name: 'Huang Zihan', gradeId: 'grade_11', grade: 'Grade 11', classId: 'class_11A', className: '11A', email: 'huangzihan@example-school.cn', status: 'active', completedMinutes: 11100, pendingMinutes: 600, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 19800, joinedAt: '2022-09-01' },
+  { id: 'std_007', studentNumber: '2023002', name: 'Zhao Siyuan', gradeId: 'grade_11', grade: 'Grade 11', classId: 'class_11B', className: '11B', email: 'zhaosy@example-school.cn', status: 'active', completedMinutes: 5520, pendingMinutes: 900, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 9500, joinedAt: '2022-09-01' },
+  { id: 'std_008', studentNumber: '2025001', name: 'Sun Wenting', gradeId: 'grade_7', grade: 'Grade 7', classId: 'class_7A', className: '7A', email: 'sunwenting@example-school.cn', status: 'active', completedMinutes: 1080, pendingMinutes: 0, annualRequiredMinutes: 1500, stageRequiredMinutes: 4500, timeCoinBalance: 1800, joinedAt: '2025-09-01' },
+  { id: 'std_009', studentNumber: '2025002', name: 'Zhou Junjie', gradeId: 'grade_7', grade: 'Grade 7', classId: 'class_7A', className: '7A', email: 'zhoujunjie@example-school.cn', status: 'active', completedMinutes: 480, pendingMinutes: 180, annualRequiredMinutes: 1500, stageRequiredMinutes: 4500, timeCoinBalance: 800, joinedAt: '2025-09-01' },
+  { id: 'std_010', studentNumber: '2025003', name: 'Wu Yaqi', gradeId: 'grade_8', grade: 'Grade 8', classId: 'class_8A', className: '8A', email: 'wuyaqi@example-school.cn', status: 'active', completedMinutes: 1320, pendingMinutes: 300, annualRequiredMinutes: 1500, stageRequiredMinutes: 4500, timeCoinBalance: 2300, joinedAt: '2024-09-01' },
 ];
 
 export const MOCK_REVIEW_QUEUE: ReviewQueueItem[] = [
-  { id: 'rev_001', serviceRecordId: 'rec_003', studentName: 'Jia Ming', grade: 'Grade 10', className: '10A', organizationName: 'Example City City Library', serviceDate: '2026-07-20', durationMinutes: 240, submittedAt: '2026-07-21T08:00:00+08:00', status: 'underReview', priority: 'normal', daysWaiting: 6, hasAnomaly: false },
+  { id: 'rev_001', serviceRecordId: 'rec_003', studentName: 'Jia Ming', grade: 'Grade 10', className: '10A', organizationName: 'Example City City Library', serviceDate: '2026-07-20', durationMinutes: 240, submittedAt: '2026-07-21T08:00:00+08:00', status: 'underReview', priority: 'medium', daysWaiting: 6, hasAnomaly: false },
   { id: 'rev_002', serviceRecordId: 'rec_006', studentName: 'Yun Li', grade: 'Grade 10', className: '10A', projectTitle: 'Example District C Community Environmental Cleanup', organizationName: 'Example District C Environmental Protection Association', serviceDate: '2026-07-18', durationMinutes: 180, submittedAt: '2026-07-19T10:00:00+08:00', status: 'underReview', priority: 'high', daysWaiting: 8, hasAnomaly: true, anomalyNote: 'Claimed hours exceed project recognition limit, please verify' },
-  { id: 'rev_003', serviceRecordId: 'rec_007', studentName: 'Wang Haotian', grade: 'Grade 10', className: '10B', organizationName: 'Charity Volunteer Association', serviceDate: '2026-07-15', durationMinutes: 300, submittedAt: '2026-07-16T14:00:00+08:00', status: 'underReview', priority: 'normal', daysWaiting: 11, hasAnomaly: false },
+  { id: 'rev_003', serviceRecordId: 'rec_007', studentName: 'Wang Haotian', grade: 'Grade 10', className: '10B', organizationName: 'Charity Volunteer Association', serviceDate: '2026-07-15', durationMinutes: 300, submittedAt: '2026-07-16T14:00:00+08:00', status: 'underReview', priority: 'medium', daysWaiting: 11, hasAnomaly: false },
   { id: 'rev_004', serviceRecordId: 'rec_008', studentName: 'Chen Meiling', grade: 'Grade 9', className: '9A', projectTitle: 'Nursing Home Visit and Care Activity', organizationName: 'Example City First Welfare Home', serviceDate: '2026-07-10', durationMinutes: 120, submittedAt: '2026-07-11T09:30:00+08:00', status: 'underReview', priority: 'high', daysWaiting: 16, hasAnomaly: false },
   { id: 'rev_005', serviceRecordId: 'rec_009', studentName: 'Liu Yufei', grade: 'Grade 9', className: '9B', organizationName: 'Example District A Community Center', serviceDate: '2026-07-05', durationMinutes: 180, submittedAt: '2026-07-06T11:00:00+08:00', status: 'underReview', priority: 'high', daysWaiting: 21, hasAnomaly: true, anomalyNote: 'Signature on evidence does not match declared supervisor name' },
   { id: 'rev_006', serviceRecordId: 'rec_010', studentName: 'Huang Zihan', grade: 'Grade 11', className: '11A', organizationName: 'Youth League Volunteer Team', serviceDate: '2026-07-22', durationMinutes: 360, submittedAt: '2026-07-23T08:00:00+08:00', status: 'underReview', priority: 'low', daysWaiting: 4, hasAnomaly: false },
-  { id: 'rev_007', serviceRecordId: 'rec_011', studentName: 'Zhao Siyuan', grade: 'Grade 11', className: '11B', organizationName: 'Example City Museum', serviceDate: '2026-07-18', durationMinutes: 240, submittedAt: '2026-07-20T09:00:00+08:00', status: 'underReview', priority: 'normal', daysWaiting: 7, hasAnomaly: false },
+  { id: 'rev_007', serviceRecordId: 'rec_011', studentName: 'Zhao Siyuan', grade: 'Grade 11', className: '11B', organizationName: 'Example City Museum', serviceDate: '2026-07-18', durationMinutes: 240, submittedAt: '2026-07-20T09:00:00+08:00', status: 'underReview', priority: 'medium', daysWaiting: 7, hasAnomaly: false },
 ];
 
 export const MOCK_ORGANIZATIONS: Organization[] = [
@@ -843,6 +843,21 @@ export const GRADE_LABEL_KEYS: Record<string, string> = {
   'Grade 11': 'mock.grades.g11',
 };
 export const CLASSES = ['6A', '6B', '7A', '7B', '8A', '8B', '9A', '9B', '10A', '10B', '11A', '11B'];
+
+/**
+ * Grade/class display names -> the real backend's dictionary IDs
+ * (`grade_6`..`grade_11`, `class_6A`..`class_11B`, matching the seed data's
+ * naming convention). The real `/grades`/`/classes` dictionary endpoints
+ * (I1's "Dictionaries" domain) return the authoritative id/name pairs;
+ * this deterministic mapping is a stand-in so screens can filter by id
+ * against the real `/students` endpoint without a full dictionary fetch.
+ */
+export function gradeNameToId(name: string): string {
+  return `grade_${name.split(' ')[1]}`;
+}
+export function classNameToId(name: string): string {
+  return `class_${name}`;
+}
 
 // Status label maps
 export const RECORD_STATUS_LABELS: Record<RecordStatus, { label: string; color: string }> = {

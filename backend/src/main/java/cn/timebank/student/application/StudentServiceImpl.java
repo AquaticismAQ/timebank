@@ -6,6 +6,7 @@ import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.i18n.LocalizedNames;
+import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.student.application.dto.StudentDetailDto;
 import cn.timebank.student.application.dto.StudentListItemDto;
 import cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest;
@@ -19,6 +20,7 @@ import cn.timebank.student.infrastructure.SchoolClassRepository;
 import cn.timebank.student.infrastructure.StudentRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,8 +47,14 @@ class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<StudentListItemDto> list(Pageable pageable, String resolvedLanguage) {
-        Page<Student> page = studentRepository.findAll(pageable);
+    public Page<StudentListItemDto> list(Pageable pageable, String gradeId, String classId, String status,
+                                          String search, String resolvedLanguage) {
+        Specification<Student> spec = FilterSpecifications.and(
+                FilterSpecifications.equalTo("gradeId", gradeId),
+                FilterSpecifications.equalTo("classId", classId),
+                FilterSpecifications.equalToEnum("status", StudentStatus.class, status),
+                FilterSpecifications.searchAnyContains(search, "displayName", "studentNumber"));
+        Page<Student> page = studentRepository.findAll(spec, pageable);
         Map<String, Grade> grades = gradeRepository.findAll().stream()
                 .collect(Collectors.toMap(Grade::getId, Function.identity()));
         Map<String, SchoolClass> classes = classRepository.findAll().stream()

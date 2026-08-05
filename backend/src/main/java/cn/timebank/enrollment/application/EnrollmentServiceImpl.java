@@ -4,6 +4,7 @@ import cn.timebank.audit.application.AuditEntry;
 import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.enrollment.application.dto.EnrollmentDto;
 import cn.timebank.enrollment.application.dto.EnrollmentRequests.BulkActionRequest;
 import cn.timebank.enrollment.application.dto.EnrollmentRequests.BulkActionResult;
@@ -48,10 +49,12 @@ class EnrollmentServiceImpl implements EnrollmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<EnrollmentDto> list(Pageable pageable, Authentication auth, String resolvedLanguage) {
+    public Page<EnrollmentDto> list(Pageable pageable, String status, Authentication auth, String resolvedLanguage) {
         TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
-        Specification<Enrollment> spec = isManager(principal) ? null
+        Specification<Enrollment> scopeSpec = isManager(principal) ? null
                 : (root, query, cb) -> cb.equal(root.get("studentId"), principal.studentId());
+        Specification<Enrollment> spec = FilterSpecifications.and(
+                scopeSpec, FilterSpecifications.equalToEnum("status", EnrollmentStatus.class, status));
         Page<Enrollment> page = repository.findAll(spec, pageable);
 
         Map<String, String> projectTitles = projectService.titlesOf(page.getContent().stream().map(Enrollment::getProjectId).distinct().toList());

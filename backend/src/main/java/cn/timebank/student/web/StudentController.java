@@ -49,7 +49,8 @@ public class StudentController {
             PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<StudentListItemDto> page = studentService.list(pageable, resolveLanguage(acceptLanguage, auth));
+        Page<StudentListItemDto> page = studentService.list(pageable, query.filter("gradeId"), query.filter("classId"),
+                query.filter("status"), query.search(), resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

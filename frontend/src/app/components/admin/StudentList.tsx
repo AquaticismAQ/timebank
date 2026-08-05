@@ -1,12 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, ChevronDown, ChevronUp, Download, Upload, AlertCircle, Pencil, X, Save } from 'lucide-react';
-import { GRADES, GRADE_LABEL_KEYS } from '../../mock/data';
+import { GRADES, GRADE_LABEL_KEYS, gradeNameToId } from '../../mock/data';
 import { type Student } from '../../api/types';
 import { formatCoins, minutesToHours } from '../../lib/format';
 import { toast } from 'sonner';
 import { useAuth, useLogs } from '../../App';
 import { api } from '../../api/client';
+import { usePagedApi } from '../../api/useApi';
+import { PageControls } from '../PageControls';
+import { ListStateBanner } from '../ListStateBanner';
 
 type SortKey = 'name' | 'grade' | 'completedHours' | 'timeCoinBalance';
 
@@ -35,11 +38,6 @@ export function StudentList() {
   const { user } = useAuth();
   const isAdmin = user?.roles?.includes('admin') ?? false;
   const { addLog } = useLogs();
-  const [students, setStudents] = useState<Student[]>([]);
-
-  useEffect(() => {
-    api.students.list().then(setStudents).catch(() => {});
-  }, []);
 
   const [search, setSearch] = useState('');
   const [filterGrade, setFilterGrade] = useState('all');
@@ -50,6 +48,38 @@ export function StudentList() {
   const [editStudent, setEditStudent] = useState<Student | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
 
+  const { items, page, loading, error, setPage, setSearch: setApiSearch, setFilter, setSort } =
+    usePagedApi<Student>(api.students.list, {});
+
+  // Only `completedHours`/`timeCoinBalance` sorts have no real-backend column to sort on server-side —
+  // those stay client-side (current page only); everything else is delegated to the server via setSort.
+  const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['completedHours', 'timeCoinBalance'];
+
+  const [students, setStudents] = useState<Student[]>([]);
+  // keep a local editable copy of the current page so admin edits reflect immediately without a refetch
+  useEffect(() => { setStudents(items); }, [items]);
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setApiSearch(value);
+  };
+
+  const handleGradeChange = (value: string) => {
+    setFilterGrade(value);
+    setFilter('gradeId', value === 'all' ? undefined : gradeNameToId(value));
+  };
+
+  const handleSortClick = (k: SortKey) => {
+    const nextDesc = sortKey === k ? !sortDesc : false;
+    setSortKey(k);
+    setSortDesc(nextDesc);
+    if (!CLIENT_ONLY_SORT_KEYS.includes(k)) {
+      setSort(nextDesc ? `-${k}` : k);
+    } else {
+      setSort(undefined);
+    }
+  };
+
   const openEdit = (s: Student) => {
     setEditStudent(s);
     setEditForm({
@@ -58,8 +88,8 @@ export function StudentList() {
       studentNumber: s.studentNumber,
       grade: s.grade,
       className: s.className,
-      completedHours: s.completedMinutes / 60,
-      timeCoinBalance: s.timeCoinBalance / 100,
+      completedHours: (s.completedMinutes ?? 0) / 60,
+      timeCoinBalance: (s.timeCoinBalance ?? 0) / 100,
       memo: '',
     });
   };
@@ -69,8 +99,8 @@ export function StudentList() {
     if (editForm.completedHours < 0) { toast.error('Completed hours cannot be negative'); return; }
     if (editForm.timeCoinBalance < 0) { toast.error('Time coins cannot be negative'); return; }
 
-    const priorCompletedHours = editStudent.completedMinutes / 60;
-    const priorTimeCoinBalance = editStudent.timeCoinBalance / 100;
+    const priorCompletedHours = (editStudent.completedMinutes ?? 0) / 60;
+    const priorTimeCoinBalance = (editStudent.timeCoinBalance ?? 0) / 100;
 
     const changes: string[] = [];
     if (editForm.studentNumber !== editStudent.studentNumber)
@@ -108,35 +138,42 @@ export function StudentList() {
   };
 
   const sortValue = (s: Student, key: SortKey): string | number =>
-    key === 'completedHours' ? s.completedMinutes : key === 'timeCoinBalance' ? s.timeCoinBalance : s[key];
+    key === 'completedHours' ? (s.completedMinutes ?? 0) : key === 'timeCoinBalance' ? (s.timeCoinBalance ?? 0) : s[key];
 
+  // Search and grade filtering now happen server-side (see handleSearchChange/handleGradeChange above).
+  // The status bucket (onTrack/below50/below25) is derived from a ratio the backend doesn't expose as a
+  // filterable field, so it's still applied client-side to whatever page came back.
+  // Sorting: server-sortable keys arrive pre-sorted in `students`; completedHours/timeCoinBalance have no
+  // backend column to sort on, so they're sorted locally, within the current page only.
   const filtered = useMemo(() => {
-    let items = students.filter(s => {
-      const matchSearch = !search || s.name.includes(search) || s.studentNumber.includes(search) || s.className.includes(search);
-      const matchGrade = filterGrade === 'all' || s.grade === filterGrade;
-      const pct = s.completedMinutes / s.annualRequiredMinutes;
-      const matchStatus = filterStatus === 'all' ? true :
+    const statusFiltered = students.filter(s => {
+      const pct = (s.completedMinutes ?? 0) / (s.annualRequiredMinutes ?? 1);
+      return filterStatus === 'all' ? true :
         filterStatus === 'onTrack' ? pct >= 0.5 :
         filterStatus === 'below50' ? pct < 0.5 :
         pct < 0.25;
-      return matchSearch && matchGrade && matchStatus;
     });
-    return [...items].sort((a, b) => {
+    if (!CLIENT_ONLY_SORT_KEYS.includes(sortKey)) return statusFiltered;
+    return [...statusFiltered].sort((a, b) => {
       const av = sortValue(a, sortKey);
       const bv = sortValue(b, sortKey);
       return sortDesc ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
     });
-  }, [search, filterGrade, filterStatus, sortKey, sortDesc]);
+  }, [students, filterStatus, sortKey, sortDesc]);
 
+  // Computed from the current page only (the real /students list is paginated, not fetched in full, and
+  // there's no aggregate-stats endpoint) — these read as "on this page", not school-wide. `total` is kept
+  // consistent with onTrack/atRisk (both page-only) rather than mixed with `page.totalItems`, so the
+  // "behind" card (total - onTrack) doesn't produce a nonsense number.
   const stats = {
     total: students.length,
-    onTrack: students.filter(s => (s.completedMinutes / s.annualRequiredMinutes) >= 0.5).length,
-    atRisk: students.filter(s => (s.completedMinutes / s.annualRequiredMinutes) < 0.25).length,
+    onTrack: students.filter(s => (s.completedMinutes ?? 0) / (s.annualRequiredMinutes ?? 1) >= 0.5).length,
+    atRisk: students.filter(s => (s.completedMinutes ?? 0) / (s.annualRequiredMinutes ?? 1) < 0.25).length,
   };
 
   const SortTh = ({ k, label }: { k: SortKey; label: string }) => (
     <th className="text-left px-4 py-3 cursor-pointer select-none hover:bg-muted/70 transition-colors"
-      onClick={() => { if (sortKey === k) setSortDesc(!sortDesc); else { setSortKey(k); setSortDesc(false); } }}>
+      onClick={() => handleSortClick(k)}>
       <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
         {label}
         {sortKey === k && <span className="text-primary">{sortDesc ? '↓' : '↑'}</span>}
@@ -183,10 +220,10 @@ export function StudentList() {
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-40">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder={t('admin.students.searchPlaceholder')}
+          <input type="text" value={search} onChange={e => handleSearchChange(e.target.value)} placeholder={t('admin.students.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
-        <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)}
+        <select value={filterGrade} onChange={e => handleGradeChange(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.students.allGrades')}</option>
           {GRADES.map(g => <option key={g} value={g}>{t(GRADE_LABEL_KEYS[g])}</option>)}
@@ -201,6 +238,8 @@ export function StudentList() {
       </div>
 
       <div className="text-xs text-muted-foreground">{t('admin.students.count', { count: filtered.length })}</div>
+
+      <ListStateBanner error={error} empty={!loading && filtered.length === 0} emptyLabel="No students" />
 
       {/* Desktop: sortable table */}
       <div className="hidden lg:block bg-card border border-border rounded-2xl overflow-hidden">
@@ -218,7 +257,7 @@ export function StudentList() {
           </thead>
           <tbody className="divide-y divide-border">
             {filtered.map(student => {
-              const annualPct = student.completedMinutes / student.annualRequiredMinutes;
+              const annualPct = (student.completedMinutes ?? 0) / (student.annualRequiredMinutes ?? 1);
               const atRisk = annualPct < 0.25;
               const belowHalf = annualPct < 0.5;
               return (
@@ -238,7 +277,7 @@ export function StudentList() {
                   <td className="px-4 py-3 min-w-32">
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
-                        <ProgressBar value={student.completedMinutes} max={student.annualRequiredMinutes}
+                        <ProgressBar value={student.completedMinutes ?? 0} max={student.annualRequiredMinutes ?? 1}
                           color={atRisk ? 'bg-red-500' : belowHalf ? 'bg-yellow-500' : 'bg-green-500'} />
                       </div>
                       <span className={`text-xs font-medium w-8 text-right shrink-0 ${atRisk ? 'text-red-500' : belowHalf ? 'text-yellow-500' : 'text-green-500'}`}>
@@ -246,8 +285,8 @@ export function StudentList() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-foreground">{minutesToHours(student.completedMinutes)}h</td>
-                  <td className="px-4 py-3 text-sm text-foreground">{formatCoins(student.timeCoinBalance)}</td>
+                  <td className="px-4 py-3 text-sm text-foreground">{student.completedMinutes !== undefined ? `${minutesToHours(student.completedMinutes)}h` : '—'}</td>
+                  <td className="px-4 py-3 text-sm text-foreground">{student.timeCoinBalance !== undefined ? formatCoins(student.timeCoinBalance) : '—'}</td>
                   <td className="px-4 py-3">
                     {atRisk ? (
                       <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
@@ -280,6 +319,9 @@ export function StudentList() {
             })}
           </tbody>
         </table>
+        <div className="px-4 pb-4">
+          <PageControls page={page} onPageChange={setPage} />
+        </div>
       </div>
 
       {/* Edit student modal */}
@@ -413,7 +455,7 @@ export function StudentList() {
       {/* Mobile: expandable cards */}
       <div className="lg:hidden space-y-2">
         {filtered.map(student => {
-          const annualPct = student.completedMinutes / student.annualRequiredMinutes;
+          const annualPct = (student.completedMinutes ?? 0) / (student.annualRequiredMinutes ?? 1);
           const isExpanded = expandedId === student.id;
           const atRisk = annualPct < 0.25;
           const belowHalf = annualPct < 0.5;
@@ -436,9 +478,9 @@ export function StudentList() {
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground mb-1.5">
-                      {minutesToHours(student.completedMinutes)}h / {minutesToHours(student.annualRequiredMinutes)}h · {formatCoins(student.timeCoinBalance)} {t('admin.students.coinsUnit')}
+                      {student.completedMinutes !== undefined ? `${minutesToHours(student.completedMinutes)}h` : '—'} / {student.annualRequiredMinutes !== undefined ? `${minutesToHours(student.annualRequiredMinutes)}h` : '—'} · {student.timeCoinBalance !== undefined ? formatCoins(student.timeCoinBalance) : '—'} {t('admin.students.coinsUnit')}
                     </div>
-                    <ProgressBar value={student.completedMinutes} max={student.annualRequiredMinutes}
+                    <ProgressBar value={student.completedMinutes ?? 0} max={student.annualRequiredMinutes ?? 1}
                       color={atRisk ? 'bg-red-500' : belowHalf ? 'bg-yellow-500' : 'bg-green-500'} />
                   </div>
                   <div className="flex items-center gap-1 text-muted-foreground shrink-0">
@@ -456,13 +498,13 @@ export function StudentList() {
                     <div className="space-y-1.5">
                       <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.studentNumber')}</span><span className="text-foreground">{student.studentNumber}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.email')}</span><span className="text-foreground text-xs truncate ml-2">{student.email}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.completedHours')}</span><span className="text-green-600 dark:text-green-400">{minutesToHours(student.completedMinutes)}h</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.pendingHours')}</span><span className="text-blue-500">{minutesToHours(student.pendingMinutes)}h</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.completedHours')}</span><span className="text-green-600 dark:text-green-400">{student.completedMinutes !== undefined ? `${minutesToHours(student.completedMinutes)}h` : '—'}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.pendingHours')}</span><span className="text-blue-500">{student.pendingMinutes !== undefined ? `${minutesToHours(student.pendingMinutes)}h` : '—'}</span></div>
                     </div>
                     <div className="space-y-1.5">
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.annualRequiredHours')}</span><span className="text-foreground">{minutesToHours(student.annualRequiredMinutes)}h</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.graduationRequiredHours')}</span><span className="text-foreground">{minutesToHours(student.stageRequiredMinutes)}h</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.timeCoins')}</span><span className="text-foreground">{formatCoins(student.timeCoinBalance)}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.annualRequiredHours')}</span><span className="text-foreground">{student.annualRequiredMinutes !== undefined ? `${minutesToHours(student.annualRequiredMinutes)}h` : '—'}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.graduationRequiredHours')}</span><span className="text-foreground">{student.stageRequiredMinutes !== undefined ? `${minutesToHours(student.stageRequiredMinutes)}h` : '—'}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.timeCoins')}</span><span className="text-foreground">{student.timeCoinBalance !== undefined ? formatCoins(student.timeCoinBalance) : '—'}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.enrolled')}</span><span className="text-foreground">{student.joinedAt}</span></div>
                     </div>
                   </div>
@@ -485,6 +527,7 @@ export function StudentList() {
             </div>
           );
         })}
+        <PageControls page={page} onPageChange={setPage} />
       </div>
     </div>
   );

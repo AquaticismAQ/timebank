@@ -1,11 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState } from 'react';
 import { Plus, Search, X, FileText, AlertTriangle, ChevronDown, ChevronUp, Upload, Send, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { RECORD_STATUS_LABELS, SERVICE_CATEGORIES, resolveCategoryName } from '../../mock/data';
-import { type ServiceRecord, type RecordStatus } from '../../api/types';
+import { type RecordStatus } from '../../api/types';
 import { formatCoins } from '../../lib/format';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { usePagedApi } from '../../api/useApi';
+import { PageControls } from '../PageControls';
+import { ListStateBanner } from '../ListStateBanner';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -23,7 +26,7 @@ const STEP_KEYS = ['source', 'serviceInfo', 'evidence', 'confirmSubmit'];
 
 export function ServiceRecords() {
   const { t, i18n } = useTranslation();
-  const [records, setRecords] = useState<ServiceRecord[]>([]);
+  const { items: records, page, loading, error, setFilter, setSearch: setPagedSearch, setPage } = usePagedApi(api.serviceRecords.list, {});
   const [view, setView] = useState<ViewMode>('list');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<RecordStatus | 'all'>('all');
@@ -43,24 +46,6 @@ export function ServiceRecords() {
     supervisorName: '',
     supervisorContact: '',
   });
-
-  useEffect(() => {
-    api.serviceRecords.list().then(setRecords).catch(() => {});
-  }, []);
-
-  const filtered = useMemo(() => {
-    return records.filter(r => {
-      const matchSearch = !search || r.organizationName.includes(search) || r.description.includes(search) || (r.projectTitle && r.projectTitle.includes(search));
-      const matchStatus = filterStatus === 'all' || r.status === filterStatus;
-      return matchSearch && matchStatus;
-    });
-  }, [search, filterStatus]);
-
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    records.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1; });
-    return counts;
-  }, []);
 
   const handleSubmitRecord = (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,6 +253,8 @@ export function ServiceRecords() {
     );
   }
 
+  if (loading && records.length === 0) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
+
   return (
     <div className="p-4 lg:p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -294,7 +281,10 @@ export function ServiceRecords() {
         ] as const).map(([val, label]) => (
           <button
             key={val}
-            onClick={() => setFilterStatus(val as RecordStatus | 'all')}
+            onClick={() => {
+              setFilterStatus(val as RecordStatus | 'all');
+              setFilter('status', val === 'all' ? undefined : val);
+            }}
             className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
               filterStatus === val
                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
@@ -302,9 +292,6 @@ export function ServiceRecords() {
             }`}
           >
             {label}
-            {val !== 'all' && statusCounts[val] > 0 && (
-              <span className="ml-1 opacity-60">({statusCounts[val]})</span>
-            )}
           </button>
         ))}
       </div>
@@ -315,20 +302,20 @@ export function ServiceRecords() {
         <input
           type="text"
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => { setSearch(e.target.value); setPagedSearch(e.target.value); }}
           placeholder={t('student.records.searchPlaceholder')}
           className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
         />
       </div>
 
       {/* Records — desktop table / mobile cards */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <FileText className="w-10 h-10 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">{t('student.records.noRecords')}</p>
-          <button onClick={() => setView('new')} className="mt-3 text-primary text-sm hover:underline">+ {t('student.records.submitFirst')}</button>
+      <ListStateBanner error={error} empty={!loading && records.length === 0} emptyLabel={t('student.records.noRecords')} />
+      {!loading && !error && records.length === 0 && (
+        <div className="text-center -mt-8">
+          <button onClick={() => setView('new')} className="text-primary text-sm hover:underline">+ {t('student.records.submitFirst')}</button>
         </div>
-      ) : (
+      )}
+      {records.length > 0 && (
         <>
           {/* Desktop table */}
           <div className="hidden lg:block bg-card border border-border rounded-2xl overflow-hidden">
@@ -345,7 +332,7 @@ export function ServiceRecords() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map(rec => {
+                {records.map(rec => {
                   const statusInfo = RECORD_STATUS_LABELS[rec.status];
                   return (
                     <tr key={rec.id} className="hover:bg-muted/30 transition-colors group">
@@ -404,7 +391,7 @@ export function ServiceRecords() {
 
           {/* Mobile cards */}
           <div className="lg:hidden space-y-3">
-            {filtered.map(rec => {
+            {records.map(rec => {
               const statusInfo = RECORD_STATUS_LABELS[rec.status];
               const isExpanded = expandedId === rec.id;
               return (
@@ -495,6 +482,7 @@ export function ServiceRecords() {
           </div>
         </>
       )}
+      <PageControls page={page} onPageChange={setPage} />
     </div>
   );
 }

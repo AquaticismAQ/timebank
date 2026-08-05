@@ -10,7 +10,15 @@ import org.springframework.data.domain.Pageable;
 /** The `student` module's published interface (Design.md §6). */
 public interface StudentService {
 
-    Page<StudentListItemDto> list(Pageable pageable, String resolvedLanguage);
+    /**
+     * {@code gradeId}/{@code classId}/{@code status} and {@code search}
+     * (matches {@code displayName}/{@code studentNumber}) are contract
+     * §2.7's {@code filter[...]}/{@code search} — null/blank means
+     * unfiltered, an unrecognized {@code status} matches nothing rather
+     * than throwing.
+     */
+    Page<StudentListItemDto> list(Pageable pageable, String gradeId, String classId, String status,
+                                   String search, String resolvedLanguage);
 
     /**
      * @param includeSensitiveFields whether the caller has permission to see

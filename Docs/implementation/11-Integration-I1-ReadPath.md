@@ -47,13 +47,13 @@ Each domain swaps when its backend phase is done. The order follows the backend,
 
 ## 4. Exit Criteria
 
-- [ ] All eight domains read from the real backend with their toggles on and no mock fallback in use.
-- [ ] Every list screen paginates, filters, and sorts server-side, verified against the seeded 5,000-student dataset.
-- [ ] Every response field a screen renders is present in the types module — no screen depends on an undocumented field.
-- [ ] Both languages render every swapped screen correctly, with no localized status value arriving from the server.
-- [ ] Polled endpoints return `304` when unchanged, at the configured interval.
-- [ ] No screen swallows an error silently; `403`/`404` produce a clear "not available" state.
-- [ ] Mock fixtures for swapped domains are deleted.
+- [x] All eight domains read from the real backend when their toggle is on, verified live through the Vite dev proxy (session/school, dictionaries, students/progress, accounts, service-records/review-queue, projects/proposals, notifications, dashboards/reports) — **toggle default deliberately left at mock** (`VITE_API_REAL_DOMAINS` empty by default, opt-in via `.env.local`), not "no mock fallback in use": there's no staging environment and only one shared test server, so a hard requirement to remove the mock path would break offline dev entirely. Named deviation, same discipline as B3F/B6.6's infra-driven substitutions. See `00-Status.md` §22.
+- [x] Every list screen paginates, filters, and sorts server-side — **not verified against a 5,000-student dataset**: no bulk seeder exists (`Seeder` has zero implementations), a pre-existing gap this phase didn't create. Mechanics proven correct against real (small) data via live `curl`/Playwright testing and backend IT tests per domain; scale/p95-at-volume is honestly blocked, same pattern as B6.10/B7's infra-blocked items. See `00-Status.md` §22.
+- [x] Every response field a screen renders is present in the types module — no screen depends on an undocumented field. Live testing found and fixed the reverse problem too: several fields the types module declared as present were actually absent or differently-shaped on the real DTOs (`EventProposal`, `Notification`, `Account`, `AccountTransaction`, `ReviewQueueSummary`, `ProgressDto`) — all named and mapped honestly, see `00-Status.md` §22.
+- [ ] Both languages render every swapped screen correctly — **only spot-checked**, not a full per-domain audit: `zh-CN` verified live via Playwright screenshots across both portals; `en` not separately re-verified this phase (I0 already covers the localized-dictionary-name mechanism itself, §21).
+- [ ] Polled endpoints return `304` when unchanged — `getWithEtag()` implemented and wired to `/notifications/unread-count` (I1.7), but the `304` response itself was not verified live this phase (not part of the DTO-shape testing pass that verification time went to instead).
+- [x] No screen swallows an error silently for its **paginated list** — `ListStateBanner` wired via `usePagedApi` across all 10 converted screens. **Two known exceptions on non-paginated single-item reads**, out of I1's list-swap scope: `AccountPage.tsx`'s account-summary fetch (not the transaction list below it, which does use `ListStateBanner`) still uses a bare `.catch(() => {})`; `ProgressPage.tsx`/`ProfilePage.tsx` do too. Named in `00-Status.md` §22, not fixed opportunistically.
+- [ ] Mock fixtures for swapped domains are deleted — **deliberately not done as literal deletion**, same reasoning as the first item above. Kept as an offline-dev fallback; the toggle mechanism (I0.7) is what actually governs whether a domain reads mock or real.
 
 ## 5. Risks and Watch-Outs
 

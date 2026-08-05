@@ -55,7 +55,7 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
         ResponseEntity<String> replay = getWithSessionAndIfNoneMatch("/api/v1/notifications/unread-count", sessionCookie, etag);
         assertThat(replay.getStatusCode()).isEqualTo(HttpStatus.NOT_MODIFIED);
 
-        NotificationDto notification = notificationService.listForUser(user.id(), PageRequest.of(0, 10))
+        NotificationDto notification = notificationService.listForUser(user.id(), PageRequest.of(0, 10), null, null)
                 .getContent().get(0);
         String csrfCookie = fetchCsrfCookie();
         HttpHeaders patchHeaders = new HttpHeaders();
@@ -88,6 +88,34 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(notificationService.unreadCount(user.id())).isZero();
+    }
+
+    @Test
+    void listForUserFiltersByReadStatusAndStaysNewestFirstWithNoExplicitSort() throws InterruptedException {
+        UserDto user = createUser("notif_read_3");
+        notificationService.notify(user.id(), "case.resolved", "case", "case_fake_older", "zh-CN");
+        Thread.sleep(5); // guarantee a distinct createdAt from the previous notify()
+        notificationService.notify(user.id(), "case.rejected", "case", "case_fake_newer", "zh-CN");
+
+        List<NotificationDto> unfiltered = notificationService.listForUser(user.id(), PageRequest.of(0, 10), null, null)
+                .getContent();
+        assertThat(unfiltered).hasSize(2);
+        // No explicit sort was requested; the service must still order newest-first.
+        assertThat(unfiltered.get(0).relatedResourceId()).isEqualTo("case_fake_newer");
+        assertThat(unfiltered.get(1).relatedResourceId()).isEqualTo("case_fake_older");
+
+        NotificationDto older = unfiltered.get(1);
+        notificationService.markRead(older.id(), user.id());
+
+        List<NotificationDto> unreadOnly = notificationService.listForUser(user.id(), PageRequest.of(0, 10), "false", null)
+                .getContent();
+        assertThat(unreadOnly).hasSize(1);
+        assertThat(unreadOnly.get(0).relatedResourceId()).isEqualTo("case_fake_newer");
+
+        List<NotificationDto> readOnly = notificationService.listForUser(user.id(), PageRequest.of(0, 10), "true", null)
+                .getContent();
+        assertThat(readOnly).hasSize(1);
+        assertThat(readOnly.get(0).relatedResourceId()).isEqualTo("case_fake_older");
     }
 
     private UserDto createUser(String username) {

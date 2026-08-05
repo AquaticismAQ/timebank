@@ -50,7 +50,8 @@ public class ProjectController {
             PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<ProjectDto> page = projectService.list(pageable, auth, resolveLanguage(acceptLanguage, auth));
+        Page<ProjectDto> page = projectService.list(pageable, query.filter("status"), query.filter("categoryId"),
+                query.search(), auth, resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 
