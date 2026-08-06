@@ -288,6 +288,8 @@
       "reject": "驳回",
       "submitSuccess": "服务记录已提交，待审核",
       "submitTitle": "提交服务记录",
+      "editTitle": "编辑退回记录",
+      "sourceLocked": "记录创建后无法更改服务来源。",
       "step_source": "来源",
       "step_serviceInfo": "服务信息",
       "step_evidence": "证明材料",

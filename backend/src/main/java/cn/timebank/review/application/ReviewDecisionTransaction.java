@@ -71,7 +71,7 @@ class ReviewDecisionTransaction {
         // decision) happens inside servicerecord's own application layer —
         // review may not touch servicerecord.domain/infrastructure directly.
         RecordReviewSnapshot snapshot = serviceRecordService.beginReviewTransition(
-                recordId, request.recordVersion(), targetStatus, actorId);
+                recordId, request.recordVersion(), targetStatus, actorId, request.comment());
 
         // Effect 1: the append-only review decision event.
         ReviewDecisionEvent event = new ReviewDecisionEvent(OpaqueIds.generate("rev"), recordId, actorId, decision,

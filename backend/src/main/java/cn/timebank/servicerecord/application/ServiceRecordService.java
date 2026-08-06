@@ -45,9 +45,12 @@ public interface ServiceRecordService {
      * {@code SUBMITTED -> UNDER_REVIEW} step if needed, then transitions to
      * {@code targetStatus} (a no-op if already there — the `ESCALATE`
      * decision's case) — all via {@link cn.timebank.servicerecord.domain.ServiceRecordStateMachine}.
+     * {@code comment}, when non-blank, is written to {@code reviewSummary} as a
+     * denormalized "latest reviewer note" for display — the append-only decision
+     * event itself (with its own comment) is `review`'s, not duplicated here.
      * Returns the fields B3.13's crediting calculation needs.
      */
-    RecordReviewSnapshot beginReviewTransition(String recordId, Long expectedVersion, String targetStatus, String actorId);
+    RecordReviewSnapshot beginReviewTransition(String recordId, Long expectedVersion, String targetStatus, String actorId, String comment);
 
     /** Sets `creditedUnits`/`accountTransactionId` after {@code AccountService.credit} has succeeded — approval only. */
     void applyCredit(String recordId, int creditedUnits, String accountTransactionId);

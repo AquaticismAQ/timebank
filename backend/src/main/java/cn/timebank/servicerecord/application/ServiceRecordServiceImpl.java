@@ -269,7 +269,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
 
     @Override
     @Transactional
-    public RecordReviewSnapshot beginReviewTransition(String recordId, Long expectedVersion, String targetStatus, String actorId) {
+    public RecordReviewSnapshot beginReviewTransition(String recordId, Long expectedVersion, String targetStatus, String actorId, String comment) {
         ServiceRecord record = findOrThrow(recordId);
         ConcurrencyControl.checkVersion(record.getVersion(), expectedVersion);
         ServiceRecordStatus target = ServiceRecordStatus.valueOf(targetStatus);
@@ -281,6 +281,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         if (record.getStatus() != target) {
             ServiceRecordStateMachine.transition(record, target, ActorRole.REVIEWER);
         }
+        if (comment != null && !comment.isBlank()) record.setReviewSummary(comment);
         record.setUpdatedAt(Instant.now());
 
         auditService.record(new AuditEntry(actorId, "reviews.decide", "serviceRecord.reviewTransition",

@@ -43,7 +43,7 @@ import type {
 import { http, ApiError, buildListQuery, getWithEtag, withVersion, type PageResult } from './http';
 import { isRealDomain } from './config';
 import { paginateMock, toBackendEnum, fromBackendEnum, type ListParams } from '../lib/pagination';
-import { localDateTimeToISO } from '../lib/datetime';
+import { localDateTimeToISO, isoToLocalDateTime } from '../lib/datetime';
 import i18n from '../../i18n';
 import { toast } from 'sonner';
 
@@ -386,7 +386,18 @@ export const api = {
         const data = page.data.map(dto => mapEnumFields({
           ...dto,
           initiatorName: dto.proposerStudentName ?? dto.initiatorName,
-          plannedDate: dto.plannedStartAt ?? dto.plannedDate,
+          // The real DTO's `plannedStartAt` is a full ISO instant, not the
+          // `<input type="date">`-shaped "YYYY-MM-DD" string this field's
+          // name elsewhere assumes — passing it straight through was
+          // invisible for a fresh create (the create-branch's `plannedDate`
+          // always comes from the date input itself) but crashed `openForm(p,
+          // 'edit')`'s resubmit save the moment the date field wasn't
+          // re-touched: `plannedStartEnd()` → `localDateTimeToISO()` splits
+          // on '-' and gets a NaN month/day from the trailing "T...Z", producing
+          // an Invalid Date whose `.toISOString()` throws (found live, not by
+          // inspection — the resubmit call failed with a swallowed client-side
+          // exception, no network request even sent).
+          plannedDate: dto.plannedStartAt ? isoToLocalDateTime(dto.plannedStartAt).date : dto.plannedDate,
           estimatedDurationMinutes: dto.proposedRecognizedMinutes ?? dto.estimatedDurationMinutes,
           suggestedMinutes: dto.proposedRecognizedMinutes ?? dto.suggestedMinutes,
           // Display strings, resolved server-side — the raw ids

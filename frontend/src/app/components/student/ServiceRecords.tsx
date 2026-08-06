@@ -3,7 +3,7 @@ import { Plus, Search, X, FileText, AlertTriangle, ChevronDown, ChevronUp, Uploa
 import { useTranslation } from 'react-i18next';
 import { RECORD_STATUS_LABELS, SERVICE_CATEGORIES, resolveCategoryName } from '../../mock/data';
 import { type RecordStatus, type ServiceRecord, type EvidenceFile } from '../../api/types';
-import { localDateTimeToISO } from '../../lib/datetime';
+import { localDateTimeToISO, isoToLocalDateTime } from '../../lib/datetime';
 import { formatCoins } from '../../lib/format';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
@@ -120,7 +120,7 @@ export function ServiceRecords() {
   const removeEvidenceFile = (id: string) => setEvidenceFiles(prev => prev.filter(f => f.id !== id));
 
   // New record form state
-  const [formData, setFormData] = useState({
+  const EMPTY_FORM = {
     sourceType: 'external',
     serviceDate: '',
     startTime: '',
@@ -131,27 +131,86 @@ export function ServiceRecords() {
     description: '',
     supervisorName: '',
     supervisorContact: '',
-  });
+  };
+  const [formData, setFormData] = useState(EMPTY_FORM);
+
+  // Distinguishes "resubmitting a returned record" (PATCH the existing
+  // record, then submit) from "brand new record" (POST) — without this,
+  // the resubmit buttons below had nothing to route through but `create()`,
+  // silently producing a duplicate record instead of fixing the returned one.
+  const [editing, setEditing] = useState<{ id: string; version: number } | null>(null);
+
+  const openNewRecord = () => {
+    setEditing(null);
+    setFormData(EMPTY_FORM);
+    setEvidenceFiles([]);
+    setStep(0);
+    setView('new');
+  };
+
+  const openResubmit = async (rec: ServiceRecord) => {
+    // `list()`'s real-branch mapping always returns `evidenceFiles: []` (no
+    // denormalized name/size/url without a per-file `GET /files/{id}` —
+    // see `fromServiceRecordDto`'s own note in client.ts); only `.get(id)`
+    // resolves them. Pre-filling straight from the list row would silently
+    // drop the student's already-uploaded evidence every time.
+    let full: ServiceRecord;
+    try {
+      full = await api.serviceRecords.get(rec.id);
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(t('common.unknownError'));
+      return;
+    }
+    setEditing({ id: full.id, version: full.version });
+    const start = isoToLocalDateTime(full.startAt);
+    const end = isoToLocalDateTime(full.endAt);
+    setFormData({
+      sourceType: full.sourceType,
+      serviceDate: full.serviceDate || start.date,
+      startTime: start.time,
+      endTime: end.time,
+      location: full.location,
+      organizationName: full.organizationName,
+      categoryId: full.serviceCategoryId,
+      description: full.description,
+      supervisorName: full.supervisorName,
+      supervisorContact: full.supervisorContact,
+    });
+    setEvidenceFiles(full.evidenceFiles);
+    setStep(0);
+    setView('new');
+    toast.info(t('student.records.loadedReturned'));
+  };
+
+  const buildRecordPayload = () => {
+    const startTime = formData.startTime ? localDateTimeToISO(formData.serviceDate, formData.startTime) : undefined;
+    const endTime = formData.endTime ? localDateTimeToISO(formData.serviceDate, formData.endTime) : undefined;
+    return {
+      sourceType: formData.sourceType as 'project' | 'external' | 'self',
+      serviceDate: formData.serviceDate,
+      startAt: startTime,
+      endAt: endTime,
+      location: formData.location,
+      organizationName: formData.organizationName,
+      serviceCategoryId: formData.categoryId,
+      description: formData.description,
+      supervisorName: formData.supervisorName,
+      supervisorContact: formData.supervisorContact,
+      evidenceFiles,
+    };
+  };
+
+  // `editing` set -> PATCH the returned record being resubmitted; unset -> a fresh POST.
+  const saveRecord = (): Promise<ServiceRecord> => editing
+    ? api.serviceRecords.update(editing.id, { ...buildRecordPayload(), version: editing.version })
+    : api.serviceRecords.create(buildRecordPayload());
 
   const handleSubmitRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      const startTime = formData.startTime ? localDateTimeToISO(formData.serviceDate, formData.startTime) : undefined;
-      const endTime = formData.endTime ? localDateTimeToISO(formData.serviceDate, formData.endTime) : undefined;
-      const record = await api.serviceRecords.create({
-        sourceType: formData.sourceType as 'project' | 'external' | 'self',
-        serviceDate: formData.serviceDate,
-        startAt: startTime,
-        endAt: endTime,
-        location: formData.location,
-        organizationName: formData.organizationName,
-        serviceCategoryId: formData.categoryId,
-        description: formData.description,
-        supervisorName: formData.supervisorName,
-        supervisorContact: formData.supervisorContact,
-        evidenceFiles,
-      });
+      const record = await saveRecord();
       await api.serviceRecords.submit(record.id, submitKeyRef.current);
       submitKeyRef.current = newIdempotencyKey();
       fieldErrors.clearAll();
@@ -159,6 +218,7 @@ export function ServiceRecords() {
       setView('list');
       setStep(0);
       setEvidenceFiles([]);
+      setEditing(null);
       refetch();
     } catch (err) {
       handleMutationError(err, { fieldErrors, fallbackMessage: t('common.unknownError') });
@@ -170,24 +230,11 @@ export function ServiceRecords() {
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      const startTime = formData.startTime ? localDateTimeToISO(formData.serviceDate, formData.startTime) : undefined;
-      const endTime = formData.endTime ? localDateTimeToISO(formData.serviceDate, formData.endTime) : undefined;
-      await api.serviceRecords.create({
-        sourceType: formData.sourceType as 'project' | 'external' | 'self',
-        serviceDate: formData.serviceDate,
-        startAt: startTime,
-        endAt: endTime,
-        location: formData.location,
-        organizationName: formData.organizationName,
-        serviceCategoryId: formData.categoryId,
-        description: formData.description,
-        supervisorName: formData.supervisorName,
-        supervisorContact: formData.supervisorContact,
-        evidenceFiles,
-      });
+      await saveRecord();
       fieldErrors.clearAll();
       toast.success(t('student.records.draftSaved'));
       setEvidenceFiles([]);
+      setEditing(null);
       refetch();
     } catch (err) {
       handleMutationError(err, { fieldErrors, fallbackMessage: t('common.unknownError') });
@@ -224,10 +271,10 @@ export function ServiceRecords() {
       <div className="px-4 py-4">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => { setView('list'); setStep(0); }} className="text-muted-foreground hover:text-foreground p-1">
+          <button onClick={() => { setView('list'); setStep(0); setEditing(null); }} className="text-muted-foreground hover:text-foreground p-1">
             <X className="w-5 h-5" />
           </button>
-          <h2 className="text-foreground flex-1">{t('student.records.submitTitle')}</h2>
+          <h2 className="text-foreground flex-1">{t(editing ? 'student.records.editTitle' : 'student.records.submitTitle')}</h2>
         </div>
 
         {/* Step indicator */}
@@ -251,6 +298,7 @@ export function ServiceRecords() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm text-foreground mb-2">{t('student.records.serviceSource')}</label>
+                {editing && <p className="text-xs text-muted-foreground mb-2">{t('student.records.sourceLocked')}</p>}
                 <div className="space-y-2">
                   {[
                     { value: 'project', label: t('student.records.sourceProject'), desc: t('student.records.sourceProjectDesc') },
@@ -260,10 +308,11 @@ export function ServiceRecords() {
                     <button
                       type="button"
                       key={opt.value}
+                      disabled={!!editing}
                       onClick={() => setFormData(f => ({ ...f, sourceType: opt.value }))}
                       className={`w-full text-left p-4 rounded-xl border-2 transition-colors ${
                         formData.sourceType === opt.value ? 'border-[oklch(0.488_0.243_264.376)] bg-blue-50 dark:bg-blue-900/20' : 'border-border hover:border-border/80 hover:bg-accent/50'
-                      }`}
+                      } ${editing ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
                       <div className="text-sm text-foreground font-medium">{opt.label}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
@@ -447,7 +496,7 @@ export function ServiceRecords() {
       <div className="flex items-center justify-between">
         <h2 className="text-foreground">{t('student.records.title')}</h2>
         <button
-          onClick={() => setView('new')}
+          onClick={openNewRecord}
           className="flex items-center gap-1.5 px-3 py-2 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90 transition-opacity"
         >
           <Plus className="w-4 h-4" />
@@ -499,7 +548,7 @@ export function ServiceRecords() {
       <ListStateBanner error={error} empty={!loading && records.length === 0} emptyLabel={t('student.records.noRecords')} />
       {!loading && !error && records.length === 0 && (
         <div className="text-center -mt-8">
-          <button onClick={() => setView('new')} className="text-primary text-sm hover:underline">+ {t('student.records.submitFirst')}</button>
+          <button onClick={openNewRecord} className="text-primary text-sm hover:underline">+ {t('student.records.submitFirst')}</button>
         </div>
       )}
       {records.length > 0 && (
@@ -525,10 +574,10 @@ export function ServiceRecords() {
                     <tr key={rec.id} className="hover:bg-muted/30 transition-colors group">
                       <td className="px-4 py-3">
                         <div className="text-sm text-foreground font-medium">{rec.projectTitle || rec.organizationName}</div>
-                        {rec.status === 'returned' && rec.returnReason && (
+                        {rec.status === 'returned' && (rec.returnReason || rec.reviewSummary) && (
                           <div className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1 mt-0.5">
                             <AlertTriangle className="w-3 h-3 shrink-0" />
-                            <span className="truncate max-w-48">{rec.returnReason}</span>
+                            <span className="truncate max-w-48">{rec.returnReason || rec.reviewSummary}</span>
                           </div>
                         )}
                       </td>
@@ -544,7 +593,7 @@ export function ServiceRecords() {
                       <td className="px-4 py-3">
                         <div className="flex gap-1 justify-end">
                           {rec.status === 'returned' && (
-                            <button onClick={() => { setView('new'); toast.info(t('student.records.loadedReturned')); }}
+                            <button onClick={() => openResubmit(rec)}
                               className="text-xs px-2 py-1 bg-primary text-primary-foreground rounded-lg hover:opacity-90">
                               {t('student.records.resubmit')}
                             </button>
@@ -597,11 +646,11 @@ export function ServiceRecords() {
                         <div className="text-xs text-muted-foreground">{rec.serviceDate} · {rec.durationMinutes / 60} {t('common.hours')} · {rec.serviceCategoryName.startsWith('mock.') ? t(rec.serviceCategoryName) : rec.serviceCategoryName}</div>
                       </div>
                     </div>
-                    {rec.status === 'returned' && rec.returnReason && (
+                    {rec.status === 'returned' && (rec.returnReason || rec.reviewSummary) && (
                       <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg px-3 py-2 mb-3">
                         <div className="text-xs text-orange-700 dark:text-orange-300 flex items-start gap-1.5">
                           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                          {rec.returnReason}
+                          {rec.returnReason || rec.reviewSummary}
                         </div>
                       </div>
                     )}
@@ -641,7 +690,7 @@ export function ServiceRecords() {
                       </button>
                       <div className="flex gap-2">
                         {rec.status === 'returned' && (
-                          <button onClick={() => { setView('new'); toast.info(t('student.records.loadedReturned')); }}
+                          <button onClick={() => openResubmit(rec)}
                             className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:opacity-90">{t('student.records.resubmit')}</button>
                         )}
                         {rec.status === 'draft' && (

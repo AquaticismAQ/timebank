@@ -116,6 +116,24 @@ class ApprovalTransactionIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void returnForChangesWritesTheReviewerCommentToReviewSummaryForTheStudentToSee() {
+        StudentDetailDto student = createStudent();
+        createLinkedUser(student.id());
+        ServiceRecordDto submitted = createAndSubmitRecord(student);
+
+        ServiceRecordDto returned = reviewService.decide(submitted.id(),
+                new DecideRequest("RETURN_FOR_CHANGES", "INCOMPLETE", "Please attach a signed confirmation letter", submitted.version()),
+                staffAuth("admin"), "idem-return-" + submitted.id(), "zh-CN");
+
+        assertThat(returned.status()).isEqualTo("RETURNED");
+        assertThat(returned.reviewSummary()).isEqualTo("Please attach a signed confirmation letter");
+
+        // The comment must persist for later reads too, not just the immediate response.
+        ServiceRecordDto reread = serviceRecordService.getDetail(submitted.id(), studentAuth(student.id()), "zh-CN");
+        assertThat(reread.reviewSummary()).isEqualTo("Please attach a signed confirmation letter");
+    }
+
+    @Test
     void duplicateIdempotencyKeyReplaysInsteadOfDoubleCrediting() {
         StudentDetailDto student = createStudent();
         createLinkedUser(student.id());

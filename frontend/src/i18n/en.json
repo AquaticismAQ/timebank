@@ -288,6 +288,8 @@
       "reject": "Rejected",
       "submitSuccess": "Service record submitted, pending review",
       "submitTitle": "Submit Service Record",
+      "editTitle": "Edit Returned Record",
+      "sourceLocked": "Service source can't be changed after a record is created.",
       "step_source": "Source",
       "step_serviceInfo": "Service Info",
       "step_evidence": "Evidence",
