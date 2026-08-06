@@ -137,7 +137,7 @@ class ProposalApprovalTransaction {
     private ProposalDto toDto(EventProposal p, String resolvedLanguage) {
         // Re-fetching via a lightweight inline mapper avoids a circular
         // dependency on ProposalService (which depends on this bean).
-        return new ProposalDto(p.getId(), p.getProposerStudentId(), null, p.getCoOrganizerStudentIds(),
+        return new ProposalDto(p.getId(), p.getProposerStudentId(), null, p.getCoOrganizerStudentIds(), null,
                 p.getTitle(), p.getObjective(), p.getDescription(), p.getExpectedOutcome(),
                 p.getCategoryId(), null, p.getPlannedStartAt(), p.getPlannedEndAt(), p.getLocation(), p.getFormat(),
                 p.getTargetParticipants(), p.getCapacity(), p.getVolunteerTasks(),

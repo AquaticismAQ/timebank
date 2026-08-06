@@ -11,6 +11,7 @@ import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.iam.application.dto.MeResponse;
 import cn.timebank.iam.application.dto.UpdateProfileRequest;
 import cn.timebank.iam.application.dto.UpdateUserRequest;
+import cn.timebank.iam.application.dto.UserDirectoryEntryDto;
 import cn.timebank.iam.application.dto.UserDto;
 import cn.timebank.iam.domain.Role;
 import cn.timebank.iam.domain.User;
@@ -21,6 +22,7 @@ import cn.timebank.organization.application.FeatureFlagService;
 import cn.timebank.organization.application.dto.FeatureFlagsDto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -241,7 +243,7 @@ class UserServiceImpl implements UserService {
         Set<String> permissionCodes = permissionCodesOf(user);
         FeatureFlagsDto flags = featureFlagService.getFlags();
         return new MeResponse(
-                new MeResponse.UserSummary(user.getId(), user.getDisplayName(), roleCodes, permissionCodes),
+                new MeResponse.UserSummary(user.getId(), user.getDisplayName(), roleCodes, permissionCodes, user.getStudentId()),
                 deriveWorkspaces(roleCodes),
                 user.getPreferredLanguage(),
                 new MeResponse.FeatureFlags(flags.pov(), flags.redemption(), flags.borrowing(), flags.appreciation()));
@@ -308,6 +310,23 @@ class UserServiceImpl implements UserService {
     public Map<String, String> displayNamesOf(List<String> userIds) {
         return userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, User::getDisplayName));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserDirectoryEntryDto> searchDirectory(String roleCode, String search) {
+        if (roleCode == null || roleCode.isBlank() || search == null || search.isBlank()) {
+            return List.of();
+        }
+        return userRepository.searchActiveByRoleAndDisplayNameContaining(roleCode, search, PageRequest.of(0, 20)).stream()
+                .map(u -> new UserDirectoryEntryDto(u.getId(), u.getDisplayName()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasActiveRole(String userId, String roleCode) {
+        return userRepository.existsActiveByIdAndRoleCode(userId, roleCode);
     }
 
     private AuthenticatedUserView toAuthView(User user) {

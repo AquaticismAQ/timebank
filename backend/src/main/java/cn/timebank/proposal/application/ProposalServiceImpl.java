@@ -11,6 +11,8 @@ import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.organization.application.OrganizationService;
 import cn.timebank.organization.application.ServiceCategoryService;
+import cn.timebank.organization.application.dto.OrganizationDto;
+import cn.timebank.organization.application.dto.OrganizationRequests.CreateOrganizationRequest;
 import cn.timebank.organization.application.dto.ServiceCategoryDto;
 import cn.timebank.proposal.application.dto.ProposalDto;
 import cn.timebank.proposal.application.dto.ProposalQueueSummaryDto;
@@ -114,6 +116,14 @@ class ProposalServiceImpl implements ProposalService {
         requireCategory(request.categoryId());
         StudentDetailDto proposer = studentService.getDetail(studentId, false, actorId, resolvedLanguage);
 
+        List<FieldErrorDetail> errors = new ArrayList<>();
+        String resolvedOrganizationId = resolveOrganizationId(request.organizationId(), request.newOrganizationName(), actorId, errors);
+        validateCoOrganizers(request.coOrganizerStudentIds(), studentId, errors);
+        validateSupervisor(request.proposedSupervisorId(), errors);
+        if (!errors.isEmpty()) {
+            throw ApiException.validationFailed("Proposal organization/people fields failed validation.", errors);
+        }
+
         Instant now = Instant.now();
         EventProposal proposal = new EventProposal(OpaqueIds.generate("prop"), studentId, proposer.gradeId(),
                 proposer.classId(), request.title(), request.categoryId(), request.plannedStartAt(),
@@ -127,7 +137,7 @@ class ProposalServiceImpl implements ProposalService {
         proposal.setFormat(request.format());
         proposal.setTargetParticipants(request.targetParticipants());
         proposal.setVolunteerTasks(request.volunteerTasks());
-        proposal.setOrganizationId(request.organizationId());
+        proposal.setOrganizationId(resolvedOrganizationId);
         proposal.setExternalContact(request.externalContact());
         proposal.setSafetyPlan(request.safetyPlan());
         proposal.setResourceNeeds(request.resourceNeeds());
@@ -150,6 +160,26 @@ class ProposalServiceImpl implements ProposalService {
         ConcurrencyControl.checkVersion(proposal.getVersion(), request.version());
         writeRevision(proposal, principalId(auth));
 
+        // Only touched fields are validated/resolved — an old, already-saved
+        // value on a field the caller isn't changing this call is never
+        // re-checked (same "only validate what changed" PATCH semantics as
+        // the rest of this method).
+        List<FieldErrorDetail> errors = new ArrayList<>();
+        String resolvedOrganizationId = proposal.getOrganizationId();
+        if (request.organizationId() != null || request.newOrganizationName() != null) {
+            resolvedOrganizationId = resolveOrganizationId(request.organizationId(), request.newOrganizationName(),
+                    principalId(auth), errors);
+        }
+        if (request.coOrganizerStudentIds() != null) {
+            validateCoOrganizers(request.coOrganizerStudentIds(), proposal.getProposerStudentId(), errors);
+        }
+        if (request.proposedSupervisorId() != null) {
+            validateSupervisor(request.proposedSupervisorId(), errors);
+        }
+        if (!errors.isEmpty()) {
+            throw ApiException.validationFailed("Proposal organization/people fields failed validation.", errors);
+        }
+
         if (request.coOrganizerStudentIds() != null) proposal.setCoOrganizerStudentIds(request.coOrganizerStudentIds());
         if (request.title() != null) proposal.setTitle(request.title());
         if (request.objective() != null) proposal.setObjective(request.objective());
@@ -167,7 +197,7 @@ class ProposalServiceImpl implements ProposalService {
         if (request.capacity() != null) proposal.setCapacity(request.capacity());
         if (request.volunteerTasks() != null) proposal.setVolunteerTasks(request.volunteerTasks());
         if (request.proposedSupervisorId() != null) proposal.setProposedSupervisorId(request.proposedSupervisorId());
-        if (request.organizationId() != null) proposal.setOrganizationId(request.organizationId());
+        if (request.organizationId() != null || request.newOrganizationName() != null) proposal.setOrganizationId(resolvedOrganizationId);
         if (request.externalContact() != null) proposal.setExternalContact(request.externalContact());
         if (request.safetyPlan() != null) proposal.setSafetyPlan(request.safetyPlan());
         if (request.resourceNeeds() != null) proposal.setResourceNeeds(request.resourceNeeds());
@@ -396,8 +426,10 @@ class ProposalServiceImpl implements ProposalService {
                 .getOrDefault(p.getProposedSupervisorId(), "");
         String organizationName = p.getOrganizationId() != null
                 ? tryOrganizationName(p.getOrganizationId()) : null;
+        List<String> coOrganizerNames = coOrganizerNamesOf(p.getCoOrganizerStudentIds());
 
         return new ProposalDto(p.getId(), p.getProposerStudentId(), proposerName, p.getCoOrganizerStudentIds(),
+                coOrganizerNames,
                 p.getTitle(), p.getObjective(), p.getDescription(), p.getExpectedOutcome(),
                 p.getCategoryId(), categoryName, p.getPlannedStartAt(), p.getPlannedEndAt(), p.getLocation(), p.getFormat(),
                 p.getTargetParticipants(), p.getCapacity(), p.getVolunteerTasks(),
@@ -413,6 +445,77 @@ class ProposalServiceImpl implements ProposalService {
             return organizationService.get(organizationId).name();
         } catch (ApiException e) {
             return "";
+        }
+    }
+
+    private List<String> coOrganizerNamesOf(List<String> coOrganizerStudentIds) {
+        if (coOrganizerStudentIds == null || coOrganizerStudentIds.isEmpty()) {
+            return List.of();
+        }
+        Map<String, String> resolved = studentService.displayNamesOf(coOrganizerStudentIds);
+        return coOrganizerStudentIds.stream().map(sid -> resolved.getOrDefault(sid, "")).toList();
+    }
+
+    /**
+     * `organizationId`/`newOrganizationName` are mutually exclusive
+     * (contract §3.2, `Docs/clarification/01-i3-partner-school-terminology.md`).
+     * A new organization is created transactionally here — the same
+     * "resolve inside the write, never require a permission the caller
+     * doesn't hold" pattern already used by proposal approval generating a
+     * project (§4.3): a student proposing an event never holds
+     * `organizations.manage`, so the frontend must never call
+     * `POST /organizations` directly for this path.
+     */
+    private String resolveOrganizationId(String organizationId, String newOrganizationName, String actorId,
+                                          List<FieldErrorDetail> errors) {
+        boolean hasExisting = organizationId != null && !organizationId.isBlank();
+        boolean hasNew = newOrganizationName != null && !newOrganizationName.isBlank();
+        if (hasExisting && hasNew) {
+            errors.add(new FieldErrorDetail("organizationId", "AMBIGUOUS",
+                    "Provide either organizationId or newOrganizationName, not both."));
+            return organizationId;
+        }
+        if (hasExisting) {
+            try {
+                organizationService.get(organizationId);
+            } catch (ApiException e) {
+                errors.add(new FieldErrorDetail("organizationId", "NOT_FOUND", "Unknown organization."));
+            }
+            return organizationId;
+        }
+        if (hasNew) {
+            OrganizationDto created = organizationService.create(
+                    new CreateOrganizationRequest(newOrganizationName, "COMMUNITY", null, null, null, null), actorId);
+            return created.id();
+        }
+        return null;
+    }
+
+    /** Every id must be a real, active student, and never the proposer themselves. */
+    private void validateCoOrganizers(List<String> coOrganizerStudentIds, String proposerStudentId,
+                                       List<FieldErrorDetail> errors) {
+        if (coOrganizerStudentIds == null || coOrganizerStudentIds.isEmpty()) {
+            return;
+        }
+        if (coOrganizerStudentIds.contains(proposerStudentId)) {
+            errors.add(new FieldErrorDetail("coOrganizerStudentIds", "INVALID",
+                    "Co-organizers must not include the proposer."));
+        }
+        Map<String, String> resolved = studentService.displayNamesOf(coOrganizerStudentIds);
+        List<String> unknown = coOrganizerStudentIds.stream().filter(sid -> !resolved.containsKey(sid)).toList();
+        if (!unknown.isEmpty()) {
+            errors.add(new FieldErrorDetail("coOrganizerStudentIds", "NOT_FOUND",
+                    "Unknown student id(s): " + String.join(", ", unknown)));
+        }
+    }
+
+    /** Must resolve to an active user holding the `teacher` role — contract §4.3's "designated teacher as project owner." */
+    private void validateSupervisor(String proposedSupervisorId, List<FieldErrorDetail> errors) {
+        if (proposedSupervisorId == null || proposedSupervisorId.isBlank()) {
+            return;
+        }
+        if (!userService.hasActiveRole(proposedSupervisorId, "teacher")) {
+            errors.add(new FieldErrorDetail("proposedSupervisorId", "NOT_FOUND", "Unknown or non-teacher supervisor id."));
         }
     }
 }

@@ -6,6 +6,7 @@ import java.util.List;
 /** Denormalized names travel with their id (contract §2.11). Field set is contract §3.2's, not the frontend mock's divergent shape (see `Docs/implementation/00-Status.md` §16). */
 public record ProposalDto(
         String id, String proposerStudentId, String proposerStudentName, List<String> coOrganizerStudentIds,
+        List<String> coOrganizerNames,
         String title, String objective, String description, String expectedOutcome,
         String categoryId, String categoryName,
         Instant plannedStartAt, Instant plannedEndAt, String location, String format,

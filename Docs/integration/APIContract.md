@@ -58,7 +58,8 @@ Login response must at least return:
       "id": "usr_xxx",
       "displayName": "Example User",
       "roles": ["student"],
-      "permissions": ["projects.read", "serviceRecords.create"]
+      "permissions": ["projects.read", "serviceRecords.create"],
+      "studentId": "std_xxx"
     },
     "workspaces": ["student"],
     "preferredLanguage": "zh-CN",
@@ -71,6 +72,8 @@ Login response must at least return:
   }
 }
 ```
+
+`studentId` (added 2026-08-06, `Docs/clarification/01-i3-partner-school-terminology.md`) is `null` for staff accounts (teacher/admin/sysadmin) — it's what lets the frontend exclude "myself" from a co-organizer search without a second round trip.
 
 ### 2.3 CSRF & Origin Protection
 
@@ -246,7 +249,7 @@ An event proposal is created by a student to apply for organizing a volunteer ac
 
 Core fields:
 
-- `id`, `proposerStudentId`, `coOrganizerStudentIds`
+- `id`, `proposerStudentId`, `coOrganizerStudentIds`, `coOrganizerNames`
 - `title`, `objective`, `description`, `expectedOutcome`
 - `categoryId`, `plannedStartAt`, `plannedEndAt`, `location`, `format`
 - `targetParticipants`, `capacity`, `volunteerTasks`
@@ -255,6 +258,16 @@ Core fields:
 - `proposedRecognizedMinutes`, `evidencePlan`
 - `status`, `currentRevision`, `assignedReviewerId`
 - `approvedProjectId`, `version`, `createdAt`, `submittedAt`, `updatedAt`
+
+`coOrganizerNames` (added 2026-08-06 alongside the write-side fields below, `Docs/clarification/01-i3-partner-school-terminology.md`) is server-resolved, read-only, positionally matched to `coOrganizerStudentIds` — the same pattern `proposedSupervisorName`/`organizationName` already use for `proposedSupervisorId`/`organizationId`.
+
+**Creating/updating a proposal** (`POST /event-proposals`, `PATCH /event-proposals/{id}`) accepts `organizationId` **or** `newOrganizationName`, never both:
+
+- `organizationId` references an existing organization (from `GET /organizations`) — the backend validates it exists.
+- `newOrganizationName` is a student-supplied name for a partner organization not yet in the system. The backend creates the organization (type defaults to `community`) and links its generated id to the proposal in the same transaction — the frontend must never call `POST /organizations` directly for this path (that endpoint stays `organizations.manage`-gated; a student proposing an event never holds it).
+- Supplying both is a `400`. Supplying neither leaves the proposal without a partner organization, which remains valid (organization is optional, same as before).
+
+`coOrganizerStudentIds` and `proposedSupervisorId` are both validated server-side against real, active accounts: every co-organizer id must be an existing student (and not the proposer themselves), and `proposedSupervisorId` must resolve to a user holding the `teacher` role — consistent with §4.3's "the designated teacher as project owner" on approval. Both were previously accepted unvalidated; the frontend now resolves them through the directory search below rather than free text.
 
 Status:
 
@@ -537,9 +550,12 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 | `POST` | `/students/{id}/deactivate` | `students.manage` | Deactivate |
 | `GET` | `/students/{id}/progress` | Owner/`progress.read` | Progress tracking |
 | `GET` | `/students/{id}/service-records` | Owner/`students.read` | Service history |
+| `GET` | `/students/directory` | `students.read`/`directory.read` | Minimal `{id, displayName, gradeName, className}` search by name, for picking a co-organizer (added 2026-08-06, `Docs/clarification/01-i3-partner-school-terminology.md`) |
 | `GET` | `/academic-years` | Authenticated | Academic years |
 | `GET` | `/grades` | Authenticated | Grades |
 | `GET` | `/classes` | Authenticated | Classes |
+
+`directory.read` is deliberately narrower than `students.read`: it's the permission `role_student` holds (students otherwise have no way to look up another student's or teacher's id), and its response never carries `studentNumber`/`status`/`graduationYear`/contact fields the way `/students`'s own list response does. `search` is required and results are capped at a small page size (20) — this is a typeahead, not a directory browse.
 
 ### 4.10 Organizations & Service Categories
 
@@ -628,6 +644,7 @@ Imports must validate before commit. Duplicate imports are prevented by source f
 | `POST` | `/roles` | `roles.manage` | Create role |
 | `PATCH` | `/roles/{id}` | `roles.manage` | Update role permissions |
 | `GET` | `/permissions` | `roles.read` | Permission code catalog |
+| `GET` | `/users/directory` | `users.read`/`directory.read` | Minimal `{id, displayName}` search by name and role, for picking a proposed supervisor (added 2026-08-06, `Docs/clarification/01-i3-partner-school-terminology.md`) — `role` query param required (e.g. `teacher`), no other user fields (username/email/studentId/roleCodes/status) are exposed |
 | `GET` | `/audit-logs` | `auditLogs.read` | Operation audit |
 | `GET` | `/login-logs` | `securityLogs.read` | Login logs |
 | `GET` | `/system/settings` | `settings.read` | System parameters |

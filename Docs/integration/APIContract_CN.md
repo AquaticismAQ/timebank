@@ -58,7 +58,8 @@ Web 推荐使用 Secure、HttpOnly、SameSite Cookie 管理会话；如采用访
       "id": "usr_xxx",
       "displayName": "Example User",
       "roles": ["student"],
-      "permissions": ["projects.read", "serviceRecords.create"]
+      "permissions": ["projects.read", "serviceRecords.create"],
+      "studentId": "std_xxx"
     },
     "workspaces": ["student"],
     "preferredLanguage": "zh-CN",
@@ -71,6 +72,8 @@ Web 推荐使用 Secure、HttpOnly、SameSite Cookie 管理会话；如采用访
   }
 }
 ```
+
+`studentId`（2026-08-06 新增，见 `Docs/clarification/01-i3-partner-school-terminology.md`）对教职工账号（教师/管理员/系统管理员）为 `null`——它使前端无需额外请求即可在共同组织者搜索中排除"我自己"。
 
 ### 2.3 CSRF 与来源保护
 
@@ -246,7 +249,7 @@ draft → published → registrationOpen → inProgress → completed → archiv
 
 核心字段：
 
-- `id`, `proposerStudentId`, `coOrganizerStudentIds`
+- `id`, `proposerStudentId`, `coOrganizerStudentIds`, `coOrganizerNames`
 - `title`, `objective`, `description`, `expectedOutcome`
 - `categoryId`, `plannedStartAt`, `plannedEndAt`, `location`, `format`
 - `targetParticipants`, `capacity`, `volunteerTasks`
@@ -255,6 +258,16 @@ draft → published → registrationOpen → inProgress → completed → archiv
 - `proposedRecognizedMinutes`, `evidencePlan`
 - `status`, `currentRevision`, `assignedReviewerId`
 - `approvedProjectId`, `version`, `createdAt`, `submittedAt`, `updatedAt`
+
+`coOrganizerNames`（2026-08-06 随下方写入字段一并新增，见 `Docs/clarification/01-i3-partner-school-terminology.md`）由服务端解析、只读，与 `coOrganizerStudentIds` 按位置一一对应——与 `proposedSupervisorId`/`organizationId` 已有的 `proposedSupervisorName`/`organizationName` 是同一种模式。
+
+**创建/更新提案**（`POST /event-proposals`、`PATCH /event-proposals/{id}`）接受 `organizationId` **或** `newOrganizationName`，二者不可同时提供：
+
+- `organizationId` 引用一个已存在的合作组织（来自 `GET /organizations`）——后端会校验其存在。
+- `newOrganizationName` 是学生填写的、系统中尚不存在的合作组织名称。后端会在同一事务内创建该组织（类型默认为 `community`）并将生成的 id 关联到提案——前端不得为此路径直接调用 `POST /organizations`（该端点仍受 `organizations.manage` 权限控制，发起活动的学生从不持有该权限）。
+- 二者同时提供将返回 `400`。二者均不提供则提案不关联合作组织，这仍是合法状态（合作组织本就是可选项，与此前一致）。
+
+`coOrganizerStudentIds` 与 `proposedSupervisorId` 均在服务端校验为真实、有效的账号：每个共同组织者 id 必须是真实存在的学生（且不能是发起人本人），`proposedSupervisorId` 必须解析为持有 `teacher` 角色的用户——与 §4.3"批准时指定教师为项目负责人"一致。此前二者均未经校验即被接受；前端现在通过下方的目录搜索来解析，而非自由文本。
 
 状态：
 
@@ -537,9 +550,12 @@ queued → running → succeeded
 | `POST` | `/students/{id}/deactivate` | `students.manage` | 停用 |
 | `GET` | `/students/{id}/progress` | 本人/`progress.read` | 达标进度 |
 | `GET` | `/students/{id}/service-records` | 本人/`students.read` | 服务历史 |
+| `GET` | `/students/directory` | `students.read`/`directory.read` | 按姓名搜索，返回精简的 `{id, displayName, gradeName, className}`，用于挑选共同组织者（2026-08-06 新增，见 `Docs/clarification/01-i3-partner-school-terminology.md`） |
 | `GET` | `/academic-years` | 已登录 | 学年 |
 | `GET` | `/grades` | 已登录 | 年级 |
 | `GET` | `/classes` | 已登录 | 班级 |
+
+`directory.read` 刻意比 `students.read` 更窄：这是 `role_student` 持有的权限（学生原本没有任何方式查到其他学生或教师的 id），其响应从不携带 `/students` 列表响应中的 `studentNumber`/`status`/`graduationYear` 或联系方式字段。`search` 为必填参数，结果数量有上限（20 条）——这是一个联想搜索，不是目录浏览。
 
 ### 4.10 组织与服务类别
 
@@ -628,6 +644,7 @@ queued → running → succeeded
 | `POST` | `/roles` | `roles.manage` | 创建角色 |
 | `PATCH` | `/roles/{id}` | `roles.manage` | 更新角色权限 |
 | `GET` | `/permissions` | `roles.read` | 权限码目录 |
+| `GET` | `/users/directory` | `users.read`/`directory.read` | 按姓名与角色搜索，返回精简的 `{id, displayName}`，用于挑选拟邀请指导教师（2026-08-06 新增，见 `Docs/clarification/01-i3-partner-school-terminology.md`）——必须提供 `role` 查询参数（如 `teacher`），不暴露 username/email/studentId/roleCodes/status 等其他用户字段 |
 | `GET` | `/audit-logs` | `auditLogs.read` | 操作审计 |
 | `GET` | `/login-logs` | `securityLogs.read` | 登录日志 |
 | `GET` | `/system/settings` | `settings.read` | 系统参数 |

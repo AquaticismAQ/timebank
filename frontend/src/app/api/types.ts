@@ -287,6 +287,20 @@ export interface Organization {
   createdAt: string;
 }
 
+/** `GET /students/directory` row — a co-organizer picker's search result, deliberately narrower than `Student` (contract §4.9). */
+export interface StudentDirectoryEntry {
+  id: string;
+  displayName: string;
+  gradeName: string;
+  className: string;
+}
+
+/** `GET /users/directory` row — a supervisor picker's search result, deliberately narrower than `User` (contract §4.15). */
+export interface TeacherDirectoryEntry {
+  id: string;
+  displayName: string;
+}
+
 /** `avgCompletionRate` is mock-only — the real `AdminStatsDto` has no aggregate completion rate (`/reports/completion` has a per-grade one); optional so a real-backed dashboard can omit it rather than fake a value. */
 export interface AdminStats {
   totalStudents: number;
@@ -335,10 +349,27 @@ export interface EventProposal {
   targetParticipants: string;
   volunteerTasks: string;
   initiatorName: string;
+  /** Display-only, comma-joined from `coOrganizerNames` (real branch) or the raw mock string (mock branch). */
   coOrganizers: string;
+  /** Display-only resolved name — `proposedSupervisorName` on the real DTO. */
   mentorTeacher: string;
+  /** Display-only resolved name — `organizationName` on the real DTO. */
   partnerOrg: string;
   contactInfo: string;
+  /**
+   * Real ids behind the display fields above — added alongside the
+   * co-organizer/supervisor/organization pickers
+   * (`Docs/clarification/01-i3-partner-school-terminology.md`). Absent on
+   * mock-branch objects, since the mock has never modeled these as real
+   * accounts. `newOrganizationName` is write-only (never comes back from a
+   * read); it exists here only so `formToApiData` can round-trip through
+   * the same `Partial<EventProposal>` the create/update calls already use.
+   */
+  coOrganizerStudentIds?: string[];
+  coOrganizerNames?: string[];
+  proposedSupervisorId?: string;
+  organizationId?: string;
+  newOrganizationName?: string;
   riskMeasures: string;
   materialNeeds: string;
   budgetNeeds: string;
@@ -392,6 +423,8 @@ export interface MeResponse {
     displayName: string;
     roles: string[];
     permissions: string[];
+    /** `null` for staff accounts (teacher/admin/sysadmin) — added 2026-08-06 so the co-organizer picker can exclude "myself" without a second round trip. */
+    studentId: string | null;
   };
   workspaces: ('student' | 'admin')[];
   preferredLanguage: 'zh-CN' | 'en';

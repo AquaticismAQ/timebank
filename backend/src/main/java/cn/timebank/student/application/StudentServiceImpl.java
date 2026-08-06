@@ -8,6 +8,7 @@ import cn.timebank.common.error.ApiException;
 import cn.timebank.common.i18n.LocalizedNames;
 import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.student.application.dto.StudentDetailDto;
+import cn.timebank.student.application.dto.StudentDirectoryEntryDto;
 import cn.timebank.student.application.dto.StudentListItemDto;
 import cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest;
 import cn.timebank.student.application.dto.StudentRequests.UpdateStudentRequest;
@@ -19,12 +20,15 @@ import cn.timebank.student.infrastructure.GradeRepository;
 import cn.timebank.student.infrastructure.SchoolClassRepository;
 import cn.timebank.student.infrastructure.StudentRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -165,6 +169,41 @@ class StudentServiceImpl implements StudentService {
         student.setUpdatedAt(Instant.now());
         auditService.record(new AuditEntry(actorId, "students.manage", "student.deactivate", "student", student.getId(),
                 null, null, null));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StudentDirectoryEntryDto> searchDirectory(String search, String resolvedLanguage) {
+        if (search == null || search.isBlank()) {
+            return List.of();
+        }
+        Specification<Student> spec = FilterSpecifications.and(
+                FilterSpecifications.equalToEnum("status", StudentStatus.class, "ACTIVE"),
+                FilterSpecifications.searchAnyContains(search, "displayName", "studentNumber"));
+        Page<Student> page = studentRepository.findAll(spec, PageRequest.of(0, 20, Sort.by("displayName")));
+        Map<String, Grade> grades = gradeRepository.findAll().stream()
+                .collect(Collectors.toMap(Grade::getId, Function.identity()));
+        Map<String, SchoolClass> classes = classRepository.findAll().stream()
+                .collect(Collectors.toMap(SchoolClass::getId, Function.identity()));
+        return page.map(s -> new StudentDirectoryEntryDto(s.getId(), s.getDisplayName(),
+                gradeNameOf(s, grades, resolvedLanguage), classNameOf(s, classes, resolvedLanguage))).getContent();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, String> displayNamesOf(List<String> studentIds) {
+        return studentRepository.findAllById(studentIds).stream()
+                .collect(Collectors.toMap(Student::getId, Student::getDisplayName));
+    }
+
+    private String gradeNameOf(Student s, Map<String, Grade> grades, String resolvedLanguage) {
+        Grade grade = grades.get(s.getGradeId());
+        return grade != null ? LocalizedNames.pick(resolvedLanguage, grade.getNameZh(), grade.getNameEn()) : "";
+    }
+
+    private String classNameOf(Student s, Map<String, SchoolClass> classes, String resolvedLanguage) {
+        SchoolClass schoolClass = classes.get(s.getClassId());
+        return schoolClass != null ? LocalizedNames.pick(resolvedLanguage, schoolClass.getNameZh(), schoolClass.getNameEn()) : "";
     }
 
     private Student findOrThrow(String id) {

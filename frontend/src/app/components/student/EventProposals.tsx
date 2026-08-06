@@ -11,6 +11,8 @@ import { usePagedApi } from '../../api/useApi';
 import { minutesToHours } from '../../lib/format';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
+import { SearchPicker, CREATE_NEW_ID, type SearchPickerOption } from '../SearchPicker';
+import { useAuth } from '../../App';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -38,9 +40,9 @@ const EMPTY_FORM = {
   estimatedCapacity: 20,
   targetParticipants: '',
   volunteerTasks: '',
-  coOrganizers: '',
-  mentorTeacher: '',
-  partnerOrg: '',
+  coOrganizerStudents: [] as SearchPickerOption[],
+  mentorTeacherOption: [] as SearchPickerOption[],
+  partnerOrgOption: [] as SearchPickerOption[],
   contactInfo: '',
   riskMeasures: '',
   materialNeeds: '',
@@ -53,20 +55,29 @@ const EMPTY_FORM = {
 
 export function EventProposals() {
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
   const [view, setView] = useState<ViewMode>('list');
   const [filterStatus, setFilterStatus] = useState<ProposalStatus | 'all'>('all');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [declared, setDeclared] = useState(false);
+  // Which real proposal (if any) handleSaveDraft/handleSubmit should PATCH
+  // instead of creating a new one — null means "New Proposal" or "Copy",
+  // both of which produce a fresh draft. Previously `openForm` had no way
+  // to distinguish "edit this one" from "copy this one," so Edit Draft
+  // silently created a duplicate instead of patching the original (found
+  // 2026-08-06, `Docs/implementation/00-Status.md` §30).
+  const [editing, setEditing] = useState<{ id: string; version: number } | null>(null);
   const { items: proposals, page, loading, error, setFilter, setPage, refetch } = usePagedApi(api.eventProposals.list, {});
 
   const detailProposal = proposals.find(p => p.id === detailId);
 
-  const openForm = (template?: EventProposal) => {
+  const openForm = (template?: EventProposal, mode: 'edit' | 'copy' = 'copy') => {
     if (template) {
+      setEditing(mode === 'edit' ? { id: template.id, version: template.version ?? 0 } : null);
       setFormData({
-        title: template.title + ' (Copy)',
+        title: mode === 'copy' ? template.title + ' (Copy)' : template.title,
         goal: template.goal,
         categoryId: template.categoryId,
         description: template.description,
@@ -78,9 +89,15 @@ export function EventProposals() {
         estimatedCapacity: template.estimatedCapacity,
         targetParticipants: template.targetParticipants,
         volunteerTasks: template.volunteerTasks,
-        coOrganizers: template.coOrganizers,
-        mentorTeacher: template.mentorTeacher,
-        partnerOrg: template.partnerOrg,
+        coOrganizerStudents: (template.coOrganizerStudentIds ?? []).map((id, i) => ({
+          id, label: template.coOrganizerNames?.[i] || id,
+        })),
+        mentorTeacherOption: template.proposedSupervisorId
+          ? [{ id: template.proposedSupervisorId, label: template.mentorTeacher || template.proposedSupervisorId }]
+          : [],
+        partnerOrgOption: template.organizationId
+          ? [{ id: template.organizationId, label: template.partnerOrg || template.organizationId }]
+          : [],
         contactInfo: template.contactInfo,
         riskMeasures: template.riskMeasures,
         materialNeeds: template.materialNeeds,
@@ -91,6 +108,7 @@ export function EventProposals() {
         suggestedHours: template.suggestedMinutes / 60,
       });
     } else {
+      setEditing(null);
       setFormData(EMPTY_FORM);
     }
     setStep(0);
@@ -115,9 +133,15 @@ export function EventProposals() {
     estimatedCapacity: formData.estimatedCapacity,
     targetParticipants: formData.targetParticipants,
     volunteerTasks: formData.volunteerTasks,
-    coOrganizers: formData.coOrganizers,
-    mentorTeacher: formData.mentorTeacher,
-    partnerOrg: formData.partnerOrg,
+    coOrganizers: formData.coOrganizerStudents.map(s => s.label).join(', '),
+    coOrganizerStudentIds: formData.coOrganizerStudents.map(s => s.id),
+    mentorTeacher: formData.mentorTeacherOption[0]?.label ?? '',
+    proposedSupervisorId: formData.mentorTeacherOption[0]?.id,
+    partnerOrg: formData.partnerOrgOption[0]?.label ?? '',
+    organizationId: formData.partnerOrgOption[0] && formData.partnerOrgOption[0].id !== CREATE_NEW_ID
+      ? formData.partnerOrgOption[0].id : undefined,
+    newOrganizationName: formData.partnerOrgOption[0]?.id === CREATE_NEW_ID
+      ? formData.partnerOrgOption[0].label : undefined,
     contactInfo: formData.contactInfo,
     riskMeasures: formData.riskMeasures,
     materialNeeds: formData.materialNeeds,
@@ -128,10 +152,16 @@ export function EventProposals() {
     suggestedMinutes: formData.suggestedHours * 60,
   });
 
+  // `editing` set -> PATCH the real proposal being edited; unset -> a fresh
+  // draft (covers both "New Proposal" and "Copy Proposal").
+  const saveProposal = (): Promise<EventProposal> => editing
+    ? api.eventProposals.update(editing.id, { ...formToApiData(), version: editing.version })
+    : api.eventProposals.create(formToApiData());
+
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      await api.eventProposals.create(formToApiData());
+      await saveProposal();
       fieldErrors.clearAll();
       toast.success(t('student.proposals.draftSaved'));
       setView('list');
@@ -148,7 +178,7 @@ export function EventProposals() {
     if (!declared) { toast.error(t('student.proposals.checkDeclaration')); return; }
     setSaving(true);
     try {
-      const proposal = await api.eventProposals.create(formToApiData());
+      const proposal = await saveProposal();
       await api.eventProposals.submit(proposal.id, submitKeyRef.current);
       submitKeyRef.current = newIdempotencyKey();
       fieldErrors.clearAll();
@@ -187,8 +217,9 @@ export function EventProposals() {
     estimatedCapacity: 'capacity',
     targetParticipants: 'targetParticipants',
     volunteerTasks: 'volunteerTasks',
-    mentorTeacher: 'proposedSupervisorId',
-    partnerOrg: 'organizationId',
+    coOrganizerStudents: 'coOrganizerStudentIds',
+    mentorTeacherOption: 'proposedSupervisorId',
+    partnerOrgOption: 'organizationId',
     contactInfo: 'externalContact',
     riskMeasures: 'safetyPlan',
     materialNeeds: 'resourceNeeds',
@@ -242,7 +273,7 @@ export function EventProposals() {
             <X className="w-4 h-4" />
           </button>
           <div>
-            <h2 className="text-foreground">{t('student.proposals.newProposal')}</h2>
+            <h2 className="text-foreground">{t(editing ? 'student.proposals.editProposal' : 'student.proposals.newProposal')}</h2>
             <p className="text-xs text-muted-foreground">{t('common.step')} {step + 1} / {STEP_KEYS.length}: {t(`student.proposals.step_${STEP_KEYS[step]}`)}</p>
           </div>
         </div>
@@ -309,9 +340,59 @@ export function EventProposals() {
               <div className="p-3 bg-muted/50 rounded-xl text-xs text-muted-foreground">
                 {t('student.proposals.initiatorAuto')}
               </div>
-              {field(t('student.proposals.coOrganizers'), 'coOrganizers', { placeholder: t('student.proposals.coOrganizersPlaceholder'), required: false })}
-              {field(t('student.proposals.mentorTeacher'), 'mentorTeacher', { placeholder: t('student.proposals.mentorPlaceholder') })}
-              {field(t('student.proposals.partnerOrg'), 'partnerOrg', { placeholder: t('student.proposals.partnerOrgPlaceholder'), required: false })}
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1.5">
+                  {t('student.proposals.coOrganizers')}
+                </label>
+                <SearchPicker
+                  multi
+                  selected={formData.coOrganizerStudents}
+                  onChange={opts => { fieldErrors.clearField('coOrganizerStudentIds'); setFormData(f => ({ ...f, coOrganizerStudents: opts })); }}
+                  fetchOptions={async search => (await api.students.directory(search, user?.studentId))
+                    .map(s => ({ id: s.id, label: s.displayName, sublabel: `${s.gradeName} ${s.className}` }))}
+                  placeholder={t('student.proposals.coOrganizersPlaceholder')}
+                  searchPlaceholder={t('student.proposals.searchStudents')}
+                  noResultsLabel={t('student.proposals.noResults')}
+                  loadingLabel={t('common.loading')}
+                />
+                <FieldError message={fieldErrors.getError('coOrganizerStudentIds', 'coOrganizerStudents')} />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1.5">
+                  {t('student.proposals.mentorTeacher')}<span className="text-destructive ml-0.5">*</span>
+                </label>
+                <SearchPicker
+                  selected={formData.mentorTeacherOption}
+                  onChange={opts => { fieldErrors.clearField('proposedSupervisorId'); setFormData(f => ({ ...f, mentorTeacherOption: opts })); }}
+                  fetchOptions={async search => (await api.users.directory('teacher', search))
+                    .map(teacher => ({ id: teacher.id, label: teacher.displayName }))}
+                  placeholder={t('student.proposals.mentorPlaceholder')}
+                  searchPlaceholder={t('student.proposals.searchTeachers')}
+                  noResultsLabel={t('student.proposals.noResults')}
+                  loadingLabel={t('common.loading')}
+                />
+                <FieldError message={fieldErrors.getError('proposedSupervisorId', 'mentorTeacherOption')} />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1.5">
+                  {t('student.proposals.partnerOrg')}
+                </label>
+                <SearchPicker
+                  selected={formData.partnerOrgOption}
+                  onChange={opts => { fieldErrors.clearField('organizationId'); setFormData(f => ({ ...f, partnerOrgOption: opts })); }}
+                  fetchOptions={async search => {
+                    const page = await api.organizations.list({ search, pageSize: 20 });
+                    return page.data.map(o => ({ id: o.id, label: o.name }));
+                  }}
+                  placeholder={t('student.proposals.partnerOrgPlaceholder')}
+                  searchPlaceholder={t('student.proposals.searchOrganizations')}
+                  noResultsLabel={t('student.proposals.noResults')}
+                  loadingLabel={t('common.loading')}
+                  allowCreateNew
+                  createNewLabel={name => t('student.proposals.createNewOrg', { name })}
+                />
+                <FieldError message={fieldErrors.getError('organizationId', 'partnerOrgOption')} />
+              </div>
               {field(t('student.proposals.contactInfo'), 'contactInfo', { placeholder: t('student.proposals.contactPlaceholder') })}
             </>
           )}
@@ -344,7 +425,7 @@ export function EventProposals() {
                   [t('student.proposals.location'), formData.location || t('student.proposals.notFilled')],
                   [t('student.proposals.estimatedDuration'), `${formData.estimatedDurationHours} ${t('common.hours')}`],
                   [t('student.proposals.estimatedVolunteers'), `${formData.estimatedCapacity} ${t('common.people')}`],
-                  [t('student.proposals.mentorTeacher'), formData.mentorTeacher || t('student.proposals.tbd')],
+                  [t('student.proposals.mentorTeacher'), formData.mentorTeacherOption[0]?.label || t('student.proposals.tbd')],
                   [t('student.proposals.suggestedHours'), `${formData.suggestedHours} ${t('common.hours')}`],
                 ].map(([k, v]) => (
                   <div key={k} className="flex gap-3">
@@ -562,7 +643,7 @@ export function EventProposals() {
               <h3 className="text-sm font-medium text-foreground mb-3">{t('student.proposals.availableActions')}</h3>
 
               {(p.status === 'draft' || p.status === 'changesRequested') && (
-                <button onClick={() => { openForm(p); }}
+                <button onClick={() => { openForm(p, 'edit'); }}
                   className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity">
                   <Edit className="w-4 h-4" />
                   {p.status === 'changesRequested' ? t('student.proposals.reviseResubmit') : t('student.proposals.editDraft')}
@@ -703,7 +784,7 @@ export function EventProposals() {
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-end">
                           {(p.status === 'draft' || p.status === 'changesRequested') && (
-                            <button onClick={() => openForm(p)}
+                            <button onClick={() => openForm(p, 'edit')}
                               className="text-xs px-2 py-1 rounded-lg border border-border hover:bg-accent text-muted-foreground flex items-center gap-1">
                               <Edit className="w-3 h-3" /> {t('common.edit')}
                             </button>

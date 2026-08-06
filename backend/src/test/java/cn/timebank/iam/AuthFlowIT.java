@@ -4,6 +4,8 @@ import cn.timebank.iam.application.UserService;
 import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.iam.application.dto.UpdateUserRequest;
 import cn.timebank.iam.application.dto.UserDto;
+import cn.timebank.iam.domain.User;
+import cn.timebank.iam.infrastructure.UserRepository;
 import cn.timebank.security.application.SessionRevocationService;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
@@ -37,6 +39,33 @@ class AuthFlowIT extends AbstractIntegrationTest {
 
     @Autowired
     private SessionRevocationService sessionRevocationService;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    /**
+     * `/me`'s `studentId` (added 2026-08-06, `Docs/implementation/00-Status.md`
+     * §30) — present for a student account with a linked student record,
+     * `null` for a staff account with none.
+     */
+    @Test
+    void meReturnsStudentIdForALinkedStudentAccountAndNullForStaff() {
+        UserDto student = createUser("auth_flow_student", "InitialPass123!", Set.of("student"));
+        User entity = userRepository.findById(student.id()).orElseThrow();
+        entity.setStudentId("std_auth_flow_test");
+        userRepository.save(entity);
+        String studentSession = login("auth_flow_student", "InitialPass123!");
+        assertThat(getWithSession("/api/v1/me", studentSession).getBody()).contains("\"studentId\":\"std_auth_flow_test\"");
+
+        createUser("auth_flow_teacher", "InitialPass123!", Set.of("teacher"));
+        String teacherSession = login("auth_flow_teacher", "InitialPass123!");
+        ResponseEntity<String> teacherMe = getWithSession("/api/v1/me", teacherSession);
+        // Global Jackson config omits null fields from the wire entirely
+        // (non_null inclusion) rather than rendering "studentId":null — see
+        // the AdminStatsDto.reviewAvgHours finding, `00-Status.md` I1
+        // notes — so "absent" is what a null studentId actually looks like.
+        assertThat(teacherMe.getBody()).doesNotContain("\"studentId\":\"");
+    }
 
     @Test
     void loginSucceedsAndEstablishesAWorkingSession() {

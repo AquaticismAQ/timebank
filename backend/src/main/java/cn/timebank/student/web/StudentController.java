@@ -8,6 +8,7 @@ import cn.timebank.organization.application.RequestLanguageService;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.student.application.StudentService;
 import cn.timebank.student.application.dto.StudentDetailDto;
+import cn.timebank.student.application.dto.StudentDirectoryEntryDto;
 import cn.timebank.student.application.dto.StudentListItemDto;
 import cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest;
 import cn.timebank.student.application.dto.StudentRequests.UpdateStudentRequest;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -52,6 +54,24 @@ public class StudentController {
         Page<StudentListItemDto> page = studentService.list(pageable, query.filter("gradeId"), query.filter("classId"),
                 query.filter("status"), query.search(), resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
+    }
+
+    /**
+     * Contract §4.9: a small, capped, name-matched search for a co-organizer
+     * picker — {@code directory.read} is what {@code role_student} actually
+     * holds (students have no other way to look up another student's id).
+     * Registered as a literal {@code /directory} segment ahead of
+     * {@code /{id}} in this class; Spring's exact-match precedence means
+     * ordering here doesn't matter for routing, but the exact-vs-pattern
+     * pairing is the same one already proven for {@code /notifications/
+     * unread-count} next to {@code /notifications/{id}}.
+     */
+    @GetMapping("/directory")
+    @PreAuthorize("hasAuthority('students.read') or hasAuthority('directory.read')")
+    public ApiResponse<List<StudentDirectoryEntryDto>> directory(
+            @RequestParam(required = false) String search,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
+        return ApiResponse.of(studentService.searchDirectory(search, resolveLanguage(acceptLanguage, auth)));
     }
 
     @GetMapping("/{id}")

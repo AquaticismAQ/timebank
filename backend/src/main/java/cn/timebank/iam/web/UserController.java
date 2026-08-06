@@ -8,6 +8,7 @@ import cn.timebank.iam.application.UserService;
 import cn.timebank.iam.application.dto.AuthDtos.AdminResetPasswordResponse;
 import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.iam.application.dto.UpdateUserRequest;
+import cn.timebank.iam.application.dto.UserDirectoryEntryDto;
 import cn.timebank.iam.application.dto.UserDto;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.SessionRevocationService;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -48,6 +50,20 @@ public class UserController {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
         Page<UserDto> page = userService.list(pageable);
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
+    }
+
+    /**
+     * Contract §4.15: a small, capped, name+role-matched search for a
+     * proposal supervisor picker — {@code directory.read} is what
+     * {@code role_student} actually holds. No path-precedence concern here:
+     * unlike {@code StudentController}, this class has no {@code GET
+     * /users/{id}} to collide with.
+     */
+    @GetMapping("/directory")
+    @PreAuthorize("hasAuthority('users.read') or hasAuthority('directory.read')")
+    public ApiResponse<List<UserDirectoryEntryDto>> directory(
+            @RequestParam String role, @RequestParam(required = false) String search) {
+        return ApiResponse.of(userService.searchDirectory(role, search));
     }
 
     @PostMapping

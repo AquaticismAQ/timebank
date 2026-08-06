@@ -30,6 +30,8 @@ import type {
   ReviewQueueItem,
   Case,
   Organization,
+  StudentDirectoryEntry,
+  TeacherDirectoryEntry,
   AdminStats,
   ReportData,
   EventProposal,
@@ -153,6 +155,7 @@ function meResponseToUser(me: MeResponse, username: string): User {
     displayName: me.user.displayName,
     roles: me.user.roles.map(r => roleMap[r.toLowerCase()] ?? 'admin') as Role[],
     workspaces: me.workspaces,
+    studentId: me.user.studentId ?? undefined,
     email: '',
     permissions: me.user.permissions,
     preferredLanguage: me.preferredLanguage,
@@ -350,24 +353,34 @@ export const api = {
   eventProposals: {
     async list(params?: ListParams): Promise<PageResult<EventProposal>> {
       if (isRealDomain('eventProposals')) {
-        // Real ProposalDto's shape diverges from EventProposal far beyond
-        // casing (plannedStartAt/plannedEndAt not plannedDate,
-        // proposerStudentName not initiatorName, proposedRecognizedMinutes
-        // is one field where the frontend has two (estimatedDurationMinutes
-        // /suggestedMinutes), and ~15 form-only fields — myRole,
-        // activityFormat, mentorTeacher, partnerOrg, contactInfo,
-        // riskMeasures, materialNeeds, budgetNeeds, recruitmentMethod,
-        // eligibility, proofMethod, currentApprovalNode, linkedProjectTitle,
-        // timeline — don't exist on the backend at all. Mapped here only
-        // for what the LIST view actually reads (title/status/categoryName/
-        // plannedDate/initiatorName); the rest stay undefined, which is
-        // fine for the list (I0.11-style detail-view field reconciliation
-        // is I1's list-swap doesn't need it — event-proposals.get was
-        // never wired real, so no detail screen depends on it yet).
+        // Real ProposalDto's shape diverges from EventProposal beyond casing
+        // (objective/expectedOutcome/format/capacity/safetyPlan/
+        // resourceNeeds/recruitmentPlan/evidencePlan vs goal/
+        // expectedOutcomes/activityFormat/estimatedCapacity/riskMeasures/
+        // materialNeeds+budgetNeeds/recruitmentMethod/proofMethod) and a
+        // handful of fields — myRole, currentApprovalNode, reviewerName,
+        // feedback, linkedProjectId/Title, revisionCount, timeline,
+        // eligibility — genuinely don't exist on the backend at all (no
+        // safe default beyond ''/derived-display, never written back by
+        // the form). All of the above were originally left unmapped since
+        // the list view itself never read them — but `openForm(p, 'edit')`
+        // (`Docs/implementation/00-Status.md` §30) now pre-fills the real
+        // edit form straight from this list data, and an unmapped field
+        // isn't just "missing," it's the literal string "undefined" landing
+        // in a real saved proposal if the student doesn't happen to retype
+        // it. `materialNeeds`/`budgetNeeds` stay a lossy split of one
+        // backend field (whole value into materialNeeds, budgetNeeds
+        // blank) — an unedited resave rejoins to the same original string
+        // since `formToApiData`'s `.filter(Boolean).join('\n')` drops the
+        // blank half, so this doesn't lose data on a no-touch edit.
         const filter = { ...params?.filter };
         if (filter.status) filter.status = toBackendEnum(filter.status);
-        type ProposalDtoWire = EventProposal & {
+        type ProposalDtoWire = Omit<EventProposal, 'coOrganizerStudentIds'> & {
           proposerStudentName?: string; plannedStartAt?: string; proposedRecognizedMinutes?: number;
+          proposedSupervisorName?: string; organizationName?: string;
+          objective?: string; expectedOutcome?: string; format?: string; capacity?: number;
+          safetyPlan?: string; resourceNeeds?: string; recruitmentPlan?: string; evidencePlan?: string;
+          externalContact?: string; coOrganizerStudentIds?: string[];
         };
         const page = await http.getPage<ProposalDtoWire>('/event-proposals', buildListQuery({ ...params, filter }));
         const data = page.data.map(dto => mapEnumFields({
@@ -376,6 +389,23 @@ export const api = {
           plannedDate: dto.plannedStartAt ?? dto.plannedDate,
           estimatedDurationMinutes: dto.proposedRecognizedMinutes ?? dto.estimatedDurationMinutes,
           suggestedMinutes: dto.proposedRecognizedMinutes ?? dto.suggestedMinutes,
+          // Display strings, resolved server-side — the raw ids
+          // (coOrganizerStudentIds/proposedSupervisorId/organizationId)
+          // pass through unchanged via the ...dto spread, for edit-prefill.
+          coOrganizers: (dto.coOrganizerNames ?? []).join(', '),
+          mentorTeacher: dto.proposedSupervisorName ?? dto.mentorTeacher,
+          partnerOrg: dto.organizationName ?? dto.partnerOrg,
+          goal: dto.objective ?? '',
+          expectedOutcomes: dto.expectedOutcome ?? '',
+          activityFormat: dto.format ?? '',
+          estimatedCapacity: dto.capacity ?? 0,
+          riskMeasures: dto.safetyPlan ?? '',
+          materialNeeds: dto.resourceNeeds ?? '',
+          budgetNeeds: '',
+          recruitmentMethod: dto.recruitmentPlan ?? '',
+          proofMethod: dto.evidencePlan ?? '',
+          contactInfo: dto.externalContact ?? '',
+          eligibility: '',
         }, ['status']));
         return { data, page: page.page };
       }
@@ -407,15 +437,20 @@ export const api = {
           targetParticipants: data.targetParticipants,
           capacity: data.estimatedCapacity,
           volunteerTasks: data.volunteerTasks,
-          proposedSupervisorId: data.mentorTeacher,
-          organizationId: data.partnerOrg,
+          // Real ids resolved through the co-organizer/supervisor/organization
+          // pickers (`Docs/clarification/01-i3-partner-school-terminology.md`)
+          // — never the display strings (mentorTeacher/partnerOrg/coOrganizers),
+          // which are read-only summaries the server itself resolves on GET.
+          proposedSupervisorId: data.proposedSupervisorId,
+          organizationId: data.organizationId,
+          newOrganizationName: data.newOrganizationName,
           externalContact: data.contactInfo,
           safetyPlan: data.riskMeasures,
           resourceNeeds: [data.materialNeeds, data.budgetNeeds].filter(Boolean).join('\n'),
           recruitmentPlan: data.recruitmentMethod,
           proposedRecognizedMinutes,
           evidencePlan: data.proofMethod,
-          coOrganizerStudentIds: [],
+          coOrganizerStudentIds: data.coOrganizerStudentIds ?? [],
         };
         const dto = await http.post<EventProposal>('/event-proposals', body);
         return mapEnumFields(dto, ['status']);
@@ -473,15 +508,16 @@ export const api = {
           targetParticipants: data.targetParticipants,
           capacity: data.estimatedCapacity,
           volunteerTasks: data.volunteerTasks,
-          proposedSupervisorId: data.mentorTeacher,
-          organizationId: data.partnerOrg,
+          proposedSupervisorId: data.proposedSupervisorId,
+          organizationId: data.organizationId,
+          newOrganizationName: data.newOrganizationName,
           externalContact: data.contactInfo,
           safetyPlan: data.riskMeasures,
           resourceNeeds: [data.materialNeeds, data.budgetNeeds].filter(Boolean).join('\n'),
           recruitmentPlan: data.recruitmentMethod,
           proposedRecognizedMinutes,
           evidencePlan: data.proofMethod,
-          coOrganizerStudentIds: [],
+          coOrganizerStudentIds: data.coOrganizerStudentIds,
         }, data.version ?? 0);
         const dto = await http.patch<EventProposal>(`/event-proposals/${id}`, body);
         return mapEnumFields(dto, ['status']);
@@ -1001,6 +1037,26 @@ export const api = {
       progress.byCategory = progress.byCategory.map(c => ({ ...c, categoryName: resolveCategoryName(c.categoryId, i18n.language) }));
       return delay(progress);
     },
+    /**
+     * A co-organizer picker's search (contract §4.9,
+     * `Docs/clarification/01-i3-partner-school-terminology.md`) — minimal
+     * fields, capped, blank on an empty search (this is a typeahead, not a
+     * browse). `excludeId` filters out the current student client-side,
+     * since the backend has no way to know who "the current proposer" is
+     * from a plain name search.
+     */
+    async directory(search: string, excludeId?: string): Promise<StudentDirectoryEntry[]> {
+      if (!search) return [];
+      if (isRealDomain('students')) {
+        const results = await http.get<StudentDirectoryEntry[]>('/students/directory', { search });
+        return results.filter(s => s.id !== excludeId);
+      }
+      const term = search.toLowerCase();
+      return MOCK_STUDENTS
+        .filter(s => s.id !== excludeId && s.name.toLowerCase().includes(term))
+        .slice(0, 20)
+        .map(s => ({ id: s.id, displayName: s.name, gradeName: s.grade, className: s.className }));
+    },
   },
 
   organizations: {
@@ -1367,6 +1423,22 @@ export const api = {
         return;
       }
       return delay(undefined);
+    },
+    /**
+     * A supervisor picker's search (contract §4.15,
+     * `Docs/clarification/01-i3-partner-school-terminology.md`) — minimal
+     * fields, capped, scoped to one role, blank on an empty search.
+     */
+    async directory(role: string, search: string): Promise<TeacherDirectoryEntry[]> {
+      if (!search) return [];
+      if (isRealDomain('users')) {
+        return http.get<TeacherDirectoryEntry[]>('/users/directory', { role, search });
+      }
+      const term = search.toLowerCase();
+      return MOCK_USERS
+        .filter(u => u.roles?.includes(role as Role) && (u.displayName ?? u.username).toLowerCase().includes(term))
+        .slice(0, 20)
+        .map(u => ({ id: u.id, displayName: u.displayName ?? u.username }));
     },
   },
 

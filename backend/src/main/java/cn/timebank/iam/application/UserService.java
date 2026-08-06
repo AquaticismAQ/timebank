@@ -6,6 +6,7 @@ import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.iam.application.dto.MeResponse;
 import cn.timebank.iam.application.dto.UpdateProfileRequest;
 import cn.timebank.iam.application.dto.UpdateUserRequest;
+import cn.timebank.iam.application.dto.UserDirectoryEntryDto;
 import cn.timebank.iam.application.dto.UserDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -61,4 +62,20 @@ public interface UserService {
      * omitted (the caller decides the fallback, e.g. an empty string).
      */
     Map<String, String> displayNamesOf(List<String> userIds);
+
+    /**
+     * {@code GET /users/directory} — a small, capped, name-matched search
+     * over active holders of {@code roleCode}, for a supervisor picker.
+     * Blank {@code search} returns empty rather than every user with that
+     * role; this is a typeahead, not a browse (contract §4.15).
+     */
+    List<UserDirectoryEntryDto> searchDirectory(String roleCode, String search);
+
+    /**
+     * Proposal-side {@code proposedSupervisorId} validation: does this id
+     * belong to an active user holding {@code roleCode}? Contract §4.3 —
+     * approval makes "the designated teacher" the generated project's
+     * owner, so this must be checked before that id is ever trusted.
+     */
+    boolean hasActiveRole(String userId, String roleCode);
 }

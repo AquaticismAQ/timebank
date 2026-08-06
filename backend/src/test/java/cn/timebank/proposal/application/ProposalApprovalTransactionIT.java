@@ -9,6 +9,9 @@ import cn.timebank.iam.application.dto.UserDto;
 import cn.timebank.iam.domain.User;
 import cn.timebank.iam.infrastructure.UserRepository;
 import cn.timebank.notification.infrastructure.NotificationRepository;
+import cn.timebank.organization.application.OrganizationService;
+import cn.timebank.organization.application.dto.OrganizationDto;
+import cn.timebank.organization.application.dto.OrganizationRequests.CreateOrganizationRequest;
 import cn.timebank.project.application.ProjectService;
 import cn.timebank.project.infrastructure.ProjectRepository;
 import cn.timebank.proposal.application.dto.ProposalDto;
@@ -69,6 +72,8 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
     private UserService userService;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private OrganizationService organizationService;
     @Autowired
     private TeacherScopeAssignmentRepository scopeAssignmentRepository;
 
@@ -190,6 +195,136 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
                 .isEqualTo(inScopeProposal.id());
     }
 
+    /**
+     * The organization/co-organizer/supervisor validation added alongside
+     * this test (`Docs/clarification/01-i3-partner-school-terminology.md`):
+     * before this pass, all three were accepted unvalidated free text.
+     */
+    @Test
+    void creatingAProposalWithAnExistingOrganizationIdSucceeds() {
+        OrganizationDto org = organizationService.create(
+                new CreateOrganizationRequest("Sunrise Shelter", "COMMUNITY", null, null, null, null), "usr_test_admin");
+        StudentDetailDto student = createStudent();
+
+        ProposalDto draft = proposalService.createDraft(
+                requestWithOrganization(org.id(), null), student.id(), student.id(), "zh-CN");
+
+        assertThat(draft.organizationId()).isEqualTo(org.id());
+        assertThat(draft.organizationName()).isEqualTo("Sunrise Shelter");
+    }
+
+    @Test
+    void creatingAProposalWithANewOrganizationNameCreatesAndLinksItInTheSameTransaction() {
+        StudentDetailDto student = createStudent();
+
+        ProposalDto draft = proposalService.createDraft(
+                requestWithOrganization(null, "Riverside Library"), student.id(), student.id(), "zh-CN");
+
+        assertThat(draft.organizationId()).isNotBlank();
+        assertThat(draft.organizationName()).isEqualTo("Riverside Library");
+        assertThat(organizationService.get(draft.organizationId()).name()).isEqualTo("Riverside Library");
+    }
+
+    @Test
+    void creatingAProposalWithBothOrganizationIdAndNewOrganizationNameIsRejected() {
+        OrganizationDto org = organizationService.create(
+                new CreateOrganizationRequest("Ambiguous Org", "COMMUNITY", null, null, null, null), "usr_test_admin");
+        StudentDetailDto student = createStudent();
+
+        assertThatThrownBy(() -> proposalService.createDraft(
+                requestWithOrganization(org.id(), "Also New Org"), student.id(), student.id(), "zh-CN"))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).fieldErrors())
+                        .anyMatch(fe -> fe.field().equals("organizationId") && fe.code().equals("AMBIGUOUS")));
+    }
+
+    @Test
+    void creatingAProposalWithAnUnknownOrganizationIdIsRejected() {
+        StudentDetailDto student = createStudent();
+
+        assertThatThrownBy(() -> proposalService.createDraft(
+                requestWithOrganization("org_does_not_exist", null), student.id(), student.id(), "zh-CN"))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).fieldErrors())
+                        .anyMatch(fe -> fe.field().equals("organizationId") && fe.code().equals("NOT_FOUND")));
+    }
+
+    @Test
+    void creatingAProposalWithAnUnknownCoOrganizerIsRejected() {
+        StudentDetailDto student = createStudent();
+
+        assertThatThrownBy(() -> proposalService.createDraft(
+                requestWithCoOrganizers(List.of("std_does_not_exist")), student.id(), student.id(), "zh-CN"))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).fieldErrors())
+                        .anyMatch(fe -> fe.field().equals("coOrganizerStudentIds") && fe.code().equals("NOT_FOUND")));
+    }
+
+    @Test
+    void creatingAProposalListingTheProposerAsACoOrganizerIsRejected() {
+        StudentDetailDto student = createStudent();
+
+        assertThatThrownBy(() -> proposalService.createDraft(
+                requestWithCoOrganizers(List.of(student.id())), student.id(), student.id(), "zh-CN"))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).fieldErrors())
+                        .anyMatch(fe -> fe.field().equals("coOrganizerStudentIds") && fe.code().equals("INVALID")));
+    }
+
+    @Test
+    void creatingAProposalWithARealCoOrganizerSucceedsAndResolvesTheirName() {
+        StudentDetailDto proposer = createStudent();
+        StudentDetailDto coOrganizer = createStudent();
+
+        ProposalDto draft = proposalService.createDraft(
+                requestWithCoOrganizers(List.of(coOrganizer.id())), proposer.id(), proposer.id(), "zh-CN");
+
+        assertThat(draft.coOrganizerStudentIds()).containsExactly(coOrganizer.id());
+        assertThat(draft.coOrganizerNames()).containsExactly(coOrganizer.displayName());
+    }
+
+    @Test
+    void creatingAProposalWithANonTeacherSupervisorIsRejected() {
+        StudentDetailDto student = createStudent();
+        UserDto nonTeacher = userService.create(new CreateUserRequest(
+                "not_a_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Not A Teacher", null,
+                Set.of("student"), "zh-CN"), "usr_test_admin");
+
+        assertThatThrownBy(() -> proposalService.createDraft(
+                requestWithSupervisor(nonTeacher.id()), student.id(), student.id(), "zh-CN"))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).fieldErrors())
+                        .anyMatch(fe -> fe.field().equals("proposedSupervisorId") && fe.code().equals("NOT_FOUND")));
+    }
+
+    private CreateProposalRequest requestWithOrganization(String organizationId, String newOrganizationName) {
+        return baseRequestBuilder(List.of(), organizationId, newOrganizationName);
+    }
+
+    private CreateProposalRequest requestWithCoOrganizers(List<String> coOrganizerStudentIds) {
+        return baseRequestBuilder(coOrganizerStudentIds, null, null);
+    }
+
+    private CreateProposalRequest requestWithSupervisor(String proposedSupervisorId) {
+        Instant start = Instant.now().plus(10, ChronoUnit.DAYS);
+        Instant end = start.plusSeconds(7200);
+        return new CreateProposalRequest(
+                List.of(), "Validation Test Proposal", "Objective", "Description",
+                "Outcome", "cat_campus", start, end, "Main Quad", "onsite", "All grades", 20,
+                "Tasks", proposedSupervisorId, null, null, null,
+                "Safety plan", "Resources", "Recruitment plan", 120, "Evidence plan");
+    }
+
+    private CreateProposalRequest baseRequestBuilder(List<String> coOrganizerStudentIds, String organizationId, String newOrganizationName) {
+        Instant start = Instant.now().plus(10, ChronoUnit.DAYS);
+        Instant end = start.plusSeconds(7200);
+        return new CreateProposalRequest(
+                coOrganizerStudentIds, "Validation Test Proposal", "Objective", "Description",
+                "Outcome", "cat_campus", start, end, "Main Quad", "onsite", "All grades", 20,
+                "Tasks", realTeacherId(), organizationId, newOrganizationName, null,
+                "Safety plan", "Resources", "Recruitment plan", 120, "Evidence plan");
+    }
+
     private StudentDetailDto createStudentInGrade9() {
         int n = SEQ.incrementAndGet();
         CreateStudentRequest request = new CreateStudentRequest(
@@ -210,11 +345,19 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
         CreateProposalRequest request = new CreateProposalRequest(
                 List.of(), title, "Improve campus cleanliness", "A student-led cleanup effort",
                 "A cleaner campus", "cat_campus", start, end, "Main Quad", "onsite", "All grades", 20,
-                "Sorting and collecting litter", "usr_test_admin", null, null,
+                "Sorting and collecting litter", realTeacherId(), null, null, null,
                 "Adult supervision by a teacher at all times; first-aid kit on site",
                 "Gloves and trash bags", "Flyers posted in classrooms", 120, "Photos and a supervisor sign-off");
         ProposalDto draft = proposalService.createDraft(request, student.id(), student.id(), "zh-CN");
         return proposalService.submit(draft.id(), studentAuth(student.id()), "idem-propsubmit-" + draft.id(), "zh-CN");
+    }
+
+    /** `proposedSupervisorId` is validated (`Docs/clarification/01-i3-partner-school-terminology.md`) — must be a real active `teacher`. */
+    private String realTeacherId() {
+        UserDto teacher = userService.create(new CreateUserRequest(
+                "proposal_supervisor_" + OpaqueIds.generate("u"), "InitialPass123!", "Supervising Teacher", null,
+                Set.of("teacher"), "zh-CN"), "usr_test_admin");
+        return teacher.id();
     }
 
     private StudentDetailDto createStudent() {

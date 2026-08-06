@@ -55,7 +55,8 @@ INSERT IGNORE INTO permission (id, code, description) VALUES
     ('perm_settings_read', 'settings.read', 'View system settings'),
     ('perm_settings_manage', 'settings.manage', 'Update system settings'),
     ('perm_lifecycle_purge', 'lifecycle.purge', 'Trigger a cohort retention purge (dry-run or real)'),
-    ('perm_lifecycle_reconcile', 'lifecycle.reconcile', 'Trigger a ledger reconciliation run and view its results');
+    ('perm_lifecycle_reconcile', 'lifecycle.reconcile', 'Trigger a ledger reconciliation run and view its results'),
+    ('perm_directory_read', 'directory.read', 'Search a minimal id+displayName directory of students/teachers for picking a co-organizer or supervisor — deliberately narrower than students.read/users.read (no contact/role/status fields)');
 
 -- Session timeout: 720 min (12h) for student, 480 min (8h) for staff roles,
 -- matching contract §2.2's default — configurable per role from here on.
@@ -77,6 +78,8 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_student', 'perm_cases_read'),
     ('role_student', 'perm_accounts_read'),
     ('role_student', 'perm_progress_read'),
+    ('role_student', 'perm_organizations_read'),
+    ('role_student', 'perm_directory_read'),
     ('role_teacher', 'perm_projects_read'),
     ('role_teacher', 'perm_projects_create'),
     ('role_teacher', 'perm_projects_update'),
