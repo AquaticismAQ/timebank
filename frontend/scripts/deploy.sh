@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Builds the production frontend locally and syncs the static output to the
+# shared test server's nginx docroot. Production serves the frontend from
+# the same origin as the backend (nginx reverse-proxies /api/*, see
+# frontend/README.md) — no dev proxy, no CORS config, needed at runtime.
+#
+# The build runs on the workstation, not the server: unlike
+# backend/scripts/deploy.sh (which must build server-side, since the JAR
+# needs the target JVM), the server has no Node/pnpm installed at all, and
+# is a shared, resource-constrained box (00-Status.md's B7 findings) —
+# installing a whole Node toolchain there just to run a one-off Vite build
+# wasn't worth it when the build is fast locally and its static output
+# (frontend/dist/) is trivially portable. Only that output is shipped.
+#
+# Usage (from a workstation with SSH key access to the server):
+#   frontend/scripts/deploy.sh [user@host]
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+TARGET="${1:-root@tb.example.com}"
+REMOTE_DOCROOT="/var/www/timebank"
+
+echo "deploy.sh: installing dependencies..."
+pnpm install --frozen-lockfile
+
+echo "deploy.sh: type-checking (Vite's esbuild transform strips types without checking them)..."
+npx -y -p typescript tsc --noEmit -p tsconfig.json
+
+echo "deploy.sh: building production bundle..."
+pnpm build
+
+echo "deploy.sh: syncing dist/ to ${TARGET}:${REMOTE_DOCROOT}..."
+rsync -az --delete dist/ "${TARGET}:${REMOTE_DOCROOT}/"
+
+echo "deploy.sh: verifying nginx config and reloading..."
+ssh "${TARGET}" "nginx -t && systemctl reload nginx"
+
+echo "deploy.sh: done"

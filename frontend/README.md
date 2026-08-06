@@ -52,3 +52,11 @@ pnpm preview   # preview a production build
 ```
 
 There is no lint, test, or typecheck script configured (`tsc --noEmit` is not run separately — Vite's esbuild transform strips types without checking them, so run `npx -y -p typescript tsc --noEmit -p tsconfig.json` manually if you want type errors caught before `pnpm build` will show them).
+
+## Deploying
+
+```bash
+frontend/scripts/deploy.sh [user@host]   # defaults to root@tb.example.com
+```
+
+Builds locally (type-check, then `pnpm build`) and rsyncs `dist/` to the server's nginx docroot (`/var/www/timebank`), then reloads nginx. The build runs on the workstation, not the server — the server has no Node/pnpm installed and is a shared, resource-constrained box (see `Docs/implementation/00-Status.md`'s B7 findings), so a whole Node toolchain wasn't installed there just for a one-off static build. `.env.production` (committed — nothing in it is a secret) sets `VITE_API_REAL_DOMAINS` to every domain, since a production build must always talk to the real backend, unlike `pnpm dev`'s all-mock default. `VITE_DEV_PROXY_TARGET` is irrelevant to a production build: nginx serves the frontend and reverse-proxies `/api/*` to the backend from the same origin, so no dev proxy is involved at runtime.
