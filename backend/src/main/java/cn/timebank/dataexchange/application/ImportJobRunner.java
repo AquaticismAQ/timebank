@@ -4,6 +4,7 @@ import cn.timebank.account.application.AccountService;
 import cn.timebank.account.application.dto.AccountRequests.AdjustmentRequest;
 import cn.timebank.dataexchange.domain.Job;
 import cn.timebank.file.application.FileStorage;
+import cn.timebank.student.application.StudentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -18,32 +19,42 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Function;
 
 import static cn.timebank.dataexchange.application.JobExecutorConfig.JOB_EXECUTOR;
 
 /**
- * B5.10: the validate and commit runs. Both stream the source file line by
- * line (bounded heap regardless of file size, Design.md §16.2) and re-run
- * the same {@link HistoricalImportRowValidator} — commit trusts nothing
- * cached from validate, so the two phases can never disagree.
+ * B5.10/B5.10b: the validate and commit runs, for both import types this
+ * module supports ({@code serviceRecordsHistorical} and {@code students} —
+ * {@link Job#getResourceType()} says which). Both stream the source file
+ * line by line (bounded heap regardless of file size, Design.md §16.2) and
+ * re-run the same row validator commit trusts nothing cached from
+ * validate, so the two phases can never disagree.
  *
  * Only {@link #commitAsync} needs true checkpoint-resume: it is the one
- * run with an external side effect (crediting the ledger), so restarting
- * it from row zero after a crash would double-credit already-committed
- * rows. {@link #validateAsync} is side-effect-free — a reclaim that
- * re-runs it from scratch produces the identical report, so it is
- * deliberately *not* checkpoint-resumed, only re-launched.
+ * run with an external side effect (crediting the ledger, or creating a
+ * student), so restarting it from row zero after a crash would double-
+ * apply already-committed rows. {@link #validateAsync} is side-effect-free
+ * — a reclaim that re-runs it from scratch produces the identical report,
+ * so it is deliberately *not* checkpoint-resumed, only re-launched.
  *
- * <p><b>Known gap, named rather than hidden:</b> the checkpoint is
- * persisted at chunk boundaries ({@code CHUNK_SIZE} rows) and once more
- * unconditionally at the end of a successful run — not after every row.
- * A crash exactly mid-chunk therefore resumes from the *previous* chunk
- * boundary and re-credits the rows already applied within the
- * in-flight chunk. Closing this fully would mean making each row's
- * {@code AccountService} write and its checkpoint update atomic
- * together, which {@code AccountService}'s per-call transaction
- * ownership does not currently support. Reducing {@code CHUNK_SIZE}
- * narrows the exposure window; it does not remove it.</p>
+ * <p><b>Known gap, named rather than hidden</b> (historical import only —
+ * see {@link #commitHistorical}): the checkpoint is persisted at chunk
+ * boundaries ({@code CHUNK_SIZE} rows) and once more unconditionally at
+ * the end of a successful run — not after every row. A crash exactly
+ * mid-chunk therefore resumes from the *previous* chunk boundary and
+ * re-credits the rows already applied within the in-flight chunk. Closing
+ * this fully would mean making each row's {@code AccountService} write and
+ * its checkpoint update atomic together, which {@code AccountService}'s
+ * per-call transaction ownership does not currently support. Reducing
+ * {@code CHUNK_SIZE} narrows the exposure window; it does not remove it.
+ * {@link #commitStudents} does not share this exposure the same way — a
+ * re-committed row is caught by {@code studentNumberExists} and reported
+ * as a per-row error rather than silently duplicated, since student
+ * creation (unlike a ledger credit) is naturally idempotent-checkable by
+ * its own unique key.</p>
  */
 @Component
 class ImportJobRunner {
@@ -52,21 +63,55 @@ class ImportJobRunner {
     private static final int CHUNK_SIZE = 500;
 
     private final JobProgressWriter progressWriter;
-    private final HistoricalImportRowValidator rowValidator;
+    private final HistoricalImportRowValidator historicalRowValidator;
+    private final StudentImportRowValidator studentRowValidator;
     private final AccountService accountService;
+    private final StudentService studentService;
     private final FileStorage fileStorage;
 
-    ImportJobRunner(JobProgressWriter progressWriter, HistoricalImportRowValidator rowValidator,
-                     AccountService accountService, FileStorage fileStorage) {
+    ImportJobRunner(JobProgressWriter progressWriter, HistoricalImportRowValidator historicalRowValidator,
+                     StudentImportRowValidator studentRowValidator, AccountService accountService,
+                     StudentService studentService, FileStorage fileStorage) {
         this.progressWriter = progressWriter;
-        this.rowValidator = rowValidator;
+        this.historicalRowValidator = historicalRowValidator;
+        this.studentRowValidator = studentRowValidator;
         this.accountService = accountService;
+        this.studentService = studentService;
         this.fileStorage = fileStorage;
+    }
+
+    private record LineOutcome(boolean valid, String field, String code, String message) {
+        static final LineOutcome VALID = new LineOutcome(true, null, null, null);
+    }
+
+    /** One fresh per-run line-checker per resource type — `students`' closes over its own `seenInFile` set, scoped to this run only. */
+    private Function<String, LineOutcome> lineCheckerFor(String resourceType) {
+        return switch (resourceType) {
+            case "serviceRecordsHistorical" -> line -> {
+                var result = historicalRowValidator.validate(line);
+                if (result instanceof HistoricalImportRowValidator.Invalid invalid) {
+                    return new LineOutcome(false, invalid.field(), invalid.code(), invalid.message());
+                }
+                return LineOutcome.VALID;
+            };
+            case "students" -> {
+                Set<String> seenInFile = new HashSet<>();
+                yield line -> {
+                    var result = studentRowValidator.validate(line, seenInFile);
+                    if (result instanceof StudentImportRowValidator.Invalid invalid) {
+                        return new LineOutcome(false, invalid.field(), invalid.code(), invalid.message());
+                    }
+                    return LineOutcome.VALID;
+                };
+            }
+            default -> line -> new LineOutcome(false, "row", "UNKNOWN_IMPORT_TYPE", "Unknown import type: " + resourceType);
+        };
     }
 
     @Async(JOB_EXECUTOR)
     void validateAsync(String jobId) {
         Job claimed = progressWriter.claim(jobId, "VALIDATING");
+        Function<String, LineOutcome> lineChecker = lineCheckerFor(claimed.getResourceType());
         Path errorTemp;
         try {
             errorTemp = Files.createTempFile("import-errors-" + jobId, ".csv");
@@ -96,12 +141,12 @@ class ImportJobRunner {
                     if (line.isBlank()) continue;
                     rowNumber++;
                     total++;
-                    var result = rowValidator.validate(line);
-                    if (result instanceof HistoricalImportRowValidator.Valid) {
+                    LineOutcome outcome = lineChecker.apply(line);
+                    if (outcome.valid()) {
                         valid++;
-                    } else if (result instanceof HistoricalImportRowValidator.Invalid invalid) {
+                    } else {
                         errors++;
-                        errorWriter.write(rowNumber + "," + invalid.field() + "," + invalid.code() + "," + escapeCsv(invalid.message()));
+                        errorWriter.write(rowNumber + "," + outcome.field() + "," + outcome.code() + "," + escapeCsv(outcome.message()));
                         errorWriter.newLine();
                     }
                     if (rowNumber % CHUNK_SIZE == 0) {
@@ -117,7 +162,7 @@ class ImportJobRunner {
                     fileStorage.store(errorRef, errIn);
                 }
             }
-            completeValidation(jobId, "VALIDATED", errorRef, total, valid);
+            progressWriter.completeValidation(jobId, "VALIDATED", errorRef, total, valid);
             log.info("Import job {} validated: {} rows, {} valid, {} errors", jobId, total, valid, errors);
         } catch (Exception e) {
             log.error("Import job {} validation failed", jobId, e);
@@ -134,6 +179,18 @@ class ImportJobRunner {
     @Async(JOB_EXECUTOR)
     void commitAsync(String jobId, String actorId) {
         Job claimed = progressWriter.claim(jobId, "COMMITTING");
+        switch (claimed.getResourceType()) {
+            case "serviceRecordsHistorical" -> commitHistorical(claimed, actorId);
+            case "students" -> commitStudents(claimed, actorId);
+            default -> {
+                log.error("Import job {} commit failed: unknown resource type {}", jobId, claimed.getResourceType());
+                progressWriter.fail(jobId, "COMMIT_FAILED", "Unknown import type: " + claimed.getResourceType());
+            }
+        }
+    }
+
+    private void commitHistorical(Job claimed, String actorId) {
+        String jobId = claimed.getId();
         int resumeFromLine = claimed.getCheckpointOffset();
         try (InputStream in = fileStorage.open(claimed.getSourceFileKey());
              BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
@@ -157,7 +214,7 @@ class ImportJobRunner {
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) continue;
                 rowNumber++;
-                var result = rowValidator.validate(line);
+                var result = historicalRowValidator.validate(line);
                 boolean alreadyProcessed = rowNumber <= resumeFromLine;
                 if (result instanceof HistoricalImportRowValidator.Valid v) {
                     if (!alreadyProcessed) {
@@ -187,8 +244,40 @@ class ImportJobRunner {
         }
     }
 
-    private void completeValidation(String jobId, String status, String errorRef, int total, int valid) {
-        progressWriter.completeValidation(jobId, status, errorRef, total, valid);
+    private void commitStudents(Job claimed, String actorId) {
+        String jobId = claimed.getId();
+        int resumeFromLine = claimed.getCheckpointOffset();
+        Set<String> seenInFile = new HashSet<>();
+        try (InputStream in = fileStorage.open(claimed.getSourceFileKey());
+             BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            reader.readLine(); // header
+            String line;
+            int rowNumber = 0;
+            int committed = 0;
+            while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) continue;
+                rowNumber++;
+                var result = studentRowValidator.validate(line, seenInFile);
+                boolean alreadyProcessed = rowNumber <= resumeFromLine;
+                if (result instanceof StudentImportRowValidator.Valid v) {
+                    if (!alreadyProcessed) {
+                        // resolvedLanguage only shapes the returned DTO's localized names, which this
+                        // fire-and-forget path never reads — fixed default is fine, no request context exists here.
+                        studentService.create(v.request(), actorId, "zh-CN");
+                    }
+                    committed++;
+                }
+                if (!alreadyProcessed && rowNumber % CHUNK_SIZE == 0) {
+                    progressWriter.renewCommitProgress(jobId, rowNumber, rowNumber, committed);
+                }
+            }
+            progressWriter.renewCommitProgress(jobId, rowNumber, rowNumber, committed);
+            progressWriter.succeed(jobId, "COMMITTED", null, rowNumber, committed);
+            log.info("Import job {} committed: {} students created (resumed from line {})", jobId, committed, resumeFromLine);
+        } catch (Exception e) {
+            log.error("Import job {} commit failed", jobId, e);
+            progressWriter.fail(jobId, "COMMIT_FAILED", String.valueOf(e.getMessage()));
+        }
     }
 
     private String escapeCsv(String value) {

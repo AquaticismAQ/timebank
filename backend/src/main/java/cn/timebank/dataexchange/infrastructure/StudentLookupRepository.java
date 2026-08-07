@@ -27,4 +27,31 @@ public class StudentLookupRepository {
                         rs.getString("class_id"), rs.getString("status")));
         return rows.stream().findFirst();
     }
+
+    /** B5.10b (student roster import): does a row with this student number already exist, anywhere — not just active. */
+    public boolean studentNumberExists(String studentNumber) {
+        Integer count = jdbcTemplate.queryForObject("select count(*) from student where student_number = :num",
+                new MapSqlParameterSource("num", studentNumber), Integer.class);
+        return count != null && count > 0;
+    }
+
+    public boolean gradeExists(String gradeId) {
+        Integer count = jdbcTemplate.queryForObject("select count(*) from grade where id = :id",
+                new MapSqlParameterSource("id", gradeId), Integer.class);
+        return count != null && count > 0;
+    }
+
+    /** Empty when the class doesn't exist at all; otherwise its actual `grade_id`, for the caller to check the roster row's claimed grade actually matches. */
+    public Optional<String> classGradeId(String classId) {
+        String sql = "select grade_id from class where id = :id";
+        List<String> rows = jdbcTemplate.query(sql, new MapSqlParameterSource("id", classId),
+                (rs, rowNum) -> rs.getString("grade_id"));
+        return rows.stream().findFirst();
+    }
+
+    public boolean academicYearExists(String academicYearId) {
+        Integer count = jdbcTemplate.queryForObject("select count(*) from academic_year where id = :id",
+                new MapSqlParameterSource("id", academicYearId), Integer.class);
+        return count != null && count > 0;
+    }
 }
