@@ -18,6 +18,8 @@ Design/chinese/          Phase 1 institutional design docs (制度设计, source
 Docs/frontend/Design.md  Phase 2 frontend page/flow spec (English + _CN Chinese twin)
 Docs/integration/APIContract.md   The REST API contract — authoritative for both frontend and future backend
 Docs/implementation/     Phase-by-phase backend + integration build plan and the living status tracker (00-Status.md)
+Docs/TestAccounts.md     Login credentials for the seeded test accounts on the shared test server
+integration-test/        Seeds a realistic dataset onto the shared test server; STATUS.md logs live-testing bugs/fixes
 frontend/                React + Vite web app (Student Portal + Admin/Teacher Portal)
 backend/                 Spring Boot 3.4 / Java 21 backend, single Maven module, package root `cn.timebank` (see below)
 ```
@@ -37,6 +39,8 @@ pnpm preview         # preview a production build
 ```
 
 There is no lint, test, or typecheck script configured in `frontend/package.json` — do not assume `pnpm lint`/`pnpm test` exist. TypeScript is `strict: true` but `noUnusedLocals`/`noUnusedParameters` are off (see `frontend/tsconfig.json`).
+
+**Frontend testing/verification uses the real shared test server, not a local mock.** `https://tb.example.com/` serves the real frontend against the real backend (`frontend/scripts/deploy.sh`, deployed 2026-08-07). Before any live frontend test or browser verification pass, check whether frontend source has changed since the last deploy (`git log` against the deploy commit) and re-run `frontend/scripts/deploy.sh` first if so — testing stale static output against new backend behavior (or vice versa) produces false results. This mirrors the backend's existing rsync-then-`verify.sh` live-verification workflow; there is no separate local/staging frontend environment. Log in with one of the real seeded accounts in `Docs/TestAccounts.md` (`admin001`/`student001`/`student002`/`teacher001`/`both001`) — the login page's old mock-only "demo accounts" quick-login card was removed 2026-08-07. The server also carries a full seeded dataset (`integration-test/`, README + STATUS.md) — projects/records/proposals in every workflow status — so screens aren't empty during a live test; check `integration-test/STATUS.md` before assuming a bug is new.
 
 Backend commands run from `backend/` (single Maven module, no multi-module split — that question from earlier is resolved):
 
