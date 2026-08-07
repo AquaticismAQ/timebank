@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, ArrowUpRight, ArrowDownLeft, Plus, ChevronDown, ChevronUp } from 'lucide-react';
-import { TRANSACTION_TYPE_LABELS } from '../../mock/data';
+import { TRANSACTION_TYPE_LABELS } from '../../lib/statusLabels';
 import { type Student, type Account, type AccountTransaction } from '../../api/types';
 import { formatCoins, minutesToHours } from '../../lib/format';
 import { toast } from 'sonner';

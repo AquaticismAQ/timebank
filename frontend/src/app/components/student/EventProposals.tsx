@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { Plus, ChevronDown, ChevronUp, ChevronRight, Edit, Send, Copy, X, FileText, CheckCircle, AlertTriangle, Clock, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { PROPOSAL_STATUS_LABELS, SERVICE_CATEGORIES, resolveCategoryName } from '../../mock/data';
+import { PROPOSAL_STATUS_LABELS } from '../../lib/statusLabels';
+import { useDictionaries } from '../../api/useDictionaries';
 import { type EventProposal, type ProposalStatus } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
@@ -54,7 +55,8 @@ const EMPTY_FORM = {
 };
 
 export function EventProposals() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const { serviceCategories } = useDictionaries();
   const { user } = useAuth();
   const [view, setView] = useState<ViewMode>('list');
   const [filterStatus, setFilterStatus] = useState<ProposalStatus | 'all'>('all');
@@ -310,7 +312,7 @@ export function EventProposals() {
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('student.proposals.serviceCategory')}<span className="text-destructive ml-0.5">*</span></label>
                 <select value={formData.categoryId} onChange={e => setFormData(f => ({ ...f, categoryId: e.target.value }))}
                   className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
-                  {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{resolveCategoryName(c.id, i18n.language)}</option>)}
+                  {serviceCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               {field(t('student.proposals.publicGoal'), 'goal', { placeholder: t('student.proposals.publicGoalPlaceholder'), rows: 3 })}
@@ -420,7 +422,7 @@ export function EventProposals() {
               <div className="space-y-3 text-sm">
                 {[
                   [t('student.proposals.eventName'), formData.title || t('student.proposals.notFilled')],
-                  [t('student.proposals.serviceCategory'), resolveCategoryName(formData.categoryId, i18n.language)],
+                  [t('student.proposals.serviceCategory'), serviceCategories.find(c => c.id === formData.categoryId)?.name ?? formData.categoryId],
                   [t('student.proposals.plannedDate'), formData.plannedDate || t('student.proposals.notFilled')],
                   [t('student.proposals.location'), formData.location || t('student.proposals.notFilled')],
                   [t('student.proposals.estimatedDuration'), `${formData.estimatedDurationHours} ${t('common.hours')}`],

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { ClipboardCheck, Users, AlertTriangle, Clock, CheckCircle, ArrowRight } from 'lucide-react';
-import { PROJECT_STATUS_LABELS } from '../../mock/data';
+import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
 import { type AdminStats, type ReviewQueueItem, type Project } from '../../api/types';
 import { useAuth } from '../../App';
 import { api } from '../../api/client';

@@ -1421,7 +1421,7 @@
       "understood": "我已了解"
     }
   },
-  "mock": {
+  "labels": {
     "projectStatus": {
       "draft": "草稿",
       "published": "已发布",
@@ -1481,25 +1481,6 @@
       "silver": "银牌志愿者",
       "gold": "金牌志愿者",
       "excellent": "优秀志愿者"
-    },
-    "categories": {
-      "cat_education": "教育支持",
-      "cat_environment": "环境保护",
-      "cat_community": "社区服务",
-      "cat_charity": "公益慈善",
-      "cat_culture": "文化传播",
-      "cat_health": "健康安全",
-      "cat_other": "其他",
-      "cat_campus": "校园活动",
-      "cat_welfare": "公益福利"
-    },
-    "grades": {
-      "g6": "六年级",
-      "g7": "七年级",
-      "g8": "八年级",
-      "g9": "九年级",
-      "g10": "十年级",
-      "g11": "十一年级"
     },
     "roles": {
       "admin": "管理员",

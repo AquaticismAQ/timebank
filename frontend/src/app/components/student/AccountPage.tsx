@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ArrowUpRight, ArrowDownLeft, Lock, ChevronDown, ChevronUp, Gift, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { TRANSACTION_TYPE_LABELS, RECOGNITION_LEVELS } from '../../mock/data';
+import { TRANSACTION_TYPE_LABELS, RECOGNITION_LEVELS } from '../../lib/statusLabels';
 import { type Account, type AccountTransaction } from '../../api/types';
 import { formatCoins } from '../../lib/format';
 import { api } from '../../api/client';

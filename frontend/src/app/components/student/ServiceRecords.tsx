@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { Plus, Search, X, FileText, AlertTriangle, ChevronDown, ChevronUp, Upload, Send, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { RECORD_STATUS_LABELS, SERVICE_CATEGORIES, resolveCategoryName } from '../../mock/data';
+import { RECORD_STATUS_LABELS } from '../../lib/statusLabels';
 import { type RecordStatus, type ServiceRecord, type EvidenceFile } from '../../api/types';
 import { localDateTimeToISO, isoToLocalDateTime } from '../../lib/datetime';
 import { formatCoins } from '../../lib/format';
@@ -10,6 +10,7 @@ import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { useFieldErrors, FieldError, handleMutationError } from '../../api/useFieldErrors';
 import { usePagedApi } from '../../api/useApi';
+import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { EvidenceLink } from '../EvidenceLink';
@@ -29,7 +30,8 @@ type ViewMode = 'list' | 'new';
 const STEP_KEYS = ['source', 'serviceInfo', 'evidence', 'confirmSubmit'];
 
 export function ServiceRecords() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const { serviceCategories } = useDictionaries();
   const { items: records, page, loading, error, setFilter, setSearch: setPagedSearch, setPage, refetch } = usePagedApi(api.serviceRecords.list, {});
   const [view, setView] = useState<ViewMode>('list');
   const [search, setSearch] = useState('');
@@ -362,8 +364,8 @@ export function ServiceRecords() {
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.serviceCategory')}</label>
                 <select value={formData.categoryId} onChange={e => { fieldErrors.clearField('serviceCategoryId'); setFormData(f => ({ ...f, categoryId: e.target.value })); }}
                   className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
-                  {SERVICE_CATEGORIES.map(cat => (
-                    <option key={cat.id} value={cat.id}>{resolveCategoryName(cat.id, i18n.language)}</option>
+                  {serviceCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
                 <FieldError message={fieldErrors.getError('serviceCategoryId', 'categoryId')} />
@@ -581,7 +583,7 @@ export function ServiceRecords() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{rec.serviceCategoryName.startsWith('mock.') ? t(rec.serviceCategoryName) : rec.serviceCategoryName}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{rec.serviceCategoryName}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{rec.serviceDate}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{rec.durationMinutes / 60}h</td>
                       <td className="px-4 py-3">
@@ -643,7 +645,7 @@ export function ServiceRecords() {
                           {rec.creditedUnits && <span className="text-xs text-yellow-600 dark:text-yellow-400">+{formatCoins(rec.creditedUnits)} {t('common.coins')}</span>}
                         </div>
                         <div className="text-sm text-foreground font-medium truncate">{rec.projectTitle || rec.organizationName}</div>
-                        <div className="text-xs text-muted-foreground">{rec.serviceDate} · {rec.durationMinutes / 60} {t('common.hours')} · {rec.serviceCategoryName.startsWith('mock.') ? t(rec.serviceCategoryName) : rec.serviceCategoryName}</div>
+                        <div className="text-xs text-muted-foreground">{rec.serviceDate} · {rec.durationMinutes / 60} {t('common.hours')} · {rec.serviceCategoryName}</div>
                       </div>
                     </div>
                     {rec.status === 'returned' && (rec.returnReason || rec.reviewSummary) && (

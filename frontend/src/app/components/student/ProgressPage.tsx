@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RECOGNITION_LEVELS, GRADE_LABEL_KEYS } from '../../mock/data';
+import { RECOGNITION_LEVELS } from '../../lib/statusLabels';
 import { type StudentProgress } from '../../api/types';
 import { ChevronRight, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -176,7 +176,7 @@ export function ProgressPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs text-muted-foreground mb-0.5">{t('student.progress.currentGrade')}</div>
-                <div className="text-foreground font-medium">{t(GRADE_LABEL_KEYS[progress.grade])}</div>
+                <div className="text-foreground font-medium">{progress.grade}</div>
               </div>
               <div className="text-right">
                 <div className="text-xs text-muted-foreground mb-0.5">{t('student.progress.honorLevel')}</div>

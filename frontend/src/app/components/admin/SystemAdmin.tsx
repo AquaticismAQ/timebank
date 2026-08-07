@@ -181,7 +181,7 @@ const INITIAL_USERS: AdminUser[] = [
 ];
 
 
-const ROLE_LABELS: Record<UserRole, string> = { admin: 'mock.roles.admin', teacher: 'mock.roles.teacher', student: 'mock.roles.student' };
+const ROLE_LABELS: Record<UserRole, string> = { admin: 'labels.roles.admin', teacher: 'labels.roles.teacher', student: 'labels.roles.student' };
 const ALL_ROLES: UserRole[] = ['admin', 'teacher', 'student'];
 
 function roleColor(role: UserRole) {

@@ -1421,7 +1421,7 @@
       "understood": "I Understand"
     }
   },
-  "mock": {
+  "labels": {
     "projectStatus": {
       "draft": "Draft",
       "published": "Published",
@@ -1481,25 +1481,6 @@
       "silver": "Silver Volunteer",
       "gold": "Gold Volunteer",
       "excellent": "Excellent Volunteer"
-    },
-    "categories": {
-      "cat_education": "Education Support",
-      "cat_environment": "Environmental Protection",
-      "cat_community": "Community Service",
-      "cat_charity": "Charity",
-      "cat_culture": "Cultural Exchange",
-      "cat_health": "Health & Safety",
-      "cat_other": "Other",
-      "cat_campus": "Campus Activities",
-      "cat_welfare": "Public Welfare"
-    },
-    "grades": {
-      "g6": "Grade 6",
-      "g7": "Grade 7",
-      "g8": "Grade 8",
-      "g9": "Grade 9",
-      "g10": "Grade 10",
-      "g11": "Grade 11"
     },
     "roles": {
       "admin": "Admin",

@@ -88,10 +88,10 @@ export function AdminProfilePage() {
   };
 
   const roleLabels: Record<string, string> = {
-    admin: t('mock.roles.admin'),
-    teacher: t('mock.roles.teacher'),
-    student: t('mock.roles.student'),
-    sysadmin: t('mock.roles.admin'),
+    admin: t('labels.roles.admin'),
+    teacher: t('labels.roles.teacher'),
+    student: t('labels.roles.student'),
+    sysadmin: t('labels.roles.admin'),
   };
 
   return (

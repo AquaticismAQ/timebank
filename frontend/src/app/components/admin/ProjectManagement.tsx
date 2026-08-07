@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Search, MapPin, Clock, Users, MoreHorizontal, CheckCircle, X, Edit, Archive } from 'lucide-react';
-import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADES, GRADE_LABEL_KEYS, resolveCategoryName, gradeNameToId } from '../../mock/data';
-import { type Project, type ProjectStatus, type Organization } from '../../api/types';
+import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
+import { type Project, type ProjectStatus, type Organization, type Grade } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { useFieldErrors, FieldError, handleMutationError } from '../../api/useFieldErrors';
 import { usePermissions } from '../../App';
+import { useDictionaries } from '../../api/useDictionaries';
 import { localDatetimeLocalToISO } from '../../lib/datetime';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
@@ -45,7 +46,11 @@ interface EditForm {
   status: ProjectStatus;
 }
 
-function toForm(p: Project): EditForm {
+// `Project.eligibleGrades` (read) is a list of server-localized grade *names* (ProjectServiceImpl.toDto's
+// `eligibleGradeNames`), but `UpdateProjectRequest.eligibleGradeIds` (write) expects real grade ids — convert
+// on the way into the form so the checkboxes (keyed by id) and the save path (which sends ids straight
+// through) agree; round-tripping names back as "ids" would silently corrupt the stored eligible-grade list.
+function toForm(p: Project, grades: Grade[]): EditForm {
   return {
     title: p.title,
     summary: p.summary,
@@ -60,7 +65,7 @@ function toForm(p: Project): EditForm {
     endAt: p.endAt.slice(0, 16),
     registrationOpenAt: p.registrationOpenAt.slice(0, 16),
     registrationCloseAt: p.registrationCloseAt.slice(0, 16),
-    eligibleGrades: [...p.eligibleGrades],
+    eligibleGrades: p.eligibleGrades.map(name => grades.find(g => g.name === name)?.id ?? name),
     evidenceRequirements: p.evidenceRequirements,
     status: p.status,
   };
@@ -78,7 +83,8 @@ interface EditModalProps {
 }
 
 function EditModal({ project, form, onChange, onClose, onSave, organizations, getFieldError, onFieldEdit }: EditModalProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const { grades, serviceCategories } = useDictionaries();
   const set = (patch: Partial<EditForm>) => onChange(patch);
   const fe = (field: string, ...aliases: string[]) => getFieldError?.(field, ...aliases);
   const edit = (field: string, patch: Partial<EditForm>) => { onFieldEdit?.(field); set(patch); };
@@ -135,7 +141,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
               <div>
                 <label className={LABEL}>{t('admin.projects.serviceCategory')}</label>
                 <select value={form.categoryId} onChange={e => edit('categoryId', { categoryId: e.target.value })} className={INPUT}>
-                  {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{resolveCategoryName(c.id, i18n.language)}</option>)}
+                  {serviceCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <FieldError message={fe('categoryId')} />
               </div>
@@ -211,14 +217,14 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
           <section className="space-y-3 border-t border-border pt-4">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('admin.projects.eligibleGrades')}</p>
             <div className="flex flex-wrap gap-2">
-              {GRADES.map(g => (
-                <button key={g} type="button" onClick={() => toggleGrade(g)}
+              {grades.map(g => (
+                <button key={g.id} type="button" onClick={() => toggleGrade(g.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                    form.eligibleGrades.includes(g)
+                    form.eligibleGrades.includes(g.id)
                       ? 'bg-[oklch(0.488_0.243_264.376)] text-white border-[oklch(0.488_0.243_264.376)]'
                       : 'border-border text-muted-foreground hover:bg-accent'
                   }`}>
-                  {t(GRADE_LABEL_KEYS[g])}
+                  {g.name}
                 </button>
               ))}
             </div>
@@ -265,7 +271,8 @@ type SortKey = 'createdAt' | 'startAt' | 'enrolledCount';
 const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['enrolledCount'];
 
 export function ProjectManagement() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const { grades, serviceCategories } = useDictionaries();
   const { hasPermission } = usePermissions();
   // Backend gates create/update/publish/close/archive on four distinct
   // permissions (ProjectController's @PreAuthorize) — role_teacher's seed
@@ -343,7 +350,7 @@ export function ProjectManagement() {
     setMenuOpenId(null);
     fieldErrors.clearAll();
     setEditProject(proj);
-    setEditForm(toForm(proj));
+    setEditForm(toForm(proj, grades));
   };
 
   const saveEdit = async () => {
@@ -366,7 +373,7 @@ export function ProjectManagement() {
         endAt: editForm.endAt ? localDatetimeLocalToISO(editForm.endAt) : editProject.endAt,
         registrationOpenAt: editForm.registrationOpenAt ? localDatetimeLocalToISO(editForm.registrationOpenAt) : editProject.registrationOpenAt,
         registrationCloseAt: editForm.registrationCloseAt ? localDatetimeLocalToISO(editForm.registrationCloseAt) : editProject.registrationCloseAt,
-        eligibleGrades: editForm.eligibleGrades.map(gradeNameToId),
+        eligibleGrades: editForm.eligibleGrades,
         evidenceRequirements: editForm.evidenceRequirements,
         version: editProject.version,
       });
@@ -428,7 +435,7 @@ export function ProjectManagement() {
         <select value={filterCategory} onChange={e => handleCategoryChange(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.projects.allCategories')}</option>
-          {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{resolveCategoryName(c.id, i18n.language)}</option>)}
+          {serviceCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
 
@@ -584,7 +591,7 @@ export function ProjectManagement() {
                 <div>
                   <label className={LABEL}>{t('admin.projects.serviceCategory')}</label>
                   <select value={newForm.categoryId} onChange={e => setNewForm(f => ({ ...f, categoryId: e.target.value }))} className={INPUT}>
-                    {SERVICE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{resolveCategoryName(c.id, i18n.language)}</option>)}
+                    {serviceCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div>

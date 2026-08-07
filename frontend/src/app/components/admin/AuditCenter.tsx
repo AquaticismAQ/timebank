@@ -1,7 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, CheckCircle, XCircle, RotateCcw, AlertTriangle, Clock, ChevronDown, ChevronUp, Send } from 'lucide-react';
-import { GRADE_LABEL_KEYS } from '../../mock/data';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
@@ -187,7 +186,7 @@ export function AuditCenter() {
         <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.audit.allGrades')}</option>
-          {grades.map(g => <option key={g} value={g}>{t(GRADE_LABEL_KEYS[g])}</option>)}
+          {grades.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
         <button
           onClick={() => {
@@ -261,7 +260,7 @@ export function AuditCenter() {
                           <div className={`w-2 h-2 rounded-full shrink-0 ${priorityColors[item.priority]}`} />
                           <div>
                             <div className="text-sm text-foreground">{item.studentName}</div>
-                            <div className="text-xs text-muted-foreground">{t(GRADE_LABEL_KEYS[item.grade])} {item.className}</div>
+                            <div className="text-xs text-muted-foreground">{item.grade} {item.className}</div>
                           </div>
                           {item.hasAnomaly && (
                             <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded">{t('admin.audit.anomaly')}</span>
@@ -323,7 +322,7 @@ export function AuditCenter() {
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <div className={`w-2 h-2 rounded-full shrink-0 ${priorityColors[item.priority]}`} />
                           <span className="text-sm text-foreground font-medium">{item.studentName}</span>
-                          <span className="text-xs text-muted-foreground">{t(GRADE_LABEL_KEYS[item.grade])} {item.className}</span>
+                          <span className="text-xs text-muted-foreground">{item.grade} {item.className}</span>
                           {item.hasAnomaly && (
                             <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                               <AlertTriangle className="w-3 h-3" /> {t('admin.audit.anomaly')}

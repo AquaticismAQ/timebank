@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Clock, ChevronRight, Plus, AlertCircle, FileText, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { RECORD_STATUS_LABELS, RECOGNITION_LEVELS } from '../../mock/data';
+import { RECORD_STATUS_LABELS, RECOGNITION_LEVELS } from '../../lib/statusLabels';
 import { type StudentProgress, type Account, type ServiceRecord, type Project } from '../../api/types';
 import { formatCoins, minutesToHours } from '../../lib/format';
 import { useAuth } from '../../App';
@@ -202,7 +202,7 @@ export function StudentHome() {
                       <td className="px-4 py-3 text-foreground">{rec.projectTitle || rec.organizationName}</td>
                       <td className="px-4 py-3 text-muted-foreground">{rec.serviceDate}</td>
                       <td className="px-4 py-3 text-muted-foreground">{rec.durationMinutes / 60}h</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{rec.serviceCategoryName.startsWith('mock.') ? t(rec.serviceCategoryName) : rec.serviceCategoryName}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{rec.serviceCategoryName}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
                       </td>

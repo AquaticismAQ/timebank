@@ -1,11 +1,10 @@
-// API response/request payload types — lifted out of mock/data.ts per
-// APIContract.md §10.1/§12.3: this module is authoritative for response
-// shapes, mock/data.ts holds fixtures only. Field shapes here already
+// API response/request payload types — authoritative for real backend
+// response shapes (APIContract.md §10.1/§12.3). Field shapes here already
 // reflect the five contract divergences resolved in I0 (needsRevision ->
 // changesRequested, coin amounts as centi-coins, minutes-only durations,
 // dictionary names, list envelope) — see APIContract.md §13.5.
 
-/** `fullName` is mock-only (unused by any screen, not in the real `SchoolInfoDto`); `academicYear` is real-only. */
+/** `fullName` is unused by any screen and not part of the real `SchoolInfoDto` — always undefined. */
 export interface SchoolInfo {
   name: string;
   fullName?: string;
@@ -19,7 +18,6 @@ export type Role = 'student' | 'teacher' | 'admin' | 'sysadmin';
 export interface User {
   id: string;
   username: string;
-  password: string;
   displayName: string;
   roles: Role[];
   workspaces: ('student' | 'admin')[];
@@ -56,6 +54,7 @@ export interface Project {
   capacity: number;
   enrolledCount: number;
   recognizedMinutes: number;
+  /** Server-localized grade *names* (e.g. "十年级"), not ids — `api.projects.create`/`.update` send this same field as `eligibleGradeIds`, which the backend expects to be real grade ids, so any edit form must convert via the `grades` dictionary rather than round-tripping this array. */
   eligibleGrades: string[];
   registrationOpenAt: string;
   registrationCloseAt: string;
@@ -210,7 +209,7 @@ export interface Notification {
  * omitted from lists (APIContract.md §9). The real `GET /students` list item (`StudentListItemDto`) does not
  * carry progress/balance fields at all — those live on `StudentProgress`/`Account`, fetched separately per
  * contract's resource separation (I1 finding, see `Docs/implementation/00-Status.md`) — so the progress fields
- * here are optional and only ever populated by the mock; a real-backed list renders "—" for them.
+ * here are optional and never populated by this list endpoint; the student list screen renders "—" for them.
  */
 export interface Student {
   id: string;
@@ -287,6 +286,40 @@ export interface Organization {
   createdAt: string;
 }
 
+/** `GET /grades` (contract §2.10 dictionary domain) — `name` is already resolved server-side per `Accept-Language`, no local i18n-key indirection needed. */
+export interface Grade {
+  id: string;
+  code: string;
+  name: string;
+  sequence: number;
+}
+
+/** `GET /classes` — `name` is already resolved server-side per `Accept-Language`. */
+export interface SchoolClass {
+  id: string;
+  code: string;
+  name: string;
+  gradeId: string;
+  academicYearId: string;
+}
+
+/** `GET /academic-years`. */
+export interface AcademicYear {
+  id: string;
+  code: string;
+  startDate: string;
+  endDate: string;
+  current: boolean;
+}
+
+/** `GET /service-categories` — `name` is already resolved server-side per `Accept-Language`. */
+export interface ServiceCategory {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+}
+
 /** `GET /students/directory` row — a co-organizer picker's search result, deliberately narrower than `Student` (contract §4.9). */
 export interface StudentDirectoryEntry {
   id: string;
@@ -301,7 +334,7 @@ export interface TeacherDirectoryEntry {
   displayName: string;
 }
 
-/** `avgCompletionRate` is mock-only — the real `AdminStatsDto` has no aggregate completion rate (`/reports/completion` has a per-grade one); optional so a real-backed dashboard can omit it rather than fake a value. */
+/** `avgCompletionRate` is never populated — the real `AdminStatsDto` has no aggregate completion rate (`/reports/completion` has a per-grade one); optional so the dashboard omits it rather than faking a value. */
 export interface AdminStats {
   totalStudents: number;
   activeStudents: number;
@@ -349,7 +382,7 @@ export interface EventProposal {
   targetParticipants: string;
   volunteerTasks: string;
   initiatorName: string;
-  /** Display-only, comma-joined from `coOrganizerNames` (real branch) or the raw mock string (mock branch). */
+  /** Display-only, comma-joined from `coOrganizerNames`. */
   coOrganizers: string;
   /** Display-only resolved name — `proposedSupervisorName` on the real DTO. */
   mentorTeacher: string;
@@ -359,9 +392,8 @@ export interface EventProposal {
   /**
    * Real ids behind the display fields above — added alongside the
    * co-organizer/supervisor/organization pickers
-   * (`Docs/clarification/01-i3-partner-school-terminology.md`). Absent on
-   * mock-branch objects, since the mock has never modeled these as real
-   * accounts. `newOrganizationName` is write-only (never comes back from a
+   * (`Docs/clarification/01-i3-partner-school-terminology.md`).
+   * `newOrganizationName` is write-only (never comes back from a
    * read); it exists here only so `formToApiData` can round-trip through
    * the same `Partial<EventProposal>` the create/update calls already use.
    */
@@ -416,7 +448,7 @@ export interface ApiErrorBody {
   requestId: string;
 }
 
-/** `GET /me` response shape (APIContract.md §2.2) — distinct from the mock `User` type. */
+/** `GET /me` response shape (APIContract.md §2.2) — distinct from the client-side `User` type (`meResponseToUser` in client.ts maps between them). */
 export interface MeResponse {
   user: {
     id: string;

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Search, X, MapPin, Clock, Users, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { PROJECT_STATUS_LABELS, SERVICE_CATEGORIES, GRADE_LABEL_KEYS, resolveCategoryName } from '../../mock/data';
+import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
 import { type Project, type ProjectStatus } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError } from '../../api/http';
 import { usePagedApi } from '../../api/useApi';
+import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 
@@ -23,7 +24,8 @@ const colorMap: Record<string, string> = {
 type FilterStatus = ProjectStatus | 'all' | 'canApply';
 
 export function ProjectCenter() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const { serviceCategories } = useDictionaries();
   const { items, page, loading, error, setSearch: setPagedSearch, setFilter, setPage, refetch } = usePagedApi(api.projects.list, {});
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
@@ -125,12 +127,12 @@ export function ProjectCenter() {
             }`}>
             {t('student.projects.allCategories')}
           </button>
-          {SERVICE_CATEGORIES.map(cat => (
+          {serviceCategories.map(cat => (
             <button key={cat.id} onClick={() => applyCategoryFilter(cat.id)}
               className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                 filterCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'text-foreground hover:bg-accent'
               }`}>
-              {resolveCategoryName(cat.id, i18n.language)}
+              {cat.name}
             </button>
           ))}
         </div>
@@ -190,10 +192,10 @@ export function ProjectCenter() {
               className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${filterCategory === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
               {t('student.projects.allCategories')}
             </button>
-            {SERVICE_CATEGORIES.map(cat => (
+            {serviceCategories.map(cat => (
               <button key={cat.id} onClick={() => applyCategoryFilter(cat.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${filterCategory === cat.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-                {resolveCategoryName(cat.id, i18n.language)}
+                {cat.name}
               </button>
             ))}
           </div>
@@ -268,7 +270,7 @@ export function ProjectCenter() {
                           <p><span className="font-medium text-foreground">{t('student.projects.owner')}</span>{proj.ownerName}</p>
                           <p><span className="font-medium text-foreground">{t('student.projects.registrationDeadline')}</span>{proj.registrationCloseAt.slice(0, 10)}</p>
                           <p><span className="font-medium text-foreground">{t('student.projects.evidenceReq')}</span>{proj.evidenceRequirements}</p>
-                          <p><span className="font-medium text-foreground">{t('student.projects.eligibleGrades')}</span>{proj.eligibleGrades.map(g => t(GRADE_LABEL_KEYS[g])).join(', ')}</p>
+                          <p><span className="font-medium text-foreground">{t('student.projects.eligibleGrades')}</span>{proj.eligibleGrades.join(', ')}</p>
                         </div>
                       )}
                     </div>

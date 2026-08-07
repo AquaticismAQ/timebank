@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, ChevronDown, ChevronUp, Download, Upload, AlertCircle, Pencil, X, Save } from 'lucide-react';
-import { GRADES, GRADE_LABEL_KEYS, gradeNameToId, classNameToId } from '../../mock/data';
 import { type Student } from '../../api/types';
 import { formatCoins, minutesToHours } from '../../lib/format';
 import { toast } from 'sonner';
@@ -9,6 +8,7 @@ import { useAuth, useLogs } from '../../App';
 import { api } from '../../api/client';
 import { handleMutationError } from '../../api/useFieldErrors';
 import { usePagedApi } from '../../api/useApi';
+import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 
@@ -27,8 +27,8 @@ type EditForm = {
   name: string;
   email: string;
   studentNumber: string;
-  grade: string;
-  className: string;
+  gradeId: string;
+  classId: string;
   completedHours: number;
   timeCoinBalance: number;
   memo: string;
@@ -39,6 +39,7 @@ export function StudentList() {
   const { user } = useAuth();
   const isAdmin = user?.roles?.includes('admin') ?? false;
   const { addLog } = useLogs();
+  const { grades, classes } = useDictionaries();
 
   const [search, setSearch] = useState('');
   const [filterGrade, setFilterGrade] = useState('all');
@@ -73,7 +74,7 @@ export function StudentList() {
 
   const handleGradeChange = (value: string) => {
     setFilterGrade(value);
-    setFilter('gradeId', value === 'all' ? undefined : gradeNameToId(value));
+    setFilter('gradeId', value === 'all' ? undefined : value);
   };
 
   const handleSortClick = (k: SortKey) => {
@@ -94,8 +95,8 @@ export function StudentList() {
       name: s.name,
       email: s.email,
       studentNumber: s.studentNumber,
-      grade: s.grade,
-      className: s.className,
+      gradeId: s.gradeId,
+      classId: s.classId,
       completedHours: (s.completedMinutes ?? 0) / 60,
       timeCoinBalance: (s.timeCoinBalance ?? 0) / 100,
       memo: '',
@@ -109,11 +110,13 @@ export function StudentList() {
 
     const priorCompletedHours = (editStudent.completedMinutes ?? 0) / 60;
     const priorTimeCoinBalance = (editStudent.timeCoinBalance ?? 0) / 100;
+    const newGradeName = grades.find(g => g.id === editForm.gradeId)?.name ?? editForm.gradeId;
+    const newClassName = classes.find(c => c.id === editForm.classId)?.name ?? editForm.classId;
 
     const changes: string[] = [];
     if (editForm.name !== editStudent.name) changes.push(`Name changed to "${editForm.name}"`);
-    if (editForm.grade !== editStudent.grade || editForm.className !== editStudent.className)
-      changes.push(`Class changed to ${editForm.grade} ${editForm.className}`);
+    if (editForm.gradeId !== editStudent.gradeId || editForm.classId !== editStudent.classId)
+      changes.push(`Class changed to ${newGradeName} ${newClassName}`);
     if (editForm.completedHours !== priorCompletedHours)
       changes.push(`Completed hours ${priorCompletedHours}h→${editForm.completedHours}h (display only — hours are record-derived)`);
     if (editForm.timeCoinBalance !== priorTimeCoinBalance)
@@ -121,7 +124,7 @@ export function StudentList() {
 
     try {
       const hasProfileChanges = editForm.name !== editStudent.name || editForm.email !== editStudent.email ||
-        editForm.grade !== editStudent.grade || editForm.className !== editStudent.className;
+        editForm.gradeId !== editStudent.gradeId || editForm.classId !== editStudent.classId;
 
       if (hasProfileChanges) {
         // Resolve from the (possibly just-changed) form value first, not the
@@ -132,8 +135,8 @@ export function StudentList() {
         await api.students.update(editStudent.id, {
           displayName: editForm.name,
           email: editForm.email,
-          gradeId: gradeNameToId(editForm.grade) || editStudent.gradeId || undefined,
-          classId: classNameToId(editForm.className) || editStudent.classId || undefined,
+          gradeId: editForm.gradeId || editStudent.gradeId || undefined,
+          classId: editForm.classId || editStudent.classId || undefined,
           version: editStudent.version ?? 1,
         });
       }
@@ -142,8 +145,10 @@ export function StudentList() {
         ...s,
         name: editForm.name,
         email: editForm.email,
-        grade: editForm.grade,
-        className: editForm.className,
+        gradeId: editForm.gradeId,
+        grade: newGradeName,
+        classId: editForm.classId,
+        className: newClassName,
       } : s));
 
       addLog({
@@ -252,7 +257,7 @@ export function StudentList() {
         <select value={filterGrade} onChange={e => handleGradeChange(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.students.allGrades')}</option>
-          {GRADES.map(g => <option key={g} value={g}>{t(GRADE_LABEL_KEYS[g])}</option>)}
+          {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
@@ -299,7 +304,7 @@ export function StudentList() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{t(GRADE_LABEL_KEYS[student.grade])} {student.className}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{student.grade} {student.className}</td>
                   <td className="px-4 py-3 min-w-32">
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
@@ -363,7 +368,7 @@ export function StudentList() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-foreground leading-tight">{t('admin.students.editTitle')}</h3>
-                <p className="text-xs text-muted-foreground">{editStudent.studentNumber} · {t(GRADE_LABEL_KEYS[editStudent.grade])}</p>
+                <p className="text-xs text-muted-foreground">{editStudent.studentNumber} · {editStudent.grade}</p>
               </div>
               <button onClick={() => setEditStudent(null)}
                 className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors">
@@ -410,18 +415,27 @@ export function StudentList() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.students.grade')}</label>
-                  <select value={editForm.grade}
-                    onChange={e => setEditForm(f => f && ({ ...f, grade: e.target.value }))}
+                  <select value={editForm.gradeId}
+                    onChange={e => {
+                      const gradeId = e.target.value;
+                      // A class belongs to exactly one grade — switching grade without
+                      // resetting classId would let a saved edit pair a student with a
+                      // class from their *previous* grade.
+                      const stillValid = classes.some(c => c.id === editForm.classId && c.gradeId === gradeId);
+                      const fallback = classes.find(c => c.gradeId === gradeId)?.id ?? '';
+                      setEditForm(f => f && ({ ...f, gradeId, classId: stillValid ? f.classId : fallback }));
+                    }}
                     className="w-full px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40">
-                    {GRADES.map(g => <option key={g} value={g}>{t(GRADE_LABEL_KEYS[g])}</option>)}
+                    {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.students.class')}</label>
-                  <input type="text" value={editForm.className}
-                    onChange={e => setEditForm(f => f && ({ ...f, className: e.target.value }))}
-                    placeholder={t('admin.students.classPlaceholder')}
-                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+                  <select value={editForm.classId}
+                    onChange={e => setEditForm(f => f && ({ ...f, classId: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40">
+                    {classes.filter(c => c.gradeId === editForm.gradeId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
               </div>
 
@@ -496,7 +510,7 @@ export function StudentList() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
                       <span className="text-sm text-foreground font-medium">{student.name}</span>
-                      <span className="text-xs text-muted-foreground">{t(GRADE_LABEL_KEYS[student.grade])} {student.className}</span>
+                      <span className="text-xs text-muted-foreground">{student.grade} {student.className}</span>
                       {atRisk && (
                         <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                           <AlertCircle className="w-3 h-3" /> {t('admin.students.critical')}
