@@ -26,16 +26,16 @@ class OrganizationProjectCountIT extends AbstractIntegrationTest {
     @Test
     void projectCountReflectsRealNonArchivedProjectsForThatOrganization() {
         OrganizationDto org = organizationService.create(
-                new CreateOrganizationRequest("Test Partner Org", "COMMUNITY", null, null, null, null),
+                new CreateOrganizationRequest("Test Partner Org", "COMMUNITY", null, null, null, null, null),
                 "usr_test_admin");
         assertThat(org.projectCount()).isZero();
 
         Instant start = Instant.now().plus(5, ChronoUnit.DAYS);
         CreateProjectRequest request = new CreateProjectRequest(
-                "Org Project", "summary", "description", "cat_campus", org.id(),
+                "Org Project", "summary", "description", "cat_campus", org.id(), null,
                 start, start.plusSeconds(7200), "Hall", 10, 100, null, null,
                 Instant.now(), start);
-        projectService.createDraft(request, "usr_test_admin", "zh-CN");
+        projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
 
         OrganizationDto reread = organizationService.get(org.id());
         assertThat(reread.projectCount()).isEqualTo(1);

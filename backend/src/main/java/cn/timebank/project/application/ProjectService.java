@@ -3,6 +3,7 @@ package cn.timebank.project.application;
 import cn.timebank.project.application.dto.ProjectCapacitySnapshot;
 import cn.timebank.project.application.dto.ProjectDto;
 import cn.timebank.project.application.dto.ProjectGenerationRequest;
+import cn.timebank.project.application.dto.ProjectRequests.CancelProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.CreateProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.UpdateProjectRequest;
 import cn.timebank.project.application.dto.TimelineEntryDto;
@@ -29,15 +30,18 @@ public interface ProjectService {
 
     ProjectDto getDetail(String id, Authentication auth, String resolvedLanguage);
 
-    ProjectDto createDraft(CreateProjectRequest request, String actorId, String resolvedLanguage);
+    /** {@code actorIsAdmin}: gates whether {@code request.ownerId()} is honored — anyone else's is silently forced to {@code actorId} (02-PorjectOrganization.md §3). */
+    ProjectDto createDraft(CreateProjectRequest request, String actorId, boolean actorIsAdmin, String resolvedLanguage);
 
-    ProjectDto updateDraft(String id, UpdateProjectRequest request, String actorId, String resolvedLanguage);
+    ProjectDto updateDraft(String id, UpdateProjectRequest request, String actorId, boolean actorIsAdmin, String resolvedLanguage);
 
     ProjectDto publish(String id, Long version, String actorId, String resolvedLanguage);
 
-    ProjectDto close(String id, Long version, String actorId, String resolvedLanguage);
-
+    /** Rejects with a state-conflict if `status == COMPLETED` and any confirmed student's record isn't yet reviewed — {@link #cancel} is the override. */
     ProjectDto archive(String id, Long version, String actorId, String resolvedLanguage);
+
+    /** The manager override — archives a live (or completed-but-unreviewed) project outright, reason required (02-PorjectOrganization.md §2.1). */
+    ProjectDto cancel(String id, CancelProjectRequest request, String actorId, String resolvedLanguage);
 
     List<TimelineEntryDto> timeline(String id, Authentication auth);
 

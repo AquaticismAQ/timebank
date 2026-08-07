@@ -203,7 +203,7 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
     @Test
     void creatingAProposalWithAnExistingOrganizationIdSucceeds() {
         OrganizationDto org = organizationService.create(
-                new CreateOrganizationRequest("Sunrise Shelter", "COMMUNITY", null, null, null, null), "usr_test_admin");
+                new CreateOrganizationRequest("Sunrise Shelter", "COMMUNITY", null, null, null, null, null), "usr_test_admin");
         StudentDetailDto student = createStudent();
 
         ProposalDto draft = proposalService.createDraft(
@@ -228,7 +228,7 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
     @Test
     void creatingAProposalWithBothOrganizationIdAndNewOrganizationNameIsRejected() {
         OrganizationDto org = organizationService.create(
-                new CreateOrganizationRequest("Ambiguous Org", "COMMUNITY", null, null, null, null), "usr_test_admin");
+                new CreateOrganizationRequest("Ambiguous Org", "COMMUNITY", null, null, null, null, null), "usr_test_admin");
         StudentDetailDto student = createStudent();
 
         assertThatThrownBy(() -> proposalService.createDraft(

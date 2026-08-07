@@ -8,10 +8,12 @@ import cn.timebank.organization.application.RequestLanguageService;
 import cn.timebank.project.application.ProjectService;
 import cn.timebank.project.application.dto.ProjectDto;
 import cn.timebank.project.application.dto.ProjectRequests.ActionRequest;
+import cn.timebank.project.application.dto.ProjectRequests.CancelProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.CreateProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.UpdateProjectRequest;
 import cn.timebank.project.application.dto.TimelineEntryDto;
 import cn.timebank.security.application.CookieSessionUserDetails;
+import cn.timebank.security.application.TimeBankPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -68,7 +70,7 @@ public class ProjectController {
     public ApiResponse<ProjectDto> create(
             @Valid @RequestBody CreateProjectRequest request,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
-        return ApiResponse.of(projectService.createDraft(request, principalId(auth), resolveLanguage(acceptLanguage, auth)));
+        return ApiResponse.of(projectService.createDraft(request, principalId(auth), isAdmin(auth), resolveLanguage(acceptLanguage, auth)));
     }
 
     @PatchMapping("/{id}")
@@ -76,7 +78,7 @@ public class ProjectController {
     public ApiResponse<ProjectDto> update(
             @PathVariable String id, @Valid @RequestBody UpdateProjectRequest request,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
-        return ApiResponse.of(projectService.updateDraft(id, request, principalId(auth), resolveLanguage(acceptLanguage, auth)));
+        return ApiResponse.of(projectService.updateDraft(id, request, principalId(auth), isAdmin(auth), resolveLanguage(acceptLanguage, auth)));
     }
 
     @PostMapping("/{id}/publish")
@@ -87,20 +89,21 @@ public class ProjectController {
         return ApiResponse.of(projectService.publish(id, request.version(), principalId(auth), resolveLanguage(acceptLanguage, auth)));
     }
 
-    @PostMapping("/{id}/close")
-    @PreAuthorize("hasAuthority('projects.close')")
-    public ApiResponse<ProjectDto> close(
-            @PathVariable String id, @Valid @RequestBody ActionRequest request,
-            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
-        return ApiResponse.of(projectService.close(id, request.version(), principalId(auth), resolveLanguage(acceptLanguage, auth)));
-    }
-
     @PostMapping("/{id}/archive")
     @PreAuthorize("hasAuthority('projects.archive')")
     public ApiResponse<ProjectDto> archive(
             @PathVariable String id, @Valid @RequestBody ActionRequest request,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
         return ApiResponse.of(projectService.archive(id, request.version(), principalId(auth), resolveLanguage(acceptLanguage, auth)));
+    }
+
+    /** The manager override (02-PorjectOrganization.md §2.1) — cancels a live (or completed-but-unreviewed) project outright; reason required. */
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasAuthority('projects.cancel')")
+    public ApiResponse<ProjectDto> cancel(
+            @PathVariable String id, @Valid @RequestBody CancelProjectRequest request,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
+        return ApiResponse.of(projectService.cancel(id, request, principalId(auth), resolveLanguage(acceptLanguage, auth)));
     }
 
     @GetMapping("/{id}/timeline")
@@ -116,5 +119,10 @@ public class ProjectController {
 
     private String principalId(Authentication auth) {
         return ((CookieSessionUserDetails) auth.getPrincipal()).id();
+    }
+
+    /** Whether the caller may set `ownerId` to someone other than themselves (02-PorjectOrganization.md §3) — role-based, not `projects.*`-permission-based, since every teacher already holds `projects.create`/`.update`. */
+    private boolean isAdmin(Authentication auth) {
+        return ((TimeBankPrincipal) auth.getPrincipal()).roleCodes().contains("admin");
     }
 }

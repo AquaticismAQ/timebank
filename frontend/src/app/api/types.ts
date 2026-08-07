@@ -277,12 +277,14 @@ export interface Organization {
   id: string;
   name: string;
   type: 'school' | 'community' | 'nonprofit' | 'government' | 'other';
+  description: string;
   contactName: string;
   contactEmail: string;
   contactPhone: string;
   address: string;
   status: 'active' | 'inactive' | 'archived';
   projectCount: number;
+  version: number;
   createdAt: string;
 }
 

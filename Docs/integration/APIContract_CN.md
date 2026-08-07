@@ -402,11 +402,17 @@ queued → running → succeeded
 | `POST` | `/projects` | `projects.create` | 创建草稿 |
 | `PATCH` | `/projects/{id}` | `projects.update` | 更新项目 |
 | `POST` | `/projects/{id}/publish` | `projects.publish` | 发布 |
-| `POST` | `/projects/{id}/close` | `projects.close` | 提前关闭 |
-| `POST` | `/projects/{id}/archive` | `projects.archive` | 归档 |
+| `POST` | `/projects/{id}/archive` | `projects.archive` | 归档已完成的项目 |
+| `POST` | `/projects/{id}/cancel` | `projects.cancel` | 取消并直接归档一个进行中（或已完成）的项目，需填写原因 |
 | `GET` | `/projects/{id}/timeline` | `projects.audit.read` | 项目变更时间线 |
 
 项目状态变化使用动作端点，避免用通用 `PATCH status` 绕过业务校验。
+
+**状态机（2026-08-08 修订，见 `Docs/clarification/02-PorjectOrganization.md` §2）：** `draft`（草稿）→ `published`（已发布）→ `registrationOpen`（报名开放）→ `closed`（报名关闭）→ `inProgress`（进行中）→ `completed`（已结束）→ `archived`（已归档），其中 `registrationOpen`→`closed`→`inProgress`→`completed` 均由系统按时间自动流转（在读取/操作访问时惰性同步），`closed` 仅表示"报名窗口已结束"，从来不是人工操作，也不代表取消。`POST /projects/{id}/archive` 只能在 `completed` 状态下成功，且必须所有 `CONFIRMED`（已确认）报名学生该项目的服务记录都已进入终态审核结果（`approved`/`rejected`/`corrected`）才能通过；否则返回 409 状态冲突错误，并说明还有多少名学生未完成审核。`POST /projects/{id}/cancel`（`reason` 必填，`@NotBlank`，作为审计记录的 `reasonCode` 存储）是独立的管理员覆盖操作——可从 `draft`/`published`/`registrationOpen`/`closed`/`inProgress`/`completed` 中的任一状态直接归档，完全绕过已审核记录的门槛检查，用于丢弃一个不需要的草稿、彻底放弃某个进行中的项目，或强制关闭一个停滞的项目。此前存在的手动 `POST /projects/{id}/close`（`projects.close`）提前关闭动作现已废弃——既然 `closed` 已完全自动化，`cancel` 承接了它原本的使用场景。`CreateProjectRequest`/`UpdateProjectRequest` 也新增了可选的 `ownerId` 字段：仅管理员可用（按角色校验，而非仅凭 `projects.create`/`.update` 权限，因为教师也持有这两项权限），非管理员提交的 `ownerId` 会被静默忽略并强制设为本人，而不是报错拒绝。
+
+**无人报名自动归档（2026-08-08 新增）：** `registrationOpen`→`closed` 的按时间自动流转在执行前会先检查该项目已确认的报名人数——若确认报名人数为零，项目会直接归档（新增 `registrationOpen`→`archived`，同样由系统触发），而不再进入 `closed`/`inProgress`/`completed`，因为这些状态对一个零报名的项目已没有实际意义。系统会写入一条专门的审计记录（`action: "project.autoArchiveNoRegistrants"`，`reasonCode: "NO_REGISTRANTS_AT_REGISTRATION_CLOSE"`，`actorId`/`permissionUsed` 均为空——因为没有人工操作者）说明原因，与其他状态变更的审计记录区分开来。只要该项目有至少一名已确认的报名学生，就不受影响，仍按原有流程进入 `closed`。
+
+管理后台的"报名名单"入口（`GET /applications?filter[projectId]=`，见 §4.4）只有在项目发布之后才有意义——前端现已对 `draft`（草稿）状态的项目隐藏该操作菜单项，因为草稿阶段报名从未开放过。
 
 ### 4.3 学生活动提案
 
@@ -561,14 +567,16 @@ queued → running → succeeded
 
 | Method | Path | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/organizations` | `organizations.read` | 组织列表 |
+| `GET` | `/organizations` | `organizations.read` | 组织列表——支持 `filter[type]`、`filter[status]`、`search`（仅按名称）（2026-08-08 新增，见 `02-PorjectOrganization.md` §4；此前这些参数虽然接受但会被静默忽略） |
 | `POST` | `/organizations` | `organizations.manage` | 创建 |
 | `GET` | `/organizations/{id}` | `organizations.read` | 详情 |
 | `PATCH` | `/organizations/{id}` | `organizations.manage` | 更新 |
-| `POST` | `/organizations/{id}/archive` | `organizations.manage` | 归档 |
+| `POST` | `/organizations/{id}/archive` | `organizations.manage` | 归档——唯一的移除方式；按设计不提供永久删除（见 `02-PorjectOrganization.md` §4） |
 | `GET` | `/service-categories` | 已登录 | 服务类别 |
 | `POST` | `/service-categories` | `rules.manage` | 创建类别 |
 | `PATCH` | `/service-categories/{id}` | `rules.manage` | 更新类别 |
+
+`organizations.manage` 现由 `role_admin` 和 `role_teacher` 共同持有（2026-08-08 变更——此前仅管理员持有）。同一变更中，`Organization` 新增了 `description`（自由文本简介）字段，与既有的结构化字段 `type`/`contactName`/`contactEmail`/`contactPhone`/`address` 并列；`CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` 均已携带该字段。
 
 ### 4.11 账户与流水
 
@@ -899,7 +907,7 @@ TypeScript 类型（如 `Project`、`ServiceRecord`、`Account`）目前从 `../
 | `projects.list` | `GET /projects` | 是 |
 | `projects.get` | `GET /projects/{id}` | 否 |
 | `projects.create` / `update` | `POST /projects` / `PATCH /projects/{id}` | 否 |
-| `projects.publish` / `close` / `archive` | `POST /projects/{id}/publish` / `/close` / `/archive` | 否 |
+| `projects.publish` / `archive` / `cancel` | `POST /projects/{id}/publish` / `/archive` / `/cancel` | 否 |
 | `eventProposals.list` | `GET /event-proposals` | 是 |
 | `eventProposals.get` | `GET /event-proposals/{id}` | 否 |
 | `eventProposals.create` / `update` | `POST /event-proposals` / `PATCH /event-proposals/{id}` | 否 |

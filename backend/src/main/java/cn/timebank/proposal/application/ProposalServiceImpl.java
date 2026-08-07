@@ -485,7 +485,7 @@ class ProposalServiceImpl implements ProposalService {
         }
         if (hasNew) {
             OrganizationDto created = organizationService.create(
-                    new CreateOrganizationRequest(newOrganizationName, "COMMUNITY", null, null, null, null), actorId);
+                    new CreateOrganizationRequest(newOrganizationName, "COMMUNITY", null, null, null, null, null), actorId);
             return created.id();
         }
         return null;

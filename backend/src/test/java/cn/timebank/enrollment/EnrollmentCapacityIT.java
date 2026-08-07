@@ -55,10 +55,10 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
 
         Instant start = Instant.now().plus(5, ChronoUnit.DAYS);
         CreateProjectRequest request = new CreateProjectRequest(
-                "Capacity Test Project", "summary", "description", "cat_campus", null,
+                "Capacity Test Project", "summary", "description", "cat_campus", null, null,
                 start, start.plusSeconds(7200), "Hall", capacity, 100, null, null,
                 Instant.now().minusSeconds(60), start);
-        ProjectDto draft = projectService.createDraft(request, "usr_test_admin", "zh-CN");
+        ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
         ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
         assertThat(published.status()).isEqualTo("PUBLISHED");
         // Force the lazy time-sync to REGISTRATION_OPEN before firing concurrent registrations.
@@ -96,10 +96,10 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
 
         Instant start = Instant.now().plus(6, ChronoUnit.DAYS);
         CreateProjectRequest request = new CreateProjectRequest(
-                "Status Filter Test Project", "summary", "description", "cat_campus", null,
+                "Status Filter Test Project", "summary", "description", "cat_campus", null, null,
                 start, start.plusSeconds(7200), "Hall", capacity, 100, null, null,
                 Instant.now().minusSeconds(60), start);
-        ProjectDto draft = projectService.createDraft(request, "usr_test_admin", "zh-CN");
+        ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
         ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
         // Force the lazy time-sync to REGISTRATION_OPEN before registering.
         projectService.getDetail(published.id(), adminAuth(), "zh-CN");
@@ -132,15 +132,15 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
     void projectIdFilterNarrowsResultsToOneProjectsEnrollments() {
         Instant start = Instant.now().plus(7, ChronoUnit.DAYS);
         CreateProjectRequest requestA = new CreateProjectRequest(
-                "Project Filter Test A", "summary", "description", "cat_campus", null,
+                "Project Filter Test A", "summary", "description", "cat_campus", null, null,
                 start, start.plusSeconds(7200), "Hall", 5, 100, null, null,
                 Instant.now().minusSeconds(60), start);
         CreateProjectRequest requestB = new CreateProjectRequest(
-                "Project Filter Test B", "summary", "description", "cat_campus", null,
+                "Project Filter Test B", "summary", "description", "cat_campus", null, null,
                 start, start.plusSeconds(7200), "Hall", 5, 100, null, null,
                 Instant.now().minusSeconds(60), start);
-        ProjectDto draftA = projectService.createDraft(requestA, "usr_test_admin", "zh-CN");
-        ProjectDto draftB = projectService.createDraft(requestB, "usr_test_admin", "zh-CN");
+        ProjectDto draftA = projectService.createDraft(requestA, "usr_test_admin", false, "zh-CN");
+        ProjectDto draftB = projectService.createDraft(requestB, "usr_test_admin", false, "zh-CN");
         ProjectDto projectA = projectService.publish(draftA.id(), draftA.version(), "usr_test_admin", "zh-CN");
         ProjectDto projectB = projectService.publish(draftB.id(), draftB.version(), "usr_test_admin", "zh-CN");
         projectService.getDetail(projectA.id(), adminAuth(), "zh-CN");

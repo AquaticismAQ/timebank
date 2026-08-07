@@ -402,11 +402,17 @@ The frontend polls the job query endpoint; long-lived connections are not a requ
 | `POST` | `/projects` | `projects.create` | Create draft |
 | `PATCH` | `/projects/{id}` | `projects.update` | Update project |
 | `POST` | `/projects/{id}/publish` | `projects.publish` | Publish |
-| `POST` | `/projects/{id}/close` | `projects.close` | Close early |
-| `POST` | `/projects/{id}/archive` | `projects.archive` | Archive |
+| `POST` | `/projects/{id}/archive` | `projects.archive` | Archive a completed project |
+| `POST` | `/projects/{id}/cancel` | `projects.cancel` | Cancel and archive a live (or completed) project outright, with a reason |
 | `GET` | `/projects/{id}/timeline` | `projects.audit.read` | Project change timeline |
 
 Project status changes use action endpoints to avoid bypassing business validation via a generic `PATCH status`.
+
+**Status machine (revised 2026-08-08, `Docs/clarification/02-PorjectOrganization.md` §2):** `draft` → `published` → `registrationOpen` → `closed` → `inProgress` → `completed` → `archived`, where `registrationOpen`→`closed`→`inProgress`→`completed` are all system-driven (time-derived, synced lazily on read/action access) — `closed` means only "the registration window has elapsed," never a manual action and never a cancellation. `POST /projects/{id}/archive` only succeeds from `completed`, and only once every `CONFIRMED`-enrolled student's service record for that project has reached a terminal review decision (`approved`/`rejected`/`corrected`); otherwise it 409s with a state-conflict error naming how many students are still unresolved. `POST /projects/{id}/cancel` (`reason` required, `@NotBlank`, stored as the audit entry's `reasonCode`) is the separate manager override — it archives directly from any of `draft`/`published`/`registrationOpen`/`closed`/`inProgress`/`completed`, bypassing the reviewed-records gate entirely, for discarding an unwanted draft, abandoning a live project outright, or force-closing a stalled one. There used to be a manual `POST /projects/{id}/close` (`projects.close`) action for early cancellation; it is retired now that `closed` is purely automatic — `cancel` replaces its use case. `CreateProjectRequest`/`UpdateProjectRequest` also carry an optional `ownerId`: admin-only (checked by role, not just `projects.create`/`.update` — teachers hold those too), and a non-admin's `ownerId` is silently ignored/forced to themselves rather than rejected.
+
+**No-registrants auto-archive (added 2026-08-08):** the `registrationOpen`→`closed` time-derived transition first checks the project's confirmed-enrollment count — zero confirmed registrants archives the project directly (`registrationOpen`→`archived`, also system-driven) instead of proceeding to `closed`/`inProgress`/`completed`, since there's nothing left for those statuses to mean. A dedicated audit entry (`action: "project.autoArchiveNoRegistrants"`, `reasonCode: "NO_REGISTRANTS_AT_REGISTRATION_CLOSE"`, `actorId`/`permissionUsed` both null — there is no human actor) records why, distinguishable from every other status change. A project with at least one confirmed registrant is unaffected and proceeds through `closed` normally.
+
+The admin "Registrants" screen (`GET /applications?filter[projectId]=`, §4.4) is only meaningful once a project has been published — the frontend hides that menu action for `draft` projects, since registration can never have opened yet.
 
 ### 4.3 Student Event Proposals
 
@@ -561,14 +567,16 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 
 | Method | Path | Permission | Description |
 | --- | --- | --- | --- |
-| `GET` | `/organizations` | `organizations.read` | Organization list |
+| `GET` | `/organizations` | `organizations.read` | Organization list — `filter[type]`, `filter[status]`, `search` (name only) all supported (added 2026-08-08, `02-PorjectOrganization.md` §4; previously accepted but silently ignored these params) |
 | `POST` | `/organizations` | `organizations.manage` | Create |
 | `GET` | `/organizations/{id}` | `organizations.read` | Detail |
 | `PATCH` | `/organizations/{id}` | `organizations.manage` | Update |
-| `POST` | `/organizations/{id}/archive` | `organizations.manage` | Archive |
+| `POST` | `/organizations/{id}/archive` | `organizations.manage` | Archive — the only removal action; there is no hard delete, by design (`02-PorjectOrganization.md` §4) |
 | `GET` | `/service-categories` | Authenticated | Service categories |
 | `POST` | `/service-categories` | `rules.manage` | Create category |
 | `PATCH` | `/service-categories/{id}` | `rules.manage` | Update category |
+
+`organizations.manage` is granted to `role_admin` and `role_teacher` (changed 2026-08-08 — previously admin-only). `Organization` gained a `description` field (free text, alongside the existing structured `type`/`contactName`/`contactEmail`/`contactPhone`/`address`) in the same change; `CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` all carry it.
 
 ### 4.11 Accounts & Transactions
 
@@ -899,7 +907,7 @@ This section exists so the backend can be built against what the frontend actual
 | `projects.list` | `GET /projects` | Yes |
 | `projects.get` | `GET /projects/{id}` | No |
 | `projects.create` / `update` | `POST /projects` / `PATCH /projects/{id}` | No |
-| `projects.publish` / `close` / `archive` | `POST /projects/{id}/publish` / `/close` / `/archive` | No |
+| `projects.publish` / `archive` / `cancel` | `POST /projects/{id}/publish` / `/archive` / `/cancel` | No |
 | `eventProposals.list` | `GET /event-proposals` | Yes |
 | `eventProposals.get` | `GET /event-proposals/{id}` | No |
 | `eventProposals.create` / `update` | `POST /event-proposals` / `PATCH /event-proposals/{id}` | No |

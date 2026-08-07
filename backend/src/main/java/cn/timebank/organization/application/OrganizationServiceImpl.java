@@ -5,6 +5,7 @@ import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.organization.application.dto.OrganizationDto;
 import cn.timebank.organization.application.dto.OrganizationRequests.CreateOrganizationRequest;
 import cn.timebank.organization.application.dto.OrganizationRequests.UpdateOrganizationRequest;
@@ -14,6 +15,7 @@ import cn.timebank.organization.infrastructure.OrganizationRepository;
 import cn.timebank.organization.infrastructure.ProjectCountRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,8 +37,12 @@ class OrganizationServiceImpl implements OrganizationService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<OrganizationDto> list(Pageable pageable) {
-        return repository.findAll(pageable).map(this::toDto);
+    public Page<OrganizationDto> list(Pageable pageable, String type, String status, String search) {
+        Specification<Organization> spec = FilterSpecifications.and(
+                FilterSpecifications.equalToEnum("type", Organization.Type.class, type == null ? null : type.toUpperCase()),
+                FilterSpecifications.equalToEnum("status", OrganizationStatus.class, status == null ? null : status.toUpperCase()),
+                FilterSpecifications.searchAnyContains(search, "name"));
+        return repository.findAll(spec, pageable).map(this::toDto);
     }
 
     @Override
@@ -50,6 +56,7 @@ class OrganizationServiceImpl implements OrganizationService {
     public OrganizationDto create(CreateOrganizationRequest request, String actorId) {
         Organization.Type type = parseType(request.type());
         Organization org = new Organization(OpaqueIds.generate("org"), request.name(), type, Instant.now());
+        org.setDescription(request.description());
         org.setContactName(request.contactName());
         org.setContactEmail(request.contactEmail());
         org.setContactPhone(request.contactPhone());
@@ -69,6 +76,9 @@ class OrganizationServiceImpl implements OrganizationService {
 
         if (request.name() != null) {
             org.setName(request.name());
+        }
+        if (request.description() != null) {
+            org.setDescription(request.description());
         }
         if (request.contactName() != null) {
             org.setContactName(request.contactName());
@@ -116,7 +126,7 @@ class OrganizationServiceImpl implements OrganizationService {
         // a per-row count query here is not the N+1 discipline §16.1 is
         // about for the busy service-record/review surfaces.
         int projectCount = projectCountRepository.countByOrganizationId(org.getId());
-        return new OrganizationDto(org.getId(), org.getName(), org.getType().name().toLowerCase(),
+        return new OrganizationDto(org.getId(), org.getName(), org.getType().name().toLowerCase(), org.getDescription(),
                 org.getContactName(), org.getContactEmail(), org.getContactPhone(), org.getAddress(),
                 org.getStatus().name().toLowerCase(), projectCount, org.getVersion(), org.getCreatedAt());
     }

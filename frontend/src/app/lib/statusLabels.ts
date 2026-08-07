@@ -15,14 +15,21 @@ export const RECORD_STATUS_LABELS: Record<RecordStatus, { label: string; color: 
   corrected: { label: 'labels.recordStatus.corrected', color: 'purple' },
 };
 
+// Order matches the normal flow (02-PorjectOrganization.md §2): Draft ->
+// Published -> Registration Open -> Registration Closed (registration window
+// elapsed, fully automatic, never a manager action) -> In Progress ->
+// Completed -> Archived. `closed` is deliberately not colored red anymore —
+// it's an ordinary automatic waypoint now, not a cancellation; a project is
+// only ever cancelled via the separate "Cancel and archive" action, which
+// goes straight to `archived`.
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, { label: string; color: string }> = {
   draft: { label: 'labels.projectStatus.draft', color: 'gray' },
   published: { label: 'labels.projectStatus.published', color: 'blue' },
   registrationOpen: { label: 'labels.projectStatus.registrationOpen', color: 'green' },
+  closed: { label: 'labels.projectStatus.closed', color: 'orange' },
   inProgress: { label: 'labels.projectStatus.inProgress', color: 'yellow' },
   completed: { label: 'labels.projectStatus.completed', color: 'purple' },
   archived: { label: 'labels.projectStatus.archived', color: 'gray' },
-  closed: { label: 'labels.projectStatus.closed', color: 'red' },
 };
 
 export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, { label: string; color: string }> = {

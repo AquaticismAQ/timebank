@@ -209,6 +209,7 @@ export const api = {
         description: data.description,
         categoryId: data.categoryId,
         organizationId: data.organizationId,
+        ownerId: data.ownerId,
         startAt: data.startAt,
         endAt: data.endAt,
         location: data.location,
@@ -229,6 +230,7 @@ export const api = {
         description: data.description,
         categoryId: data.categoryId,
         organizationId: data.organizationId,
+        ownerId: data.ownerId,
         startAt: data.startAt,
         endAt: data.endAt,
         location: data.location,
@@ -246,12 +248,15 @@ export const api = {
       const dto = await http.post<Project>(`/projects/${id}/publish`, { version });
       return mapEnumFields(dto, ['status']);
     },
-    async close(id: string, version?: number): Promise<Project> {
-      const dto = await http.post<Project>(`/projects/${id}/close`, { version });
-      return mapEnumFields(dto, ['status']);
-    },
     async archive(id: string, version?: number): Promise<Project> {
       const dto = await http.post<Project>(`/projects/${id}/archive`, { version });
+      return mapEnumFields(dto, ['status']);
+    },
+    // The manager override (02-PorjectOrganization.md §2.1) — archives a live
+    // or completed-but-unreviewed project outright; reason required, bypasses
+    // archive()'s reviewed-records gate.
+    async cancel(id: string, reason: string, version?: number): Promise<Project> {
+      const dto = await http.post<Project>(`/projects/${id}/cancel`, { reason, version });
       return mapEnumFields(dto, ['status']);
     },
   },
@@ -631,6 +636,41 @@ export const api = {
     async list(params?: ListParams): Promise<PageResult<Organization>> {
       const page = await http.getPage<Organization>('/organizations', buildListQuery(params));
       return { data: page.data.map(o => mapEnumFields(o, ['status', 'type'])), page: page.page };
+    },
+    async get(id: string): Promise<Organization> {
+      const dto = await http.get<Organization>(`/organizations/${id}`);
+      return mapEnumFields(dto, ['status', 'type']);
+    },
+    async create(data: Partial<Organization>): Promise<Organization> {
+      const body = {
+        name: data.name,
+        type: data.type ? toBackendEnum(data.type) : undefined,
+        description: data.description,
+        contactName: data.contactName,
+        contactEmail: data.contactEmail,
+        contactPhone: data.contactPhone,
+        address: data.address,
+      };
+      const dto = await http.post<Organization>('/organizations', body);
+      return mapEnumFields(dto, ['status', 'type']);
+    },
+    async update(id: string, data: Partial<Organization>): Promise<Organization> {
+      const body = withVersion({
+        name: data.name,
+        description: data.description,
+        contactName: data.contactName,
+        contactEmail: data.contactEmail,
+        contactPhone: data.contactPhone,
+        address: data.address,
+      }, data.version!);
+      const dto = await http.patch<Organization>(`/organizations/${id}`, body);
+      return mapEnumFields(dto, ['status', 'type']);
+    },
+    // No hard delete exists server-side, deliberately (02-PorjectOrganization.md
+    // §4) — this soft-archives (status -> archived); the org id and any
+    // project that already references it stay valid.
+    async archive(id: string): Promise<void> {
+      await http.post<void>(`/organizations/${id}/archive`, {});
     },
   },
 

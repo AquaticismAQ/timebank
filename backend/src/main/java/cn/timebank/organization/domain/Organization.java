@@ -36,6 +36,10 @@ public class Organization extends VersionedEntity {
     private Type type;
 
     @Setter
+    @Column(name = "description", columnDefinition = "text")
+    private String description;
+
+    @Setter
     @Column(name = "contact_name")
     private String contactName;
 

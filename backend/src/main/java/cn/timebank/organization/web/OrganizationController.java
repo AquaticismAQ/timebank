@@ -42,7 +42,7 @@ public class OrganizationController {
     @PreAuthorize("hasAuthority('organizations.read')")
     public ApiResponse<List<OrganizationDto>> list(PageQuery query) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<OrganizationDto> page = organizationService.list(pageable);
+        Page<OrganizationDto> page = organizationService.list(pageable, query.filter("type"), query.filter("status"), query.search());
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

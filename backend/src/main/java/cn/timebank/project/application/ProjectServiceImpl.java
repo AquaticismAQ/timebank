@@ -13,6 +13,7 @@ import cn.timebank.organization.application.dto.ServiceCategoryDto;
 import cn.timebank.project.application.dto.ProjectCapacitySnapshot;
 import cn.timebank.project.application.dto.ProjectDto;
 import cn.timebank.project.application.dto.ProjectGenerationRequest;
+import cn.timebank.project.application.dto.ProjectRequests.CancelProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.CreateProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.UpdateProjectRequest;
 import cn.timebank.project.application.dto.TimelineEntryDto;
@@ -22,6 +23,7 @@ import cn.timebank.project.domain.ProjectStateMachine;
 import cn.timebank.project.domain.ProjectStateMachine.ActorRole;
 import cn.timebank.project.domain.ProjectStatus;
 import cn.timebank.project.infrastructure.EnrollmentReadRepository;
+import cn.timebank.project.infrastructure.ProjectArchiveReadinessRepository;
 import cn.timebank.project.infrastructure.ProjectRepository;
 import cn.timebank.project.infrastructure.ProjectRevisionRepository;
 import cn.timebank.security.application.CookieSessionUserDetails;
@@ -51,6 +53,7 @@ class ProjectServiceImpl implements ProjectService {
     private final ProjectRepository repository;
     private final ProjectRevisionRepository revisionRepository;
     private final EnrollmentReadRepository enrollmentReadRepository;
+    private final ProjectArchiveReadinessRepository archiveReadinessRepository;
     private final ServiceCategoryService serviceCategoryService;
     private final OrganizationService organizationService;
     private final AcademicStructureService academicStructureService;
@@ -59,12 +62,14 @@ class ProjectServiceImpl implements ProjectService {
     private final ObjectMapper objectMapper;
 
     ProjectServiceImpl(ProjectRepository repository, ProjectRevisionRepository revisionRepository,
-                       EnrollmentReadRepository enrollmentReadRepository, ServiceCategoryService serviceCategoryService,
+                       EnrollmentReadRepository enrollmentReadRepository, ProjectArchiveReadinessRepository archiveReadinessRepository,
+                       ServiceCategoryService serviceCategoryService,
                        OrganizationService organizationService, AcademicStructureService academicStructureService,
                        UserService userService, AuditService auditService, ObjectMapper objectMapper) {
         this.repository = repository;
         this.revisionRepository = revisionRepository;
         this.enrollmentReadRepository = enrollmentReadRepository;
+        this.archiveReadinessRepository = archiveReadinessRepository;
         this.serviceCategoryService = serviceCategoryService;
         this.organizationService = organizationService;
         this.academicStructureService = academicStructureService;
@@ -122,7 +127,7 @@ class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public ProjectDto createDraft(CreateProjectRequest request, String actorId, String resolvedLanguage) {
+    public ProjectDto createDraft(CreateProjectRequest request, String actorId, boolean actorIsAdmin, String resolvedLanguage) {
         requireCategory(request.categoryId());
         if (request.organizationId() != null) {
             organizationService.get(request.organizationId());
@@ -130,9 +135,10 @@ class ProjectServiceImpl implements ProjectService {
         if (request.eligibleGradeIds() != null) {
             requireGrades(request.eligibleGradeIds());
         }
+        String ownerId = resolveOwnerIdForCreate(request.ownerId(), actorIsAdmin, actorId);
 
         Instant now = Instant.now();
-        Project project = new Project(OpaqueIds.generate("proj"), request.title(), request.categoryId(), actorId, null,
+        Project project = new Project(OpaqueIds.generate("proj"), request.title(), request.categoryId(), ownerId, null,
                 request.startAt(), request.endAt(), request.capacity(), request.recognizedMinutes(),
                 request.registrationOpenAt(), request.registrationCloseAt(), now);
         project.setSummary(request.summary());
@@ -141,6 +147,7 @@ class ProjectServiceImpl implements ProjectService {
         project.setLocation(request.location());
         project.setEligibleGradeIds(request.eligibleGradeIds());
         project.setEvidenceRequirements(request.evidenceRequirements());
+        validateDateOrdering(project);
         repository.save(project);
 
         auditService.record(new AuditEntry(actorId, "projects.create", "project.create", "project", project.getId(),
@@ -150,7 +157,7 @@ class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public ProjectDto updateDraft(String id, UpdateProjectRequest request, String actorId, String resolvedLanguage) {
+    public ProjectDto updateDraft(String id, UpdateProjectRequest request, String actorId, boolean actorIsAdmin, String resolvedLanguage) {
         Project project = findOrThrow(id);
         ConcurrencyControl.checkVersion(project.getVersion(), request.version());
         writeRevision(project, actorId);
@@ -166,6 +173,7 @@ class ProjectServiceImpl implements ProjectService {
             organizationService.get(request.organizationId());
             project.setOrganizationId(request.organizationId());
         }
+        applyOwnerIfPermitted(project, request.ownerId(), actorIsAdmin);
         if (request.startAt() != null) project.setStartAt(request.startAt());
         if (request.endAt() != null) project.setEndAt(request.endAt());
         if (request.location() != null) project.setLocation(request.location());
@@ -179,6 +187,7 @@ class ProjectServiceImpl implements ProjectService {
         if (request.registrationOpenAt() != null) project.setRegistrationOpenAt(request.registrationOpenAt());
         if (request.registrationCloseAt() != null) project.setRegistrationCloseAt(request.registrationCloseAt());
         project.setUpdatedAt(Instant.now());
+        validateDateOrdering(project);
 
         auditService.record(new AuditEntry(actorId, "projects.update", "project.update", "project", project.getId(),
                 null, null, null));
@@ -202,28 +211,36 @@ class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public ProjectDto close(String id, Long version, String actorId, String resolvedLanguage) {
+    public ProjectDto archive(String id, Long version, String actorId, String resolvedLanguage) {
         Project project = findOrThrow(id);
         syncTimeBasedStatus(project);
         ConcurrencyControl.checkVersion(project.getVersion(), version);
-        ProjectStateMachine.transition(project, ProjectStatus.CLOSED, ActorRole.MANAGER);
+        if (project.getStatus() == ProjectStatus.COMPLETED) {
+            int unresolved = archiveReadinessRepository.countUnresolvedConfirmedStudents(project.getId());
+            if (unresolved > 0) {
+                throw ApiException.stateConflict(unresolved + " confirmed student(s) still need their service "
+                        + "record reviewed before this project can be archived. Use Cancel and archive to override.");
+            }
+        }
+        ProjectStateMachine.transition(project, ProjectStatus.ARCHIVED, ActorRole.MANAGER);
         project.setUpdatedAt(Instant.now());
-        auditService.record(new AuditEntry(actorId, "projects.close", "project.close", "project", project.getId(),
+        auditService.record(new AuditEntry(actorId, "projects.archive", "project.archive", "project", project.getId(),
                 null, null, null));
         repository.saveAndFlush(project);
         return toSingleDtoNoScope(project, actorId, resolvedLanguage);
     }
 
+    /** The manager override (02-PorjectOrganization.md §2.1) — bypasses the reviewed-records gate {@link #archive} enforces from COMPLETED; requires a reason, logged as the audit entry's reasonCode. */
     @Override
     @Transactional
-    public ProjectDto archive(String id, Long version, String actorId, String resolvedLanguage) {
+    public ProjectDto cancel(String id, CancelProjectRequest request, String actorId, String resolvedLanguage) {
         Project project = findOrThrow(id);
         syncTimeBasedStatus(project);
-        ConcurrencyControl.checkVersion(project.getVersion(), version);
-        ProjectStateMachine.transition(project, ProjectStatus.ARCHIVED, ActorRole.MANAGER);
+        ConcurrencyControl.checkVersion(project.getVersion(), request.version());
+        ProjectStateMachine.cancel(project);
         project.setUpdatedAt(Instant.now());
-        auditService.record(new AuditEntry(actorId, "projects.archive", "project.archive", "project", project.getId(),
-                null, null, null));
+        auditService.record(new AuditEntry(actorId, "projects.cancel", "project.cancel", "project", project.getId(),
+                null, null, request.reason()));
         repository.saveAndFlush(project);
         return toSingleDtoNoScope(project, actorId, resolvedLanguage);
     }
@@ -283,11 +300,60 @@ class ProjectServiceImpl implements ProjectService {
         if (project.getStatus() == ProjectStatus.PUBLISHED && !now.isBefore(project.getRegistrationOpenAt())) {
             ProjectStateMachine.transition(project, ProjectStatus.REGISTRATION_OPEN, ActorRole.SYSTEM);
         }
-        if (project.getStatus() == ProjectStatus.REGISTRATION_OPEN && !now.isBefore(project.getStartAt())) {
+        if (project.getStatus() == ProjectStatus.REGISTRATION_OPEN && !now.isBefore(project.getRegistrationCloseAt())) {
+            // A registration window that closes with nobody signed up has
+            // nothing left to run — self-archive instead of proceeding to
+            // CLOSED/IN_PROGRESS, with an audit trail explaining why (no
+            // actor to attribute it to, hence the null actorId/permission —
+            // AuditLog.actor_id is nullable for exactly this kind of purely
+            // system-initiated event).
+            if (enrollmentReadRepository.countConfirmed(project.getId()) == 0) {
+                ProjectStateMachine.transition(project, ProjectStatus.ARCHIVED, ActorRole.SYSTEM);
+                auditService.record(new AuditEntry(null, null, "project.autoArchiveNoRegistrants", "project",
+                        project.getId(), null, null, "NO_REGISTRANTS_AT_REGISTRATION_CLOSE"));
+            } else {
+                ProjectStateMachine.transition(project, ProjectStatus.CLOSED, ActorRole.SYSTEM);
+            }
+        }
+        if (project.getStatus() == ProjectStatus.CLOSED && !now.isBefore(project.getStartAt())) {
             ProjectStateMachine.transition(project, ProjectStatus.IN_PROGRESS, ActorRole.SYSTEM);
         }
         if (project.getStatus() == ProjectStatus.IN_PROGRESS && !now.isBefore(project.getEndAt())) {
             ProjectStateMachine.transition(project, ProjectStatus.COMPLETED, ActorRole.SYSTEM);
+        }
+    }
+
+    /** Admin-only override; anyone else's `ownerId` is silently forced to themselves (02-PorjectOrganization.md §3), never rejected. */
+    private String resolveOwnerIdForCreate(String requestedOwnerId, boolean actorIsAdmin, String actorId) {
+        if (requestedOwnerId == null || requestedOwnerId.equals(actorId) || !actorIsAdmin) {
+            return actorId;
+        }
+        requireTeacherOrAdmin(requestedOwnerId);
+        return requestedOwnerId;
+    }
+
+    /** Reassignment on update is admin-only; a non-admin's `ownerId` field, if sent at all, is ignored rather than applied. */
+    private void applyOwnerIfPermitted(Project project, String requestedOwnerId, boolean actorIsAdmin) {
+        if (requestedOwnerId == null || !actorIsAdmin) {
+            return;
+        }
+        requireTeacherOrAdmin(requestedOwnerId);
+        project.setOwnerId(requestedOwnerId);
+    }
+
+    private void requireTeacherOrAdmin(String userId) {
+        if (!userService.hasActiveRole(userId, "teacher") && !userService.hasActiveRole(userId, "admin")) {
+            throw ApiException.invalidRequest("ownerId must be an active teacher or admin user.");
+        }
+    }
+
+    /** Required for CLOSED (registration-elapsed) to ever actually reach IN_PROGRESS — a project whose registration window closes after its own start date would otherwise stall in REGISTRATION_OPEN forever, since IN_PROGRESS is now only reachable via CLOSED. */
+    private void validateDateOrdering(Project project) {
+        if (project.getRegistrationCloseAt().isAfter(project.getStartAt())) {
+            throw ApiException.invalidRequest("registrationCloseAt must not be after startAt.");
+        }
+        if (project.getRegistrationCloseAt().isBefore(project.getRegistrationOpenAt())) {
+            throw ApiException.invalidRequest("registrationCloseAt must not be before registrationOpenAt.");
         }
     }
 

@@ -9,7 +9,8 @@ import org.springframework.data.domain.Pageable;
 /** Contract §4.10. */
 public interface OrganizationService {
 
-    Page<OrganizationDto> list(Pageable pageable);
+    /** {@code type}/{@code status}: contract §2.7 {@code filter[...]}, {@code search} matches {@code name} only; null/blank means unfiltered. */
+    Page<OrganizationDto> list(Pageable pageable, String type, String status, String search);
 
     OrganizationDto get(String id);
 

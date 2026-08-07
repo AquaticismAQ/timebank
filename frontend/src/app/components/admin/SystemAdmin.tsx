@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Trash2, Lock } from 'lucide-react';
+import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Trash2, Lock, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, useLogs, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
+import { OrganizationManagement } from './OrganizationManagement';
 
 // ── Rule config types ──────────────────────────────────────────────────────
 
@@ -158,7 +159,7 @@ function RuleModal({ section, onClose, onSave }: RuleModalProps) {
   );
 }
 
-type Tab = 'users' | 'rules' | 'import' | 'logs' | 'settings';
+type Tab = 'users' | 'rules' | 'import' | 'logs' | 'organizations' | 'settings';
 type UserRole = 'admin' | 'teacher' | 'student';
 type UserStatus = 'active' | 'inactive';
 
@@ -634,6 +635,7 @@ export function SystemAdmin() {
     { key: 'rules', label: t('admin.system.tabRules'), icon: Shield },
     { key: 'import', label: t('admin.system.tabImport'), icon: FileText },
     { key: 'logs', label: t('admin.system.tabLogs'), icon: FileText },
+    { key: 'organizations', label: t('admin.system.tabOrganizations'), icon: Building2 },
     { key: 'settings', label: t('admin.system.tabSettings'), icon: Settings },
   ];
 
@@ -885,6 +887,9 @@ export function SystemAdmin() {
           </div>
         </div>
       )}
+
+      {/* ── Partner Organizations tab ────────────────────────────────── */}
+      {activeTab === 'organizations' && <OrganizationManagement />}
 
       {/* ── Settings tab ──────────────────────────────────────────── */}
       {activeTab === 'settings' && (

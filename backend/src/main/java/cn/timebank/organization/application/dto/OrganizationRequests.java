@@ -9,12 +9,12 @@ public final class OrganizationRequests {
     }
 
     public record CreateOrganizationRequest(
-            @NotBlank String name, @NotBlank String type, String contactName,
+            @NotBlank String name, @NotBlank String type, String description, String contactName,
             String contactEmail, String contactPhone, String address) {
     }
 
     public record UpdateOrganizationRequest(
-            String name, String contactName, String contactEmail, String contactPhone,
+            String name, String description, String contactName, String contactEmail, String contactPhone,
             String address, @NotNull Long version) {
     }
 }
