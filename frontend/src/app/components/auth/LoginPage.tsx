@@ -165,28 +165,6 @@ export function LoginPage() {
           </form>
         </div>
 
-        {/* Demo accounts */}
-        <div className="mt-6 bg-card/50 border border-border rounded-xl p-4">
-          <p className="text-xs text-muted-foreground mb-3 font-medium">{t('auth.login.demoAccounts')}</p>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { username: 'student001', label: t('auth.login.demoStudent'), role: t('auth.login.demoStudentGrade') },
-              { username: 'teacher001', label: t('auth.login.demoTeacher'), role: t('auth.login.demoTeacherRole') },
-              { username: 'admin001', label: t('auth.login.demoAdmin'), role: t('auth.login.demoAdminDept') },
-              { username: 'both001', label: t('auth.login.demoDual'), role: t('auth.login.demoDualRole') },
-            ].map(acc => (
-              <button
-                key={acc.username}
-                onClick={() => { setUsername(acc.username); setPassword('password'); }}
-                className="text-left px-3 py-2 rounded-lg border border-border hover:bg-accent hover:border-primary/30 transition-colors"
-              >
-                <div className="text-xs text-foreground">{acc.label}</div>
-                <div className="text-xs text-muted-foreground">{acc.role}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
         <p className="text-center text-xs text-muted-foreground mt-6">
           {t('auth.login.title')} · {schoolInfo?.name ?? ''} · {schoolInfo?.studentDevCenter ?? ''}
         </p>

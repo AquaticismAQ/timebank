@@ -1,15 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { LogOut, ChevronRight, Bell, Shield, HelpCircle, Moon, Sun, Monitor, Mail, X, Lock, Eye, Database, UserCheck, Globe } from 'lucide-react';
+import { LogOut, ChevronRight, Bell, Shield, HelpCircle, Moon, Sun, Monitor, Mail, X, Lock, Eye, Database, UserCheck, Globe, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { useAuth, useTheme } from '../../App';
 import { type SchoolInfo } from '../../api/types';
 import { changeLanguage } from '../../lib/language';
 import { api } from '../../api/client';
+import { useFieldErrors, handleMutationError, FieldError } from '../../api/useFieldErrors';
 
 export function AdminProfilePage() {
   const { t, i18n } = useTranslation();
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -33,6 +35,37 @@ export function AdminProfilePage() {
     setNotifEnabled(prev => ({ ...prev, [key]: !prev[key] }));
 
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+
+  const [editingBasicInfo, setEditingBasicInfo] = useState(false);
+  const [basicForm, setBasicForm] = useState({ displayName: '', email: '' });
+  const [savingBasicInfo, setSavingBasicInfo] = useState(false);
+  const basicInfoErrors = useFieldErrors();
+
+  const startEditBasicInfo = () => {
+    setBasicForm({ displayName: user?.displayName ?? '', email: user?.email ?? '' });
+    basicInfoErrors.clearAll();
+    setEditingBasicInfo(true);
+  };
+  const cancelEditBasicInfo = () => {
+    setEditingBasicInfo(false);
+    basicInfoErrors.clearAll();
+  };
+  const saveBasicInfo = async () => {
+    setSavingBasicInfo(true);
+    basicInfoErrors.clearAll();
+    try {
+      const displayName = basicForm.displayName.trim();
+      const email = basicForm.email.trim();
+      await api.auth.updateProfile({ displayName, email });
+      updateUser({ displayName, email });
+      toast.success(t('admin.profile.basicInfoSaved'));
+      setEditingBasicInfo(false);
+    } catch (err) {
+      handleMutationError(err, { fieldErrors: basicInfoErrors, fallbackMessage: t('common.unknownError') });
+    } finally {
+      setSavingBasicInfo(false);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -167,21 +200,78 @@ export function AdminProfilePage() {
         ))}
       </div>
 
-      {/* Basic info (read-only) */}
+      {/* Basic info — name/email are self-service (PATCH /me/profile); roles stay read-only */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-border">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
           <div className="text-sm text-muted-foreground font-medium">{t('admin.profile.basicInfo')}</div>
+          {editingBasicInfo ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={cancelEditBasicInfo}
+                disabled={savingBasicInfo}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={saveBasicInfo}
+                disabled={savingBasicInfo}
+                className="text-xs px-3 py-1.5 rounded-lg bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {savingBasicInfo ? t('common.saving') : t('common.save')}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={startEditBasicInfo}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              {t('common.edit')}
+            </button>
+          )}
         </div>
-        {[
-          { label: t('admin.profile.name'), value: user?.displayName || '—' },
-          { label: t('admin.profile.email'), value: user?.email || '—' },
-          { label: t('admin.profile.roles'), value: user?.roles.map(r => roleLabels[r] ?? r).join(', ') || '—' },
-        ].map((item, i) => (
-          <div key={i} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0">
-            <span className="text-sm text-muted-foreground">{item.label}</span>
-            <span className="text-sm text-foreground">{item.value}</span>
-          </div>
-        ))}
+
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <span className="text-sm text-muted-foreground shrink-0">{t('admin.profile.name')}</span>
+          {editingBasicInfo ? (
+            <div className="flex-1 ml-4">
+              <input
+                type="text"
+                value={basicForm.displayName}
+                onChange={e => setBasicForm(prev => ({ ...prev, displayName: e.target.value }))}
+                className="w-full px-3 py-1.5 text-sm text-right rounded-lg border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+              />
+              <FieldError message={basicInfoErrors.getError('displayName')} />
+            </div>
+          ) : (
+            <span className="text-sm text-foreground">{user?.displayName || '—'}</span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <span className="text-sm text-muted-foreground shrink-0">{t('admin.profile.email')}</span>
+          {editingBasicInfo ? (
+            <div className="flex-1 ml-4">
+              <input
+                type="email"
+                value={basicForm.email}
+                onChange={e => setBasicForm(prev => ({ ...prev, email: e.target.value }))}
+                className="w-full px-3 py-1.5 text-sm text-right rounded-lg border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+              />
+              <FieldError message={basicInfoErrors.getError('email')} />
+            </div>
+          ) : (
+            <span className="text-sm text-foreground">{user?.email || '—'}</span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0">
+          <span className="text-sm text-muted-foreground">{t('admin.profile.roles')}</span>
+          <span className="text-sm text-foreground">{user?.roles.map(r => roleLabels[r] ?? r).join(', ') || '—'}</span>
+        </div>
+
+        <p className="px-4 py-2.5 text-xs text-muted-foreground bg-muted/30">{t('admin.profile.basicInfoNote')}</p>
       </div>
 
       {/* Logout */}

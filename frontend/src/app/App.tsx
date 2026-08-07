@@ -88,6 +88,8 @@ interface AuthContextValue {
   logout: () => void;
   currentWorkspace: 'student' | 'admin' | null;
   setWorkspace: (ws: 'student' | 'admin') => void;
+  /** Merges a partial update (e.g. after `PATCH /me/profile`) into the current session's user, persisted to localStorage like login does. */
+  updateUser: (patch: Partial<User>) => void;
 }
 
 export const AuthContext = createContext<AuthContextValue>({
@@ -96,6 +98,7 @@ export const AuthContext = createContext<AuthContextValue>({
   logout: () => {},
   currentWorkspace: null,
   setWorkspace: () => {},
+  updateUser: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -185,8 +188,17 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('timebank-workspace', ws);
   }, []);
 
+  const updateUser = useCallback((patch: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      localStorage.setItem('timebank-user', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, currentWorkspace, setWorkspace }}>
+    <AuthContext.Provider value={{ user, login, logout, currentWorkspace, setWorkspace, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

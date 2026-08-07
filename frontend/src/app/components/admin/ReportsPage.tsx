@@ -61,21 +61,26 @@ export function ReportsPage() {
           <button onClick={async () => {
             try {
               const job = await api.exports.create('participation');
-              toast.info('Export started...');
+              toast.info(t('admin.system.exportStarted'));
               const poll = async () => {
-                const status = await api.exports.get(job.jobId);
-                if (status.status === 'SUCCEEDED' || status.status === 'succeeded') {
-                  const dl = await api.exports.download(job.jobId);
-                  window.open(`/api/v1/exports/${job.jobId}/content?token=${dl.token}`, '_blank');
-                  toast.success(t('admin.reports.exportToast'));
-                } else if (status.status === 'FAILED' || status.status === 'failed') {
-                  toast.error('Export failed');
-                } else { setTimeout(poll, 2000); }
+                try {
+                  const status = await api.exports.get(job.jobId);
+                  if (status.status === 'SUCCEEDED' || status.status === 'succeeded') {
+                    const dl = await api.exports.download(job.jobId);
+                    window.open(dl.downloadUrl, '_blank');
+                    toast.success(t('admin.reports.exportToast'));
+                  } else if (status.status === 'FAILED' || status.status === 'failed') {
+                    toast.error(t('admin.system.exportFailed'));
+                  } else { setTimeout(poll, 2000); }
+                } catch (err) {
+                  if (err instanceof ApiError) toast.error(mapApiError(err).message);
+                  else toast.error(t('common.unknownError'));
+                }
               };
               setTimeout(poll, 1000);
             } catch (err) {
               if (err instanceof ApiError) toast.error(mapApiError(err).message);
-              else toast.error(String(err));
+              else toast.error(t('common.unknownError'));
             }
           }}
             className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-xl text-sm text-muted-foreground hover:bg-accent">

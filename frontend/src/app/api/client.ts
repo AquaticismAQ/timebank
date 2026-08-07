@@ -175,6 +175,14 @@ export interface LoginResponse {
   user: User;
 }
 
+/** Real wire shape of `JobDto` (imports/exports share the same `job` table, D5) — `totalRows`/`validRows` are absent until the async run behind `create`/`validate`/`commit` actually reaches VALIDATED/COMMITTED. */
+export interface ImportJob {
+  id: string;
+  status: string;
+  totalRows?: number;
+  validRows?: number;
+}
+
 export const api = {
   auth: {
     async login(username: string, password: string): Promise<LoginResponse> {
@@ -1495,7 +1503,16 @@ export const api = {
       if (!response.ok) throw new ApiError({ code: 'DOWNLOAD_FAILED', message: 'Template download failed', requestId: '' });
       return response.blob();
     },
-    async create(type: string, file: File): Promise<{ id: string; status: string; totalRows: number; validRows: number; invalidRows: number }> {
+    // Real `JobDto` has no `invalidRows` field (compute it as totalRows -
+    // validRows once the job is VALIDATED) and no `committedRows` field —
+    // the committed count travels in `validRows` too, overloaded the same
+    // way `Job.validRows` on the backend itself is documented to mean
+    // different things at different phases (00-Status.md §18). `totalRows`/
+    // `validRows` are only meaningful once status has moved past
+    // QUEUED/VALIDATING/COMMITTING — callers must poll `get()`, not trust
+    // the immediate response from `create`/`validate`/`commit`, which
+    // return before the async run behind them has done anything.
+    async create(type: string, file: File): Promise<ImportJob> {
       if (isRealDomain('imports')) {
         const formData = new FormData();
         formData.append('type', type);
@@ -1514,31 +1531,31 @@ export const api = {
         const json = await response.json();
         return json.data;
       }
-      return delay({ id: `imp_${Date.now()}`, status: 'uploaded', totalRows: 0, validRows: 0, invalidRows: 0 });
+      return delay({ id: `imp_${Date.now()}`, status: 'QUEUED' });
     },
-    async get(id: string): Promise<{ id: string; status: string; totalRows: number; validRows: number; invalidRows: number }> {
+    async get(id: string): Promise<ImportJob> {
       if (isRealDomain('imports')) {
-        return http.get(`/imports/${id}`);
+        return http.get<ImportJob>(`/imports/${id}`);
       }
-      return delay({ id, status: 'validated', totalRows: 10, validRows: 9, invalidRows: 1 });
+      return delay({ id, status: 'VALIDATED', totalRows: 10, validRows: 9 });
     },
-    async validate(id: string): Promise<{ id: string; status: string; totalRows: number; validRows: number; invalidRows: number }> {
+    async validate(id: string): Promise<ImportJob> {
       if (isRealDomain('imports')) {
-        return http.post(`/imports/${id}/validate`);
+        return http.post<ImportJob>(`/imports/${id}/validate`);
       }
-      return delay({ id, status: 'validated', totalRows: 10, validRows: 9, invalidRows: 1 });
+      return delay({ id, status: 'VALIDATING' });
     },
-    async errors(id: string): Promise<{ errors: { row: number; field: string; message: string }[] }> {
+    async errors(id: string): Promise<{ totalErrors: number; errors: { rowNumber: number; field: string; code: string; message: string }[] }> {
       if (isRealDomain('imports')) {
         return http.get(`/imports/${id}/errors`);
       }
-      return delay({ errors: [] });
+      return delay({ totalErrors: 0, errors: [] });
     },
-    async commit(id: string, idempotencyKey: string): Promise<{ id: string; status: string; committedRows: number }> {
+    async commit(id: string, idempotencyKey: string): Promise<ImportJob> {
       if (isRealDomain('imports')) {
-        return http.post(`/imports/${id}/commit`, undefined, idempotencyKey);
+        return http.post<ImportJob>(`/imports/${id}/commit`, undefined, idempotencyKey);
       }
-      return delay({ id, status: 'committed', committedRows: 9 });
+      return delay({ id, status: 'COMMITTING' });
     },
     async cancel(id: string): Promise<void> {
       if (isRealDomain('imports')) {
@@ -1550,23 +1567,36 @@ export const api = {
   },
 
   exports: {
+    // The real backend's JobDto field is `id`, not `jobId` — this was
+    // silently mistyped, so every real export's `job.jobId` was `undefined`,
+    // the polling `GET /exports/undefined` 404'd inside an uncaught
+    // `setTimeout` callback, and the "Export started..." toast was the last
+    // thing the user ever saw. Mapped explicitly here rather than just
+    // renaming the wire field, since `jobId` is what the rest of this file
+    // (and SystemAdmin.tsx) already expects.
     async create(reportType: string): Promise<{ jobId: string; status: string }> {
       if (isRealDomain('exports')) {
-        return http.post<{ jobId: string; status: string }>('/exports', { reportType });
+        const dto = await http.post<{ id: string; status: string }>('/exports', { reportType });
+        return { jobId: dto.id, status: dto.status };
       }
       return delay({ jobId: `exp_${Date.now()}`, status: 'processing' });
     },
-    async get(jobId: string): Promise<{ jobId: string; status: string; downloadUrl?: string }> {
+    async get(jobId: string): Promise<{ jobId: string; status: string }> {
       if (isRealDomain('exports')) {
-        return http.get(`/exports/${jobId}`);
+        const dto = await http.get<{ id: string; status: string }>(`/exports/${jobId}`);
+        return { jobId: dto.id, status: dto.status };
       }
-      return delay({ jobId, status: 'succeeded', downloadUrl: '#' });
+      return delay({ jobId, status: 'succeeded' });
     },
-    async download(jobId: string): Promise<{ downloadUrl: string; token: string }> {
+    // Real `DownloadUrlDto` has one field, `downloadUrl` — already the full
+    // path with its one-time token embedded as a query param. There is no
+    // separate `token` field to extract; a caller that tried to rebuild the
+    // URL from a `token` field got `token=undefined`.
+    async download(jobId: string): Promise<{ downloadUrl: string }> {
       if (isRealDomain('exports')) {
-        return http.get(`/exports/${jobId}/download`);
+        return http.get<{ downloadUrl: string }>(`/exports/${jobId}/download`);
       }
-      return delay({ downloadUrl: '#', token: 'mock' });
+      return delay({ downloadUrl: '#' });
     },
   },
 

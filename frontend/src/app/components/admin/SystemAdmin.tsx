@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Trash2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, useLogs, usePermissions } from '../../App';
-import { api } from '../../api/client';
+import { api, type ImportJob } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 
 // ── Rule config types ──────────────────────────────────────────────────────
@@ -537,10 +537,24 @@ export function SystemAdmin() {
       a.href = url; a.download = `${type}-template.csv`;
       document.body.appendChild(a); a.click();
       document.body.removeChild(a); URL.revokeObjectURL(url);
-      toast.success(t('admin.system.templateDownloaded'));
+      toast.success(t(type === 'students' ? 'admin.system.studentTemplateDownloaded' : 'admin.system.templateDownloaded'));
     } catch (err) {
       if (err instanceof ApiError) toast.error(mapApiError(err).message);
-      else toast.error(String(err));
+      else toast.error(t('common.unknownError'));
+    }
+  };
+
+  // validate/commit are async (Job starts VALIDATING/COMMITTING and only
+  // reaches a terminal status once ImportJobRunner finishes) — their own
+  // immediate responses never carry totalRows/validRows yet. This used to
+  // read those fields straight off the create-time response (always
+  // undefined), so every upload silently took the "no valid rows" branch
+  // and cancelled the job regardless of what was actually in the file.
+  const pollImportJob = async (jobId: string, doneStatuses: string[]): Promise<ImportJob> => {
+    for (;;) {
+      const job = await api.imports.get(jobId);
+      if (doneStatuses.includes(job.status)) return job;
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
   };
 
@@ -548,21 +562,35 @@ export function SystemAdmin() {
     setSaving(true);
     try {
       const job = await api.imports.create(type, file);
-      const validated = await api.imports.validate(job.id);
-      if (validated.invalidRows > 0) {
-        const errResult = await api.imports.errors(job.id);
-        toast.error(`${validated.invalidRows} invalid rows: ${errResult.errors.slice(0, 3).map(e => `Row ${e.row}: ${e.message}`).join('; ')}`);
+      await api.imports.validate(job.id);
+      const validated = await pollImportJob(job.id, ['VALIDATED', 'VALIDATION_FAILED']);
+      if (validated.status === 'VALIDATION_FAILED') {
+        toast.error(t('common.unknownError'));
+        return;
       }
-      if (validated.validRows > 0) {
-        const committed = await api.imports.commit(job.id, newIdempotencyKey());
-        toast.success(`Import complete: ${committed.committedRows} rows committed`);
+      const totalRows = validated.totalRows ?? 0;
+      const validRows = validated.validRows ?? 0;
+      const invalidRows = totalRows - validRows;
+      if (invalidRows > 0) {
+        const errResult = await api.imports.errors(job.id);
+        toast.error(`${invalidRows} invalid rows: ${errResult.errors.slice(0, 3).map(e => `Row ${e.rowNumber}: ${e.message}`).join('; ')}`);
+      }
+      if (validRows > 0) {
+        await api.imports.commit(job.id, newIdempotencyKey());
+        const committed = await pollImportJob(job.id, ['COMMITTED', 'COMMIT_FAILED']);
+        if (committed.status === 'COMMIT_FAILED') {
+          toast.error(t('common.unknownError'));
+        } else {
+          // `validRows` doubles as "rows committed" once status is COMMITTED (JobProgressWriter.succeed) — same field, different meaning post-commit.
+          toast.success(`Import complete: ${committed.validRows ?? 0} rows committed`);
+        }
       } else {
         await api.imports.cancel(job.id);
         toast.error('No valid rows to import');
       }
     } catch (err) {
       if (err instanceof ApiError) toast.error(mapApiError(err).message);
-      else toast.error(String(err));
+      else toast.error(t('common.unknownError'));
     } finally {
       setSaving(false);
     }
@@ -572,22 +600,32 @@ export function SystemAdmin() {
     try {
       const job = await api.exports.create(reportType);
       const poll = async (): Promise<void> => {
-        const status = await api.exports.get(job.jobId);
-        if (status.status === 'SUCCEEDED' || status.status === 'succeeded') {
-          const dl = await api.exports.download(job.jobId);
-          window.open(`/api/v1/exports/${job.jobId}/content?token=${dl.token}`, '_blank');
-          toast.success(t('admin.system.exportTaskCreated', { label: reportType }));
-        } else if (status.status === 'FAILED' || status.status === 'failed') {
-          toast.error('Export failed');
-        } else {
-          setTimeout(poll, 2000);
+        try {
+          const status = await api.exports.get(job.jobId);
+          if (status.status === 'SUCCEEDED' || status.status === 'succeeded') {
+            const dl = await api.exports.download(job.jobId);
+            window.open(dl.downloadUrl, '_blank');
+            toast.success(t('admin.system.exportTaskCreated', { label: reportType }));
+          } else if (status.status === 'FAILED' || status.status === 'failed') {
+            toast.error(t('admin.system.exportFailed'));
+          } else {
+            setTimeout(poll, 2000);
+          }
+        } catch (err) {
+          // The polling loop runs detached from the outer try/catch (it's
+          // invoked via setTimeout, after the outer call already returned) —
+          // an error here used to become an unhandled promise rejection: no
+          // toast, no console-visible failure, just the "Export started..."
+          // toast sitting there looking like nothing happened.
+          if (err instanceof ApiError) toast.error(mapApiError(err).message);
+          else toast.error(t('common.unknownError'));
         }
       };
-      toast.info('Export started...');
+      toast.info(t('admin.system.exportStarted'));
       setTimeout(poll, 1000);
     } catch (err) {
       if (err instanceof ApiError) toast.error(mapApiError(err).message);
-      else toast.error(String(err));
+      else toast.error(t('common.unknownError'));
     }
   };
 

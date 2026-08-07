@@ -52,9 +52,15 @@ export function StudentList() {
   const { items, page, loading, error, setPage, setSearch: setApiSearch, setFilter, setSort, refetch } =
     usePagedApi<Student>(api.students.list, {});
 
-  // Only `completedHours`/`timeCoinBalance` sorts have no real-backend column to sort on server-side —
-  // those stay client-side (current page only); everything else is delegated to the server via setSort.
-  const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['completedHours', 'timeCoinBalance'];
+  // Only `name` maps onto a real, sortable backend column (`StudentController.SORTABLE` only allows
+  // id/studentNumber/displayName/createdAt) — the wire property is `displayName`, not `name`. `grade` has
+  // no sortable column at all (grade_id sorts alphabetically as a string, which puts grade_10/11 before
+  // grade_6/7/8/9 — not the pedagogical order — so the backend deliberately doesn't offer it) and
+  // `completedHours`/`timeCoinBalance` are record-derived aggregates with nothing to sort on server-side;
+  // all three stay client-side (current page only). Sending an unsupported `sort` value 400s
+  // ("Cannot sort by '...'") — this used to happen for both `name` and `grade`.
+  const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['grade', 'completedHours', 'timeCoinBalance'];
+  const SORT_WIRE_KEY: Partial<Record<SortKey, string>> = { name: 'displayName' };
 
   const [students, setStudents] = useState<Student[]>([]);
   // keep a local editable copy of the current page so admin edits reflect immediately without a refetch
@@ -75,7 +81,8 @@ export function StudentList() {
     setSortKey(k);
     setSortDesc(nextDesc);
     if (!CLIENT_ONLY_SORT_KEYS.includes(k)) {
-      setSort(nextDesc ? `-${k}` : k);
+      const wireKey = SORT_WIRE_KEY[k] ?? k;
+      setSort(nextDesc ? `-${wireKey}` : wireKey);
     } else {
       setSort(undefined);
     }

@@ -21,6 +21,38 @@ export async function getSchoolInfo(): Promise<SchoolInfo> {
   return Promise.resolve(MOCK_SCHOOL_INFO);
 }
 
+// Permission lists below are the *exact* real grant matrix from
+// `R__seed_permissions_and_roles.sql`'s `role_permission` rows for each
+// role — not a hand-picked subset. Previously these were small curated
+// lists (e.g. student had 2 of the real 13, admin had 14 of the real 44),
+// so any UI gate keyed on a permission code the mock omitted stayed
+// hidden in mock mode even though the same role would see it against the
+// real backend — a real mock/real-mode behavior divergence, not just an
+// aesthetic gap. There's no automated sync; if the migration's grants
+// change, update here too (see integration-test/MOCK_DATA_GUIDE.md, which
+// documents the same matrix for the backend seed data).
+const ROLE_STUDENT_PERMISSIONS = [
+  'projects.read', 'eventProposals.create', 'eventProposals.read', 'applications.create', 'applications.read',
+  'serviceRecords.create', 'serviceRecords.read', 'cases.create', 'cases.read', 'accounts.read', 'progress.read',
+  'organizations.read', 'directory.read',
+];
+const ROLE_TEACHER_PERMISSIONS = [
+  'projects.read', 'projects.create', 'projects.update', 'projects.publish', 'eventProposals.read',
+  'eventProposals.review', 'eventProposals.assign', 'applications.read', 'serviceRecords.read', 'reviews.read',
+  'reviews.decide', 'reviews.assign', 'cases.create', 'cases.read', 'students.read', 'progress.read',
+  'organizations.read', 'accounts.read', 'rules.read',
+];
+const ROLE_ADMIN_PERMISSIONS = [
+  'projects.read', 'projects.create', 'projects.update', 'projects.publish', 'projects.close', 'projects.archive',
+  'projects.audit.read', 'eventProposals.read', 'eventProposals.review', 'eventProposals.assign',
+  'applications.read', 'applications.manage', 'serviceRecords.read', 'reviews.read', 'reviews.decide',
+  'reviews.bulkDecide', 'reviews.assign', 'cases.create', 'cases.read', 'cases.decide', 'students.read',
+  'students.manage', 'progress.read', 'organizations.read', 'organizations.manage', 'accounts.read',
+  'accounts.adjust', 'accounts.reverse', 'accounts.freeze', 'rules.read', 'rules.manage', 'rules.publish',
+  'reports.read', 'exports.create', 'imports.create', 'imports.read', 'imports.commit', 'users.read',
+  'users.manage', 'roles.read', 'auditLogs.read', 'settings.read', 'lifecycle.purge', 'lifecycle.reconcile',
+];
+
 export const MOCK_USERS: User[] = [
   {
     id: 'usr_student001',
@@ -31,7 +63,7 @@ export const MOCK_USERS: User[] = [
     workspaces: ['student'],
     studentId: 'std_001',
     email: 'jiaming@example-school.cn',
-    permissions: ['serviceRecords.create', 'projects.read'],
+    permissions: ROLE_STUDENT_PERMISSIONS,
     featureFlags: { pov: false, redemption: false, borrowing: false, appreciation: false },
   },
   {
@@ -43,7 +75,7 @@ export const MOCK_USERS: User[] = [
     workspaces: ['student'],
     studentId: 'std_002',
     email: 'yunli@example-school.cn',
-    permissions: ['serviceRecords.create', 'projects.read'],
+    permissions: ROLE_STUDENT_PERMISSIONS,
     featureFlags: { pov: false, redemption: false, borrowing: false, appreciation: false },
   },
   {
@@ -54,12 +86,7 @@ export const MOCK_USERS: User[] = [
     roles: ['teacher'],
     workspaces: ['admin'],
     email: 'alex.lin@example-school.cn',
-    // Matches role_teacher's real grant (R__seed_permissions_and_roles.sql)
-    // — 'projects.manage'/'accounts.manage' below aren't real permission
-    // codes (nothing in R__seed_permissions_and_roles.sql grants them), so
-    // every UI gate keyed on the real granular codes silently hid its
-    // button in mock mode regardless of role.
-    permissions: ['reviews.decide', 'reviews.assign', 'projects.create', 'projects.update', 'projects.publish', 'projects.read', 'students.read'],
+    permissions: ROLE_TEACHER_PERMISSIONS,
     featureFlags: { pov: false, redemption: false, borrowing: false, appreciation: false },
   },
   {
@@ -70,8 +97,7 @@ export const MOCK_USERS: User[] = [
     roles: ['admin'],
     workspaces: ['admin'],
     email: 'wei.chen@example-school.cn',
-    // Matches role_admin's real grant — see the teacher fixture's note above.
-    permissions: ['reviews.decide', 'reviews.assign', 'projects.create', 'projects.update', 'projects.publish', 'projects.close', 'projects.archive', 'projects.read', 'accounts.adjust', 'accounts.freeze', 'accounts.reverse', 'users.manage', 'students.read', 'roles.read'],
+    permissions: ROLE_ADMIN_PERMISSIONS,
     featureFlags: { pov: false, redemption: false, borrowing: false, appreciation: false },
   },
   {
@@ -81,9 +107,15 @@ export const MOCK_USERS: User[] = [
     displayName: 'Jordan',
     roles: ['student', 'teacher'],
     workspaces: ['student', 'admin'],
+    // Was 'std_003', whose MOCK_STUDENTS entry was named "Wang Haotian" —
+    // a different name than this user's own displayName. A dual-role
+    // account's student half and staff half are the same person; std_003
+    // is renamed to "Jordan" below to actually match.
     studentId: 'std_003',
     email: 'jordan@example-school.cn',
-    permissions: ['serviceRecords.create', 'projects.read', 'reviews.decide', 'projects.create', 'projects.update', 'projects.publish', 'students.read'],
+    // Real union of role_student + role_teacher grants (RBAC: a user's
+    // effective permissions are the union across all held roles).
+    permissions: Array.from(new Set([...ROLE_STUDENT_PERMISSIONS, ...ROLE_TEACHER_PERMISSIONS])),
     featureFlags: { pov: false, redemption: false, borrowing: false, appreciation: false },
   },
 ];
@@ -588,7 +620,8 @@ export const MOCK_NOTIFICATIONS: Notification[] = [
 export const MOCK_STUDENTS: Student[] = [
   { id: 'std_001', studentNumber: '2024001', name: 'Jia Ming', gradeId: 'grade_10', grade: 'Grade 10', classId: 'class_10A', className: '10A', email: 'jiaming@example-school.cn', status: 'active', completedMinutes: 300, pendingMinutes: 240, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 600, joinedAt: '2023-09-01', guardianName: 'Zhang Daqiang', guardianContact: '139xxxx1234' },
   { id: 'std_002', studentNumber: '2024002', name: 'Yun Li', gradeId: 'grade_10', grade: 'Grade 10', classId: 'class_10A', className: '10A', email: 'yunli@example-school.cn', status: 'active', completedMinutes: 2520, pendingMinutes: 480, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 4500, joinedAt: '2023-09-01', guardianName: 'Li Guoqiang', guardianContact: '138xxxx5678' },
-  { id: 'std_003', studentNumber: '2024003', name: 'Wang Haotian', gradeId: 'grade_10', grade: 'Grade 10', classId: 'class_10B', className: '10B', email: 'wanghaotian@example-school.cn', status: 'active', completedMinutes: 4680, pendingMinutes: 0, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 8200, joinedAt: '2023-09-01' },
+  // Linked to usr_both001 (the dual-role student+teacher test persona) — name/email must match that user, not stand in as a separate person.
+  { id: 'std_003', studentNumber: '2024003', name: 'Jordan', gradeId: 'grade_10', grade: 'Grade 10', classId: 'class_10B', className: '10B', email: 'jordan@example-school.cn', status: 'active', completedMinutes: 4680, pendingMinutes: 0, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 8200, joinedAt: '2023-09-01' },
   { id: 'std_004', studentNumber: '2024004', name: 'Chen Meiling', gradeId: 'grade_9', grade: 'Grade 9', classId: 'class_9A', className: '9A', email: 'chenmei@example-school.cn', status: 'active', completedMinutes: 1800, pendingMinutes: 300, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 3200, joinedAt: '2024-09-01' },
   { id: 'std_005', studentNumber: '2024005', name: 'Liu Yufei', gradeId: 'grade_9', grade: 'Grade 9', classId: 'class_9B', className: '9B', email: 'liuyufei@example-school.cn', status: 'active', completedMinutes: 900, pendingMinutes: 120, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 1600, joinedAt: '2024-09-01' },
   { id: 'std_006', studentNumber: '2023001', name: 'Huang Zihan', gradeId: 'grade_11', grade: 'Grade 11', classId: 'class_11A', className: '11A', email: 'huangzihan@example-school.cn', status: 'active', completedMinutes: 11100, pendingMinutes: 600, annualRequiredMinutes: 4500, stageRequiredMinutes: 18000, timeCoinBalance: 19800, joinedAt: '2022-09-01' },
