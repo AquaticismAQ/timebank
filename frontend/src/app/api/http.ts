@@ -26,6 +26,28 @@ function readCookie(name: string): string | undefined {
   return match ? decodeURIComponent(match[1]) : undefined;
 }
 
+// Session expiry (401 AUTHENTICATION_REQUIRED, APIContract.md line 147) isn't
+// tied to any single call site — any of dozens of independent fetches can be
+// the one that discovers it. AuthProvider registers a single handler here so
+// whichever call hits it first drives the logout+redirect; `firedUnauthorized`
+// guards against every other in-flight call re-triggering it.
+let unauthorizedHandler: (() => void) | null = null;
+let firedUnauthorized = false;
+
+export function setUnauthorizedHandler(fn: () => void): void {
+  unauthorizedHandler = fn;
+}
+
+export function resetUnauthorizedState(): void {
+  firedUnauthorized = false;
+}
+
+function notifyIfUnauthorized(code: string | undefined): void {
+  if (code !== 'AUTHENTICATION_REQUIRED' || firedUnauthorized) return;
+  firedUnauthorized = true;
+  unauthorizedHandler?.();
+}
+
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
@@ -66,11 +88,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const parsed = text ? JSON.parse(text) : {};
 
   if (!response.ok || parsed.error) {
-    throw new ApiError(parsed.error ?? {
+    const errBody = parsed.error ?? {
       code: 'INTERNAL_ERROR',
       message: response.statusText || 'Request failed.',
       requestId: '',
-    });
+    };
+    notifyIfUnauthorized(errBody.code);
+    throw new ApiError(errBody);
   }
 
   return parsed.data as T;
@@ -94,7 +118,9 @@ async function requestPage<T>(path: string, options: RequestOptions = {}): Promi
   const text = await response.text();
   const parsed = text ? JSON.parse(text) : {};
   if (!response.ok || parsed.error) {
-    throw new ApiError(parsed.error ?? { code: 'INTERNAL_ERROR', message: response.statusText, requestId: '' });
+    const errBody = parsed.error ?? { code: 'INTERNAL_ERROR', message: response.statusText, requestId: '' };
+    notifyIfUnauthorized(errBody.code);
+    throw new ApiError(errBody);
   }
   return { data: parsed.data, page: parsed.page };
 }
@@ -131,7 +157,9 @@ export async function getWithEtag<T>(path: string, previousEtag: string | undefi
   const text = await response.text();
   const parsed = text ? JSON.parse(text) : {};
   if (!response.ok || parsed.error) {
-    throw new ApiError(parsed.error ?? { code: 'INTERNAL_ERROR', message: response.statusText, requestId: '' });
+    const errBody = parsed.error ?? { code: 'INTERNAL_ERROR', message: response.statusText, requestId: '' };
+    notifyIfUnauthorized(errBody.code);
+    throw new ApiError(errBody);
   }
   return { data: parsed.data as T, etag: response.headers.get('ETag') ?? undefined };
 }

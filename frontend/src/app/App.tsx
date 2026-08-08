@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { Toaster } from 'sonner';
 import { type User } from './api/types';
 import { api } from './api/client';
+import { setUnauthorizedHandler, resetUnauthorizedState } from './api/http';
 import i18n from '../i18n';
 
 // ── Shared operation log ───────────────────────────────────────────────────
@@ -170,6 +171,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         setCurrentWorkspaceState(found.workspaces[0]);
         localStorage.setItem('timebank-workspace', found.workspaces[0]);
       }
+      resetUnauthorizedState();
       return true;
     } catch {
       return false;
@@ -182,6 +184,20 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('timebank-user');
     localStorage.removeItem('timebank-workspace');
   }, []);
+
+  // Any API call anywhere can be the one that discovers the session expired
+  // server-side (idle timeout, revoked cookie, ...) — http.ts calls this
+  // single handler the first time any call gets back 401
+  // AUTHENTICATION_REQUIRED, so we don't rely on the stale cached `user` in
+  // localStorage (which RequireAuth otherwise trusts forever) to notice.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      logout();
+      if (window.location.pathname !== '/login') {
+        window.location.assign('/login');
+      }
+    });
+  }, [logout]);
 
   const setWorkspace = useCallback((ws: 'student' | 'admin') => {
     setCurrentWorkspaceState(ws);
