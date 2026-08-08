@@ -158,7 +158,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
               <FieldError message={fe('description')} />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={LABEL}>{t('admin.projects.serviceCategory')}</label>
                 <select value={form.categoryId} onChange={e => edit('categoryId', { categoryId: e.target.value })} className={INPUT}>
@@ -231,7 +231,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={LABEL}>{t('admin.projects.capacity')}</label>
                 <input type="number" min={1} value={form.capacity} onChange={e => edit('capacity', { capacity: Number(e.target.value) })} className={INPUT} />
@@ -249,10 +249,10 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
           {/* Eligible grades */}
           <section className="space-y-3 border-t border-border pt-4">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('admin.projects.eligibleGrades')}</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               {grades.map(g => (
                 <button key={g.id} type="button" onClick={() => toggleGrade(g.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                  className={`w-full px-3 py-1.5 rounded-lg text-xs text-center border transition-colors ${
                     form.eligibleGrades.includes(g.id)
                       ? 'bg-[oklch(0.488_0.243_264.376)] text-white border-[oklch(0.488_0.243_264.376)]'
                       : 'border-border text-muted-foreground hover:bg-accent'
@@ -590,7 +590,7 @@ export function ProjectManagement() {
                     <MoreHorizontal className="w-4 h-4" />
                   </button>
                   {menuOpenId === proj.id && (
-                    <div className="absolute right-0 top-8 bg-card border border-border rounded-xl shadow-lg z-10 w-40 overflow-hidden">
+                    <div className="absolute right-0 top-8 bg-card border border-border rounded-xl shadow-lg z-10 w-48 overflow-hidden">
                       {canViewRegistrants && proj.status !== 'draft' && (
                         <button onClick={() => { setMenuOpenId(null); setRegistrantsProject(proj); }}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-accent">
@@ -656,7 +656,7 @@ export function ProjectManagement() {
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={() => setShowForm(false)} />
-          <div className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-lg mx-4 mb-4 sm:mb-0 z-50 max-h-[80vh] overflow-y-auto">
+          <div className="relative bg-card border border-border rounded-2xl p-6 w-full sm:max-w-2xl max-w-[calc(100%-2rem)] mx-4 mb-4 sm:mb-0 z-50 max-h-[80vh] overflow-y-auto">
             <h3 className="text-foreground mb-4">{t('admin.projects.newProjectTitle')}</h3>
             <div className="space-y-3">
               <div>
@@ -710,7 +710,7 @@ export function ProjectManagement() {
                 <label className={LABEL}>{t('admin.projects.location')}</label>
                 <input type="text" value={newForm.location} onChange={e => setNewForm(f => ({ ...f, location: e.target.value }))} placeholder={t('admin.projects.locationPlaceholder')} className={INPUT} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>{t('admin.projects.capacity')}</label>
                   <input type="number" min="1" value={newForm.capacity} onChange={e => setNewForm(f => ({ ...f, capacity: Number(e.target.value) }))} placeholder="20" className={INPUT} />
@@ -739,11 +739,11 @@ export function ProjectManagement() {
               )}
               <div>
                 <label className={LABEL}>{t('admin.projects.eligibleGrades')}</label>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                   {grades.map(g => (
                     <button key={g.id} type="button"
                       onClick={() => setNewForm(f => ({ ...f, eligibleGrades: f.eligibleGrades.includes(g.id) ? f.eligibleGrades.filter(x => x !== g.id) : [...f.eligibleGrades, g.id] }))}
-                      className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                      className={`w-full px-3 py-1.5 rounded-lg text-xs text-center border transition-colors ${
                         newForm.eligibleGrades.includes(g.id)
                           ? 'bg-[oklch(0.488_0.243_264.376)] text-white border-[oklch(0.488_0.243_264.376)]'
                           : 'border-border text-muted-foreground hover:bg-accent'

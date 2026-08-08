@@ -7,7 +7,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 TimeBank (时间银行) is an institutional system for recording, auditing, and incentivizing middle-school student volunteer service. Service hours become "time coins" (never a currency/token — see Content Principles below). The project has four phases:
 
 - **Phase 1 — Institutional design**: complete, documented in `Design/chinese/*.md`.
-- **Phase 2 — Online system (current focus)**: React web frontend is nearly complete (`frontend/`). Java/Spring Boot + MySQL backend implementation started 2026-08-02 (`backend/`) per `Docs/implementation/`; B0-B6 backend work is done and deployed to the shared test server (B6 with named infra-blocked gaps), B7 (Database Operations) started and mostly blocked on infrastructure that doesn't exist — see `Docs/implementation/00-Status.md` for current state. Integration: I0 (Contract Prep) done, I1 (Read Path) mostly done, I2 (Write Path) wired across all 8 domains (found real bugs in two, fixed and verified) — see `00-Status.md` §21–§23.
+- **Phase 2 — Online system (current focus)**: React web frontend deployed at `https://tb.example.com/` (`frontend/`). Java/Spring Boot + MySQL backend implementation started 2026-08-02 (`backend/`) per `Docs/implementation/`; B0-B6 backend work is done and deployed to the shared test server (B6 with named infra-blocked gaps), B7 (Database Operations) started and mostly blocked on infrastructure that doesn't exist — see `Docs/implementation/00-Status.md` for current state. Integration: I0 done, I1 mostly done, I2 done (`✅`, all 10 exit criteria met), I3 in progress (I3.1-I3.6 done, I3.7 8/12 acceptance scenarios proven) — see `00-Status.md` §21–§34.
 - **Phase 3 — POV (Proof of Volunteering)**: WeChat Mini Program witness/AI-verification layer, reserved via feature flags, not implemented.
 - **Phase 4 — Redemption/borrowing/value-added**: reserved via feature flags, not implemented.
 
@@ -56,24 +56,22 @@ The backend follows `Docs/implementation/` phase by phase — check `Docs/implem
 
 **Everything lives under `frontend/src/app/`** (not `src/` directly — routes, contexts, and API client are all nested one level in). Path alias `@` → `frontend/src`.
 
-### Data flow: mock-backed API client standing in for the real backend
+### Data flow: dual-branch API client (mock + real backend)
 
-`frontend/src/app/api/client.ts` exports a single `api` object grouped by resource domain (`api.projects`, `api.serviceRecords`, `api.accounts`, `api.eventProposals`, `api.reviewQueue`, etc.), each method returning `Promise<T>` and simulating latency via `delay()`. It currently reads/writes in-memory mock arrays from `frontend/src/app/mock/data.ts`, which also doubles as **the TypeScript type source** (`User`, `Project`, `ServiceRecord`, `Account`, `EventProposal`, etc.).
+`frontend/src/app/api/client.ts` exports a single `api` object grouped by resource domain (`api.projects`, `api.serviceRecords`, `api.accounts`, `api.eventProposals`, `api.reviewQueue`, etc.). Each method has dual branches: a mock path (in-memory arrays from `frontend/src/app/mock/data.ts`) and a real path (HTTP calls via `api/http.ts`). The toggle is per-domain via `VITE_API_REAL_DOMAINS` in `api/config.ts`. In production (`.env.production`), all 19 domains are set to real.
 
-This is intentional scaffolding for a **frontend-driven** build: the whole app talks to `api.*` only, never to `MOCK_*` constants directly, so that once the Spring Boot backend exists, only `client.ts` method bodies need to change from mock logic to `fetch` calls — no component changes. `Docs/integration/APIContract.md` §12 codifies this pattern explicitly:
+The app talks to `api.*` only, never to `MOCK_*` constants directly. `Docs/integration/APIContract.md` §12 codifies this:
 
 ```tsx
 // Correct — go through the API client
 const [projects, setProjects] = useState<Project[]>([]);
 useEffect(() => { api.projects.list().then(setProjects).catch(() => {}); }, []);
 
-// Wrong — bypasses the client, breaks the mock→real-backend swap path
+// Wrong — bypasses the client
 import { MOCK_PROJECTS } from '../../mock/data';
 ```
 
-`frontend/src/app/api/useApi.ts` provides a `useApi(fn, deps)` hook (loading/error/data/refetch) as an alternative to manual `useState`+`useEffect` for read-only fetches.
-
-When the real backend lands, the API surface it must implement is `Docs/integration/APIContract.md` — treat it as the contract, not `client.ts`'s mock behavior (e.g. review-approval must be one backend transaction that writes a review event, updates record status, generates an account transaction, updates progress, and creates a notification — the mock client currently does this as a shortcut, not as a template for real transactional boundaries).
+`frontend/src/app/api/useApi.ts` provides `usePagedApi` (primary, paginated) and `useApi` (simple) hooks. The `api/http.ts` transport handles envelope unwrapping, CSRF, `Accept-Language`, idempotency keys, and error classification (`ApiError` with `code`, `fieldErrors`, `requestId`).
 
 ### Routing, auth, and workspaces
 
@@ -86,8 +84,10 @@ A user can hold both `student` and `admin` workspace access; `RequireAuth` redir
 ```
 components/auth/       login, workspace picker
 components/layout/     AppShell, StudentLayout, AdminLayout (shell/nav chrome)
-components/student/    one file per student-portal page (StudentHome, ProjectCenter, ServiceRecords, ...)
-components/admin/      one file per admin-portal page (AdminDashboard, AuditCenter, ProjectManagement, ...)
+components/student/    one file per student-portal page (StudentHome, ProjectCenter, ServiceRecords, EventProposals, ...)
+components/admin/      one file per admin-portal page (AdminDashboard, AuditCenter, ProjectManagement,
+                       ProjectRegistrants, ProposalReview, CaseReview, AccountManagement, UserManagement, ...)
+components/shared/     EvidenceLink (short-lived URL viewer), SearchPicker (Command+Popover picker)
 components/ui/         shadcn/Radix primitives (button, dialog, table, ...) — treat as generated/vendored, prefer composing over editing
 components/figma/      ImageWithFallback — Figma-import artifact
 ```

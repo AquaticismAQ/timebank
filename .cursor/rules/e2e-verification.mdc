@@ -15,53 +15,60 @@ alwaysApply: false
 
 ## Test Server Environment
 
+**ALWAYS verify against the deployed server, NEVER against a local `pnpm dev` instance.** Deploy first (`frontend/scripts/deploy.sh`), then test at the real URL.
+
+- **URL:** `https://tb.example.com/` — real frontend + backend deployed (since 2026-08-07)
 - **Host:** see `test-server-credits.md` for SSH and DB access
 - **Backend:** runs as a systemd unit (`timebank-backend.service`, user `timebank`)
 - **Database:** MySQL 8 on localhost:3306, app schema `timebank`
-- **Frontend proxy:** Vite dev proxy → `https://tb.example.com/api/v1/*`
+- **Frontend:** static files in `/var/www/timebank/`, SPA fallback via `try_files $uri $uri/ /index.html`
+- **Nginx:** serves frontend + proxies `/api/*` to `127.0.0.1:8080`
 - **No Docker** — everything runs natively
+
+## Seeded Test Accounts
+
+See `Docs/TestAccounts.md` for real seeded accounts: `admin001`, `student001`, `student002`, `teacher001`, `both001`. The login page's old mock "demo accounts" card was removed 2026-08-07.
+
+The server also carries a full seeded dataset (`integration-test/`, README + STATUS.md) — projects/records/proposals in every workflow status — so screens aren't empty during a live test. Check `integration-test/STATUS.md` before assuming a bug is new.
 
 ## E2E Verification Workflow
 
-### 1. Pre-flight
+### 1. Pre-flight — check if deploy is current
 
 ```bash
+# Check if frontend source changed since last deploy
+git log --oneline frontend/ | head -5
+# If changed, re-deploy first:
+frontend/scripts/deploy.sh
+
 # Verify backend is running
 curl https://tb.example.com/api/v1/ping
-# Should return: {"status":"ok"}
 
-# Start frontend in real-domain mode
+# For local dev-proxy testing (alternative to deployed version):
 cd frontend
-echo 'VITE_API_REAL_DOMAINS=auth,school,students,accounts,serviceRecords,reviewQueue,projects,eventProposals,applications,notifications,dashboards,reports,files,users,rules,imports,exports' > .env.local
+echo 'VITE_API_REAL_DOMAINS=auth,school,students,accounts,serviceRecords,reviewQueue,projects,eventProposals,applications,notifications,dashboards,reports,files,users,rules,imports,exports,cases' > .env.local
 pnpm dev
 ```
 
-### 2. Test User Setup
+### 2. Test User Options
 
-Create throwaway test users via SQL (SSH to server, use mysql CLI with app credentials from `test-server-credits.md`). Use bcrypt hashes generated via `htpasswd -nbBC 12 '' 'password'`. **Delete all test data after verification.**
+**Option A (preferred): Use seeded accounts** — see `Docs/TestAccounts.md`
 
-Pattern from prior phases (I0 §21, I1 §22):
-- Admin user: `e2e_admin` with `SYSTEM_ADMIN` + `SCHOOL_ADMIN` roles
-- Student user: `e2e_student` with `STUDENT` role, linked to a real `student` row
-- Teacher user: `e2e_teacher` with `TEACHER` role
+**Option B: Disposable SQL users** — for isolated testing. Create via SQL (SSH to server). Use bcrypt hashes via `htpasswd -nbBC 12 '' 'password'`. **Delete all test data after verification.**
 
-### 3. Verification Checklist (I2 Write Path)
+Pattern from I3 (§33):
+- Admin: `usr_<prefix>_admin` with `SYSTEM_ADMIN` + `SCHOOL_ADMIN` roles
+- Teacher: `usr_<prefix>_teach` with `TEACHER` role
+- Student: `usr_<prefix>_stu` with `STUDENT` role, linked to a real `student` row (`std_<prefix>01`)
 
-For each domain, verify the real branch works end-to-end through the UI:
+### 3. Playwright Workaround
 
-| Domain | Actions to verify | Key check |
-|--------|------------------|-----------|
-| **Service records** | Create draft, save, submit, withdraw | Idempotency key prevents double-submit |
-| **Evidence upload** | Upload file → intent → PUT → complete | File appears in record's evidence list |
-| **Review decisions** | Approve, return, reject a record | Credited amount shown from server response |
-| **Account operations** | Manual adjustment, freeze | Balance changes reflected immediately |
-| **Projects** | Create, update, publish, close, archive | Status transitions work correctly |
-| **Registrations** | Apply to project | Application appears in list |
-| **Proposals** | Create, submit, withdraw | Proposal status changes server-side |
-| **Users** | List from API, create, edit, deactivate | User appears in list after creation |
-| **Import/export** | Template download, file upload, export job | Import validates and commits; export downloads |
-| **Notifications** | Mark read, mark all read | Unread count decreases |
-| **Student profile** | Edit name/email/grade | Profile updated server-side |
+Playwright/Chromium doesn't exempt `localhost` from `Secure`-flagged cookies (unlike real desktop browsers). For dev-proxy testing:
+1. Obtain session via `curl` (proven reliable)
+2. Inject into Playwright context with `secure: false`
+3. Seed `localStorage['timebank-user']`/`['timebank-workspace']` matching `AuthProvider.login()`'s real branch
+
+For testing against the deployed `https://tb.example.com/` directly, this workaround is unnecessary.
 
 ### 4. What to Look For
 
@@ -71,18 +78,22 @@ For each domain, verify the real branch works end-to-end through the UI:
 - **Error handling:** Invalid input → server error shown as toast, form preserved
 - **Optimistic locking:** Edit same record in two tabs → second edit shows conflict toast
 - **Enum casing:** No raw UPPER_SNAKE values visible in UI
+- **No "undefined" strings:** Check all pre-filled form fields — unmapped DTO fields show as literal `"undefined"`
+- **No raw i18n keys:** Check rendered text — missing translations show as `key.path.here`
+- **Evidence files:** Verify they actually upload and pre-fill on resubmit (not just decorative)
 
 ### 5. Post-verification Cleanup
 
 ```sql
 -- Delete all test data created during verification
--- Users, students, service records, accounts, etc.
+-- Users, students, service records, accounts, proposals, cases, organizations, etc.
 -- Always clean up; never leave test data on the shared server
+-- Use a .sql file (never inline -e) for traceability
 ```
 
 ### 6. Reporting
 
-Record findings in `Docs/implementation/00-Status.md` §23 or a new §24, following the established pattern:
+Record findings in `Docs/implementation/00-Status.md` as a new numbered section (§35+), following the established pattern:
 - What was verified (with curl/Playwright evidence)
 - Bugs found and fixed
 - What's still open, honestly
