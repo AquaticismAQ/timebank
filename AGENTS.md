@@ -1,121 +1,145 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to Codex when working in this repository.
 
 ## Project overview
 
-TimeBank (时间银行) is an institutional system for recording, auditing, and incentivizing middle-school student volunteer service. Service hours become "time coins" (never a currency/token — see Content Principles below). The project has four phases:
+TimeBank (时间银行) is an institutional system for recording, auditing, and incentivizing middle-school student volunteer service. Service hours become "time coins" (never a currency/token — see Content Principles below).
 
-- **Phase 1 — Institutional design**: complete, documented in `Design/chinese/*.md`.
-- **Phase 2 — Online system (current focus)**: React web frontend deployed at `https://tb.example.com/` (`frontend/`). Java/Spring Boot + MySQL backend implementation started 2026-08-02 (`backend/`) per `Docs/implementation/`; B0-B6 backend work is done and deployed to the shared test server (B6 with named infra-blocked gaps), B7 (Database Operations) started and mostly blocked on infrastructure that doesn't exist — see `Docs/implementation/00-Status.md` for current state. Integration: I0 done, I1 mostly done, I2 done (`✅`, all 10 exit criteria met), I3 in progress (I3.1-I3.6 done, I3.7 8/12 acceptance scenarios proven) — see `00-Status.md` §21–§34.
+- **Phase 1 — Institutional design**: complete in `Design/chinese/*.md`.
+- **Phase 2 — Online system (current focus)**: the React frontend and Spring Boot/MySQL backend are both deployed at `https://tb.example.com/`. B1 and B2 are complete; the implemented B0/B3-B6 functionality is deployed, while B0.14 and several phase-level or infrastructure-dependent exit criteria remain open. B7 Database Operations is partial and mostly blocked on missing production infrastructure. I0 is done, I1 is mostly done, I2 is done (`✅`, all 10 exit criteria met), and I3 is in progress: I3.1-I3.6 are done and 11 of 12 I3.7 acceptance scenarios are proven; only the complete bilingual/mobile+desktop sweep in scenario #12 remains open. Always check `Docs/implementation/00-Status.md` before relying on this summary.
 - **Phase 3 — POV (Proof of Volunteering)**: WeChat Mini Program witness/AI-verification layer, reserved via feature flags, not implemented.
 - **Phase 4 — Redemption/borrowing/value-added**: reserved via feature flags, not implemented.
 
-Repo layout:
+Repository layout:
 
 ```
-Design/chinese/          Phase 1 institutional design docs (制度设计, source of "why")
-Docs/frontend/Design.md  Phase 2 frontend page/flow spec (English + _CN Chinese twin)
-Docs/integration/APIContract.md   The REST API contract — authoritative for both frontend and future backend
-Docs/implementation/     Phase-by-phase backend + integration build plan and the living status tracker (00-Status.md)
-frontend/                React + Vite web app (Student Portal + Admin/Teacher Portal)
-backend/                 Spring Boot 3.4 / Java 21 backend, single Maven module, package root `cn.timebank` (see below)
+Design/chinese/          Phase 1 institutional design docs (source of "why")
+Docs/frontend/           Phase 2 frontend design, English + Chinese twins
+Docs/integration/        Authoritative REST API contract, English + Chinese twins
+Docs/implementation/     Build plans and living phase/status tracker
+Docs/TestAccounts.md     Seeded shared-test-server credentials
+integration-test/        Realistic server dataset and live-test status/bug log
+frontend/                React + Vite Student and Admin/Teacher portals
+backend/                 Spring Boot 3.4 / Java 21 / MySQL backend
 ```
 
-`Docs/frontend/Design.md` and `Docs/integration/APIContract.md` each have a `_CN.md` Chinese counterpart that must stay in sync when edited.
+`Docs/frontend/Design.md` and `Docs/integration/APIContract.md` each have a `_CN.md` Chinese counterpart. Keep each pair structurally and semantically synchronized when edited.
 
-## Commands
+## Start-of-work checklist
 
-All frontend commands run from `frontend/`:
+Use this order before changing code:
+
+1. Read the summary, phase table, acceptance table, and latest findings in `Docs/implementation/00-Status.md`.
+2. Read `integration-test/STATUS.md` for the deployed dataset and latest live-verification findings.
+3. Check `git status` and recent `git log`; inspect actual code and scripts. Historical status paragraphs describe what was true when written and may be superseded later.
+4. Read applicable clarification documents, especially `Docs/clarification/02-PorjectOrganization.md` for current project/organization behavior.
+5. After a deployed-app test finds or verifies a defect, update `integration-test/STATUS.md`. Update `00-Status.md` when phase or acceptance evidence changes.
+
+## Frontend
+
+Everything lives under `frontend/src/app/`; `@` aliases `frontend/src`.
+
+### Commands
+
+Run from `frontend/`:
 
 ```bash
-cd frontend
-pnpm install        # install deps (pnpm workspace, see pnpm-lock.yaml/pnpm-workspace.yaml)
-pnpm dev            # start Vite dev server
-pnpm build           # production build (tsc noEmit is not run separately; Vite handles the build)
-pnpm preview         # preview a production build
+pnpm install
+pnpm dev
+npx -y -p typescript tsc --noEmit -p tsconfig.json
+pnpm build
+pnpm preview
 ```
 
-There is no lint, test, or typecheck script configured in `frontend/package.json` — do not assume `pnpm lint`/`pnpm test` exist. TypeScript is `strict: true` but `noUnusedLocals`/`noUnusedParameters` are off (see `frontend/tsconfig.json`).
+There is no lint, test, or typecheck script in `frontend/package.json`; do not assume `pnpm lint`, `pnpm test`, or `pnpm typecheck` exists. Vite's build does not typecheck, so use the explicit `tsc` command above. TypeScript is strict, while `noUnusedLocals`/`noUnusedParameters` remain off.
 
-Backend commands run from `backend/` (single Maven module, no multi-module split — that question from earlier is resolved):
+### Real-backend-only data flow
+
+There is no frontend mock mode. It was removed 2026-08-07. Every `api.*` method in `frontend/src/app/api/client.ts` calls the real backend through `api/http.ts`; `frontend/src/app/mock/`, `api/config.ts`, `isRealDomain`, and `VITE_API_REAL_DOMAINS` no longer exist. Do not recreate mock branches or bypass the API client.
+
+`pnpm dev` requires a real backend proxy target. Copy `frontend/.env.example` to the git-ignored `frontend/.env.local` and set `VITE_DEV_PROXY_TARGET=https://tb.example.com`. `vite.config.ts` intentionally fails at startup without it. Production is same-origin: nginx serves the static bundle and proxies `/api/*`, so `frontend/.env.production` is intentionally empty of API toggles.
+
+`frontend/src/app/api/useApi.ts` provides `usePagedApi` and `useApi`. `api/http.ts` handles envelope unwrapping, CSRF, `Accept-Language`, idempotency keys, session-expiry redirects, and `ApiError` classification. Continue using these shared paths rather than component-specific `fetch` calls.
+
+### Deploy and browser verification
+
+`https://tb.example.com/` is the shared test deployment, not a production school deployment. The server has no Node/pnpm. Build locally and deploy static output with:
 
 ```bash
-cd backend
-mvn compile           # local compile check only
-mvn test               # fast tests: MockMvc slices + ArchUnit, no external dependency
-mvn verify              # adds *IT integration tests — needs TIMEBANK_DB_HOST/_USERNAME/_PASSWORD env vars
-                         # for an account with CREATE/DROP on `timebank_it_%` (see test-server-credits.md, untracked)
+frontend/scripts/deploy.sh                    # defaults to root@tb.example.com
+frontend/scripts/deploy.sh user@other-host    # optional target
 ```
 
-**No Docker anywhere in this project** — not locally, not in tests, not in deployment (`Docs/implementation/01-Overview.md` §6). Integration tests (`*IT` classes, run via `mvn verify`/Failsafe, not `mvn test`/Surefire) run against real MySQL on the shared test server, each in its own `timebank_it_<random>` schema created and dropped per test class (`cn.timebank.testsupport.MySqlTestSchemaExtension`) — never against the application's own `timebank` schema. The app deploys as a systemd unit (`backend/scripts/deploy.sh`), not a container; see `backend/scripts/verify.sh` for the test entry point a CI runner would call. Both scripts read secrets from the environment and contain none themselves.
+The script runs frozen dependency installation, explicit TypeScript checking, `pnpm build`, `rsync --delete` to `/var/www/timebank/`, then validates and reloads nginx. Deploy frontend changes before browser/live verification; otherwise the browser may be testing stale static output.
 
-The backend follows `Docs/implementation/` phase by phase — check `Docs/implementation/00-Status.md` before assuming what exists. As of B2 (Base Data & Rules), real code exists in `cn.timebank.common.*` (envelope, error handling, request-id logging, pagination, idempotency, i18n resolution), `cn.timebank.audit` (append-only audit log), `cn.timebank.iam` (users, roles, permissions, login logs, password lifecycle), `cn.timebank.security` (session auth, CSRF, `@PreAuthorize` on every endpoint, the data-scope resolver mechanism — not yet wired to a real resource), `cn.timebank.student` (students, academic years, grades, classes), `cn.timebank.organization` (partner organizations, service categories, school info, feature flags, the shared `RequestLanguageService`), `cn.timebank.rules` (versioned rules with an immutable-publish lifecycle and date-based resolution), and `cn.timebank.notification` (template rendering only, no send path yet). Local Maven builds need `JAVA_HOME=/opt/homebrew/opt/openjdk@21` explicitly set — the default `java` on this machine is JDK 17. Every other business module (`servicerecord`, `project`, etc.) has no code yet beyond an empty `package-info.java` marking its boundary for B0.2's ArchUnit rules. Package root is `cn.timebank`, not `cn.<school>.timebank` as `Docs/backend/Design.md` §7 originally proposed — deviation and rationale recorded there and in the status doc.
+Use accounts from `Docs/TestAccounts.md`. The shared server has realistic data seeded by `integration-test/seed.ts`. Read `integration-test/README.md`, `MOCK_DATA_GUIDE.md`, and especially `STATUS.md` before reseeding or declaring a bug new. The seeder is first-run-only, refuses conflicts, and is not the future 5,000-student performance seeder. Some live tests are irreversible (for example project archive); account for the current dataset state recorded in `STATUS.md`.
 
-## Frontend architecture
+### Architecture
 
-**Everything lives under `frontend/src/app/`** (not `src/` directly — routes, contexts, and API client are all nested one level in). Path alias `@` → `frontend/src`.
+`frontend/src/app/App.tsx` composes `ThemeProvider` → `AuthProvider` → `LogsProvider` → `BrowserRouter`. `RequireAuth` sends unauthenticated users to `/login` and dual-workspace users to `/workspace`. Routes live under `/student/*` and `/admin/*`; teachers use the Admin Portal with scoped permissions, not a separate portal.
 
-### Data flow: dual-branch API client (mock + real backend)
-
-`frontend/src/app/api/client.ts` exports a single `api` object grouped by resource domain (`api.projects`, `api.serviceRecords`, `api.accounts`, `api.eventProposals`, `api.reviewQueue`, etc.). Each method has dual branches: a mock path (in-memory arrays from `frontend/src/app/mock/data.ts`) and a real path (HTTP calls via `api/http.ts`). The toggle is per-domain via `VITE_API_REAL_DOMAINS` in `api/config.ts`. In production (`.env.production`), all 19 domains are set to real.
-
-The app talks to `api.*` only, never to `MOCK_*` constants directly. `Docs/integration/APIContract.md` §12 codifies this:
-
-```tsx
-// Correct — go through the API client
-const [projects, setProjects] = useState<Project[]>([]);
-useEffect(() => { api.projects.list().then(setProjects).catch(() => {}); }, []);
-
-// Wrong — bypasses the client
-import { MOCK_PROJECTS } from '../../mock/data';
-```
-
-`frontend/src/app/api/useApi.ts` provides `usePagedApi` (primary, paginated) and `useApi` (simple) hooks. The `api/http.ts` transport handles envelope unwrapping, CSRF, `Accept-Language`, idempotency keys, and error classification (`ApiError` with `code`, `fieldErrors`, `requestId`).
-
-### Routing, auth, and workspaces
-
-`frontend/src/app/App.tsx` is the composition root: `ThemeProvider` (light/dark/auto, auto follows local hour 7–19) → `AuthProvider` (user + workspace persisted to `localStorage`) → `LogsProvider` (client-only operation log, seeded, not backed by an API yet) → `BrowserRouter`.
-
-A user can hold both `student` and `admin` workspace access; `RequireAuth` redirects to `/workspace` (portal picker) when workspace is ambiguous, and to `/login` when unauthenticated. Routes are nested under `/student/*` (`StudentLayout`) and `/admin/*` (`AdminLayout`), matching the Student Portal / Admin+Teacher Portal split in `Docs/frontend/Design.md` §3–7 — teachers use the same Admin Portal as school admins but with scoped permissions, not a separate portal.
-
-### Component organization
+Component organization:
 
 ```
-components/auth/       login, workspace picker
-components/layout/     AppShell, StudentLayout, AdminLayout (shell/nav chrome)
-components/student/    one file per student-portal page (StudentHome, ProjectCenter, ServiceRecords, EventProposals, ...)
-components/admin/      one file per admin-portal page (AdminDashboard, AuditCenter, ProjectManagement,
-                       ProjectRegistrants, ProposalReview, CaseReview, AccountManagement, UserManagement, ...)
-components/shared/     EvidenceLink (short-lived URL viewer), SearchPicker (Command+Popover picker)
-components/ui/         shadcn/Radix primitives (button, dialog, table, ...) — treat as generated/vendored, prefer composing over editing
-components/figma/      ImageWithFallback — Figma-import artifact
+components/auth/       login and workspace picker
+components/layout/     AppShell, StudentLayout, AdminLayout
+components/student/    StudentHome, ProjectCenter, ServiceRecords, EventProposals, ...
+components/admin/      dashboards, reviews, projects, registrants, organizations, accounts, ...
+components/shared/     EvidenceLink, SearchPicker
+components/ui/         shadcn/Radix primitives; compose rather than edit when possible
+components/figma/      ImageWithFallback
 ```
 
-This is organized by portal/page today, not yet by the business-domain module layout (`projects/`, `service-records/`, `reviews/`, ...) that `Docs/frontend/Design.md` §12 recommends as the target structure — don't assume that reorganization has happened.
+Key I3 additions include `EvidenceLink.tsx`, `SearchPicker.tsx`, `ProjectRegistrants.tsx`, `ProposalReview.tsx`, `CaseReview.tsx`, and `OrganizationManagement.tsx`. Language persistence is centralized in `lib/language.ts`; timezone-safe conversion lives in `lib/datetime.ts`.
 
-### Styling
+Styling uses Tailwind CSS v4 through `@tailwindcss/vite`, with tokens in `frontend/src/styles/theme.css` and `globals.css`. Build mobile-first, then enhance at Tailwind's standard breakpoints.
 
-Tailwind CSS v4 (via `@tailwindcss/vite`, no `tailwind.config.js` — config lives in CSS). Theme tokens in `frontend/src/styles/theme.css`/`globals.css`. Mobile-first is a hard requirement per the design doc: build the mobile layout first, then progressively enhance for tablet/desktop, and don't invent new breakpoints outside Tailwind's defaults.
+## Backend
 
-## Domain and status-model conventions
+The backend is a single Maven module rooted at package `cn.timebank` (not `cn.<school>.timebank`). Real code exists across `account`, `caseflow`, `dataexchange`, `enrollment`, `file`, `lifecycle`, `notification`, `organization`, `progress`, `project`, `proposal`, `reporting`, `review`, `servicerecord`, plus the base IAM/security/student/rules/audit modules. Do not use the old B2-era assumption that later business modules contain only `package-info.java`.
 
-These conventions are set by `Docs/integration/APIContract.md` and `Design/chinese/`, and both frontend and future backend work must respect them:
+Local Maven commands run from `backend/`:
 
-- **Never call it a "token"/"currency"**: time coins are a non-financial school-internal accounting unit. Don't introduce redemption/cash-out/transfer semantics outside the explicitly reserved Phase 4 namespace.
-- **Status machines are backend-owned**: `Project`, `EventProposal`, `Application`, `ServiceRecord`, `Case` all have defined status transitions (see APIContract §3) — the frontend displays state, it does not derive or invent it.
-- **Account balances are transaction-derived only**: no direct balance edit endpoint exists or should exist; every change is a new immutable `AccountTransaction` (including corrections/reversals — never overwrite or delete a transaction).
-- **Reviews/approvals are non-overwritable events**: changing a decision appends a new event rather than mutating the old one.
-- **Event Proposal → Project pipeline**: a student "activity proposal" (`EventProposal`) is not a `Project` and never appears in the Project Center until approved; approval must atomically generate the official `Project` draft and backfill `approvedProjectId` in the same transaction — never create the project first and separately link it.
-- **Phase 3/4 features are feature-flagged, not half-built**: disabled features must show "Not yet available" rather than a broken/blank action; don't wire up POV or redemption/borrowing UI beyond what's already flagged.
-- **IDs are opaque server-generated strings**: never parse or derive meaning from an ID format.
-- **Durations/amounts are integers**: minutes for duration, minimum accounting units for time-coins — no floats.
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn compile
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn test
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn verify
+```
 
-## Content/documentation conventions (when editing Design/Docs)
+`mvn test` runs fast MockMvc/unit/ArchUnit tests without external services. `mvn verify` adds Failsafe `*IT` tests and needs `TIMEBANK_DB_HOST`, `TIMEBANK_DB_USERNAME`, and `TIMEBANK_DB_PASSWORD` for an account with CREATE/DROP on `timebank_it_%`. Each IT class creates and drops its own random schema via `MySqlTestSchemaExtension`; never point tests at the application's `timebank` schema.
 
-From `CONTRIBUTING.md`, still binding for this repo:
+There is no Docker anywhere in this project. The backend runs as the `timebank-backend` systemd unit. The normal shared-server sequence is sync → full verification → deploy:
 
-- Chinese docs are primary; English docs mirror their structure exactly. Keep `_CN` and non-`_CN` doc pairs in sync.
-- Preserve cross-references between design docs (`见 XDoc.md` / `see XDoc.md`) and don't renumber existing sections gratuitously — other docs cite section numbers.
-- Don't weaken anti-fraud/anti-Sybil/legal-compliance provisions without explicit justification.
-- Avoid financial vocabulary (代币/发币/挖矿/提现/钱包) anywhere in new content, per the non-financial design principle.
+```bash
+rsync -az --delete --exclude 'target/' --exclude '.git/' \
+  backend/ root@tb.example.com:/opt/timebank-backend/
+ssh root@tb.example.com
+# In the remote shell, export TIMEBANK_DB_HOST/_USERNAME/_PASSWORD first:
+cd /opt/timebank-backend
+./scripts/verify.sh
+./scripts/deploy.sh
+```
+
+`backend/scripts/verify.sh` reads DB credentials only from the environment and runs full `mvn verify`. `backend/scripts/deploy.sh` packages server-side with tests skipped, fixes ownership, restarts systemd, and checks that the service is active. Run relevant focused tests locally, then full server verification before deployment. B0.14's automated CI trigger still does not exist.
+
+## Current domain rules
+
+- **Non-financial terminology**: time coins are a school-internal accounting unit. Never introduce token/currency, cash-out, transfer, mining, or wallet semantics outside explicitly reserved Phase 4 design.
+- **Backend-owned states**: `Project`, `EventProposal`, `Application`, `ServiceRecord`, and `Case` transitions are backend-owned. Frontend code displays state and invokes action endpoints; it does not derive or patch status directly.
+- **Immutable accounting**: balances are transaction-derived. Corrections and reversals append immutable `AccountTransaction` rows; never edit a balance or overwrite/delete a transaction.
+- **Append-only reviews**: review/approval changes append events rather than overwriting prior decisions.
+- **Proposal → Project**: proposal approval atomically writes the review event, marks the proposal approved, creates the official project draft, and backfills `approvedProjectId`. Never create then link in separate frontend calls.
+- **Proposal organization input**: choose an existing partner organization by opaque `organizationId`, or provide `newOrganizationName`; the backend atomically resolves/creates the organization during proposal creation. Students do not need `organizations.manage` merely to propose a new organization.
+- **Current project lifecycle**: `CLOSED` is time-derived and means the registration window elapsed. Managers use `POST /projects/{id}/cancel` with a required reason to cancel/archive unwanted projects, including drafts. Normal archive from `COMPLETED` is gated until every confirmed student's service record is reviewed. A registration-open project with zero confirmed registrants auto-archives when registration closes and records a system audit reason. Read `Docs/clarification/02-PorjectOrganization.md` and the bilingual contract before changing this state machine.
+- **Phase 3/4 flags**: disabled features show “Not yet available”; do not half-build POV or redemption/borrowing features.
+- **Opaque IDs**: IDs are server-generated strings. Never parse or derive semantics from their format.
+- **Integer units**: durations use integer minutes and time-coin amounts use integer minimum accounting units; never use floats.
+
+## Documentation rules
+
+- Chinese design/contract docs are primary; English twins mirror their structure. Update both twins together.
+- Preserve cross-references and avoid gratuitous section renumbering.
+- Do not weaken anti-fraud, anti-Sybil, privacy, or legal-compliance provisions without explicit justification.
+- Avoid financial vocabulary (代币/发币/挖矿/提现/钱包) in new content.
+- Keep secrets out of tracked files and scripts. `Docs/TestAccounts.md` contains shared-test credentials by explicit project convention; do not reuse them elsewhere.

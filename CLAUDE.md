@@ -62,19 +62,15 @@ The backend follows `Docs/implementation/` phase by phase — check `Docs/implem
 
 **Everything lives under `frontend/src/app/`** (not `src/` directly — routes, contexts, and API client are all nested one level in). Path alias `@` → `frontend/src`.
 
-### Data flow: dual-branch API client (mock + real backend)
+### Data flow: API client (real backend only)
 
-`frontend/src/app/api/client.ts` exports a single `api` object grouped by resource domain (`api.projects`, `api.serviceRecords`, `api.accounts`, `api.eventProposals`, `api.reviewQueue`, etc.). Each method has dual branches: a mock path (in-memory arrays from `frontend/src/app/mock/data.ts`) and a real path (HTTP calls via `api/http.ts`). The toggle is per-domain via `VITE_API_REAL_DOMAINS` in `api/config.ts`. In production (`.env.production`), all 19 domains are set to real.
+`frontend/src/app/api/client.ts` exports a single `api` object grouped by resource domain (`api.projects`, `api.serviceRecords`, `api.accounts`, `api.eventProposals`, `api.reviewQueue`, etc.), each method making real HTTP calls via `api/http.ts` (base URL `/api/v1`, same-origin in production, dev-proxied locally). Mock mode was removed entirely (2026-08-07): there is no in-memory mock data, no `mock/` directory, and no per-domain real/mock toggle. `frontend/.env.local` (copied from `.env.example`) with `VITE_DEV_PROXY_TARGET` is required for `pnpm dev` — Vite fails fast at startup if it's missing.
 
-The app talks to `api.*` only, never to `MOCK_*` constants directly. `Docs/integration/APIContract.md` §12 codifies this:
+The app talks to `api.*` only:
 
 ```tsx
-// Correct — go through the API client
 const [projects, setProjects] = useState<Project[]>([]);
 useEffect(() => { api.projects.list().then(setProjects).catch(() => {}); }, []);
-
-// Wrong — bypasses the client
-import { MOCK_PROJECTS } from '../../mock/data';
 ```
 
 `frontend/src/app/api/useApi.ts` provides `usePagedApi` (primary, paginated) and `useApi` (simple) hooks. The `api/http.ts` transport handles envelope unwrapping, CSRF, `Accept-Language`, idempotency keys, and error classification (`ApiError` with `code`, `fieldErrors`, `requestId`).
