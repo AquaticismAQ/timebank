@@ -35,17 +35,18 @@ export function AdminDashboard() {
   const [pendingReviews, setPendingReviews] = useState<ReviewQueueItem[]>([]);
   const [activeProjects, setActiveProjects] = useState<Project[]>([]);
   const [allReviews, setAllReviews] = useState<ReviewQueueItem[]>([]);
+  const [dashboardLoaded, setDashboardLoaded] = useState(false);
 
   useEffect(() => {
     api.dashboards.admin().then(d => {
       setStats(d.stats);
       setPendingReviews(d.pendingReviews);
       setActiveProjects(d.activeProjects);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setDashboardLoaded(true));
     api.reviewQueue.list({ pageSize: 100 }).then(result => setAllReviews(result.data)).catch(() => {});
   }, []);
 
-  if (!stats) return <div className="p-4 lg:p-6">{t('common.loading')}</div>;
+  if (!dashboardLoaded) return <div className="p-4 lg:p-6">{t('common.loading')}</div>;
 
   const urgentReviews = allReviews.filter(r => r.daysWaiting >= 7 || r.hasAnomaly);
 
@@ -59,6 +60,7 @@ export function AdminDashboard() {
         </p>
       </div>
 
+      {stats && (<>
       {/* Key stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label={t('admin.dashboard.pendingReviews')} value={stats.pendingReviews} sub={t('admin.dashboard.clickToReview')} icon={ClipboardCheck}
@@ -92,6 +94,7 @@ export function AdminDashboard() {
           <div className="text-xs text-muted-foreground mt-0.5">{t('admin.dashboard.activeProjects')}</div>
         </div>
       </div>
+      </>)}
 
       {/* Urgent / anomaly reviews */}
       {urgentReviews.length > 0 && (
@@ -122,7 +125,8 @@ export function AdminDashboard() {
       {/* Desktop: two-column split for queue + projects */}
       <div className="lg:grid lg:grid-cols-5 lg:gap-6">
 
-        {/* Pending reviews preview */}
+        {/* Pending reviews preview — fall back to allReviews when dashboard endpoint is forbidden */}
+        {(() => { const displayReviews = pendingReviews.length > 0 ? pendingReviews : allReviews.slice(0, 10); return (
         <div className="lg:col-span-3">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-foreground">{t('admin.dashboard.reviewQueue')}</h3>
@@ -144,7 +148,7 @@ export function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {pendingReviews.map(r => (
+                {displayReviews.map(r => (
                   <tr key={r.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
                       <div className={`w-2 h-2 rounded-full ${r.priority === 'high' ? 'bg-red-500' : r.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}`} />
@@ -167,7 +171,7 @@ export function AdminDashboard() {
 
           {/* Mobile cards */}
           <div className="lg:hidden space-y-2">
-            {pendingReviews.map(r => (
+            {displayReviews.map(r => (
               <div key={r.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
                 <div className={`w-2 h-2 rounded-full shrink-0 ${r.priority === 'high' ? 'bg-red-500' : r.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}`} />
                 <div className="flex-1 min-w-0">
@@ -183,6 +187,7 @@ export function AdminDashboard() {
             ))}
           </div>
         </div>
+        ); })()}
 
         {/* Active projects */}
         <div className="lg:col-span-2 mt-6 lg:mt-0">

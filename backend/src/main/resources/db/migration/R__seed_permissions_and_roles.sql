@@ -101,6 +101,7 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_teacher', 'perm_organizations_manage'),
     ('role_teacher', 'perm_accounts_read'),
     ('role_teacher', 'perm_rules_read'),
+    ('role_teacher', 'perm_reports_read'),
     ('role_admin', 'perm_projects_read'),
     ('role_admin', 'perm_projects_create'),
     ('role_admin', 'perm_projects_update'),
