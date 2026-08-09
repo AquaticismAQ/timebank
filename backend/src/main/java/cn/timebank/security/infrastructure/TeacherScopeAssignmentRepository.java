@@ -8,4 +8,6 @@ import java.util.List;
 public interface TeacherScopeAssignmentRepository extends JpaRepository<TeacherScopeAssignment, String> {
 
     List<TeacherScopeAssignment> findByUserIdAndResourceType(String userId, String resourceType);
+
+    void deleteByUserId(String userId);
 }

@@ -6,7 +6,8 @@ import java.util.Set;
 /**
  * Response shape for `GET /users`, `/users/{id}`. Never carries a password
  * or password hash — MOCK_USERS' `password` field is exactly the shortcut
- * contract §13.3 says not to copy.
+ * contract §13.3 says not to copy. {@code scopeGradeIds} is always present
+ * (empty for a non-teacher, or a teacher with no grade bond yet).
  */
 public record UserDto(
         String id,
@@ -19,5 +20,20 @@ public record UserDto(
         Set<String> roleCodes,
         Long version,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        Set<String> scopeGradeIds) {
+
+    /**
+     * {@code UserServiceImpl} (module {@code iam}) can't populate this
+     * field itself — {@code security.application} already depends on
+     * {@code iam.application} (`UserDetailsServiceImpl`), so the reverse
+     * dependency would cycle the two modules' application layers. The web
+     * layer enriches the response with this copy helper instead, the same
+     * place {@code SessionRevocationService} is called from for the same
+     * reason (see {@code UserServiceImpl}'s class Javadoc).
+     */
+    public UserDto withScopeGradeIds(Set<String> scopeGradeIds) {
+        return new UserDto(id, username, displayName, email, studentId, status, preferredLanguage, roleCodes,
+                version, createdAt, updatedAt, scopeGradeIds);
+    }
 }

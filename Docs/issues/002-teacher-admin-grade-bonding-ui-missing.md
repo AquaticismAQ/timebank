@@ -1,6 +1,6 @@
 # 002 — No grade-bonding UI when creating a teacher/admin account
 
-Status: **Open**
+Status: **Fixed and live-verified** (2026-08-10)
 
 ## Symptom
 
@@ -76,5 +76,65 @@ responsible for — the concept doesn't exist in the account-creation form at al
 - Live: verify the Project Management grade picker still behaves identically after
   extraction (both edit and create flows, mobile and desktop viewport widths).
 
+## Resolution
+
+Resolved the open question: **admin's grade field is a static informational note,
+not an interactive picker** — since admin's unrestricted access is a hardcoded
+`grantAll` bypass (never reads scope rows), an interactive-but-inert control would
+look broken if unchecked and do nothing.
+
+- Extracted `GradePicker` (`frontend/src/app/components/GradePicker.tsx`) from the
+  duplicated inline JSX in `ProjectManagement.tsx` (both the edit and create-project
+  grade grids now use it) and reused it for the new teacher grade-bonding field in
+  `SystemAdmin.tsx`'s `UserModal`. Admin-only accounts show a static
+  `scopeGradesAdminNote` string instead of a picker.
+- `UserModal` requires at least one grade selected when `roles` includes `teacher`
+  before the form can submit (`errorGradeRequired`), satisfying this issue's own
+  acceptance criterion — full field-level backend validation (studentId/staffId,
+  uniqueness, etc.) stays issue 003's job.
+- **Backend module-boundary constraint discovered during implementation**:
+  `cn.timebank.security.application.UserDetailsServiceImpl` already depends on
+  `cn.timebank.iam.application.UserService`, so `UserServiceImpl` calling back into
+  `security.application` (to write/read `teacher_scope_assignment` rows) would
+  create an `iam` ↔ `security` application-layer cycle — the same problem the
+  existing code already solved for `SessionRevocationService` by keeping that call
+  at the **web** layer instead (see `UserServiceImpl`'s class Javadoc). Followed the
+  same pattern: added `TeacherScopeAssignmentService`
+  (`backend/src/main/java/cn/timebank/security/application/`, write side of B1.7's
+  mechanism — `DataScopeResolver` remains the read side), and `UserController`
+  (not `UserServiceImpl`) calls it after `create()`/`update()`, enriching the
+  response via a new `UserDto.withScopeGradeIds()` copy helper.
+- `replaceGradeScope` writes one row per grade per managed resource type
+  (`serviceRecords`, `eventProposals`, `students`, `accounts`, `cases` — the full
+  set any `ScopeFields` implementation exists for today) in one call, and clears
+  all of them (`Set.of()`) whenever a `PATCH` results in the account no longer
+  holding the `teacher` role.
+- `CreateUserRequest`/`UpdateUserRequest` gained `scopeGradeIds` via an added
+  non-canonical constructor overload (Java records support this) defaulting it to
+  empty/`null`, specifically so the ~16 existing test call sites across the backend
+  that construct these records didn't need touching.
+- `Docs/integration/APIContract.md` and `_CN.md` §4.15 updated with the new field's
+  semantics.
+- New live IT coverage: `backend/src/test/java/cn/timebank/iam/UserScopeBondingIT.java`
+  (create writes scope across every resource type, update replaces rather than
+  adds, removing the teacher role clears the bond, non-teacher roles ignore the
+  field, list responses are enriched per-row) — 5/5 pass against real MySQL.
+  Re-ran every other IT suite that constructs `CreateUserRequest`/`UpdateUserRequest`
+  (18 classes total across issues 001 and 002) to confirm the added constructor
+  overload didn't change existing behavior — all pass.
+- Deployed both backend and frontend to `https://tb.example.com/` and verified via
+  the real HTTP API: created a teacher account with `scopeGradeIds: ["grade_7"]`,
+  confirmed the response echoes it, then logged in as that exact new teacher and
+  confirmed `GET /students` returns only its 2 grade_7 students — proving issues
+  001 and 002 compose correctly end-to-end on live infrastructure, not just in
+  isolated tests. Also verified live: updating grades replaces rather than adds,
+  and removing the `teacher` role clears `scopeGradeIds` back to empty. Test
+  account deactivated afterward.
+- No browser/UI automation tool was available in this session, so the `UserModal`
+  form itself (grade picker rendering, the "at least one grade" client-side
+  validation, the admin static note) was verified by type-checked build
+  (`pnpm build`, clean) and by exercising the exact same HTTP requests the form
+  now sends — not by clicking through the deployed page in a real browser.
+
 ---
-*This document will be updated once the fix has been implemented and verified.*
+*Live-verified 2026-08-10 against `https://tb.example.com/`, except the browser-rendered form itself (no browser tool available this session).*

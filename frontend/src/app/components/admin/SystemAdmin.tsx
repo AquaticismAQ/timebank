@@ -6,6 +6,8 @@ import { useAuth, useLogs, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { OrganizationManagement } from './OrganizationManagement';
+import { GradePicker } from '../GradePicker';
+import { useDictionaries } from '../../api/useDictionaries';
 
 // ── Rule config types ──────────────────────────────────────────────────────
 
@@ -171,14 +173,15 @@ interface AdminUser {
   status: UserStatus;
   lastLogin: string;
   version: number;
+  scopeGradeIds: string[];
 }
 
 const INITIAL_USERS: AdminUser[] = [
-  { id: 'u1', name: 'Wei 陈老师', email: 'wei.chen@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-27', version: 1 },
-  { id: 'u2', name: 'Alex 林', email: 'alex.lin@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-26', version: 1 },
-  { id: 'u3', name: 'Mei 赵老师', email: 'mei.zhao@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-25', version: 1 },
-  { id: 'u4', name: 'Jordan', email: 'jordan@example-school.cn', roles: ['teacher', 'student'], status: 'active', lastLogin: '2026-07-24', version: 1 },
-  { id: 'u5', name: 'Nina 江', email: 'nina.jiang@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-20', version: 1 },
+  { id: 'u1', name: 'Wei 陈老师', email: 'wei.chen@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-27', version: 1, scopeGradeIds: [] },
+  { id: 'u2', name: 'Alex 林', email: 'alex.lin@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-26', version: 1, scopeGradeIds: [] },
+  { id: 'u3', name: 'Mei 赵老师', email: 'mei.zhao@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-25', version: 1, scopeGradeIds: [] },
+  { id: 'u4', name: 'Jordan', email: 'jordan@example-school.cn', roles: ['teacher', 'student'], status: 'active', lastLogin: '2026-07-24', version: 1, scopeGradeIds: [] },
+  { id: 'u5', name: 'Nina 江', email: 'nina.jiang@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-20', version: 1, scopeGradeIds: [] },
 ];
 
 
@@ -199,15 +202,19 @@ interface UserFormState {
   password: string;
   confirmPassword: string;
   showResetPwd: boolean;
+  scopeGradeIds: string[];
 }
 
 const emptyForm = (): UserFormState => ({
   name: '', email: '', roles: ['teacher'], status: 'active',
-  password: '', confirmPassword: '', showResetPwd: false,
+  password: '', confirmPassword: '', showResetPwd: false, scopeGradeIds: [],
 });
 
 function userToForm(u: AdminUser): UserFormState {
-  return { name: u.name, email: u.email, roles: [...u.roles], status: u.status, password: '', confirmPassword: '', showResetPwd: false };
+  return {
+    name: u.name, email: u.email, roles: [...u.roles], status: u.status,
+    password: '', confirmPassword: '', showResetPwd: false, scopeGradeIds: [...u.scopeGradeIds],
+  };
 }
 
 interface UserModalProps {
@@ -224,6 +231,7 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { grades } = useDictionaries();
 
   const set = (patch: Partial<UserFormState>) => setForm(prev => ({ ...prev, ...patch }));
 
@@ -231,10 +239,18 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
     set({ roles: form.roles.includes(role) ? form.roles.filter(r => r !== role) : [...form.roles, role] });
   };
 
+  const toggleScopeGrade = (gradeId: string) => {
+    set({ scopeGradeIds: form.scopeGradeIds.includes(gradeId) ? form.scopeGradeIds.filter(g => g !== gradeId) : [...form.scopeGradeIds, gradeId] });
+  };
+
+  const isTeacher = form.roles.includes('teacher');
+  const isAdminOnly = form.roles.includes('admin') && !isTeacher;
+
   const handleSave = () => {
     if (!form.name.trim()) { toast.error(t('admin.system.errorNameRequired')); return; }
     if (!form.email.trim() || !form.email.includes('@')) { toast.error(t('admin.system.errorEmailInvalid')); return; }
     if (form.roles.length === 0) { toast.error(t('admin.system.errorRoleRequired')); return; }
+    if (isTeacher && form.scopeGradeIds.length === 0) { toast.error(t('admin.system.errorGradeRequired')); return; }
     if (mode === 'create') {
       if (!form.password) { toast.error(t('admin.system.errorPasswordRequired')); return; }
       if (form.password.length < 6) { toast.error(t('admin.system.errorPasswordTooShort')); return; }
@@ -296,6 +312,21 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
               ))}
             </div>
           </div>
+
+          {/* Grade bonding (teacher: real & required; admin-only: informational) */}
+          {isTeacher && (
+            <div>
+              <label className="block text-xs text-muted-foreground mb-2">
+                {t('admin.system.scopeGradesLabel')} * ({t('admin.system.multiSelect')})
+              </label>
+              <GradePicker grades={grades} selected={form.scopeGradeIds} onToggle={toggleScopeGrade} />
+            </div>
+          )}
+          {isAdminOnly && (
+            <p className="text-xs text-muted-foreground bg-muted rounded-xl px-3 py-2.5">
+              {t('admin.system.scopeGradesAdminNote')}
+            </p>
+          )}
 
           {/* Status (edit only) */}
           {mode === 'edit' && (
@@ -442,7 +473,7 @@ export function SystemAdmin() {
         roles: u.roles.map(r => r.toLowerCase()) as UserRole[],
         status: (u.status as UserStatus) || 'active',
         lastLogin: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : '—',
-        version: u.version,
+        version: u.version, scopeGradeIds: u.scopeGradeIds,
       })));
     }).catch(() => {});
   }, []);
@@ -461,16 +492,19 @@ export function SystemAdmin() {
   const handleCreate = async (form: UserFormState) => {
     setSaving(true);
     try {
+      const isTeacher = form.roles.includes('teacher');
       const result = await api.users.create({
         username: form.email.split('@')[0],
         initialPassword: form.password,
         displayName: form.name.trim(),
         email: form.email.trim(),
         roleCodes: form.roles.map(r => r.toUpperCase()),
+        scopeGradeIds: isTeacher ? form.scopeGradeIds : undefined,
       });
       setUsers(prev => [...prev, {
         id: result.id, name: form.name.trim(), email: form.email.trim(),
         roles: form.roles, status: 'active', lastLogin: '—', version: 1,
+        scopeGradeIds: isTeacher ? form.scopeGradeIds : [],
       }]);
       addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logCreateUser'), target: `${form.name.trim()} (${form.email.trim()})`, category: 'system' });
       setCreateOpen(false);
@@ -487,19 +521,22 @@ export function SystemAdmin() {
     if (!editTarget) return;
     setSaving(true);
     try {
+      const isTeacher = form.roles.includes('teacher');
       await api.users.update(editTarget.id, {
         displayName: form.name.trim(),
         email: form.email.trim(),
         status: form.status,
         roleCodes: form.roles.map(r => r.toUpperCase()),
         version: editTarget.version,
+        scopeGradeIds: isTeacher ? form.scopeGradeIds : [],
       });
       if (form.showResetPwd && form.password) {
         const result = await api.users.resetPassword(editTarget.id);
         toast.success(t('admin.system.passwordReset') + (result.temporaryPassword ? `: ${result.temporaryPassword}` : ''));
       }
       setUsers(prev => prev.map(u => u.id === editTarget.id
-        ? { ...u, name: form.name.trim(), email: form.email.trim(), roles: form.roles, status: form.status, version: u.version + 1 }
+        ? { ...u, name: form.name.trim(), email: form.email.trim(), roles: form.roles, status: form.status, version: u.version + 1,
+            scopeGradeIds: isTeacher ? form.scopeGradeIds : [] }
         : u
       ));
       addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logEditUser'), target: `${form.name.trim()} (${form.email.trim()})`, category: 'system' });

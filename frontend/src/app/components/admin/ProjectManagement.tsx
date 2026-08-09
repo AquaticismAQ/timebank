@@ -14,6 +14,7 @@ import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { ProjectRegistrants } from './ProjectRegistrants';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
+import { GradePicker } from '../GradePicker';
 
 const colorMap: Record<string, string> = {
   gray:   'bg-muted text-muted-foreground',
@@ -249,18 +250,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
           {/* Eligible grades */}
           <section className="space-y-3 border-t border-border pt-4">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('admin.projects.eligibleGrades')}</p>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-              {grades.map(g => (
-                <button key={g.id} type="button" onClick={() => toggleGrade(g.id)}
-                  className={`w-full px-3 py-1.5 rounded-lg text-xs text-center border transition-colors ${
-                    form.eligibleGrades.includes(g.id)
-                      ? 'bg-[oklch(0.488_0.243_264.376)] text-white border-[oklch(0.488_0.243_264.376)]'
-                      : 'border-border text-muted-foreground hover:bg-accent'
-                  }`}>
-                  {g.name}
-                </button>
-              ))}
-            </div>
+            <GradePicker grades={grades} selected={form.eligibleGrades} onToggle={toggleGrade} />
           </section>
 
           {/* Evidence & status */}
@@ -739,19 +729,8 @@ export function ProjectManagement() {
               )}
               <div>
                 <label className={LABEL}>{t('admin.projects.eligibleGrades')}</label>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                  {grades.map(g => (
-                    <button key={g.id} type="button"
-                      onClick={() => setNewForm(f => ({ ...f, eligibleGrades: f.eligibleGrades.includes(g.id) ? f.eligibleGrades.filter(x => x !== g.id) : [...f.eligibleGrades, g.id] }))}
-                      className={`w-full px-3 py-1.5 rounded-lg text-xs text-center border transition-colors ${
-                        newForm.eligibleGrades.includes(g.id)
-                          ? 'bg-[oklch(0.488_0.243_264.376)] text-white border-[oklch(0.488_0.243_264.376)]'
-                          : 'border-border text-muted-foreground hover:bg-accent'
-                      }`}>
-                      {g.name}
-                    </button>
-                  ))}
-                </div>
+                <GradePicker grades={grades} selected={newForm.eligibleGrades}
+                  onToggle={g => setNewForm(f => ({ ...f, eligibleGrades: f.eligibleGrades.includes(g) ? f.eligibleGrades.filter(x => x !== g) : [...f.eligibleGrades, g] }))} />
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.evidenceReq')}</label>

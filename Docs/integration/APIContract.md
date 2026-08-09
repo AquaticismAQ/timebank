@@ -658,6 +658,17 @@ Imports must validate before commit. Duplicate imports are prevented by source f
 | `GET` | `/system/settings` | `settings.read` | System parameters |
 | `PATCH` | `/system/settings` | `settings.manage` | Update allowed parameters |
 
+`POST /users` / `PATCH /users/{id}` / the `GET /users` list response also carry
+`scopeGradeIds: string[]` (added 2026-08-10, issue 002) — the grade ids a
+`teacher`-role account is bonded to (`teacher_scope_assignment` rows, one per
+grade per resource type §11 acceptance scenario 8 already scopes: `serviceRecords`,
+`eventProposals`, `students`, `accounts`, `cases`). Only meaningful when
+`roleCodes` includes `teacher`: ignored on create for any other role, and
+automatically cleared if a `PATCH` removes the `teacher` role from an account.
+Not required for `admin` — an admin account's unrestricted access is a
+permission-level bypass, not scope data, so `scopeGradeIds` is always empty
+for admin-only accounts and the UI shows no grade picker for them.
+
 ### 4.16 School Info
 
 | Method | Path | Permission | Description |

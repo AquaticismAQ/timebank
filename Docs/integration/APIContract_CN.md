@@ -658,6 +658,14 @@ queued → running → succeeded
 | `GET` | `/system/settings` | `settings.read` | 系统参数 |
 | `PATCH` | `/system/settings` | `settings.manage` | 更新允许修改的参数 |
 
+`POST /users`、`PATCH /users/{id}` 以及 `GET /users` 列表响应均携带
+`scopeGradeIds: string[]`（2026-08-10 新增，issue 002）——`teacher` 角色账号所绑定的年级
+id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已启用数据范围的每个资源类型：
+`serviceRecords`、`eventProposals`、`students`、`accounts`、`cases`，每个年级每种资源类型各一条）。
+仅当 `roleCodes` 包含 `teacher` 时才有意义：创建时对其他角色一律忽略，且若 `PATCH` 将 `teacher`
+角色移除，该绑定会自动清空。`admin` 角色不需要此字段——管理员的全量访问是权限层面的绕过，而非数据范围
+记录，因此纯管理员账号的 `scopeGradeIds` 始终为空，界面上也不展示年级选择器。
+
 ### 4.16 学校信息
 
 | Method | Path | 权限 | 说明 |

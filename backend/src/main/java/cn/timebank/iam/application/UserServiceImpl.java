@@ -338,11 +338,13 @@ class UserServiceImpl implements UserService {
                 user.sessionTimeoutMinutes(defaultSessionTimeoutMinutes));
     }
 
+    // scopeGradeIds is always empty here — this module can't reach security.application
+    // (see UserDto.withScopeGradeIds); the web layer fills it in.
     private UserDto toDto(User user) {
         Set<String> roleCodes = user.getRoles().stream().map(Role::getCode).collect(Collectors.toCollection(LinkedHashSet::new));
         return new UserDto(user.getId(), user.getUsername(), user.getDisplayName(), user.getEmail(),
                 user.getStudentId(), user.getStatus().name(), user.getPreferredLanguage(), roleCodes,
-                user.getVersion(), user.getCreatedAt(), user.getUpdatedAt());
+                user.getVersion(), user.getCreatedAt(), user.getUpdatedAt(), Set.of());
     }
 
     /** Compact before/after summary for audit rows — never the entity itself (Design.md §13). */

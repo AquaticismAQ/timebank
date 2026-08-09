@@ -12,6 +12,7 @@ import cn.timebank.iam.application.dto.UserDirectoryEntryDto;
 import cn.timebank.iam.application.dto.UserDto;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.SessionRevocationService;
+import cn.timebank.security.application.TeacherScopeAssignmentService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,26 +30,35 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Set;
 
-/** Contract §4.15: `/users`. */
+/**
+ * Contract §4.15: `/users`. Also where {@code iam} and {@code security}'s
+ * application layers are allowed to meet — see {@code UserServiceImpl}'s
+ * class Javadoc and {@code UserDto.withScopeGradeIds} — so grade-bond
+ * reads/writes (issue 002) happen here, not in {@code UserServiceImpl}.
+ */
 @RestController
 @RequestMapping("/api/v1/users")
 public class UserController {
 
     private static final Set<String> SORTABLE = Set.of("id", "username", "displayName", "createdAt");
+    private static final String TEACHER_ROLE = "teacher";
 
     private final UserService userService;
     private final SessionRevocationService sessionRevocationService;
+    private final TeacherScopeAssignmentService teacherScopeAssignmentService;
 
-    public UserController(UserService userService, SessionRevocationService sessionRevocationService) {
+    public UserController(UserService userService, SessionRevocationService sessionRevocationService,
+                           TeacherScopeAssignmentService teacherScopeAssignmentService) {
         this.userService = userService;
         this.sessionRevocationService = sessionRevocationService;
+        this.teacherScopeAssignmentService = teacherScopeAssignmentService;
     }
 
     @GetMapping
     @PreAuthorize("hasAuthority('users.read')")
     public ApiResponse<List<UserDto>> list(PageQuery query) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<UserDto> page = userService.list(pageable);
+        Page<UserDto> page = userService.list(pageable).map(this::withScopeGradeIds);
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 
@@ -70,7 +80,12 @@ public class UserController {
     @PreAuthorize("hasAuthority('users.manage')")
     public ApiResponse<UserDto> create(@Valid @RequestBody CreateUserRequest request, Authentication auth) {
         String actorId = principalId(auth);
-        return ApiResponse.of(userService.create(request, actorId));
+        UserDto created = userService.create(request, actorId);
+        if (created.roleCodes().contains(TEACHER_ROLE)) {
+            Set<String> grades = request.scopeGradeIds() != null ? request.scopeGradeIds() : Set.of();
+            teacherScopeAssignmentService.replaceGradeScope(created.id(), grades);
+        }
+        return ApiResponse.of(withScopeGradeIds(created));
     }
 
     @PatchMapping("/{id}")
@@ -82,7 +97,15 @@ public class UserController {
         if ("INACTIVE".equals(request.status()) && !"INACTIVE".equals(before.status())) {
             sessionRevocationService.revokeAllSessionsForUser(updated.username());
         }
-        return ApiResponse.of(updated);
+        if (updated.roleCodes().contains(TEACHER_ROLE)) {
+            if (request.scopeGradeIds() != null) {
+                teacherScopeAssignmentService.replaceGradeScope(id, request.scopeGradeIds());
+            }
+        } else {
+            // Role changed away from teacher (or was never one) — clear any stale bond.
+            teacherScopeAssignmentService.replaceGradeScope(id, Set.of());
+        }
+        return ApiResponse.of(withScopeGradeIds(updated));
     }
 
     @PostMapping("/{id}/unlock")
@@ -102,5 +125,12 @@ public class UserController {
 
     private String principalId(Authentication auth) {
         return ((CookieSessionUserDetails) auth.getPrincipal()).id();
+    }
+
+    private UserDto withScopeGradeIds(UserDto dto) {
+        Set<String> grades = dto.roleCodes().contains(TEACHER_ROLE)
+                ? teacherScopeAssignmentService.gradesOf(dto.id())
+                : Set.of();
+        return dto.withScopeGradeIds(grades);
     }
 }
