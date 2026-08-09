@@ -18,6 +18,14 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     Optional<User> findByStudentId(String studentId);
 
+    boolean existsByStudentId(String studentId);
+
+    boolean existsByStudentIdAndIdNot(String studentId, String id);
+
+    boolean existsByStaffId(String staffId);
+
+    boolean existsByStaffIdAndIdNot(String staffId, String id);
+
     Page<User> findAll(Pageable pageable);
 
     /** {@code GET /users/directory} — capped by the caller's {@link Pageable}. */

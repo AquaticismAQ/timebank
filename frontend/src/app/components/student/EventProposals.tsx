@@ -9,7 +9,7 @@ import { api } from '../../api/client';
 import { newIdempotencyKey } from '../../api/http';
 import { useFieldErrors, FieldError, handleMutationError } from '../../api/useFieldErrors';
 import { usePagedApi } from '../../api/useApi';
-import { minutesToHours } from '../../lib/format';
+import { minutesToHours, formatGradeClass } from '../../lib/format';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { SearchPicker, CREATE_NEW_ID, type SearchPickerOption } from '../SearchPicker';
@@ -351,7 +351,7 @@ export function EventProposals() {
                   selected={formData.coOrganizerStudents}
                   onChange={opts => { fieldErrors.clearField('coOrganizerStudentIds'); setFormData(f => ({ ...f, coOrganizerStudents: opts })); }}
                   fetchOptions={async search => (await api.students.directory(search, user?.studentId))
-                    .map(s => ({ id: s.id, label: s.displayName, sublabel: `${s.gradeName} ${s.className}` }))}
+                    .map(s => ({ id: s.id, label: s.displayName, sublabel: formatGradeClass(s.gradeName, s.className) }))}
                   placeholder={t('student.proposals.coOrganizersPlaceholder')}
                   searchPlaceholder={t('student.proposals.searchStudents')}
                   noResultsLabel={t('student.proposals.noResults')}

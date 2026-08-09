@@ -1,6 +1,23 @@
+import i18n from '../../i18n';
+
 // Display formatters for the wire's canonical units (APIContract.md §2.1):
 // integer centi-coins and integer minutes. Convert in exactly these two
 // places — grep for direct `/ 100` or `/ 60` elsewhere before adding one.
+
+/**
+ * "Grade 10, Class A" (en) / "十年级A班" (zh). `grade`/`className` arrive
+ * from the API as independent, already-localized strings (never combined
+ * server-side, contract §2.10) — this is the one place they're joined, so
+ * every display location shows the same format instead of five slightly
+ * different inline template literals (issue 005). Chinese class names
+ * already carry a "班" (class/homeroom) suffix, so no separator word is
+ * needed there the way English needs "Class".
+ */
+export function formatGradeClass(grade: string, className: string): string {
+  if (!grade) return className;
+  if (!className) return grade;
+  return i18n.language.startsWith('zh') ? `${grade}${className}` : `${grade}, Class ${className}`;
+}
 
 /** `centi` is integer centi-coins (1 coin = 100 units). Trims trailing zeros: 600 -> "6", 650 -> "6.5". */
 export function formatCoins(centi: number): string {

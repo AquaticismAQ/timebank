@@ -8,6 +8,8 @@ import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { OrganizationManagement } from './OrganizationManagement';
 import { GradePicker } from '../GradePicker';
 import { useDictionaries } from '../../api/useDictionaries';
+import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
+import { formatGradeClass } from '../../lib/format';
 
 // ── Rule config types ──────────────────────────────────────────────────────
 
@@ -174,6 +176,8 @@ interface AdminUser {
   lastLogin: string;
   version: number;
   scopeGradeIds: string[];
+  studentId?: string;
+  staffId?: string;
 }
 
 const INITIAL_USERS: AdminUser[] = [
@@ -203,17 +207,21 @@ interface UserFormState {
   confirmPassword: string;
   showResetPwd: boolean;
   scopeGradeIds: string[];
+  studentId?: string;
+  staffId: string;
 }
 
 const emptyForm = (): UserFormState => ({
   name: '', email: '', roles: ['teacher'], status: 'active',
   password: '', confirmPassword: '', showResetPwd: false, scopeGradeIds: [],
+  studentId: undefined, staffId: '',
 });
 
 function userToForm(u: AdminUser): UserFormState {
   return {
     name: u.name, email: u.email, roles: [...u.roles], status: u.status,
     password: '', confirmPassword: '', showResetPwd: false, scopeGradeIds: [...u.scopeGradeIds],
+    studentId: u.studentId, staffId: u.staffId ?? '',
   };
 }
 
@@ -231,7 +239,19 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<SearchPickerOption[]>([]);
   const { grades } = useDictionaries();
+
+  // Editing an existing student-linked account: the picker needs a
+  // friendly label (name/grade/class), which the account list response
+  // doesn't carry (only the opaque studentId) — one lookup to seed it.
+  useEffect(() => {
+    if (initial.studentId) {
+      api.students.get(initial.studentId)
+        .then(s => setSelectedStudent([{ id: s.id, label: s.name, sublabel: formatGradeClass(s.grade, s.className) }]))
+        .catch(() => {});
+    }
+  }, [initial.studentId]);
 
   const set = (patch: Partial<UserFormState>) => setForm(prev => ({ ...prev, ...patch }));
 
@@ -244,13 +264,18 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
   };
 
   const isTeacher = form.roles.includes('teacher');
-  const isAdminOnly = form.roles.includes('admin') && !isTeacher;
+  const isAdmin = form.roles.includes('admin');
+  const isAdminOnly = isAdmin && !isTeacher;
+  const isStudent = form.roles.includes('student');
+  const needsStaffId = isTeacher || isAdmin;
 
   const handleSave = () => {
     if (!form.name.trim()) { toast.error(t('admin.system.errorNameRequired')); return; }
     if (!form.email.trim() || !form.email.includes('@')) { toast.error(t('admin.system.errorEmailInvalid')); return; }
     if (form.roles.length === 0) { toast.error(t('admin.system.errorRoleRequired')); return; }
     if (isTeacher && form.scopeGradeIds.length === 0) { toast.error(t('admin.system.errorGradeRequired')); return; }
+    if (isStudent && !form.studentId) { toast.error(t('admin.system.errorStudentLinkRequired')); return; }
+    if (needsStaffId && !form.staffId.trim()) { toast.error(t('admin.system.errorStaffIdRequired')); return; }
     if (mode === 'create') {
       if (!form.password) { toast.error(t('admin.system.errorPasswordRequired')); return; }
       if (form.password.length < 6) { toast.error(t('admin.system.errorPasswordTooShort')); return; }
@@ -326,6 +351,37 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
             <p className="text-xs text-muted-foreground bg-muted rounded-xl px-3 py-2.5">
               {t('admin.system.scopeGradesAdminNote')}
             </p>
+          )}
+
+          {/* Linked student (role = student): search-and-link to an existing
+              roster row rather than free-typing a second copy of grade/class/
+              student-number — the roster (CSV-imported) already owns those. */}
+          {isStudent && (
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1.5">
+                {t('admin.system.linkedStudentLabel')} *
+              </label>
+              <SearchPicker
+                selected={selectedStudent}
+                onChange={opts => { setSelectedStudent(opts); set({ studentId: opts[0]?.id }); }}
+                fetchOptions={async search => (await api.students.directory(search))
+                  .map(s => ({ id: s.id, label: s.displayName, sublabel: formatGradeClass(s.gradeName, s.className) }))}
+                placeholder={t('admin.system.linkedStudentPlaceholder')}
+                searchPlaceholder={t('admin.system.linkedStudentSearchPlaceholder')}
+                noResultsLabel={t('student.proposals.noResults')}
+                loadingLabel={t('common.loading')}
+              />
+            </div>
+          )}
+
+          {/* Staff ID (teacher or admin) */}
+          {needsStaffId && (
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.staffIdLabel')} *</label>
+              <input type="text" value={form.staffId} onChange={e => set({ staffId: e.target.value })}
+                placeholder={t('admin.system.staffIdPlaceholder')}
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+            </div>
           )}
 
           {/* Status (edit only) */}
@@ -474,6 +530,7 @@ export function SystemAdmin() {
         status: (u.status as UserStatus) || 'active',
         lastLogin: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : '—',
         version: u.version, scopeGradeIds: u.scopeGradeIds,
+        studentId: u.studentId, staffId: u.staffId,
       })));
     }).catch(() => {});
   }, []);
@@ -493,6 +550,8 @@ export function SystemAdmin() {
     setSaving(true);
     try {
       const isTeacher = form.roles.includes('teacher');
+      const needsStaffId = isTeacher || form.roles.includes('admin');
+      const isStudent = form.roles.includes('student');
       const result = await api.users.create({
         username: form.email.split('@')[0],
         initialPassword: form.password,
@@ -500,11 +559,15 @@ export function SystemAdmin() {
         email: form.email.trim(),
         roleCodes: form.roles.map(r => r.toUpperCase()),
         scopeGradeIds: isTeacher ? form.scopeGradeIds : undefined,
+        studentId: isStudent ? form.studentId : undefined,
+        staffId: needsStaffId ? form.staffId.trim() : undefined,
       });
       setUsers(prev => [...prev, {
         id: result.id, name: form.name.trim(), email: form.email.trim(),
         roles: form.roles, status: 'active', lastLogin: '—', version: 1,
         scopeGradeIds: isTeacher ? form.scopeGradeIds : [],
+        studentId: isStudent ? form.studentId : undefined,
+        staffId: needsStaffId ? form.staffId.trim() : undefined,
       }]);
       addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logCreateUser'), target: `${form.name.trim()} (${form.email.trim()})`, category: 'system' });
       setCreateOpen(false);
@@ -522,6 +585,8 @@ export function SystemAdmin() {
     setSaving(true);
     try {
       const isTeacher = form.roles.includes('teacher');
+      const needsStaffId = isTeacher || form.roles.includes('admin');
+      const isStudent = form.roles.includes('student');
       await api.users.update(editTarget.id, {
         displayName: form.name.trim(),
         email: form.email.trim(),
@@ -529,6 +594,8 @@ export function SystemAdmin() {
         roleCodes: form.roles.map(r => r.toUpperCase()),
         version: editTarget.version,
         scopeGradeIds: isTeacher ? form.scopeGradeIds : [],
+        studentId: isStudent ? form.studentId : undefined,
+        staffId: needsStaffId ? form.staffId.trim() : undefined,
       });
       if (form.showResetPwd && form.password) {
         const result = await api.users.resetPassword(editTarget.id);
@@ -536,7 +603,9 @@ export function SystemAdmin() {
       }
       setUsers(prev => prev.map(u => u.id === editTarget.id
         ? { ...u, name: form.name.trim(), email: form.email.trim(), roles: form.roles, status: form.status, version: u.version + 1,
-            scopeGradeIds: isTeacher ? form.scopeGradeIds : [] }
+            scopeGradeIds: isTeacher ? form.scopeGradeIds : [],
+            studentId: isStudent ? form.studentId : undefined,
+            staffId: needsStaffId ? form.staffId.trim() : undefined }
         : u
       ));
       addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logEditUser'), target: `${form.name.trim()} (${form.email.trim()})`, category: 'system' });

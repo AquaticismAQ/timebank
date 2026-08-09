@@ -669,6 +669,26 @@ Not required for `admin` — an admin account's unrestricted access is a
 permission-level bypass, not scope data, so `scopeGradeIds` is always empty
 for admin-only accounts and the UI shows no grade picker for them.
 
+`POST /users` / `PATCH /users/{id}` also carry `studentId: string | null` and
+`staffId: string | null` (added 2026-08-10, issue 003), both surfaced back in
+`GET /users` and the `PATCH` response:
+
+- `studentId` — only for `roleCodes` including `student`; required for that
+  role. Must be the id of an existing, not-already-linked
+  `Student` row (contract §4.9) — creating a student-role account does **not**
+  accept a free-typed grade/class/student-number; the client looks one up via
+  `GET /students/directory` and submits its id, the same picker pattern used
+  for a proposal's co-organizers/supervisor. Linking a `Student` already
+  linked to another account, or an unknown id, is a `409`/`400` respectively.
+- `staffId` — only for `roleCodes` including `teacher` or `admin`; required
+  for those roles. A free-text, school-assigned identifier (no existing
+  "staff roster" module to link against, unlike `studentId`) — must be unique
+  across accounts; a duplicate is a `409`.
+- Both follow the same partial-update convention as every other `PATCH`
+  field: omitted/`null` means "don't touch," present means "replace."
+- These required-ness rules are enforced at request-validation time, not
+  bean-level `@NotBlank`, since each is conditional on `roleCodes`.
+
 ### 4.16 School Info
 
 | Method | Path | Permission | Description |

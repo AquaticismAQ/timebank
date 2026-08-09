@@ -101,6 +101,9 @@ export const students: SeedStudent[] = [
   { studentNumber: '2025001', displayName: 'Sun Wenting', gradeId: 'grade_7', classId: 'class_7A', graduationYear: 2031, joinedAtOffsetDays: -30, email: 'sunwenting@example-school.cn' },
   { studentNumber: '2025002', displayName: 'Zhou Junjie', gradeId: 'grade_7', classId: 'class_7A', graduationYear: 2031, joinedAtOffsetDays: -30, email: 'zhoujunjie@example-school.cn' },
   { studentNumber: '2025003', displayName: 'Wu Yaqi', gradeId: 'grade_8', classId: 'class_8A', graduationYear: 2030, joinedAtOffsetDays: -335, email: 'wuyaqi@example-school.cn' },
+  // Issue 006: a student in the named (not single-letter) "Mils" class, proving
+  // display/filter logic handles an arbitrary-length className, not just "A"/"B".
+  { studentNumber: '2024006', displayName: 'Xu Ran', gradeId: 'grade_10', classId: 'class_10_mils', graduationYear: 2028, joinedAtOffsetDays: -700, email: 'xuran@example-school.cn' },
 ];
 
 // ── Projects ─────────────────────────────────────────────────────────────
@@ -378,5 +381,67 @@ export const eventProposals: SeedEventProposal[] = [
     safetyPlan: '', resourceNeeds: '', recruitmentPlan: '',
     proposedRecognizedMinutes: 120, evidencePlan: '',
     targetStatus: 'draft',
+  },
+];
+
+// Issue 006: the caseflow (appeals/corrections) module had zero seed data —
+// Case Review was empty on every live test. `IN_REVIEW` is deliberately
+// absent from CaseStatusTarget: CaseDecisionTransaction folds the implicit
+// SUBMITTED -> IN_REVIEW step into the same transaction as the real
+// decision, so it's never a resting state the real API can produce.
+export type CaseStatusTarget = 'draft' | 'submitted' | 'needsInformation' | 'resolved' | 'rejected';
+
+export interface SeedCase {
+  studentUsername: string;
+  /** Staff filing on the student's behalf (e.g. a teacher's manualCorrection); omit for the student filing their own. */
+  filedByUsername?: string;
+  type: 'appeal' | 'supplement' | 'manualCorrection';
+  subjectType?: string;
+  subjectId?: string;
+  title: string;
+  description?: string;
+  requestedAmountCentiCoins?: number;
+  reasonCode: string;
+  targetStatus: CaseStatusTarget;
+  reviewerUsername?: string;
+  decisionReasonCode?: string;
+  decisionComment?: string;
+}
+
+export const cases: SeedCase[] = [
+  {
+    studentUsername: 'student001', type: 'appeal', subjectType: 'serviceRecord',
+    title: 'Appeal: hours undercounted on library service record',
+    description: 'The approved record only credited 2 hours but I was there for 2.5 — the supervisor can confirm.',
+    reasonCode: 'DISPUTE_REJECTION', targetStatus: 'resolved', reviewerUsername: 'admin001',
+    decisionReasonCode: 'EVIDENCE_CONFIRMED', decisionComment: 'Confirmed with supervisor by phone, hours corrected.',
+  },
+  {
+    studentUsername: 'student002', type: 'appeal', subjectType: 'serviceRecord',
+    title: 'Appeal: record rejected without a documented reason',
+    description: 'My external service record was returned with no explanation of what was missing.',
+    // cases.decide is admin-only (role_teacher only holds cases.create/read) —
+    // unlike service-record/proposal reviews, a teacher can never be the reviewerUsername here.
+    reasonCode: 'DISPUTE_REJECTION', targetStatus: 'rejected', reviewerUsername: 'admin001',
+    decisionReasonCode: 'INSUFFICIENT_EVIDENCE', decisionComment: 'Original rejection was correct — no supervisor contact info provided.',
+  },
+  {
+    studentUsername: 'student001', type: 'supplement', subjectType: 'serviceRecord',
+    title: 'Supplement: missing evidence photo for approved activity',
+    description: 'Requesting to add the evidence photo I forgot to attach at submission time.',
+    reasonCode: 'MISSING_EVIDENCE', targetStatus: 'needsInformation', reviewerUsername: 'admin001',
+    decisionReasonCode: 'NEED_ORIGINAL_TIMESTAMP', decisionComment: 'Please resubmit with the photo\'s original (unedited) timestamp visible.',
+  },
+  {
+    studentUsername: 'student002', filedByUsername: 'teacher001', type: 'manualCorrection', subjectType: 'serviceRecord',
+    title: 'Manual correction: hours adjustment for miscounted shift',
+    description: 'Shift log shows 3 hours but the system only recorded 2 — filing on the student\'s behalf.',
+    requestedAmountCentiCoins: 100, reasonCode: 'LATE_SIGNOFF', targetStatus: 'submitted',
+  },
+  {
+    studentUsername: 'student001', type: 'supplement', subjectType: 'serviceRecord',
+    title: 'Supplement: additional context for a pending record',
+    description: 'Draft only — still gathering evidence before submitting.',
+    reasonCode: 'ADDITIONAL_CONTEXT', targetStatus: 'draft',
   },
 ];

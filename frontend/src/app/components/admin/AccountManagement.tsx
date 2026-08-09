@@ -3,22 +3,51 @@ import { useTranslation } from 'react-i18next';
 import { Search, ArrowUpRight, ArrowDownLeft, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { TRANSACTION_TYPE_LABELS } from '../../lib/statusLabels';
 import { type Student, type Account, type AccountTransaction } from '../../api/types';
-import { formatCoins, minutesToHours } from '../../lib/format';
+import { formatCoins, minutesToHours, formatGradeClass } from '../../lib/format';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
-import { usePermissions } from '../../App';
+import { usePermissions, useAuth } from '../../App';
 import { usePagedApi } from '../../api/useApi';
+import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 
 export function AccountManagement() {
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
+  const { user } = useAuth();
   const canManage = hasPermission('accounts.adjust');
-  const { items, page, loading, error, setPage, setSearch: setApiSearch, refetch } = usePagedApi<Student>(api.students.list, {});
+  const { items, page, loading, error, setPage, setSearch: setApiSearch, setFilter, refetch } = usePagedApi<Student>(api.students.list, {});
+  const { grades, classes } = useDictionaries();
   const [search, setSearch] = useState('');
+  const [filterGrade, setFilterGrade] = useState('all');
+  const [filterClass, setFilterClass] = useState('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const handleGradeChange = (value: string) => {
+    setFilterGrade(value);
+    setFilter('gradeId', value === 'all' ? undefined : value);
+    setFilterClass('all');
+    setFilter('classId', undefined);
+  };
+
+  const handleClassChange = (value: string) => {
+    setFilterClass(value);
+    setFilter('classId', value === 'all' ? undefined : value);
+  };
+
+  const availableGrades = useMemo(() => {
+    if (user && user.roles.includes('teacher') && !user.roles.includes('admin') && user.scopeGradeIds.length > 0) {
+      return grades.filter(g => user.scopeGradeIds.includes(g.id));
+    }
+    return grades;
+  }, [grades, user]);
+
+  const availableClasses = useMemo(
+    () => classes.filter(c => filterGrade === 'all' || c.gradeId === filterGrade),
+    [classes, filterGrade],
+  );
 
   const [balanceMap, setBalanceMap] = useState<Record<string, number>>({});
   const enrichWithBalances = useCallback(async (students: Student[]) => {
@@ -138,11 +167,23 @@ export function AccountManagement() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input type="text" value={search} onChange={e => handleSearchChange(e.target.value)} placeholder={t('admin.accounts.searchPlaceholder')}
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+      {/* Search + grade/class filters */}
+      <div className="flex flex-wrap gap-2">
+        <div className="relative flex-1 min-w-40">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input type="text" value={search} onChange={e => handleSearchChange(e.target.value)} placeholder={t('admin.accounts.searchPlaceholder')}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+        </div>
+        <select value={filterGrade} onChange={e => handleGradeChange(e.target.value)}
+          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+          <option value="all">{t('admin.students.allGrades')}</option>
+          {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select>
+        <select value={filterClass} onChange={e => handleClassChange(e.target.value)}
+          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+          <option value="all">{t('admin.students.allClasses')}</option>
+          {availableClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
       </div>
 
       <ListStateBanner error={error} empty={!loading && filtered.length === 0} emptyLabel="No students" />
@@ -162,7 +203,7 @@ export function AccountManagement() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-foreground font-medium">{student.name}</span>
-                    <span className="text-xs text-muted-foreground">{student.grade} {student.className}</span>
+                    <span className="text-xs text-muted-foreground">{formatGradeClass(student.grade, student.className)}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: ((student.completedMinutes ?? 0) / 60) * 2, redeemed: 0 })}</div>
                 </div>

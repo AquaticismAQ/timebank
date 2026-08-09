@@ -19,8 +19,8 @@
 import { spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
-  organizations, users, students, projects, serviceRecords, eventProposals,
-  type SeedProject, type SeedServiceRecord, type SeedEventProposal,
+  organizations, users, students, projects, serviceRecords, eventProposals, cases,
+  type SeedProject, type SeedServiceRecord, type SeedEventProposal, type SeedCase,
 } from './mock-data.ts';
 
 // ── Config ──────────────────────────────────────────────────────────────
@@ -260,7 +260,10 @@ async function main() {
       roleInserts.push(`INSERT INTO user_role (user_id, role_id) VALUES (${sqlString(id)}, ${sqlString(ROLE_ID[roleCode])});`);
     }
     for (const grade of u.scopeGrades ?? []) {
-      for (const resourceType of ['serviceRecords', 'eventProposals', 'students']) {
+      // Every resourceType TeacherScopeAssignmentServiceImpl's MANAGED_RESOURCE_TYPES
+      // covers (issue 002/006) — kept in sync so a hand-seeded teacher matches what
+      // the real account-creation form would produce.
+      for (const resourceType of ['serviceRecords', 'eventProposals', 'students', 'accounts', 'cases']) {
         scopeInserts.push(
           `INSERT INTO teacher_scope_assignment (id, user_id, resource_type, scope_type, scope_value, created_at) VALUES ` +
           `(${sqlString(genId('tsa'))}, ${sqlString(id)}, ${sqlString(resourceType)}, 'GRADE', ${sqlString(grade)}, ${now});`
@@ -369,6 +372,33 @@ async function main() {
       decision, reasonCode: p.reasonCode, comment: p.comment, proposalVersion: submitted.version,
     }, randomUUID());
     console.log(`  proposal "${p.title}" -> ${p.targetStatus} (by ${p.reviewerUsername})`);
+  }
+
+  console.log('== Phase 6: API — cases ==');
+  for (const c of cases as SeedCase[]) {
+    const filer = session(c.filedByUsername ?? c.studentUsername);
+    const student = session(c.studentUsername);
+    const created = await filer.request('POST', '/api/v1/cases', {
+      studentId: c.filedByUsername ? student.userId : undefined,
+      type: c.type, subjectType: c.subjectType, subjectId: c.subjectId,
+      title: c.title, description: c.description,
+      requestedAmountCentiCoins: c.requestedAmountCentiCoins, reasonCode: c.reasonCode,
+    });
+    if (c.targetStatus === 'draft') {
+      console.log(`  case "${c.title}" -> draft`);
+      continue;
+    }
+    const submitted = await filer.request('POST', `/api/v1/cases/${created.id}/submit`, undefined, randomUUID());
+    if (c.targetStatus === 'submitted') {
+      console.log(`  case "${c.title}" -> submitted`);
+      continue;
+    }
+    const reviewer = session(c.reviewerUsername!);
+    const decision = c.targetStatus === 'resolved' ? 'resolve' : c.targetStatus === 'rejected' ? 'reject' : 'requestInformation';
+    await reviewer.request('POST', `/api/v1/cases/${created.id}/decisions`, {
+      decision, reasonCode: c.decisionReasonCode ?? c.reasonCode, comment: c.decisionComment, caseVersion: submitted.version,
+    }, randomUUID());
+    console.log(`  case "${c.title}" -> ${c.targetStatus} (by ${c.reviewerUsername})`);
   }
 
   console.log('\n== Done ==');

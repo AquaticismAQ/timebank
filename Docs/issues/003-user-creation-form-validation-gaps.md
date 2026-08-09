@@ -1,6 +1,6 @@
 # 003 — User creation form missing required-field validation
 
-Status: **Open**
+Status: **Fixed and live-verified** (2026-08-10)
 
 ## Symptom
 
@@ -101,5 +101,61 @@ Confirmed via code inspection — none of this exists today, on either side:
   confirm rejection; attempt to submit a teacher account with no grade selected and
   confirm the form blocks it.
 
+## Resolution
+
+**Open question resolved**: creating a student-role account **links to an existing
+`Student` roster row** (search-and-pick via `SearchPicker`, same pattern as the
+co-organizer/supervisor pickers), rather than free-typing a new grade/class/
+student-number — avoids a second, independently-editable copy of data the CSV-
+imported roster already owns.
+
+- **Backend**: `V14__user_staff_id.sql` adds `user.staff_id` (new column) plus
+  unique constraints on both `staff_id` and the pre-existing (never-enforced-unique)
+  `student_id`. `CreateUserRequest`/`UpdateUserRequest` gained `studentId`/`staffId`
+  (via the same additive-constructor-overload trick as issue 002, so none of the ~16
+  existing test call sites needed touching). `UserServiceImpl.create()`/`update()`
+  validate a submitted `studentId` actually exists (reusing `StudentService
+  .displayNamesOf`'s existing "absent id means unknown" convention — no new method
+  needed) and that neither `studentId` nor `staffId` is already linked to a
+  different account.
+- **Required-ness lives in `UserController`, not `UserServiceImpl`**: each rule
+  ("teacher needs ≥1 grade," "student needs a linked studentId," "teacher/admin
+  needs a staffId") is conditional on `roleCodes`, and enforcing it in the service
+  would also apply to every existing IT test that calls `UserService` directly as a
+  fixture-setup shortcut without supplying every field a real submission would.
+  Real traffic always goes through the controller, so checking there is sufficient
+  — documented explicitly on `UserController` and `CreateUserRequest` so the
+  distinction doesn't get "fixed" into a regression later. `UserController.update()`
+  computes each field's *effective* value (request value if provided, else the
+  account's current value) before validating, so an unrelated edit (e.g. just
+  `displayName`) doesn't spuriously demand re-submitting fields that were already
+  set.
+- **Frontend**: `UserModal` gained a `staffId` text input (teacher/admin, required)
+  and a `SearchPicker`-based student-link field (student role, required) —
+  `frontend/src/app/api/client.ts`'s `students.get()` seeds the picker's label when
+  editing an already-linked account (one lookup, since the account list response
+  only carries the opaque `studentId`).
+- `Docs/integration/APIContract.md`/`_CN.md` §4.15 updated with both fields'
+  semantics.
+- New live IT coverage (`UserScopeBondingIT`, extended): staffId required for
+  teacher/admin, duplicate staffId rejected, student role requires a linked
+  student, unknown studentId rejected, linking an already-linked student rejected
+  — 11/11 pass against real MySQL (up from 5 after issue 002). Re-ran every IT
+  suite that constructs `CreateUserRequest`/`UpdateUserRequest` (18 classes across
+  issues 001-003) against real MySQL after a clean rebuild — all pass. (Two
+  suites — `AuthFlowIT`, `DataScopeResolverIT` — showed spurious failures on an
+  earlier non-`clean` run; a `mvn clean verify` rerun confirmed both pass 100%,
+  a stale-incremental-compile artifact, not a real regression — see the same
+  class of issue noted during issue 001's verification.)
+- Deployed both backend and frontend to `https://tb.example.com/` and live-verified
+  via the real HTTP API: created a teacher without a `staffId` (rejected, "staff
+  ID is required"), created two accounts with the same `staffId` (second rejected,
+  409), created a student-role account linked to a real roster row (`studentId`
+  echoed back correctly), and attempted to link the same student twice (second
+  rejected). No browser tool was available this session, so — as with issue 002 —
+  the rendered form itself (picker UI, inline validation) was verified via a clean
+  `tsc --noEmit` and by exercising the exact HTTP requests the form now sends, not
+  by clicking through the deployed page.
+
 ---
-*This document will be updated once the fix has been implemented and verified.*
+*Live-verified 2026-08-10 against `https://tb.example.com/`, except the browser-rendered form itself (no browser tool available this session).*

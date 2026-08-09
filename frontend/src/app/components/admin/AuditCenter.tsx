@@ -11,6 +11,7 @@ import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { EvidenceLink } from '../EvidenceLink';
 import { type EvidenceFile } from '../../api/types';
+import { formatGradeClass } from '../../lib/format';
 
 type SortKey = 'daysWaiting' | 'submittedAt' | 'durationMinutes';
 
@@ -260,7 +261,7 @@ export function AuditCenter() {
                           <div className={`w-2 h-2 rounded-full shrink-0 ${priorityColors[item.priority]}`} />
                           <div>
                             <div className="text-sm text-foreground">{item.studentName}</div>
-                            <div className="text-xs text-muted-foreground">{item.grade} {item.className}</div>
+                            <div className="text-xs text-muted-foreground">{formatGradeClass(item.grade, item.className)}</div>
                           </div>
                           {item.hasAnomaly && (
                             <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded">{t('admin.audit.anomaly')}</span>
@@ -322,7 +323,7 @@ export function AuditCenter() {
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <div className={`w-2 h-2 rounded-full shrink-0 ${priorityColors[item.priority]}`} />
                           <span className="text-sm text-foreground font-medium">{item.studentName}</span>
-                          <span className="text-xs text-muted-foreground">{item.grade} {item.className}</span>
+                          <span className="text-xs text-muted-foreground">{formatGradeClass(item.grade, item.className)}</span>
                           {item.hasAnomaly && (
                             <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                               <AlertTriangle className="w-3 h-3" /> {t('admin.audit.anomaly')}

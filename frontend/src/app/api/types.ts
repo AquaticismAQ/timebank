@@ -22,6 +22,8 @@ export interface User {
   roles: Role[];
   workspaces: ('student' | 'admin')[];
   studentId?: string;
+  /** Issue 004: this operator's own grade bond (empty for non-teacher accounts) — used to scope grade filter dropdowns to what they can actually see. */
+  scopeGradeIds: string[];
   email: string;
   avatar?: string;
   permissions?: string[];
@@ -459,6 +461,8 @@ export interface MeResponse {
     permissions: string[];
     /** `null` for staff accounts (teacher/admin/sysadmin) — added 2026-08-06 so the co-organizer picker can exclude "myself" without a second round trip. */
     studentId: string | null;
+    /** Issue 004: the operator's own grade bond, empty for non-teacher accounts — lets a filter dropdown narrow itself to what a scoped teacher can actually see. */
+    scopeGradeIds: string[];
   };
   workspaces: ('student' | 'admin')[];
   preferredLanguage: 'zh-CN' | 'en';

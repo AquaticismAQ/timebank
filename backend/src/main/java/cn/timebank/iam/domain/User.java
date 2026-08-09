@@ -25,9 +25,13 @@ import java.util.Set;
  * enum (Design.md §5 watch-out) — this entity only knows the {@link Role}
  * rows it has been assigned, not any fixed vocabulary of role names.
  *
- * {@code studentId} has no foreign key: the `student` table does not exist
- * until B2. It is a plain opaque reference, exactly as the contract
- * requires IDs to be treated everywhere else.
+ * {@code studentId} has no foreign key — {@code iam} validates its existence
+ * via {@code student}'s own application-layer service rather than a
+ * cross-module FK, the same modular-monolith boundary B0.2's ArchUnit rules
+ * enforce elsewhere. It is a plain opaque reference, exactly as the contract
+ * requires IDs to be treated everywhere else. {@code staffId} (issue 003)
+ * follows the identical pattern for teacher/admin accounts, with no
+ * referenced table to have a foreign key to in the first place.
  */
 @Entity
 @Table(name = "user")
@@ -57,6 +61,11 @@ public class User extends VersionedEntity {
     @Setter
     @Column(name = "student_id", length = 32)
     private String studentId;
+
+    /** Issue 003: required+unique for teacher/admin accounts, never set for student accounts. */
+    @Setter
+    @Column(name = "staff_id", length = 64)
+    private String staffId;
 
     @Setter
     @Enumerated(EnumType.STRING)

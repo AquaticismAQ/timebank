@@ -127,6 +127,7 @@ function meResponseToUser(me: MeResponse, username: string): User {
     roles: me.user.roles.map(r => roleMap[r.toLowerCase()] ?? 'admin') as Role[],
     workspaces: me.workspaces,
     studentId: me.user.studentId ?? undefined,
+    scopeGradeIds: me.user.scopeGradeIds ?? [],
     email: '',
     permissions: me.user.permissions,
     preferredLanguage: me.preferredLanguage,
@@ -901,22 +902,23 @@ export const api = {
   },
 
   users: {
-    async list(params?: ListParams): Promise<PageResult<{ id: string; username: string; displayName: string; email: string; roles: string[]; status: string; lastLoginAt?: string; version: number; scopeGradeIds: string[] }>> {
-      type UserDtoWire = { id: string; username: string; displayName: string; email: string; roles: { code: string }[]; status: string; lastLoginAt?: string; version: number; scopeGradeIds?: string[] };
+    async list(params?: ListParams): Promise<PageResult<{ id: string; username: string; displayName: string; email: string; roles: string[]; status: string; lastLoginAt?: string; version: number; scopeGradeIds: string[]; studentId?: string; staffId?: string }>> {
+      type UserDtoWire = { id: string; username: string; displayName: string; email: string; roles: { code: string }[]; status: string; lastLoginAt?: string; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string };
       const page = await http.getPage<UserDtoWire>('/users', buildListQuery(params));
       return {
         data: page.data.map(u => ({
           id: u.id, username: u.username, displayName: u.displayName, email: u.email,
           roles: u.roles.map(r => r.code), status: fromBackendEnum(u.status),
           lastLoginAt: u.lastLoginAt, version: u.version, scopeGradeIds: u.scopeGradeIds ?? [],
+          studentId: u.studentId, staffId: u.staffId,
         })),
         page: page.page,
       };
     },
-    async create(data: { username: string; initialPassword: string; displayName: string; email: string; roleCodes: string[]; preferredLanguage?: string; scopeGradeIds?: string[] }): Promise<{ id: string }> {
+    async create(data: { username: string; initialPassword: string; displayName: string; email: string; roleCodes: string[]; preferredLanguage?: string; scopeGradeIds?: string[]; studentId?: string; staffId?: string }): Promise<{ id: string }> {
       return http.post<{ id: string }>('/users', data);
     },
-    async update(id: string, data: { displayName?: string; email?: string; status?: string; roleCodes?: string[]; version: number; scopeGradeIds?: string[] }): Promise<void> {
+    async update(id: string, data: { displayName?: string; email?: string; status?: string; roleCodes?: string[]; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string }): Promise<void> {
       const body = { ...data, status: data.status ? toBackendEnum(data.status) : undefined };
       await http.patch<void>(`/users/${id}`, body);
     },

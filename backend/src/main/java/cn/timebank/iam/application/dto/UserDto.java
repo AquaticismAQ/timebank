@@ -15,6 +15,7 @@ public record UserDto(
         String displayName,
         String email,
         String studentId,
+        String staffId,
         String status,
         String preferredLanguage,
         Set<String> roleCodes,
@@ -33,7 +34,7 @@ public record UserDto(
      * reason (see {@code UserServiceImpl}'s class Javadoc).
      */
     public UserDto withScopeGradeIds(Set<String> scopeGradeIds) {
-        return new UserDto(id, username, displayName, email, studentId, status, preferredLanguage, roleCodes,
+        return new UserDto(id, username, displayName, email, studentId, staffId, status, preferredLanguage, roleCodes,
                 version, createdAt, updatedAt, scopeGradeIds);
     }
 }

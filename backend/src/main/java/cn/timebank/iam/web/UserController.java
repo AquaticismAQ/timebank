@@ -1,5 +1,6 @@
 package cn.timebank.iam.web;
 
+import cn.timebank.common.error.ApiException;
 import cn.timebank.common.pagination.PageQuery;
 import cn.timebank.common.pagination.PageableFactory;
 import cn.timebank.common.web.ApiResponse;
@@ -42,6 +43,8 @@ public class UserController {
 
     private static final Set<String> SORTABLE = Set.of("id", "username", "displayName", "createdAt");
     private static final String TEACHER_ROLE = "teacher";
+    private static final String ADMIN_ROLE = "admin";
+    private static final String STUDENT_ROLE = "student";
 
     private final UserService userService;
     private final SessionRevocationService sessionRevocationService;
@@ -79,11 +82,11 @@ public class UserController {
     @PostMapping
     @PreAuthorize("hasAuthority('users.manage')")
     public ApiResponse<UserDto> create(@Valid @RequestBody CreateUserRequest request, Authentication auth) {
+        requireRoleFields(request.roleCodes(), request.scopeGradeIds(), request.studentId(), request.staffId());
         String actorId = principalId(auth);
         UserDto created = userService.create(request, actorId);
         if (created.roleCodes().contains(TEACHER_ROLE)) {
-            Set<String> grades = request.scopeGradeIds() != null ? request.scopeGradeIds() : Set.of();
-            teacherScopeAssignmentService.replaceGradeScope(created.id(), grades);
+            teacherScopeAssignmentService.replaceGradeScope(created.id(), request.scopeGradeIds());
         }
         return ApiResponse.of(withScopeGradeIds(created));
     }
@@ -92,20 +95,47 @@ public class UserController {
     @PreAuthorize("hasAuthority('users.manage')")
     public ApiResponse<UserDto> update(@PathVariable String id, @Valid @RequestBody UpdateUserRequest request,
                                         Authentication auth) {
-        UserDto before = userService.getById(id);
+        UserDto before = withScopeGradeIds(userService.getById(id));
+        Set<String> effectiveRoles = request.roleCodes() != null ? request.roleCodes() : before.roleCodes();
+        Set<String> effectiveGrades = request.scopeGradeIds() != null ? request.scopeGradeIds() : before.scopeGradeIds();
+        String effectiveStudentId = request.studentId() != null ? request.studentId() : before.studentId();
+        String effectiveStaffId = request.staffId() != null ? request.staffId() : before.staffId();
+        requireRoleFields(effectiveRoles, effectiveGrades, effectiveStudentId, effectiveStaffId);
+
         UserDto updated = userService.update(id, request, principalId(auth));
         if ("INACTIVE".equals(request.status()) && !"INACTIVE".equals(before.status())) {
             sessionRevocationService.revokeAllSessionsForUser(updated.username());
         }
         if (updated.roleCodes().contains(TEACHER_ROLE)) {
-            if (request.scopeGradeIds() != null) {
-                teacherScopeAssignmentService.replaceGradeScope(id, request.scopeGradeIds());
-            }
+            teacherScopeAssignmentService.replaceGradeScope(id, effectiveGrades);
         } else {
             // Role changed away from teacher (or was never one) — clear any stale bond.
             teacherScopeAssignmentService.replaceGradeScope(id, Set.of());
         }
         return ApiResponse.of(withScopeGradeIds(updated));
+    }
+
+    /**
+     * Issue 003's required-ness rules — deliberately checked here, not in
+     * {@code CreateUserRequest}'s bean validation or {@code UserServiceImpl}:
+     * each rule is conditional on {@code roleCodes}, which plain
+     * per-field annotations can't express, and enforcing it in the service
+     * would also apply to the many existing IT tests that call
+     * {@code UserService} directly as a fixture-setup shortcut without
+     * supplying every field a real UI submission would (see
+     * {@code CreateUserRequest}'s Javadoc). Real traffic always goes
+     * through this controller, so checking here is sufficient.
+     */
+    private void requireRoleFields(Set<String> roleCodes, Set<String> scopeGradeIds, String studentId, String staffId) {
+        if (roleCodes.contains(TEACHER_ROLE) && (scopeGradeIds == null || scopeGradeIds.isEmpty())) {
+            throw ApiException.invalidRequest("At least one grade is required for a teacher account.");
+        }
+        if (roleCodes.contains(STUDENT_ROLE) && (studentId == null || studentId.isBlank())) {
+            throw ApiException.invalidRequest("A linked student is required for a student account.");
+        }
+        if ((roleCodes.contains(TEACHER_ROLE) || roleCodes.contains(ADMIN_ROLE)) && (staffId == null || staffId.isBlank())) {
+            throw ApiException.invalidRequest("A staff ID is required for teacher and admin accounts.");
+        }
     }
 
     @PostMapping("/{id}/unlock")

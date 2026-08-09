@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, ChevronDown, ChevronUp, Download, Upload, AlertCircle, Pencil, X, Save } from 'lucide-react';
 import { type Student } from '../../api/types';
-import { formatCoins, minutesToHours } from '../../lib/format';
+import { formatCoins, minutesToHours, formatGradeClass } from '../../lib/format';
 import { toast } from 'sonner';
 import { useAuth, useLogs } from '../../App';
 import { api } from '../../api/client';
@@ -43,6 +43,7 @@ export function StudentList() {
 
   const [search, setSearch] = useState('');
   const [filterGrade, setFilterGrade] = useState('all');
+  const [filterClass, setFilterClass] = useState('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'onTrack' | 'below50' | 'below25'>('all');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDesc, setSortDesc] = useState(false);
@@ -65,7 +66,24 @@ export function StudentList() {
 
   const [students, setStudents] = useState<Student[]>([]);
   // keep a local editable copy of the current page so admin edits reflect immediately without a refetch
-  useEffect(() => { setStudents(items); }, [items]);
+
+  // `GET /students` never carries a balance (StudentListItemDto has no such
+  // field — issue 006) — fetched separately and merged in, the same pattern
+  // AccountManagement.tsx already uses, rather than coupling the roster
+  // endpoint to account-ledger data.
+  const [balanceMap, setBalanceMap] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (items.length === 0) return;
+    api.accounts.list({ pageSize: 200 }).then(result => {
+      const map: Record<string, number> = {};
+      for (const acct of result.data) map[acct.studentId] = acct.balance;
+      setBalanceMap(map);
+    }).catch(() => {});
+  }, [items]);
+
+  useEffect(() => {
+    setStudents(items.map(s => ({ ...s, timeCoinBalance: balanceMap[s.id] ?? s.timeCoinBalance })));
+  }, [items, balanceMap]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -75,7 +93,30 @@ export function StudentList() {
   const handleGradeChange = (value: string) => {
     setFilterGrade(value);
     setFilter('gradeId', value === 'all' ? undefined : value);
+    // A class belongs to exactly one grade — a class selected under the
+    // previous grade is meaningless (or invalid) once the grade changes.
+    setFilterClass('all');
+    setFilter('classId', undefined);
   };
+
+  const handleClassChange = (value: string) => {
+    setFilterClass(value);
+    setFilter('classId', value === 'all' ? undefined : value);
+  };
+
+  // A scoped teacher's dropdown only offers the grades they're bonded to
+  // (issue 001/004) — an admin, or a teacher with no bond yet, sees every grade.
+  const availableGrades = useMemo(() => {
+    if (user && user.roles.includes('teacher') && !user.roles.includes('admin') && user.scopeGradeIds.length > 0) {
+      return grades.filter(g => user.scopeGradeIds.includes(g.id));
+    }
+    return grades;
+  }, [grades, user]);
+
+  const availableClasses = useMemo(
+    () => classes.filter(c => filterGrade === 'all' || c.gradeId === filterGrade),
+    [classes, filterGrade],
+  );
 
   const handleSortClick = (k: SortKey) => {
     const nextDesc = sortKey === k ? !sortDesc : false;
@@ -257,7 +298,12 @@ export function StudentList() {
         <select value={filterGrade} onChange={e => handleGradeChange(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.students.allGrades')}</option>
-          {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select>
+        <select value={filterClass} onChange={e => handleClassChange(e.target.value)}
+          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+          <option value="all">{t('admin.students.allClasses')}</option>
+          {availableClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
@@ -304,7 +350,7 @@ export function StudentList() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{student.grade} {student.className}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{formatGradeClass(student.grade, student.className)}</td>
                   <td className="px-4 py-3 min-w-32">
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
@@ -510,7 +556,7 @@ export function StudentList() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
                       <span className="text-sm text-foreground font-medium">{student.name}</span>
-                      <span className="text-xs text-muted-foreground">{student.grade} {student.className}</span>
+                      <span className="text-xs text-muted-foreground">{formatGradeClass(student.grade, student.className)}</span>
                       {atRisk && (
                         <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                           <AlertCircle className="w-3 h-3" /> {t('admin.students.critical')}

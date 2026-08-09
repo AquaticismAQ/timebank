@@ -20,6 +20,7 @@ import cn.timebank.iam.infrastructure.RoleRepository;
 import cn.timebank.iam.infrastructure.UserRepository;
 import cn.timebank.organization.application.FeatureFlagService;
 import cn.timebank.organization.application.dto.FeatureFlagsDto;
+import cn.timebank.student.application.StudentService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -57,6 +58,7 @@ class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
     private final FeatureFlagService featureFlagService;
+    private final StudentService studentService;
 
     private final int maxFailedAttempts;
     private final int lockoutDurationMinutes;
@@ -64,6 +66,7 @@ class UserServiceImpl implements UserService {
 
     UserServiceImpl(UserRepository userRepository, RoleRepository roleRepository,
                      PasswordEncoder passwordEncoder, AuditService auditService, FeatureFlagService featureFlagService,
+                     StudentService studentService,
                      @Value("${timebank.auth.lockout.max-failed-attempts:5}") int maxFailedAttempts,
                      @Value("${timebank.auth.lockout.duration-minutes:15}") int lockoutDurationMinutes,
                      @Value("${timebank.auth.session.default-timeout-minutes:480}") int defaultSessionTimeoutMinutes) {
@@ -72,6 +75,7 @@ class UserServiceImpl implements UserService {
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditService = auditService;
+        this.studentService = studentService;
         this.maxFailedAttempts = maxFailedAttempts;
         this.lockoutDurationMinutes = lockoutDurationMinutes;
         this.defaultSessionTimeoutMinutes = defaultSessionTimeoutMinutes;
@@ -101,11 +105,19 @@ class UserServiceImpl implements UserService {
         if (userRepository.existsByUsername(request.username())) {
             throw ApiException.stateConflict("Username is already taken.");
         }
+        if (request.studentId() != null) {
+            requireUnlinkedStudent(request.studentId(), null);
+        }
+        if (request.staffId() != null && userRepository.existsByStaffId(request.staffId())) {
+            throw ApiException.stateConflict("Staff ID is already in use.");
+        }
         Set<Role> roles = resolveRoles(request.roleCodes());
         Instant now = Instant.now();
         User user = new User(OpaqueIds.generate("usr"), request.username(),
                 passwordEncoder.encode(request.initialPassword()), request.displayName(), request.email(),
                 request.preferredLanguage() != null ? request.preferredLanguage() : "zh-CN", now);
+        user.setStudentId(request.studentId());
+        user.setStaffId(request.staffId());
         roles.forEach(user::addRole);
         userRepository.save(user);
 
@@ -133,6 +145,16 @@ class UserServiceImpl implements UserService {
         if (request.roleCodes() != null) {
             user.getRoles().clear();
             resolveRoles(request.roleCodes()).forEach(user::addRole);
+        }
+        if (request.studentId() != null) {
+            requireUnlinkedStudent(request.studentId(), user.getId());
+            user.setStudentId(request.studentId());
+        }
+        if (request.staffId() != null) {
+            if (userRepository.existsByStaffIdAndIdNot(request.staffId(), user.getId())) {
+                throw ApiException.stateConflict("Staff ID is already in use.");
+            }
+            user.setStaffId(request.staffId());
         }
         user.setUpdatedAt(Instant.now());
 
@@ -243,7 +265,7 @@ class UserServiceImpl implements UserService {
         Set<String> permissionCodes = permissionCodesOf(user);
         FeatureFlagsDto flags = featureFlagService.getFlags();
         return new MeResponse(
-                new MeResponse.UserSummary(user.getId(), user.getDisplayName(), roleCodes, permissionCodes, user.getStudentId()),
+                new MeResponse.UserSummary(user.getId(), user.getDisplayName(), roleCodes, permissionCodes, user.getStudentId(), Set.of()),
                 deriveWorkspaces(roleCodes),
                 user.getPreferredLanguage(),
                 new MeResponse.FeatureFlags(flags.pov(), flags.redemption(), flags.borrowing(), flags.appreciation()));
@@ -251,6 +273,26 @@ class UserServiceImpl implements UserService {
 
     private User findOrThrow(String id) {
         return userRepository.findById(id).orElseThrow(() -> ApiException.notFound("User not found."));
+    }
+
+    /**
+     * {@code excludeUserId} is {@code null} on create (nothing to exclude
+     * yet) or the account's own id on update (re-submitting its own current
+     * link isn't a conflict with itself). Existence uses {@link
+     * StudentService#displayNamesOf}, the same "absent id means it doesn't
+     * exist" convention that method's own Javadoc documents — no dedicated
+     * exists-by-id method needed.
+     */
+    private void requireUnlinkedStudent(String studentId, String excludeUserId) {
+        if (!studentService.displayNamesOf(List.of(studentId)).containsKey(studentId)) {
+            throw ApiException.invalidRequest("Unknown student: " + studentId);
+        }
+        boolean alreadyLinked = excludeUserId == null
+                ? userRepository.existsByStudentId(studentId)
+                : userRepository.existsByStudentIdAndIdNot(studentId, excludeUserId);
+        if (alreadyLinked) {
+            throw ApiException.stateConflict("This student is already linked to another account.");
+        }
     }
 
     private Set<Role> resolveRoles(Set<String> roleCodes) {
@@ -343,7 +385,7 @@ class UserServiceImpl implements UserService {
     private UserDto toDto(User user) {
         Set<String> roleCodes = user.getRoles().stream().map(Role::getCode).collect(Collectors.toCollection(LinkedHashSet::new));
         return new UserDto(user.getId(), user.getUsername(), user.getDisplayName(), user.getEmail(),
-                user.getStudentId(), user.getStatus().name(), user.getPreferredLanguage(), roleCodes,
+                user.getStudentId(), user.getStaffId(), user.getStatus().name(), user.getPreferredLanguage(), roleCodes,
                 user.getVersion(), user.getCreatedAt(), user.getUpdatedAt(), Set.of());
     }
 

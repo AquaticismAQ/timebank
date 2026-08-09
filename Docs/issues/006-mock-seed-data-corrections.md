@@ -1,6 +1,6 @@
 # 006 — Seed/mock data corrections and gaps
 
-Status: **Open**
+Status: **Fixed and live-verified** (2026-08-10)
 
 ## Symptom / findings
 
@@ -106,5 +106,60 @@ so the Case Review page has representative data to review/action.
   Accounts page and student-portal balances for `student001`/`student002`.
 - Live: open Case Review as `admin001`/`teacher001`, confirm seeded cases appear.
 
+## Resolution
+
+1. **StudentList.tsx balance**: fetches `api.accounts.list()` and merges by
+   `studentId` into the displayed rows, the same pattern `AccountManagement.tsx`
+   already used — chosen over teaching `StudentServiceImpl` about account-ledger
+   data, per the issue's own preference for (b).
+2. **teacher_scope_assignment resource-type coverage**: `integration-test/seed.ts`'s
+   scope-insert loop now covers all 5 resource types (`serviceRecords`,
+   `eventProposals`, `students`, `accounts`, `cases`) — `students` landed with
+   issue 001, `accounts`/`cases` added here, matching the full set
+   `TeacherScopeAssignmentServiceImpl.MANAGED_RESOURCE_TYPES` (issue 002) already
+   writes for any account created through the real admin UI, so a hand-seeded
+   teacher and a UI-created one are no longer inconsistent with each other.
+3. **Admin "all grades"**: confirmed no fix needed (already a permission-level
+   bypass, not scope data) — no seed-data change.
+4. **Case Review seed data**: added a `SeedCase`/`cases` fixture set to
+   `mock-data.ts` (5 cases covering every API-reachable status — `DRAFT`,
+   `SUBMITTED`, `NEEDS_INFORMATION`, `RESOLVED`, `REJECTED`; `IN_REVIEW` is
+   deliberately unreachable through the real API, since `CaseDecisionTransaction`
+   folds the implicit `SUBMITTED → IN_REVIEW` step into the same transaction as
+   the real decision) and a "Phase 6" driving loop in `seed.ts`, mirroring the
+   existing service-record/proposal phases' create → submit → decide shape. One
+   correction made from the issue's own draft while implementing: `role_teacher`
+   only holds `cases.create`/`cases.read`, never `cases.decide` (`admin` only) —
+   a case fixture "decided by teacher001" isn't actually reachable through the
+   real permission set, so all case decisions route through `admin001`.
+5. **"Mils" class fixture**: added `class_10_mils` (`name_en`/`name_zh` = `'Mils'`)
+   to `R__seed_base_data.sql` — a real dictionary entry (schools legitimately
+   sometimes name classes rather than letter them), not integration-test-only —
+   plus a roster student in it (`mock-data.ts`, student `2024006`).
+6. `STATUS.md` updated (`Current dataset status`, `Bug log`, `Fix history`) to
+   reflect all of the above and issues 001-005.
+
+**Applying to the already-seeded live server**: `seed.ts` is first-run-only and
+refuses to run against a server whose users/students already exist, so the new
+`cases`/`class_10_mils`/student-2024006 fixtures couldn't be applied via a normal
+`npm run seed` re-run. Applied directly instead — the `class_10_mils` student via
+one additive direct-SQL `INSERT` (same recipe `seed.ts`'s own student-insert phase
+uses), the 5 cases via the exact same real HTTP create→submit→decide calls
+`seed.ts`'s new Phase 6 would make, run by hand as `student001`/`student002`/
+`teacher001`/`admin001`. Both are byte-for-byte what a fresh `npm run seed` run
+would now produce from the committed fixtures.
+
+- Deployed backend + frontend to `https://tb.example.com/`. Live-verified via the
+  real API: `GET /accounts` confirms real nonzero balances exist for
+  `student001`/`student002` for `StudentList.tsx`'s new merge to pick up;
+  `GET /cases` returns exactly 5 cases spanning `DRAFT`/`SUBMITTED`/
+  `NEEDS_INFORMATION`/`RESOLVED`/`REJECTED`; `GET /students?filter[classId]=
+  class_10_mils` returns exactly the one `"Mils"`-class student with
+  `className: "Mils"` displaying correctly (see issue 004's/005's verification).
+- No browser tool was available this session — Case Review's and Student List's
+  actual rendered pages weren't screenshotted; verification is API-level
+  (confirming the data these pages already fetch from is now correct and
+  present), not a browser click-through.
+
 ---
-*This document will be updated once the fix has been implemented and verified.*
+*Live-verified 2026-08-10 against `https://tb.example.com/` (API-level). The rendered Case Review/Student List pages weren't screenshotted — no browser tool available this session.*

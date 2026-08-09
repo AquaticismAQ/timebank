@@ -1,6 +1,6 @@
 # 005 — Student grade/class displays as "Grade 9 Grade 9 B" instead of "Grade 10, Class A"
 
-Status: **Open**
+Status: **Fixed and live-verified** (2026-08-10)
 
 ## Symptom
 
@@ -72,5 +72,32 @@ the bug report's note and the separate request in
 - Live: check Student List, Accounts, Audit Center, and Dashboard all show the
   corrected, non-duplicated format for a student in every grade.
 
+## Resolution
+
+- `R__seed_base_data.sql`'s 12 class rows now store only the class label (`'A'`/
+  `'B'` en, `'A班'`/`'B班'` zh) — no grade prefix. Chinese keeps the "班"
+  (class/homeroom) suffix, which reads naturally without a separator; English
+  needs one, since its class label is now bare.
+- Since `R__` repeatable migrations use `INSERT IGNORE` (never touches rows that
+  already exist, even on a checksum-triggered rerun), added
+  `V15__fix_class_name_double_prefix.sql` — a plain one-time `UPDATE`, the first
+  data-correction migration in this repo (no `UPDATE`-based precedent existed;
+  every prior migration was pure DDL/`INSERT IGNORE`) — to retroactively correct
+  the 12 rows already sitting in the live server's database.
+- Added `formatGradeClass(grade, className)` to `frontend/src/app/lib/format.ts`
+  — language-aware (`i18n.language`), since the fix means English needs an
+  explicit ", Class " separator while Chinese reads correctly as direct
+  concatenation. Replaced **10 separate inline `{grade} {className}`-style
+  template literals** across 6 files (`StudentList.tsx`, `AccountManagement.tsx`,
+  `AuditCenter.tsx`, `AdminDashboard.tsx`, `SystemAdmin.tsx`'s two new pickers
+  from issue 003, and `EventProposals.tsx`'s co-organizer picker) with calls to
+  the one shared helper.
+- `tsc --noEmit` clean. `mvn test`/`mvn verify` (relevant IT suites) clean.
+- Deployed both backend and frontend to `https://tb.example.com/`. Live-verified via
+  the real API: `GET /students` now returns `className: "A"`/`"B"` (previously
+  `"Grade 9 B"` etc.) for every seeded student — confirmed across all six grades —
+  so `formatGradeClass` renders "Grade 9, Class B" correctly rather than
+  "Grade 9 Grade 9 B".
+
 ---
-*This document will be updated once the fix has been implemented and verified.*
+*Live-verified 2026-08-10 against `https://tb.example.com/` (API-level: corrected `className` field confirmed for every grade). The rendered display string itself wasn't screenshotted — no browser tool available this session.*

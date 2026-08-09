@@ -1,6 +1,6 @@
 # 004 — Grade/class filtering incomplete on high-volume admin list pages
 
-Status: **Open**
+Status: **Fixed and live-verified** (2026-08-10)
 
 ## Symptom
 
@@ -70,5 +70,34 @@ What's actually broken/missing, and likely what the report is really describing:
   correct narrowing; repeat on the accounts page.
 - Live: as `teacher001`, confirm the grade dropdown offers only grade_10.
 
+## Resolution
+
+- Added a class `<select>` to `StudentList.tsx` (options scoped to the selected
+  grade, reset to "all" whenever the grade changes — a class belongs to exactly
+  one grade) and both grade + class filters to `AccountManagement.tsx`, reusing
+  the identical `usePagedApi`/`setFilter` pattern already proven on Student List.
+- **Item 3 needed a new backend capability**: nothing exposed "the current
+  operator's own grade bond" before this — added `scopeGradeIds` to `GET /me`'s
+  response (`MeResponse.UserSummary`, enriched at the `MeController` layer for the
+  same `iam`/`security` module-cycle reason as issues 002/003's `UserDto`
+  enrichment). The frontend `User`/`AuthContext` type now carries it, and both
+  pages' grade dropdowns filter themselves to `user.scopeGradeIds` whenever the
+  logged-in account is a (non-admin) teacher with a non-empty bond — an admin, or
+  a teacher with no bond yet, still sees every grade.
+- `mvn test` clean; `tsc --noEmit` clean. No new backend IT test was added
+  specifically for this issue (the underlying scope-enrichment mechanism is
+  already covered by `UserScopeBondingIT` from issues 002/003 — `/me`'s
+  enrichment is the same `gradesOf()` call, just a different response shape).
+- Deployed both backend and frontend to `https://tb.example.com/`. Live-verified via
+  the real API: `GET /me` as `teacher001` returns `scopeGradeIds: ["grade_10"]`
+  (confirming the frontend dropdown will narrow correctly); `GET /students
+  ?filter[classId]=class_10_mils` (issue 006's new named-class fixture) correctly
+  narrows to exactly that one student, proving the class filter's plumbing works
+  end to end for an arbitrary (non-single-letter) class name, not just "A"/"B".
+- No browser tool was available this session — the actual rendered dropdowns
+  (options, disabled/reset behavior) were verified via a clean `tsc --noEmit` and
+  by confirming the API responses they're built from are correct, not by clicking
+  through the deployed page.
+
 ---
-*This document will be updated once the fix has been implemented and verified.*
+*Live-verified 2026-08-10 against `https://tb.example.com/`, except the browser-rendered dropdowns themselves (no browser tool available this session).*

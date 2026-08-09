@@ -666,6 +666,20 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
 角色移除，该绑定会自动清空。`admin` 角色不需要此字段——管理员的全量访问是权限层面的绕过，而非数据范围
 记录，因此纯管理员账号的 `scopeGradeIds` 始终为空，界面上也不展示年级选择器。
 
+`POST /users`、`PATCH /users/{id}` 还携带 `studentId: string | null` 与
+`staffId: string | null`（2026-08-10 新增，issue 003），并在 `GET /users` 及
+`PATCH` 响应中一并返回：
+
+- `studentId`——仅当 `roleCodes` 包含 `student` 时使用，该角色下为必填。必须是一个真实存在、
+  尚未被其他账号关联的 `Student` 记录 id（见 §4.9）——创建学生角色账号**不支持**直接填写新的
+  年级/班级/学号；前端通过 `GET /students/directory` 搜索并提交其 id，与提案共同组织者/指导教师
+  所用的选择器模式一致。关联一个已被其他账号占用的学生，或未知 id，将分别返回 `409`/`400`。
+- `staffId`——仅当 `roleCodes` 包含 `teacher` 或 `admin` 时使用，这两个角色下为必填。为自由文本、
+  由学校分配的标识符（不同于 `studentId`，没有可关联的"教职工名册"模块）——必须在所有账号间唯一，
+  重复将返回 `409`。
+- 二者遵循与其他 `PATCH` 字段相同的部分更新约定：省略/`null` 表示"不修改"，提供值表示"整体替换"。
+- 这些必填规则在请求校验阶段强制执行，而非 bean 级 `@NotBlank`，因为每条规则都依赖于 `roleCodes`。
+
 ### 4.16 学校信息
 
 | Method | Path | 权限 | 说明 |
