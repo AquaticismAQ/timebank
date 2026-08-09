@@ -260,7 +260,7 @@ async function main() {
       roleInserts.push(`INSERT INTO user_role (user_id, role_id) VALUES (${sqlString(id)}, ${sqlString(ROLE_ID[roleCode])});`);
     }
     for (const grade of u.scopeGrades ?? []) {
-      for (const resourceType of ['serviceRecords', 'eventProposals']) {
+      for (const resourceType of ['serviceRecords', 'eventProposals', 'students']) {
         scopeInserts.push(
           `INSERT INTO teacher_scope_assignment (id, user_id, resource_type, scope_type, scope_value, created_at) VALUES ` +
           `(${sqlString(genId('tsa'))}, ${sqlString(id)}, ${sqlString(resourceType)}, 'GRADE', ${sqlString(grade)}, ${now});`

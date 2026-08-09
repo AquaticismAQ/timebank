@@ -51,7 +51,7 @@ public class StudentController {
             PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<StudentListItemDto> page = studentService.list(pageable, query.filter("gradeId"), query.filter("classId"),
+        Page<StudentListItemDto> page = studentService.list(pageable, auth, query.filter("gradeId"), query.filter("classId"),
                 query.filter("status"), query.search(), resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
@@ -81,7 +81,7 @@ public class StudentController {
             Authentication auth) {
         CookieSessionUserDetails principal = (CookieSessionUserDetails) auth.getPrincipal();
         boolean sensitive = principal.hasPermission("students.manage") || id.equals(principal.studentId());
-        return ApiResponse.of(studentService.getDetail(id, sensitive, principal.id(), resolveLanguage(acceptLanguage, auth)));
+        return ApiResponse.of(studentService.getDetail(id, auth, sensitive, principal.id(), resolveLanguage(acceptLanguage, auth)));
     }
 
     @PostMapping
@@ -99,20 +99,20 @@ public class StudentController {
             @PathVariable String id, @Valid @RequestBody UpdateStudentRequest request,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
         CookieSessionUserDetails principal = (CookieSessionUserDetails) auth.getPrincipal();
-        return ApiResponse.of(studentService.update(id, request, principal.id(), resolveLanguage(acceptLanguage, auth)));
+        return ApiResponse.of(studentService.update(id, request, auth, principal.id(), resolveLanguage(acceptLanguage, auth)));
     }
 
     @PostMapping("/{id}/activate")
     @PreAuthorize("hasAuthority('students.manage')")
     public ApiResponse<Void> activate(@PathVariable String id, Authentication auth) {
-        studentService.activate(id, principalId(auth));
+        studentService.activate(id, auth, principalId(auth));
         return ApiResponse.of(null);
     }
 
     @PostMapping("/{id}/deactivate")
     @PreAuthorize("hasAuthority('students.manage')")
     public ApiResponse<Void> deactivate(@PathVariable String id, Authentication auth) {
-        studentService.deactivate(id, principalId(auth));
+        studentService.deactivate(id, auth, principalId(auth));
         return ApiResponse.of(null);
     }
 

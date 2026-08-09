@@ -7,6 +7,11 @@ import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.i18n.LocalizedNames;
 import cn.timebank.common.pagination.FilterSpecifications;
+import cn.timebank.security.application.CookieSessionUserDetails;
+import cn.timebank.security.application.DataScopeResolver;
+import cn.timebank.security.application.DataScopeSpecifications;
+import cn.timebank.security.application.ScopeDescriptor;
+import cn.timebank.security.application.TimeBankPrincipal;
 import cn.timebank.student.application.dto.StudentDetailDto;
 import cn.timebank.student.application.dto.StudentDirectoryEntryDto;
 import cn.timebank.student.application.dto.StudentListItemDto;
@@ -24,6 +29,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,29 +42,36 @@ import java.util.stream.Collectors;
 @Service
 class StudentServiceImpl implements StudentService {
 
+    private static final String RESOURCE_TYPE = "students";
+
     private final StudentRepository studentRepository;
     private final GradeRepository gradeRepository;
     private final SchoolClassRepository classRepository;
     private final AuditService auditService;
+    private final DataScopeResolver dataScopeResolver;
+    private final StudentScopeFields scopeFields = new StudentScopeFields();
 
     StudentServiceImpl(StudentRepository studentRepository, GradeRepository gradeRepository,
-                        SchoolClassRepository classRepository, AuditService auditService) {
+                        SchoolClassRepository classRepository, AuditService auditService,
+                        DataScopeResolver dataScopeResolver) {
         this.studentRepository = studentRepository;
         this.gradeRepository = gradeRepository;
         this.classRepository = classRepository;
         this.auditService = auditService;
+        this.dataScopeResolver = dataScopeResolver;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<StudentListItemDto> list(Pageable pageable, String gradeId, String classId, String status,
-                                          String search, String resolvedLanguage) {
-        Specification<Student> spec = FilterSpecifications.and(
+    public Page<StudentListItemDto> list(Pageable pageable, Authentication auth, String gradeId, String classId,
+                                          String status, String search, String resolvedLanguage) {
+        Specification<Student> scopeSpec = scopeSpecification(auth);
+        Specification<Student> filterSpec = FilterSpecifications.and(
                 FilterSpecifications.equalTo("gradeId", gradeId),
                 FilterSpecifications.equalTo("classId", classId),
                 FilterSpecifications.equalToEnum("status", StudentStatus.class, status),
                 FilterSpecifications.searchAnyContains(search, "displayName", "studentNumber"));
-        Page<Student> page = studentRepository.findAll(spec, pageable);
+        Page<Student> page = studentRepository.findAll(FilterSpecifications.and(scopeSpec, filterSpec), pageable);
         Map<String, Grade> grades = gradeRepository.findAll().stream()
                 .collect(Collectors.toMap(Grade::getId, Function.identity()));
         Map<String, SchoolClass> classes = classRepository.findAll().stream()
@@ -68,11 +81,25 @@ class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional
+    // Not readOnly: see the scoped overload below.
+    public StudentDetailDto getDetail(String id, boolean includeSensitiveFields, String actorId, String resolvedLanguage) {
+        Student student = studentRepository.findById(id).orElseThrow(() -> ApiException.notFound("Student not found."));
+        return toDetailDto(student, includeSensitiveFields, actorId, resolvedLanguage);
+    }
+
+    @Override
+    @Transactional
     // Not readOnly: a sensitive-field read conditionally writes an audit row
     // below, and that write must actually commit — a readOnly transaction
     // silently drops it (caught live via StudentPrivacyIT on real MySQL).
-    public StudentDetailDto getDetail(String id, boolean includeSensitiveFields, String actorId, String resolvedLanguage) {
-        Student student = findOrThrow(id);
+    public StudentDetailDto getDetail(String id, Authentication auth, boolean includeSensitiveFields, String actorId,
+                                       String resolvedLanguage) {
+        Student student = findInScopeOrThrow(idEquals(id), auth);
+        return toDetailDto(student, includeSensitiveFields, actorId, resolvedLanguage);
+    }
+
+    private StudentDetailDto toDetailDto(Student student, boolean includeSensitiveFields, String actorId,
+                                          String resolvedLanguage) {
         Grade grade = gradeRepository.findById(student.getGradeId())
                 .orElseThrow(() -> new IllegalStateException("Student references a missing grade"));
         SchoolClass schoolClass = classRepository.findById(student.getClassId())
@@ -114,13 +141,14 @@ class StudentServiceImpl implements StudentService {
 
         auditService.record(new AuditEntry(actorId, "students.manage", "student.create", "student", student.getId(),
                 null, new StudentSummaryForAudit(student), null));
-        return getDetail(student.getId(), true, actorId, resolvedLanguage);
+        return toDetailDto(student, true, actorId, resolvedLanguage);
     }
 
     @Override
     @Transactional
-    public StudentDetailDto update(String id, UpdateStudentRequest request, String actorId, String resolvedLanguage) {
-        Student student = findOrThrow(id);
+    public StudentDetailDto update(String id, UpdateStudentRequest request, Authentication auth, String actorId,
+                                    String resolvedLanguage) {
+        Student student = findInScopeOrThrow(idEquals(id), auth);
         ConcurrencyControl.checkVersion(student.getVersion(), request.version());
 
         StudentSummaryForAudit before = new StudentSummaryForAudit(student);
@@ -148,13 +176,13 @@ class StudentServiceImpl implements StudentService {
 
         auditService.record(new AuditEntry(actorId, "students.manage", "student.update", "student", student.getId(),
                 before, new StudentSummaryForAudit(student), null));
-        return getDetail(student.getId(), true, actorId, resolvedLanguage);
+        return toDetailDto(student, true, actorId, resolvedLanguage);
     }
 
     @Override
     @Transactional
-    public void activate(String id, String actorId) {
-        Student student = findOrThrow(id);
+    public void activate(String id, Authentication auth, String actorId) {
+        Student student = findInScopeOrThrow(idEquals(id), auth);
         student.setStatus(StudentStatus.ACTIVE);
         student.setUpdatedAt(Instant.now());
         auditService.record(new AuditEntry(actorId, "students.manage", "student.activate", "student", student.getId(),
@@ -163,8 +191,8 @@ class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional
-    public void deactivate(String id, String actorId) {
-        Student student = findOrThrow(id);
+    public void deactivate(String id, Authentication auth, String actorId) {
+        Student student = findInScopeOrThrow(idEquals(id), auth);
         student.setStatus(StudentStatus.INACTIVE);
         student.setUpdatedAt(Instant.now());
         auditService.record(new AuditEntry(actorId, "students.manage", "student.deactivate", "student", student.getId(),
@@ -206,8 +234,21 @@ class StudentServiceImpl implements StudentService {
         return schoolClass != null ? LocalizedNames.pick(resolvedLanguage, schoolClass.getNameZh(), schoolClass.getNameEn()) : "";
     }
 
-    private Student findOrThrow(String id) {
-        return studentRepository.findById(id).orElseThrow(() -> ApiException.notFound("Student not found."));
+    private Student findInScopeOrThrow(Specification<Student> idSpec, Authentication auth) {
+        Specification<Student> scopeSpec = scopeSpecification(auth);
+        Specification<Student> combined = scopeSpec == null ? idSpec : idSpec.and(scopeSpec);
+        return studentRepository.findOne(combined).orElseThrow(() -> ApiException.notFound("Student not found."));
+    }
+
+    private Specification<Student> idEquals(String id) {
+        return (root, query, cb) -> cb.equal(root.get("id"), id);
+    }
+
+    private Specification<Student> scopeSpecification(Authentication auth) {
+        TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
+        boolean grantAll = principal.roleCodes().contains("admin") || principal.roleCodes().contains("sysadmin");
+        ScopeDescriptor scope = dataScopeResolver.resolve(principal, RESOURCE_TYPE, grantAll);
+        return DataScopeSpecifications.apply(scope, scopeFields, principal.studentId());
     }
 
     private void requireGrade(String gradeId) {
