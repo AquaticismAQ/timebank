@@ -174,7 +174,12 @@ export interface Account {
   updatedAt: string;
 }
 
-/** Minutes-only on the wire (APIContract.md §2.1); derive hours for display via `minutesToHours`. `timeCoinBalance` is centi-coins. */
+/**
+ * Minutes-only on the wire (APIContract.md §2.1); derive hours for display via `minutesToHours`. `timeCoinBalance` is centi-coins.
+ * `grade` here is a pre-formatted display string (via `formatGradeClass`), unlike `Student.gradeLevel`/`className` elsewhere — this
+ * DTO has no backing endpoint of its own for grade/class (client.ts backfills it from a separate `/students/{id}` call), so there's
+ * no raw `gradeLevel` to expose alongside it worth the extra field.
+ */
 export interface StudentProgress {
   studentId: string;
   academicYear: string;
@@ -218,7 +223,7 @@ export interface Student {
   studentNumber: string;
   name: string;
   gradeId: string;
-  grade: string;
+  gradeLevel: number;
   classId: string;
   className: string;
   email: string;
@@ -240,7 +245,7 @@ export interface ReviewQueueItem {
   id: string;
   serviceRecordId: string;
   studentName: string;
-  grade: string;
+  gradeLevel: number;
   className: string;
   projectTitle?: string;
   organizationName: string;
@@ -298,7 +303,7 @@ export interface Grade {
   sequence: number;
 }
 
-/** `GET /classes` — `name` is already resolved server-side per `Accept-Language`. */
+/** `GET /classes` — `name` is raw, language-invariant data (issue 010), never localized. */
 export interface SchoolClass {
   id: string;
   code: string;
@@ -328,7 +333,7 @@ export interface ServiceCategory {
 export interface StudentDirectoryEntry {
   id: string;
   displayName: string;
-  gradeName: string;
+  gradeLevel: number;
   className: string;
 }
 

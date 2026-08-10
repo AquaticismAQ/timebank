@@ -43,9 +43,8 @@ public class AcademicStructureController {
 
     @GetMapping("/api/v1/classes")
     @PreAuthorize("isAuthenticated()")
-    public ApiResponse<List<ClassDto>> listClasses(
-            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
-        return ApiResponse.of(academicStructureService.listClasses(resolveLanguage(acceptLanguage, auth)));
+    public ApiResponse<List<ClassDto>> listClasses() {
+        return ApiResponse.of(academicStructureService.listClasses());
     }
 
     private String resolveLanguage(String acceptLanguage, Authentication auth) {

@@ -186,9 +186,23 @@ The web frontend ships in Chinese and English (default `zh-CN`). Localization is
 | Text class | Examples | Wire representation |
 | --- | --- | --- |
 | **Codes and enums** | `status`, `decision`, `type`, `sourceType`, `reasonCode`, `recognitionLevel`, `priority` | **Never localized.** The stable code is sent; the client owns the label and must fall back to rendering the raw code for values it does not recognize (§10.2) |
-| **Dictionary / base data** | Service categories, organization types, grades, classes, recognition tiers, rule names | Server-localized. The response carries both the stable identifier (`categoryId` / `code`) and the localized `name` for the resolved language. Clients key logic and styling off the identifier, never off `name` |
+| **Dictionary / base data** | Service categories, organization types, recognition tiers, rule names | Server-localized. The response carries both the stable identifier (`categoryId` / `code`) and the localized `name` for the resolved language. Clients key logic and styling off the identifier, never off `name` |
 | **User-authored content** | Project titles and descriptions, proposal fields, review comments, organization names, appeal text | Returned exactly as entered, in whatever language it was written. Never machine-translated, never stored once per language |
 | **Server-generated messages** | Notification `title`/`body`, error `message` | Rendered per request language. Notifications additionally carry `templateCode` and parameters so history re-renders correctly after a language switch, and so a client may localize independently |
+
+**Grades and classes are a deliberate exception to the dictionary row above** (issue
+010, `Docs/issues/010-grade-class-raw-storage-and-abbreviated-format.md`): neither is
+actually translated content. A grade number reads the same in every language (just
+formatted differently — "G10" vs. "十年级"), and a class label like "Mils" is a proper
+noun, never translated at all. `GET /grades` still returns a server-localized `name`
+(unchanged — genuine cross-module consumers depend on it: Project's eligible-grades
+display, Reports/CSV export), but every **student-linked** grade/class field
+(`StudentListItemDto`/`StudentDetailDto`/`StudentDirectoryEntryDto`/
+`ReviewQueueItemDto`) carries a raw `gradeLevel` (int, the grade number) and a raw,
+language-invariant `className` instead of a pre-localized `gradeName` string. `GET
+/classes`'s `name` is raw for the same reason — `class` has no other consumer. The
+client assembles the localized display string itself (`formatGradeClass` /
+`formatClassName`, `frontend/src/app/lib/format.ts`).
 
 **Language resolution order:** `Accept-Language` header → the principal's `preferredLanguage` → the school's default language. Requests with no usable match fall back rather than failing, and a missing dictionary translation falls back to the school's default language — a localized `name` is never `null` or empty.
 
@@ -556,7 +570,7 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 | `POST` | `/students/{id}/deactivate` | `students.manage` | Deactivate |
 | `GET` | `/students/{id}/progress` | Owner/`progress.read` | Progress tracking |
 | `GET` | `/students/{id}/service-records` | Owner/`students.read` | Service history |
-| `GET` | `/students/directory` | `students.read`/`directory.read` | Minimal `{id, displayName, gradeName, className}` search by name, for picking a co-organizer (added 2026-08-06, `Docs/clarification/01-i3-partner-school-terminology.md`) |
+| `GET` | `/students/directory` | `students.read`/`directory.read` | Minimal `{id, displayName, gradeLevel, className}` search by name, for picking a co-organizer (added 2026-08-06, `Docs/clarification/01-i3-partner-school-terminology.md`; `gradeName` became raw `gradeLevel` in issue 010) |
 | `GET` | `/academic-years` | Authenticated | Academic years |
 | `GET` | `/grades` | Authenticated | Grades |
 | `GET` | `/classes` | Authenticated | Classes |

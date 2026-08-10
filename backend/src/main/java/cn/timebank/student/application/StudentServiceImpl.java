@@ -5,7 +5,6 @@ import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
-import cn.timebank.common.i18n.LocalizedNames;
 import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.DataScopeResolver;
@@ -76,7 +75,7 @@ class StudentServiceImpl implements StudentService {
                 .collect(Collectors.toMap(Grade::getId, Function.identity()));
         Map<String, SchoolClass> classes = classRepository.findAll().stream()
                 .collect(Collectors.toMap(SchoolClass::getId, Function.identity()));
-        return page.map(s -> toListItem(s, grades, classes, resolvedLanguage));
+        return page.map(s -> toListItem(s, grades, classes));
     }
 
     @Override
@@ -113,8 +112,8 @@ class StudentServiceImpl implements StudentService {
         return new StudentDetailDto(
                 student.getId(), student.getStudentNumber(), student.getDisplayName(),
                 includeSensitiveFields ? student.getEmail() : null,
-                grade.getId(), LocalizedNames.pick(resolvedLanguage, grade.getNameZh(), grade.getNameEn()),
-                schoolClass.getId(), LocalizedNames.pick(resolvedLanguage, schoolClass.getNameZh(), schoolClass.getNameEn()),
+                grade.getId(), grade.getSequence(),
+                schoolClass.getId(), schoolClass.getName(),
                 student.getStatus().name(), student.getGraduationYear(),
                 includeSensitiveFields ? student.getGuardianName() : null,
                 includeSensitiveFields ? student.getGuardianContact() : null,
@@ -214,7 +213,7 @@ class StudentServiceImpl implements StudentService {
         Map<String, SchoolClass> classes = classRepository.findAll().stream()
                 .collect(Collectors.toMap(SchoolClass::getId, Function.identity()));
         return page.map(s -> new StudentDirectoryEntryDto(s.getId(), s.getDisplayName(),
-                gradeNameOf(s, grades, resolvedLanguage), classNameOf(s, classes, resolvedLanguage))).getContent();
+                gradeLevelOf(s, grades), classNameOf(s, classes))).getContent();
     }
 
     @Override
@@ -224,14 +223,14 @@ class StudentServiceImpl implements StudentService {
                 .collect(Collectors.toMap(Student::getId, Student::getDisplayName));
     }
 
-    private String gradeNameOf(Student s, Map<String, Grade> grades, String resolvedLanguage) {
+    private int gradeLevelOf(Student s, Map<String, Grade> grades) {
         Grade grade = grades.get(s.getGradeId());
-        return grade != null ? LocalizedNames.pick(resolvedLanguage, grade.getNameZh(), grade.getNameEn()) : "";
+        return grade != null ? grade.getSequence() : 0;
     }
 
-    private String classNameOf(Student s, Map<String, SchoolClass> classes, String resolvedLanguage) {
+    private String classNameOf(Student s, Map<String, SchoolClass> classes) {
         SchoolClass schoolClass = classes.get(s.getClassId());
-        return schoolClass != null ? LocalizedNames.pick(resolvedLanguage, schoolClass.getNameZh(), schoolClass.getNameEn()) : "";
+        return schoolClass != null ? schoolClass.getName() : "";
     }
 
     private Student findInScopeOrThrow(Specification<Student> idSpec, Authentication auth) {
@@ -263,14 +262,13 @@ class StudentServiceImpl implements StudentService {
         }
     }
 
-    private StudentListItemDto toListItem(Student s, Map<String, Grade> grades, Map<String, SchoolClass> classes,
-                                           String resolvedLanguage) {
+    private StudentListItemDto toListItem(Student s, Map<String, Grade> grades, Map<String, SchoolClass> classes) {
         Grade grade = grades.get(s.getGradeId());
         SchoolClass schoolClass = classes.get(s.getClassId());
         return new StudentListItemDto(
                 s.getId(), s.getStudentNumber(), s.getDisplayName(),
-                s.getGradeId(), grade != null ? LocalizedNames.pick(resolvedLanguage, grade.getNameZh(), grade.getNameEn()) : "",
-                s.getClassId(), schoolClass != null ? LocalizedNames.pick(resolvedLanguage, schoolClass.getNameZh(), schoolClass.getNameEn()) : "",
+                s.getGradeId(), grade != null ? grade.getSequence() : 0,
+                s.getClassId(), schoolClass != null ? schoolClass.getName() : "",
                 s.getStatus().name(), s.getGraduationYear(), s.getVersion());
     }
 

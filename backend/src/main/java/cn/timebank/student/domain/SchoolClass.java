@@ -28,11 +28,9 @@ public class SchoolClass {
     @Column(name = "code", length = 32, nullable = false)
     private String code;
 
-    @Column(name = "name_zh", length = 100, nullable = false)
-    private String nameZh;
-
-    @Column(name = "name_en", length = 100, nullable = false)
-    private String nameEn;
+    /** Raw class label only — never grade-prefixed, never locale-decorated (issue 010). */
+    @Column(name = "name", length = 100, nullable = false)
+    private String name;
 
     @Column(name = "grade_id", length = 32, nullable = false)
     private String gradeId;

@@ -45,8 +45,7 @@ public class ReviewQueueRepository {
         String where = scopeClause(scope, params) + filterClause(hasAnomaly, search, params);
 
         String sql = """
-                select sr.id, sr.student_id, sr.student_name, g.name_zh as grade_name_zh, g.name_en as grade_name_en,
-                       c.name_zh as class_name_zh, c.name_en as class_name_en,
+                select sr.id, sr.student_id, sr.student_name, g.sequence as grade_sequence, c.name as class_name,
                        sr.source_type, p.title as project_title, sr.organization_name,
                        sr.service_date, sr.duration_minutes,
                        sr.service_category_id, sc.name_zh, sc.name_en, sr.status, sr.submitted_at,
@@ -67,10 +66,11 @@ public class ReviewQueueRepository {
             boolean anomaly = rs.getBoolean("has_anomaly");
             long daysWaiting = submittedAt != null ? ChronoUnit.DAYS.between(submittedAt, Instant.now()) : 0;
             String priority = anomaly || daysWaiting > 3 ? "high" : daysWaiting > 1 ? "medium" : "low";
+            Integer gradeSequence = (Integer) rs.getObject("grade_sequence");
             return new ReviewQueueItemDto(
                     rs.getString("id"), rs.getString("student_id"), rs.getString("student_name"),
-                    LocalizedNames.pick(resolvedLanguage, rs.getString("grade_name_zh"), rs.getString("grade_name_en")),
-                    LocalizedNames.pick(resolvedLanguage, rs.getString("class_name_zh"), rs.getString("class_name_en")),
+                    gradeSequence != null ? gradeSequence : 0,
+                    rs.getString("class_name") != null ? rs.getString("class_name") : "",
                     rs.getString("source_type"), rs.getString("project_title"), rs.getString("organization_name"),
                     rs.getObject("service_date", LocalDate.class),
                     rs.getInt("duration_minutes"), rs.getString("service_category_id"),

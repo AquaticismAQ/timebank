@@ -29,15 +29,16 @@ import type {
 import { http, ApiError, buildListQuery, getWithEtag, withVersion, type PageResult } from './http';
 import { toBackendEnum, fromBackendEnum, type ListParams } from '../lib/pagination';
 import { localDateTimeToISO, isoToLocalDateTime } from '../lib/datetime';
+import { formatGradeClass } from '../lib/format';
 import { toast } from 'sonner';
 
 // Real StudentListItemDto/StudentDetailDto field names/casing genuinely
-// differ from the frontend Student shape (displayName not name, gradeName
+// differ from the frontend Student shape (displayName not name, gradeLevel
 // not grade, status is UPPER_SNAKE) — mapped here once, not passed through
 // raw (I1 finding: caught live as a `student.name[0]` crash before this fix).
 interface StudentListItemDtoWire {
   id: string; studentNumber: string; displayName: string;
-  gradeId: string; gradeName: string; classId: string; className: string;
+  gradeId: string; gradeLevel: number; classId: string; className: string;
   status: string; graduationYear: number; version: number;
   email?: string; guardianName?: string; guardianContact?: string; joinedAt?: string;
 }
@@ -106,7 +107,7 @@ function fromStudentDto(dto: StudentListItemDtoWire): Student {
     studentNumber: dto.studentNumber,
     name: dto.displayName,
     gradeId: dto.gradeId,
-    grade: dto.gradeName,
+    gradeLevel: dto.gradeLevel,
     classId: dto.classId,
     className: dto.className,
     email: dto.email ?? '',
@@ -616,7 +617,10 @@ export const api = {
         http.get<ProgressDtoWire>(`/students/${id}/progress`),
         this.get(id).catch(() => undefined),
       ]);
-      return { ...dto, academicYear: '', grade: student?.grade ?? '', byCategory: [] };
+      return {
+        ...dto, academicYear: '', byCategory: [],
+        grade: student ? formatGradeClass(student.gradeLevel, student.className) : '',
+      };
     },
     /**
      * A co-organizer picker's search (contract §4.9,

@@ -156,7 +156,7 @@ export function AdminDashboard() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-sm text-foreground">{r.studentName}</div>
-                      <div className="text-xs text-muted-foreground">{formatGradeClass(r.grade, r.className)}</div>
+                      <div className="text-xs text-muted-foreground">{formatGradeClass(r.gradeLevel, r.className)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{r.organizationName}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{r.durationMinutes / 60}h</td>
@@ -178,7 +178,7 @@ export function AdminDashboard() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm text-foreground">{r.studentName}</span>
-                    <span className="text-xs text-muted-foreground">{formatGradeClass(r.grade, r.className)}</span>
+                    <span className="text-xs text-muted-foreground">{formatGradeClass(r.gradeLevel, r.className)}</span>
                     {r.hasAnomaly && <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded">{t('admin.dashboard.anomaly')}</span>}
                   </div>
                   <div className="text-xs text-muted-foreground">{r.organizationName} · {r.durationMinutes / 60}h · {r.serviceDate}</div>

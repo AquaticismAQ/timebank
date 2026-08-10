@@ -15,30 +15,30 @@ INSERT IGNORE INTO grade (id, code, name_zh, name_en, sequence) VALUES
 INSERT IGNORE INTO academic_year (id, code, start_date, end_date, is_current, created_at, updated_at) VALUES
     ('ay_2025_2026', '2025-2026', '2025-09-01', '2026-08-31', 1, NOW(3), NOW(3));
 
--- Two classes (A/B) per grade for the current academic year. name_zh/name_en
--- are the class label ONLY — never grade-prefixed. gradeName and className
--- are independent fields a caller combines itself (contract §2.10); a
--- grade-prefixed class name double-prefixes once combined with grade.name
--- (issue 005 — "Grade 9 Grade 9 B"). name_zh keeps the "班" (class/homeroom)
--- suffix since that reads naturally in Chinese without a grade prefix.
-INSERT IGNORE INTO class (id, code, name_zh, name_en, grade_id, academic_year_id, created_at, updated_at) VALUES
-    ('class_6A', '6A', 'A班', 'A', 'grade_6', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_6B', '6B', 'B班', 'B', 'grade_6', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_7A', '7A', 'A班', 'A', 'grade_7', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_7B', '7B', 'B班', 'B', 'grade_7', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_8A', '8A', 'A班', 'A', 'grade_8', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_8B', '8B', 'B班', 'B', 'grade_8', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_9A', '9A', 'A班', 'A', 'grade_9', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_9B', '9B', 'B班', 'B', 'grade_9', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_10A', '10A', 'A班', 'A', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_10B', '10B', 'B班', 'B', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_11A', '11A', 'A班', 'A', 'grade_11', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_11B', '11B', 'B班', 'B', 'grade_11', 'ay_2025_2026', NOW(3), NOW(3)),
+-- Two classes (A/B) per grade for the current academic year. `name` is the raw
+-- class label ONLY — never grade-prefixed, never locale-decorated (issue 010:
+-- collapsed from name_zh/name_en, which duplicated a hand-written "班" suffix
+-- per row; the frontend now assembles the localized display string itself). A
+-- grade-prefixed class name double-prefixes once combined with grade display
+-- (issue 005 — "Grade 9 Grade 9 B") — `name` stays a bare label to avoid that.
+INSERT IGNORE INTO class (id, code, name, grade_id, academic_year_id, created_at, updated_at) VALUES
+    ('class_6A', '6A', 'A', 'grade_6', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_6B', '6B', 'B', 'grade_6', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_7A', '7A', 'A', 'grade_7', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_7B', '7B', 'B', 'grade_7', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_8A', '8A', 'A', 'grade_8', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_8B', '8B', 'B', 'grade_8', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_9A', '9A', 'A', 'grade_9', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_9B', '9B', 'B', 'grade_9', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_10A', '10A', 'A', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_10B', '10B', 'B', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_11A', '11A', 'A', 'grade_11', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_11B', '11B', 'B', 'grade_11', 'ay_2025_2026', NOW(3), NOW(3)),
     -- A named (not single-letter) class, same as some real schools use house/
     -- program names instead of A/B — issue 006: nothing in seed data or the
     -- fixed-width UI assumptions had ever exercised a className longer than
     -- one character before this.
-    ('class_10_mils', '10-Mils', 'Mils', 'Mils', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3));
+    ('class_10_mils', '10-Mils', 'Mils', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3));
 
 -- Service categories, matching the frontend mock's SERVICE_CATEGORIES.
 INSERT IGNORE INTO service_category (id, code, name_zh, name_en, active, created_at, updated_at) VALUES

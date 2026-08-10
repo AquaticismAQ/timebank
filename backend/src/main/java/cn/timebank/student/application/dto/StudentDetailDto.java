@@ -15,7 +15,7 @@ public record StudentDetailDto(
         String displayName,
         String email,
         String gradeId,
-        String gradeName,
+        int gradeLevel,
         String classId,
         String className,
         String status,

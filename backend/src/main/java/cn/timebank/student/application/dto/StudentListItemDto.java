@@ -11,7 +11,7 @@ public record StudentListItemDto(
         String studentNumber,
         String displayName,
         String gradeId,
-        String gradeName,
+        int gradeLevel,
         String classId,
         String className,
         String status,

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Search, ArrowUpRight, ArrowDownLeft, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { TRANSACTION_TYPE_LABELS } from '../../lib/statusLabels';
 import { type Student, type Account, type AccountTransaction } from '../../api/types';
-import { formatCoins, minutesToHours, formatGradeClass } from '../../lib/format';
+import { formatCoins, minutesToHours, formatGradeClass, formatClassName } from '../../lib/format';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
@@ -182,7 +182,7 @@ export function AccountManagement() {
         <select value={filterClass} onChange={e => handleClassChange(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.students.allClasses')}</option>
-          {availableClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {availableClasses.map(c => <option key={c.id} value={c.id}>{formatClassName(c.name)}</option>)}
         </select>
       </div>
 
@@ -203,7 +203,7 @@ export function AccountManagement() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-foreground font-medium">{student.name}</span>
-                    <span className="text-xs text-muted-foreground">{formatGradeClass(student.grade, student.className)}</span>
+                    <span className="text-xs text-muted-foreground">{formatGradeClass(student.gradeLevel, student.className)}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: ((student.completedMinutes ?? 0) / 60) * 2, redeemed: 0 })}</div>
                 </div>

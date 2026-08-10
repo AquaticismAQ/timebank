@@ -13,5 +13,5 @@ public interface AcademicStructureService {
 
     List<GradeDto> listGrades(String resolvedLanguage);
 
-    List<ClassDto> listClasses(String resolvedLanguage);
+    List<ClassDto> listClasses();
 }

@@ -56,12 +56,12 @@ class AcademicStructureServiceImpl implements AcademicStructureService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = CacheConfig.DICTIONARIES, key = "'classes:' + #resolvedLanguage")
-    public List<ClassDto> listClasses(String resolvedLanguage) {
+    // No language dimension in the cache key (unlike listGrades): class.name is raw,
+    // language-invariant data now (issue 010), not picked via Accept-Language.
+    @Cacheable(value = CacheConfig.DICTIONARIES, key = "'classes'")
+    public List<ClassDto> listClasses() {
         return classRepository.findAll().stream()
-                .map(c -> new ClassDto(c.getId(), c.getCode(),
-                        LocalizedNames.pick(resolvedLanguage, c.getNameZh(), c.getNameEn()),
-                        c.getGradeId(), c.getAcademicYearId()))
+                .map(c -> new ClassDto(c.getId(), c.getCode(), c.getName(), c.getGradeId(), c.getAcademicYearId()))
                 .toList();
     }
 }

@@ -12,7 +12,20 @@ import org.springframework.security.core.Authentication;
 import java.util.List;
 import java.util.Map;
 
-/** The `student` module's published interface (Design.md §6). */
+/**
+ * The `student` module's published interface (Design.md §6).
+ *
+ * <p>{@code resolvedLanguage} is threaded through every method below even
+ * though grade/class are no longer localized here (issue 010 — {@code
+ * StudentDetailDto}/{@code StudentListItemDto}/{@code
+ * StudentDirectoryEntryDto} carry a raw {@code gradeLevel} int and a raw,
+ * language-invariant {@code className} now). Kept rather than removed: ~20
+ * call sites across unrelated modules and test suites pass this parameter,
+ * and nothing in those callers' behavior depends on grade/class naming —
+ * ripping it out is pure signature churn unrelated to issue 010's actual
+ * bug. Reconsider if this interface's next real change also touches every
+ * call site anyway.
+ */
 public interface StudentService {
 
     /**

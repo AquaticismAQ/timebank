@@ -2,6 +2,7 @@ package cn.timebank.student;
 
 import cn.timebank.organization.application.RequestLanguageService;
 import cn.timebank.student.application.AcademicStructureService;
+import cn.timebank.student.application.dto.ClassDto;
 import cn.timebank.student.application.dto.GradeDto;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
@@ -17,8 +18,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * B2.5's exit criterion, proven against real MySQL: the same request,
  * distinguished only by {@code Accept-Language}, returns identically-coded
- * rows with different display names, and a missing translation falls back
- * rather than going null/empty.
+ * grade rows with different display names, and a missing translation falls
+ * back rather than going null/empty. Classes are deliberately NOT part of
+ * that anymore (issue 010): {@code class.name} collapsed to a single raw,
+ * language-invariant column, so {@link #classesAreLanguageInvariant()} below
+ * proves the opposite property for classes on purpose.
  */
 class LocalizationIT extends AbstractIntegrationTest {
 
@@ -56,6 +60,19 @@ class LocalizationIT extends AbstractIntegrationTest {
         List<GradeDto> en = academicStructureService.listGrades("en");
         assertThat(zh).allSatisfy(g -> assertThat(g.name()).isNotBlank());
         assertThat(en).allSatisfy(g -> assertThat(g.name()).isNotBlank());
+    }
+
+    @Test
+    void classesAreLanguageInvariant() {
+        List<ClassDto> classes = academicStructureService.listClasses();
+
+        assertThat(classes).isNotEmpty();
+        assertThat(classes).allSatisfy(c -> assertThat(c.name()).isNotBlank());
+        // Bare raw labels — no baked-in "班" suffix, no grade prefix (issue 005/010).
+        ClassDto classA = classes.stream().filter(c -> c.id().equals("class_10A")).findFirst().orElseThrow();
+        assertThat(classA.name()).isEqualTo("A");
+        ClassDto classMils = classes.stream().filter(c -> c.id().equals("class_10_mils")).findFirst().orElseThrow();
+        assertThat(classMils.name()).isEqualTo("Mils");
     }
 
     @Test

@@ -186,9 +186,20 @@ Web 前端提供中文与英文两种界面（默认 `zh-CN`）。本地化的�
 | 文本类型 | 示例 | 传输表示 |
 | --- | --- | --- |
 | **代码与枚举** | `status`、`decision`、`type`、`sourceType`、`reasonCode`、`recognitionLevel`、`priority` | **永不本地化**。下发稳定代码，标签由客户端负责；对不认识的值必须兜底展示原始代码（§10.2） |
-| **字典/基础数据** | 服务类别、组织类型、年级、班级、荣誉等级、规则名称 | 服务端本地化。响应同时携带稳定标识（`categoryId` / `code`）与所解析语言的 `name`。客户端的逻辑与样式一律以标识为准，不得依赖 `name` |
+| **字典/基础数据** | 服务类别、组织类型、荣誉等级、规则名称 | 服务端本地化。响应同时携带稳定标识（`categoryId` / `code`）与所解析语言的 `name`。客户端的逻辑与样式一律以标识为准，不得依赖 `name` |
 | **用户撰写内容** | 项目标题与描述、提案字段、审核意见、组织名称、复核陈述 | 按录入原样返回，录入什么语言就是什么语言。不做机器翻译，不按语言重复存储 |
 | **服务端生成文案** | 通知 `title`/`body`、错误 `message` | 按请求语言渲染。通知另外携带 `templateCode` 与参数，使切换语言后历史通知能重新正确渲染，也允许客户端自行本地化 |
+
+**年级与班级是上述字典行的刻意例外**（issue 010，见
+`Docs/issues/010-grade-class-raw-storage-and-abbreviated-format.md`）：两者其实都不是
+被翻译的内容。年级数字在每种语言下含义相同（只是格式不同——"G10" 对比"十年级"），而班级
+名称（如 "Mils"）是专有名词，从不翻译。`GET /grades` 仍下发服务端本地化的 `name`（未变
+——Project 的可报名年级展示、Reports/CSV 导出等确有跨模块依赖），但每个**与学生关联**的
+年级/班级字段（`StudentListItemDto`/`StudentDetailDto`/`StudentDirectoryEntryDto`/
+`ReviewQueueItemDto`）携带的是原始 `gradeLevel`（int，年级数字）与原始的、与语言无关的
+`className`，而不再是预先本地化的 `gradeName` 字符串。`GET /classes` 的 `name` 同理为原
+始值——`class` 没有其他消费方。本地化展示字符串由客户端自行拼装
+（`formatGradeClass` / `formatClassName`，`frontend/src/app/lib/format.ts`）。
 
 **语言解析顺序：** `Accept-Language` 请求头 → 当前用户的 `preferredLanguage` → 学校默认语言。无法匹配时降级而不是报错；字典项缺少某语言译文时降级到学校默认语言——本地化 `name` 永不为 `null` 或空串。
 
@@ -556,7 +567,7 @@ queued → running → succeeded
 | `POST` | `/students/{id}/deactivate` | `students.manage` | 停用 |
 | `GET` | `/students/{id}/progress` | 本人/`progress.read` | 达标进度 |
 | `GET` | `/students/{id}/service-records` | 本人/`students.read` | 服务历史 |
-| `GET` | `/students/directory` | `students.read`/`directory.read` | 按姓名搜索，返回精简的 `{id, displayName, gradeName, className}`，用于挑选共同组织者（2026-08-06 新增，见 `Docs/clarification/01-i3-partner-school-terminology.md`） |
+| `GET` | `/students/directory` | `students.read`/`directory.read` | 按姓名搜索，返回精简的 `{id, displayName, gradeLevel, className}`，用于挑选共同组织者（2026-08-06 新增，见 `Docs/clarification/01-i3-partner-school-terminology.md`；`gradeName` 已在 issue 010 中改为原始的 `gradeLevel`） |
 | `GET` | `/academic-years` | 已登录 | 学年 |
 | `GET` | `/grades` | 已登录 | 年级 |
 | `GET` | `/classes` | 已登录 | 班级 |

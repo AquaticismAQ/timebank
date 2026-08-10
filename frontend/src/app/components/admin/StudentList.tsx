@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, ChevronDown, ChevronUp, Download, Upload, AlertCircle, Pencil, X, Save } from 'lucide-react';
 import { type Student } from '../../api/types';
-import { formatCoins, minutesToHours, formatGradeClass } from '../../lib/format';
+import { formatCoins, minutesToHours, formatGradeClass, formatClassName } from '../../lib/format';
 import { toast } from 'sonner';
 import { useAuth, useLogs } from '../../App';
 import { api } from '../../api/client';
@@ -12,7 +12,7 @@ import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 
-type SortKey = 'name' | 'grade' | 'completedHours' | 'timeCoinBalance';
+type SortKey = 'name' | 'gradeLevel' | 'completedHours' | 'timeCoinBalance';
 
 function ProgressBar({ value, max, color = 'bg-primary' }: { value: number; max: number; color?: string }) {
   const pct = Math.min((value / max) * 100, 100);
@@ -61,7 +61,7 @@ export function StudentList() {
   // `completedHours`/`timeCoinBalance` are record-derived aggregates with nothing to sort on server-side;
   // all three stay client-side (current page only). Sending an unsupported `sort` value 400s
   // ("Cannot sort by '...'") — this used to happen for both `name` and `grade`.
-  const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['grade', 'completedHours', 'timeCoinBalance'];
+  const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['gradeLevel', 'completedHours', 'timeCoinBalance'];
   const SORT_WIRE_KEY: Partial<Record<SortKey, string>> = { name: 'displayName' };
 
   const [students, setStudents] = useState<Student[]>([]);
@@ -303,7 +303,7 @@ export function StudentList() {
         <select value={filterClass} onChange={e => handleClassChange(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.students.allClasses')}</option>
-          {availableClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {availableClasses.map(c => <option key={c.id} value={c.id}>{formatClassName(c.name)}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
@@ -324,7 +324,7 @@ export function StudentList() {
           <thead className="bg-muted/50 border-b border-border">
             <tr>
               <SortTh k="name" label={t('admin.students.sortName')} />
-              <SortTh k="grade" label={t('admin.students.sortGrade')} />
+              <SortTh k="gradeLevel" label={t('admin.students.sortGrade')} />
               <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('admin.students.annualProgress')}</th>
               <SortTh k="completedHours" label={t('admin.students.sortHours')} />
               <SortTh k="timeCoinBalance" label={t('admin.students.sortCoins')} />
@@ -350,7 +350,7 @@ export function StudentList() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{formatGradeClass(student.grade, student.className)}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{formatGradeClass(student.gradeLevel, student.className)}</td>
                   <td className="px-4 py-3 min-w-32">
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
@@ -414,7 +414,7 @@ export function StudentList() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-foreground leading-tight">{t('admin.students.editTitle')}</h3>
-                <p className="text-xs text-muted-foreground">{editStudent.studentNumber} · {editStudent.grade}</p>
+                <p className="text-xs text-muted-foreground">{editStudent.studentNumber} · {formatGradeClass(editStudent.gradeLevel, editStudent.className)}</p>
               </div>
               <button onClick={() => setEditStudent(null)}
                 className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors">
@@ -480,7 +480,7 @@ export function StudentList() {
                   <select value={editForm.classId}
                     onChange={e => setEditForm(f => f && ({ ...f, classId: e.target.value }))}
                     className="w-full px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40">
-                    {classes.filter(c => c.gradeId === editForm.gradeId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {classes.filter(c => c.gradeId === editForm.gradeId).map(c => <option key={c.id} value={c.id}>{formatClassName(c.name)}</option>)}
                   </select>
                 </div>
               </div>
@@ -556,7 +556,7 @@ export function StudentList() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
                       <span className="text-sm text-foreground font-medium">{student.name}</span>
-                      <span className="text-xs text-muted-foreground">{formatGradeClass(student.grade, student.className)}</span>
+                      <span className="text-xs text-muted-foreground">{formatGradeClass(student.gradeLevel, student.className)}</span>
                       {atRisk && (
                         <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                           <AlertCircle className="w-3 h-3" /> {t('admin.students.critical')}

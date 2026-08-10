@@ -351,7 +351,7 @@ export function EventProposals() {
                   selected={formData.coOrganizerStudents}
                   onChange={opts => { fieldErrors.clearField('coOrganizerStudentIds'); setFormData(f => ({ ...f, coOrganizerStudents: opts })); }}
                   fetchOptions={async search => (await api.students.directory(search, user?.studentId))
-                    .map(s => ({ id: s.id, label: s.displayName, sublabel: formatGradeClass(s.gradeName, s.className) }))}
+                    .map(s => ({ id: s.id, label: s.displayName, sublabel: formatGradeClass(s.gradeLevel, s.className) }))}
                   placeholder={t('student.proposals.coOrganizersPlaceholder')}
                   searchPlaceholder={t('student.proposals.searchStudents')}
                   noResultsLabel={t('student.proposals.noResults')}

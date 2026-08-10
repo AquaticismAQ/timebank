@@ -194,7 +194,7 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
         // StudentDirectoryEntryDto has no studentNumber/status/graduationYear/
         // version accessor at all — a compile-time guarantee, same shape as
         // the list-response test above.
-        assertThat(results).allSatisfy(r -> assertThat(r.gradeName()).isNotEmpty());
+        assertThat(results).allSatisfy(r -> assertThat(r.gradeLevel()).isPositive());
 
         assertThat(studentService.searchDirectory(null, "zh-CN")).isEmpty();
         assertThat(studentService.searchDirectory("", "zh-CN")).isEmpty();

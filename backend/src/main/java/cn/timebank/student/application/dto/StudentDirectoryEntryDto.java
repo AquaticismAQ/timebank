@@ -12,6 +12,6 @@ package cn.timebank.student.application.dto;
 public record StudentDirectoryEntryDto(
         String id,
         String displayName,
-        String gradeName,
+        int gradeLevel,
         String className) {
 }

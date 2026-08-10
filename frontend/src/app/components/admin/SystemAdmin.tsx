@@ -248,7 +248,7 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
   useEffect(() => {
     if (initial.studentId) {
       api.students.get(initial.studentId)
-        .then(s => setSelectedStudent([{ id: s.id, label: s.name, sublabel: formatGradeClass(s.grade, s.className) }]))
+        .then(s => setSelectedStudent([{ id: s.id, label: s.name, sublabel: formatGradeClass(s.gradeLevel, s.className) }]))
         .catch(() => {});
     }
   }, [initial.studentId]);
@@ -365,7 +365,7 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
                 selected={selectedStudent}
                 onChange={opts => { setSelectedStudent(opts); set({ studentId: opts[0]?.id }); }}
                 fetchOptions={async search => (await api.students.directory(search))
-                  .map(s => ({ id: s.id, label: s.displayName, sublabel: formatGradeClass(s.gradeName, s.className) }))}
+                  .map(s => ({ id: s.id, label: s.displayName, sublabel: formatGradeClass(s.gradeLevel, s.className) }))}
                 placeholder={t('admin.system.linkedStudentPlaceholder')}
                 searchPlaceholder={t('admin.system.linkedStudentSearchPlaceholder')}
                 noResultsLabel={t('student.proposals.noResults')}

@@ -45,12 +45,12 @@ export function AuditCenter() {
 
   // No server-side `grade` filter exists on /review-queue — kept client-side,
   // so this only narrows within the currently fetched page, not the whole dataset.
-  const grades = [...new Set(items.map(r => r.grade))];
+  const grades = [...new Set(items.map(r => r.gradeLevel))];
 
   // ReviewController's SORTABLE whitelist is currently empty (Set.of()), so no field
   // is sortable server-side — sorting stays entirely client-side on the current page.
   const filtered = useMemo(() => {
-    let rows = items.filter(r => filterGrade === 'all' || r.grade === filterGrade);
+    let rows = items.filter(r => filterGrade === 'all' || r.gradeLevel === Number(filterGrade));
     rows = [...rows].sort((a, b) => {
       const aVal = a[sortKey] as number | string;
       const bVal = b[sortKey] as number | string;
@@ -187,7 +187,7 @@ export function AuditCenter() {
         <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.audit.allGrades')}</option>
-          {grades.map(g => <option key={g} value={g}>{g}</option>)}
+          {grades.map(g => <option key={g} value={g}>{formatGradeClass(g, '')}</option>)}
         </select>
         <button
           onClick={() => {
@@ -261,7 +261,7 @@ export function AuditCenter() {
                           <div className={`w-2 h-2 rounded-full shrink-0 ${priorityColors[item.priority]}`} />
                           <div>
                             <div className="text-sm text-foreground">{item.studentName}</div>
-                            <div className="text-xs text-muted-foreground">{formatGradeClass(item.grade, item.className)}</div>
+                            <div className="text-xs text-muted-foreground">{formatGradeClass(item.gradeLevel, item.className)}</div>
                           </div>
                           {item.hasAnomaly && (
                             <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded">{t('admin.audit.anomaly')}</span>
@@ -323,7 +323,7 @@ export function AuditCenter() {
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <div className={`w-2 h-2 rounded-full shrink-0 ${priorityColors[item.priority]}`} />
                           <span className="text-sm text-foreground font-medium">{item.studentName}</span>
-                          <span className="text-xs text-muted-foreground">{formatGradeClass(item.grade, item.className)}</span>
+                          <span className="text-xs text-muted-foreground">{formatGradeClass(item.gradeLevel, item.className)}</span>
                           {item.hasAnomaly && (
                             <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                               <AlertTriangle className="w-3 h-3" /> {t('admin.audit.anomaly')}
