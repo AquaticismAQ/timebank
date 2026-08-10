@@ -113,6 +113,16 @@ These conventions are set by `Docs/integration/APIContract.md` and `Design/chine
 - **IDs are opaque server-generated strings**: never parse or derive meaning from an ID format.
 - **Durations/amounts are integers**: minutes for duration, minimum accounting units for time-coins — no floats.
 
+## Bug-tracking and live-verification workflow
+
+When a live-verification/browser-testing session against `https://tb.example.com/` finds a real defect (not a code-review finding — something reproduced against the real deployed app), write it up rather than just fixing it silently:
+
+- **One doc per bug in `Docs/issues/0NN-<slug>.md`**, numbered sequentially continuing from the highest existing number in that directory — never renumber or reuse a number, and check the directory first so two sessions don't collide. Shape (see any of `001`–`009` for the pattern): a `Status:` line (`Fixed and live-verified (YYYY-MM-DD)` once actually verified, not before), `## Symptom`, `## Root cause`, `## Fix` (or `## Proposed fix` before it's implemented), `## Test plan`, `## Resolution`, and a closing italic footer line stating what was live-verified and naming any gap (e.g. "no browser tool available this session" — say this explicitly whenever verification stopped at the API/code level instead of an actual click-through, so a later session knows to close that gap rather than assuming it's covered).
+- **Also update `integration-test/STATUS.md`** every time — it's the living record of actual live-testing activity (distinct from the per-bug doc, and distinct from `Docs/implementation/00-Status.md`'s build-phase tracking): append a row to the bug log table (§2) and a dated entry to the chronological fix history (§4). Do this as you go in the same session, not as a batch rewrite before a review.
+- **A data-only fix still gets a doc.** If the root cause is a live-database gap (e.g. a missing seed row) fixed via direct SQL with no application code touched, that's exactly as reportable as a code fix — don't skip the issue doc just because there's no diff to point to.
+- **Check `Docs/issues/` and `integration-test/STATUS.md`'s bug log before assuming something is new** — a symptom that looks fresh may already be a named, fixed issue (re-verify against the live app rather than trusting the doc blindly, since live data/deploys can drift from what a doc claims — see issue `008` for a case where a prior fix's data never actually landed).
+- Live database writes (direct `INSERT`/`UPDATE` against `tb.example.com`'s real `timebank` schema, not a `timebank_it_*` test schema) are a shared-state, hard-to-reverse action — narrate them and get confirmation before running them, same as any other risky action, even though this repo's established pattern is to do them directly (no admin UI exists yet for e.g. teacher grade-scope assignment).
+
 ## Content/documentation conventions (when editing Design/Docs)
 
 From `CONTRIBUTING.md`, still binding for this repo:
