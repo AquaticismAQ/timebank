@@ -11,6 +11,7 @@ import cn.timebank.iam.application.dto.AuthenticatedUserView;
 import cn.timebank.iam.application.dto.MeResponse;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.SessionRevocationService;
+import cn.timebank.security.application.TeacherScopeAssignmentService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -29,6 +30,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Set;
+
 /**
  * Contract §2.2. Session lifecycle (cookie creation, fixation defense,
  * per-role idle timeout) lives here rather than in {@code AuthService}
@@ -41,13 +44,29 @@ public class AuthController {
     private final AuthService authService;
     private final UserService userService;
     private final SessionRevocationService sessionRevocationService;
+    private final TeacherScopeAssignmentService teacherScopeAssignmentService;
     private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
     public AuthController(AuthService authService, UserService userService,
-                           SessionRevocationService sessionRevocationService) {
+                           SessionRevocationService sessionRevocationService,
+                           TeacherScopeAssignmentService teacherScopeAssignmentService) {
         this.authService = authService;
         this.userService = userService;
         this.sessionRevocationService = sessionRevocationService;
+        this.teacherScopeAssignmentService = teacherScopeAssignmentService;
+    }
+
+    /**
+     * Same {@code scopeGradeIds} enrichment {@link MeController#me} applies —
+     * duplicated here rather than pushed into {@code UserServiceImpl.buildMeResponse}
+     * because of the {@code iam}/{@code security} module-cycle constraint documented
+     * on {@code MeController} and {@code UserController}.
+     */
+    private MeResponse withScopeGradeIds(MeResponse response, String userId) {
+        Set<String> grades = response.user().roles().contains("teacher")
+                ? teacherScopeAssignmentService.gradesOf(userId)
+                : Set.of();
+        return response.withScopeGradeIds(grades);
     }
 
     @PostMapping("/api/v1/auth/login")
@@ -57,7 +76,7 @@ public class AuthController {
         AuthenticatedUserView view = authService.authenticate(
                 request.username(), request.password(), clientIp(httpRequest), httpRequest.getHeader("User-Agent"));
         establishSession(view, httpRequest, httpResponse);
-        return ApiResponse.of(userService.buildMeResponse(view.id()));
+        return ApiResponse.of(withScopeGradeIds(userService.buildMeResponse(view.id()), view.id()));
     }
 
     @PostMapping("/api/v1/auth/logout")
@@ -78,7 +97,7 @@ public class AuthController {
         // Fixation hygiene on a privilege-equivalent action, same as login.
         request.changeSessionId();
         request.getSession().setMaxInactiveInterval(principal.sessionTimeoutMinutes() * 60);
-        return ApiResponse.of(userService.buildMeResponse(principal.id()));
+        return ApiResponse.of(withScopeGradeIds(userService.buildMeResponse(principal.id()), principal.id()));
     }
 
     @PostMapping("/api/v1/auth/forgot-password")

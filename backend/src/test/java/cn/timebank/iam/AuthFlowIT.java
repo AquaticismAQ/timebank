@@ -7,6 +7,7 @@ import cn.timebank.iam.application.dto.UserDto;
 import cn.timebank.iam.domain.User;
 import cn.timebank.iam.infrastructure.UserRepository;
 import cn.timebank.security.application.SessionRevocationService;
+import cn.timebank.security.application.TeacherScopeAssignmentService;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,9 @@ class AuthFlowIT extends AbstractIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private TeacherScopeAssignmentService teacherScopeAssignmentService;
+
     /**
      * `/me`'s `studentId` (added 2026-08-06, `Docs/implementation/00-Status.md`
      * §30) — present for a student account with a linked student record,
@@ -65,6 +69,42 @@ class AuthFlowIT extends AbstractIntegrationTest {
         // the AdminStatsDto.reviewAvgHours finding, `00-Status.md` I1
         // notes — so "absent" is what a null studentId actually looks like.
         assertThat(teacherMe.getBody()).doesNotContain("\"studentId\":\"");
+    }
+
+    /**
+     * A scoped teacher's {@code scopeGradeIds} must be on the login/refresh
+     * response, not just {@code GET /me} — the frontend never calls
+     * {@code api.auth.me()} after establishing a session (it seeds the
+     * whole-session user object straight from the login/refresh response),
+     * so a grade filter driven only by the login payload silently showed
+     * every grade instead of the teacher's own (found live 2026-08-10,
+     * root cause: {@code AuthController} skipped the enrichment
+     * {@code MeController} already applies).
+     */
+    @Test
+    void loginAndRefreshBothCarryTheTeachersScopeGradeIds() {
+        UserDto teacher = createUser("auth_flow_scoped_teacher", "InitialPass123!", Set.of("teacher"));
+        teacherScopeAssignmentService.replaceGradeScope(teacher.id(), Set.of("grade_10"));
+
+        String csrfCookie = fetchCsrfCookie();
+        HttpHeaders loginHeaders = new HttpHeaders();
+        loginHeaders.setContentType(MediaType.APPLICATION_JSON);
+        loginHeaders.add(HttpHeaders.COOKIE, csrfCookie);
+        loginHeaders.add("X-XSRF-TOKEN", cookieValue(csrfCookie));
+        String loginBody = "{\"username\":\"auth_flow_scoped_teacher\",\"password\":\"InitialPass123!\"}";
+        ResponseEntity<String> loginResponse = restTemplate.postForEntity(
+                "/api/v1/auth/login", new HttpEntity<>(loginBody, loginHeaders), String.class);
+        assertThat(loginResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(loginResponse.getBody()).contains("\"scopeGradeIds\":[\"grade_10\"]");
+
+        String sessionCookie = extractCookie(loginResponse, "TIMEBANK_SESSION");
+        HttpHeaders refreshHeaders = new HttpHeaders();
+        refreshHeaders.add(HttpHeaders.COOKIE, sessionCookie + "; " + csrfCookie);
+        refreshHeaders.add("X-XSRF-TOKEN", cookieValue(csrfCookie));
+        ResponseEntity<String> refreshResponse = restTemplate.postForEntity(
+                "/api/v1/auth/refresh", new HttpEntity<>(refreshHeaders), String.class);
+        assertThat(refreshResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(refreshResponse.getBody()).contains("\"scopeGradeIds\":[\"grade_10\"]");
     }
 
     @Test

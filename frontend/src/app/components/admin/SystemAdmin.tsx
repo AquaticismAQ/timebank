@@ -212,7 +212,7 @@ interface UserFormState {
 }
 
 const emptyForm = (): UserFormState => ({
-  name: '', email: '', roles: ['teacher'], status: 'active',
+  name: '', email: '', roles: [], status: 'active',
   password: '', confirmPassword: '', showResetPwd: false, scopeGradeIds: [],
   studentId: undefined, staffId: '',
 });
