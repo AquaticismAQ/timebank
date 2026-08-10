@@ -49,6 +49,7 @@ interface EditForm {
   description: string;
   categoryId: string;
   organizationId: string;
+  deliveryScope: 'onCampus' | 'offCampus' | 'hybrid';
   ownerId: string;
   ownerName: string;
   location: string;
@@ -73,6 +74,7 @@ function toForm(p: Project, grades: Grade[]): EditForm {
     description: p.description,
     categoryId: p.categoryId,
     organizationId: p.organizationId,
+    deliveryScope: p.deliveryScope,
     ownerId: p.ownerId,
     ownerName: p.ownerName,
     location: p.location,
@@ -170,9 +172,22 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
               <div>
                 <label className={LABEL}>{t('admin.projects.partnerOrg')}</label>
                 <select value={form.organizationId} onChange={e => edit('organizationId', { organizationId: e.target.value })} className={INPUT}>
-                  {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  <option value="">{t('admin.projects.selectOrg')}</option>
+                  {organizations.filter(o => !o.isSchoolOrganization).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                 </select>
                 <FieldError message={fe('organizationId')} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={LABEL}>{t('admin.projects.deliveryScope')}</label>
+                <select value={form.deliveryScope} onChange={e => edit('deliveryScope', { deliveryScope: e.target.value as EditForm['deliveryScope'] })} className={INPUT}>
+                  <option value="onCampus">{t('admin.projects.deliveryScopeOnCampus')}</option>
+                  <option value="offCampus">{t('admin.projects.deliveryScopeOffCampus')}</option>
+                  <option value="hybrid">{t('admin.projects.deliveryScopeHybrid')}</option>
+                </select>
+                <FieldError message={fe('deliveryScope')} />
               </div>
             </div>
 
@@ -333,6 +348,7 @@ export function ProjectManagement() {
   const [newForm, setNewForm] = useState({
     title: '', summary: '', description: '', categoryId: 'cat_community', recognizedMinutes: 120,
     startAt: '', endAt: '', location: '', capacity: 20, organizationId: '', ownerId: '',
+    deliveryScope: 'onCampus' as 'onCampus' | 'offCampus' | 'hybrid',
     registrationOpenAt: '', registrationCloseAt: '', eligibleGrades: [] as string[], evidenceRequirements: '',
   });
   const [newFormSaving, setNewFormSaving] = useState(false);
@@ -391,6 +407,7 @@ export function ProjectManagement() {
     startAt: newForm.startAt ? localDatetimeLocalToISO(newForm.startAt) : '',
     endAt: newForm.endAt ? localDatetimeLocalToISO(newForm.endAt) : '',
     location: newForm.location, capacity: newForm.capacity, organizationId: newForm.organizationId || undefined,
+    deliveryScope: newForm.deliveryScope,
     ownerId: newForm.ownerId || undefined,
     registrationOpenAt: newForm.registrationOpenAt ? localDatetimeLocalToISO(newForm.registrationOpenAt) : '',
     registrationCloseAt: newForm.registrationCloseAt ? localDatetimeLocalToISO(newForm.registrationCloseAt) : '',
@@ -417,6 +434,7 @@ export function ProjectManagement() {
         description: editForm.description,
         categoryId: editForm.categoryId,
         organizationId: editForm.organizationId,
+        deliveryScope: editForm.deliveryScope,
         ownerId: editForm.ownerId,
         location: editForm.location,
         capacity: editForm.capacity,
@@ -709,9 +727,17 @@ export function ProjectManagement() {
                   <label className={LABEL}>{t('admin.projects.partnerOrg')}</label>
                   <select value={newForm.organizationId} onChange={e => setNewForm(f => ({ ...f, organizationId: e.target.value }))} className={INPUT}>
                     <option value="">{t('admin.projects.selectOrg')}</option>
-                    {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                    {organizations.filter(o => !o.isSchoolOrganization).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className={LABEL}>{t('admin.projects.deliveryScope')}</label>
+                <select value={newForm.deliveryScope} onChange={e => setNewForm(f => ({ ...f, deliveryScope: e.target.value as typeof newForm.deliveryScope }))} className={INPUT}>
+                  <option value="onCampus">{t('admin.projects.deliveryScopeOnCampus')}</option>
+                  <option value="offCampus">{t('admin.projects.deliveryScopeOffCampus')}</option>
+                  <option value="hybrid">{t('admin.projects.deliveryScopeHybrid')}</option>
+                </select>
               </div>
               {canArchive && (
                 <div>

@@ -106,6 +106,12 @@ public class Project extends VersionedEntity {
     @Column(name = "status", length = 16, nullable = false)
     private ProjectStatus status;
 
+    /** §4.2 — never inferred from organization type; defaulted at the DB level for pre-V18 rows, required going forward. */
+    @Setter
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_scope", length = 16, nullable = false)
+    private DeliveryScope deliveryScope;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

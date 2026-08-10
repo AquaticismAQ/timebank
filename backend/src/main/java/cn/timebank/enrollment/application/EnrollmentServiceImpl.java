@@ -226,6 +226,14 @@ class EnrollmentServiceImpl implements EnrollmentService {
         return names;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isConfirmed(String projectId, String studentId) {
+        return repository.findByProjectIdAndStudentId(projectId, studentId)
+                .map(e -> e.getStatus() == EnrollmentStatus.CONFIRMED)
+                .orElse(false);
+    }
+
     private EnrollmentDto toDto(Enrollment e, Map<String, String> projectTitles, Map<String, String> studentNames) {
         return new EnrollmentDto(e.getId(), e.getProjectId(), projectTitles.getOrDefault(e.getProjectId(), ""),
                 e.getStudentId(), studentNames.getOrDefault(e.getStudentId(), ""), e.getStatus().name(),

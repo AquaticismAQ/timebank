@@ -211,19 +211,19 @@ Behavior requirements:
 
 #### Create/Edit Record
 
-Uses a multi-step form:
+Uses a multi-step form. A record's source is one of two chooseable kinds, set once at creation and never changed afterward (`Docs/clarification/03-ServiceRecordFormOptimization.md`):
 
-1. **Source**: Link to a registered project, or select off-campus/self-initiated service.
-2. **Service Information**: Date, start/end time, duration, location, organization, service nature, and description.
-3. **Proof Materials**: Supervisor information, signatures/photos/emails/certificates and other files.
-4. **Confirm & Submit**: Display complete summary, declaration, and submission action.
+1. **Source**: Select "Registered Project" (a project the student holds a confirmed registration for) or "Self-Initiated" (student-organized, no project link). A third, historical-only source ("External," pre-dating this design) can still be viewed/edited/resubmitted on existing records but is never offered as a new choice.
+2. **Service Information**: Date, start/end time (live duration preview), and description are common to both sources. For a **registered project**, organization, service nature, and location are read-only, pulled from the project itself — the student never types them. For **self-initiated**, the student fills in location, an optional organization name, and service nature directly. Both sources expose a travel-time disclosure toggle with a required reason field once toggled on.
+3. **Proof Materials**: For a registered project, the supervisor (the project's own owner) is shown read-only. For self-initiated, the student picks a supervisor kind — a school staff member or another student (searched from the real directory, contact resolved server-side) or an external person (name and contact entered directly) — then uploads evidence files.
+4. **Confirm & Submit**: Display complete summary (including the live duration preview), declaration, and submission action. The record's permanent tracking number is assigned on save and shown afterward in the list/detail views, not on this screen.
 
 Behavior requirements:
 
 - Provide draft saving and auto-save feedback.
 - Frontend performs required field, format, time range, and file type validation.
 - Backend business validation errors are mapped to specific steps and fields.
-- After submission, enters read-only detail; returned records create a new revised version.
+- After submission, enters read-only detail; returned records create a new revised version, with the original source locked (a returned project-sourced record cannot be turned into a self-initiated one on resubmission, or vice versa).
 
 #### Record Detail
 

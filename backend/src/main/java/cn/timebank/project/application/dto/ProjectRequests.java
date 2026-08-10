@@ -13,10 +13,15 @@ public final class ProjectRequests {
     private ProjectRequests() {
     }
 
-    /** {@code ownerId}: admin-only override (silently forced to the caller for anyone else — Docs/clarification/02-PorjectOrganization.md §3). */
+    /**
+     * {@code ownerId}: admin-only override (silently forced to the caller for anyone else — Docs/clarification/02-PorjectOrganization.md §3).
+     * {@code organizationId}: the project's PARTNER organization, if any (never the school organization itself — that's
+     * automatic, issue 03 §4.2). {@code deliveryScope}: required, one of {@code ON_CAMPUS}/{@code OFF_CAMPUS}/{@code HYBRID}.
+     */
     public record CreateProjectRequest(
             @NotBlank String title, String summary, String description,
             @NotBlank String categoryId, String organizationId, String ownerId,
+            @NotBlank String deliveryScope,
             @NotNull Instant startAt, @NotNull Instant endAt, String location,
             @Positive int capacity, @Positive int recognizedMinutes, List<String> eligibleGradeIds,
             String evidenceRequirements, @NotNull Instant registrationOpenAt, @NotNull Instant registrationCloseAt) {
@@ -25,7 +30,7 @@ public final class ProjectRequests {
     /** `PATCH /projects/{id}` — never `status`; action endpoints own that (B4.2). {@code ownerId}: admin-only, ignored (not applied) from any other caller. */
     public record UpdateProjectRequest(
             String title, String summary, String description,
-            String categoryId, String organizationId, String ownerId,
+            String categoryId, String organizationId, String ownerId, String deliveryScope,
             Instant startAt, Instant endAt, String location,
             Integer capacity, Integer recognizedMinutes, List<String> eligibleGradeIds,
             String evidenceRequirements, Instant registrationOpenAt, Instant registrationCloseAt,

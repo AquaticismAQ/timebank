@@ -56,7 +56,7 @@ function mapEnumFields<T extends object>(obj: T, fields: (keyof T)[]): T {
 
 /** `/service-records` and `/dashboards/*`'s embedded `recentRecords` both return the same real `ServiceRecordDto` — one mapper, both call sites. */
 function fromServiceRecordDto(dto: ServiceRecord & { evidenceFileIds?: string[] }): ServiceRecord {
-  return mapEnumFields({ ...dto, evidenceFiles: dto.evidenceFiles ?? [] }, ['status', 'sourceType']);
+  return mapEnumFields({ ...dto, evidenceFiles: dto.evidenceFiles ?? [] }, ['status', 'sourceType', 'supervisorKind']);
 }
 
 /** `/review-queue` and `/dashboards/admin`'s embedded `pendingReviews` both return the same real `ReviewQueueItemDto`, including the raw SUBMITTED status name — one mapper, both call sites. */
@@ -198,11 +198,11 @@ export const api = {
       const filter = { ...params?.filter };
       if (filter.status) filter.status = toBackendEnum(filter.status);
       const page = await http.getPage<Project>('/projects', buildListQuery({ ...params, filter }));
-      return { data: page.data.map(p => mapEnumFields(p, ['status', 'myApplicationStatus'])), page: page.page };
+      return { data: page.data.map(p => mapEnumFields(p, ['status', 'myApplicationStatus', 'deliveryScope'])), page: page.page };
     },
     async get(id: string): Promise<Project> {
       const dto = await http.get<Project>(`/projects/${id}`);
-      return mapEnumFields(dto, ['status', 'myApplicationStatus']);
+      return mapEnumFields(dto, ['status', 'myApplicationStatus', 'deliveryScope']);
     },
     async create(data: Partial<Project>): Promise<Project> {
       const body = {
@@ -212,6 +212,8 @@ export const api = {
         categoryId: data.categoryId,
         organizationId: data.organizationId,
         ownerId: data.ownerId,
+        // Required (issue 03 §4.2) — never inferred, always explicit.
+        deliveryScope: data.deliveryScope ? toBackendEnum(data.deliveryScope) : undefined,
         startAt: data.startAt,
         endAt: data.endAt,
         location: data.location,
@@ -223,7 +225,7 @@ export const api = {
         registrationCloseAt: data.registrationCloseAt,
       };
       const dto = await http.post<Project>('/projects', body);
-      return mapEnumFields(dto, ['status']);
+      return mapEnumFields(dto, ['status', 'deliveryScope']);
     },
     async update(id: string, data: Partial<Project>): Promise<Project> {
       const body = withVersion({
@@ -233,6 +235,7 @@ export const api = {
         categoryId: data.categoryId,
         organizationId: data.organizationId,
         ownerId: data.ownerId,
+        deliveryScope: data.deliveryScope ? toBackendEnum(data.deliveryScope) : undefined,
         startAt: data.startAt,
         endAt: data.endAt,
         location: data.location,
@@ -244,7 +247,7 @@ export const api = {
         registrationCloseAt: data.registrationCloseAt,
       }, data.version!);
       const dto = await http.patch<Project>(`/projects/${id}`, body);
-      return mapEnumFields(dto, ['status']);
+      return mapEnumFields(dto, ['status', 'deliveryScope']);
     },
     async publish(id: string, version?: number): Promise<Project> {
       const dto = await http.post<Project>(`/projects/${id}/publish`, { version });
@@ -454,6 +457,11 @@ export const api = {
       const body = {
         sourceType: toBackendEnum(data.sourceType || 'self'),
         projectId: data.projectId,
+        // PROJECT source: the server derives organizationId/organizationName/location/
+        // serviceCategoryId/supervisor* from the project itself and ignores these
+        // regardless of what's sent — see APIContract.md §3.4. Sent unconditionally
+        // here anyway (harmless for PROJECT, needed for SELF) rather than branching,
+        // since the backend is the actual source of truth for which source ignores what.
         organizationId: data.organizationId,
         organizationName: data.organizationName,
         serviceDate: data.serviceDate,
@@ -462,10 +470,13 @@ export const api = {
         location: data.location,
         serviceCategoryId: data.serviceCategoryId,
         description: data.description,
+        supervisorKind: data.supervisorKind ? toBackendEnum(data.supervisorKind) : undefined,
+        supervisorSubjectId: data.supervisorSubjectId,
         supervisorName: data.supervisorName,
         supervisorContact: data.supervisorContact,
         evidenceFileIds: (data.evidenceFiles ?? []).map(f => f.id),
-        includesTravelTime: false,
+        includesTravelTime: data.includesTravelTime ?? false,
+        travelTimeReason: data.travelTimeReason,
       };
       const dto = await http.post<ServiceRecord & { evidenceFileIds?: string[] }>('/service-records', body);
       return fromServiceRecordDto(dto);
@@ -481,10 +492,13 @@ export const api = {
         location: data.location,
         serviceCategoryId: data.serviceCategoryId,
         description: data.description,
+        supervisorKind: data.supervisorKind ? toBackendEnum(data.supervisorKind) : undefined,
+        supervisorSubjectId: data.supervisorSubjectId,
         supervisorName: data.supervisorName,
         supervisorContact: data.supervisorContact,
         evidenceFileIds: data.evidenceFiles?.map(f => f.id),
         includesTravelTime: data.includesTravelTime,
+        travelTimeReason: data.travelTimeReason,
       }, data.version!);
       const dto = await http.patch<ServiceRecord & { evidenceFileIds?: string[] }>(`/service-records/${id}`, body);
       return fromServiceRecordDto(dto);

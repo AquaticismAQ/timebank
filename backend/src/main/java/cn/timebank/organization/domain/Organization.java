@@ -60,6 +60,15 @@ public class Organization extends VersionedEntity {
     @Column(name = "status", length = 16, nullable = false)
     private OrganizationStatus status;
 
+    /**
+     * Immutable — no setter. Exactly one row has this true (DB-enforced, see V17's
+     * generated-column unique index); never set by the normal create/update flow,
+     * only by the seed migration. {@code OrganizationServiceImpl} rejects any attempt
+     * to update or archive the row this is true on.
+     */
+    @Column(name = "is_school_organization", nullable = false)
+    private boolean schoolOrganization;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -72,6 +81,7 @@ public class Organization extends VersionedEntity {
         this.name = name;
         this.type = type;
         this.status = OrganizationStatus.ACTIVE;
+        this.schoolOrganization = false;
         this.createdAt = now;
         this.updatedAt = now;
     }

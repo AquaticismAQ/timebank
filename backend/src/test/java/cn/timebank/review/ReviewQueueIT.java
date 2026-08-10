@@ -94,7 +94,8 @@ class ReviewQueueIT extends AbstractIntegrationTest {
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, LocalDate.now().minusDays(1),
                 Instant.now().minus(1, ChronoUnit.DAYS).minusSeconds(3600), Instant.now().minus(1, ChronoUnit.DAYS),
-                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
+                "Somewhere", "cat_campus", "desc", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
+                List.of(readyFile()), false, null);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
 
         var page = reviewService.queue(PageRequest.of(0, 50), null, null, adminAuth(), "zh-CN");
@@ -133,7 +134,8 @@ class ReviewQueueIT extends AbstractIntegrationTest {
         Instant start = end.minusSeconds(3600);
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, LocalDate.now().minusDays(2), start, end,
-                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
+                "Somewhere", "cat_campus", "desc", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
+                List.of(readyFile()), false, null);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
         return serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-submit-" + draft.id(), "zh-CN");
     }

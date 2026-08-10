@@ -55,7 +55,7 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
 
         Instant start = Instant.now().plus(5, ChronoUnit.DAYS);
         CreateProjectRequest request = new CreateProjectRequest(
-                "Capacity Test Project", "summary", "description", "cat_campus", null, null,
+                "Capacity Test Project", "summary", "description", "cat_campus", null, null, "ON_CAMPUS",
                 start, start.plusSeconds(7200), "Hall", capacity, 100, null, null,
                 Instant.now().minusSeconds(60), start);
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
@@ -96,7 +96,7 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
 
         Instant start = Instant.now().plus(6, ChronoUnit.DAYS);
         CreateProjectRequest request = new CreateProjectRequest(
-                "Status Filter Test Project", "summary", "description", "cat_campus", null, null,
+                "Status Filter Test Project", "summary", "description", "cat_campus", null, null, "ON_CAMPUS",
                 start, start.plusSeconds(7200), "Hall", capacity, 100, null, null,
                 Instant.now().minusSeconds(60), start);
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
@@ -132,11 +132,11 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
     void projectIdFilterNarrowsResultsToOneProjectsEnrollments() {
         Instant start = Instant.now().plus(7, ChronoUnit.DAYS);
         CreateProjectRequest requestA = new CreateProjectRequest(
-                "Project Filter Test A", "summary", "description", "cat_campus", null, null,
+                "Project Filter Test A", "summary", "description", "cat_campus", null, null, "ON_CAMPUS",
                 start, start.plusSeconds(7200), "Hall", 5, 100, null, null,
                 Instant.now().minusSeconds(60), start);
         CreateProjectRequest requestB = new CreateProjectRequest(
-                "Project Filter Test B", "summary", "description", "cat_campus", null, null,
+                "Project Filter Test B", "summary", "description", "cat_campus", null, null, "ON_CAMPUS",
                 start, start.plusSeconds(7200), "Hall", 5, 100, null, null,
                 Instant.now().minusSeconds(60), start);
         ProjectDto draftA = projectService.createDraft(requestA, "usr_test_admin", false, "zh-CN");

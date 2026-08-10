@@ -32,7 +32,7 @@ class OrganizationProjectCountIT extends AbstractIntegrationTest {
 
         Instant start = Instant.now().plus(5, ChronoUnit.DAYS);
         CreateProjectRequest request = new CreateProjectRequest(
-                "Org Project", "summary", "description", "cat_campus", org.id(), null,
+                "Org Project", "summary", "description", "cat_campus", org.id(), null, "OFF_CAMPUS",
                 start, start.plusSeconds(7200), "Hall", 10, 100, null, null,
                 Instant.now(), start);
         projectService.createDraft(request, "usr_test_admin", false, "zh-CN");

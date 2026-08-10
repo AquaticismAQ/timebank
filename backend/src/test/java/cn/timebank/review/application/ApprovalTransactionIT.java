@@ -314,8 +314,8 @@ class ApprovalTransactionIT extends AbstractIntegrationTest {
         Instant start = end.minusSeconds(3600);
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, LocalDate.now().minusDays(2), start, end,
-                "Community Center", "cat_campus", "Helped out", null, null,
-                List.of(readyFile()), false);
+                "Community Center", "cat_campus", "Helped out", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
+                List.of(readyFile()), false, null);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
         return serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-submit-" + draft.id(), "zh-CN");
     }

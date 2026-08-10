@@ -176,7 +176,8 @@ class ImportExportIT extends AbstractIntegrationTest {
                 new cn.timebank.servicerecord.application.dto.ServiceRecordRequests.CreateServiceRecordRequest(
                         "SELF", null, null, null, LocalDate.now().minusDays(1),
                         Instant.now().minus(minutes, java.time.temporal.ChronoUnit.MINUTES), Instant.now(),
-                        "Somewhere", "cat_campus", "desc", null, null, java.util.List.of(readyFile()), false);
+                        "Somewhere", "cat_campus", "desc", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
+                        java.util.List.of(readyFile()), false, null);
         var draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
         var submitted = serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-export-fixture-" + draft.id(), "zh-CN");
         reviewService.decide(submitted.id(),

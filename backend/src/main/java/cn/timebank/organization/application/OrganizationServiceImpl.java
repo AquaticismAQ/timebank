@@ -72,6 +72,7 @@ class OrganizationServiceImpl implements OrganizationService {
     @Transactional
     public OrganizationDto update(String id, UpdateOrganizationRequest request, String actorId) {
         Organization org = findOrThrow(id);
+        rejectIfSchoolOrganization(org, "The school organization cannot be edited here — use school settings instead.");
         ConcurrencyControl.checkVersion(org.getVersion(), request.version());
 
         if (request.name() != null) {
@@ -103,10 +104,25 @@ class OrganizationServiceImpl implements OrganizationService {
     @Transactional
     public void archive(String id, String actorId) {
         Organization org = findOrThrow(id);
+        rejectIfSchoolOrganization(org, "The school organization cannot be archived.");
         org.setStatus(OrganizationStatus.ARCHIVED);
         org.setUpdatedAt(Instant.now());
         auditService.record(new AuditEntry(actorId, "organizations.manage", "organization.archive",
                 "organization", org.getId(), null, null, null));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrganizationDto getSchoolOrganization() {
+        return toDto(repository.findBySchoolOrganizationTrue()
+                .orElseThrow(() -> new IllegalStateException(
+                        "No school organization row exists — the startup health check should have prevented this.")));
+    }
+
+    private void rejectIfSchoolOrganization(Organization org, String message) {
+        if (org.isSchoolOrganization()) {
+            throw ApiException.stateConflict(message);
+        }
     }
 
     private Organization findOrThrow(String id) {
@@ -128,6 +144,6 @@ class OrganizationServiceImpl implements OrganizationService {
         int projectCount = projectCountRepository.countByOrganizationId(org.getId());
         return new OrganizationDto(org.getId(), org.getName(), org.getType().name().toLowerCase(), org.getDescription(),
                 org.getContactName(), org.getContactEmail(), org.getContactPhone(), org.getAddress(),
-                org.getStatus().name().toLowerCase(), projectCount, org.getVersion(), org.getCreatedAt());
+                org.getStatus().name().toLowerCase(), org.isSchoolOrganization(), projectCount, org.getVersion(), org.getCreatedAt());
     }
 }

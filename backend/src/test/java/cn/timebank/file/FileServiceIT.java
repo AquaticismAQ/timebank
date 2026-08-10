@@ -181,7 +181,8 @@ class FileServiceIT extends AbstractIntegrationTest {
         Instant start = end.minusSeconds(3600);
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, LocalDate.now().minusDays(1), start, end,
-                "Somewhere", "cat_campus", "desc", null, null, List.of(fileId), false);
+                "Somewhere", "cat_campus", "desc", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
+                List.of(fileId), false, null);
         return serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
     }
 

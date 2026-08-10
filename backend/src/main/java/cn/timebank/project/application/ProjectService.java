@@ -30,6 +30,16 @@ public interface ProjectService {
 
     ProjectDto getDetail(String id, Authentication auth, String resolvedLanguage);
 
+    /**
+     * Unscoped — no visibility/ownership check, same shape as {@code StudentService}'s
+     * unscoped {@code getDetail} overload. For cross-module, system-level lookups only
+     * (Docs/clarification/03-ServiceRecordFormOptimization.md §3.1 — {@code servicerecord}
+     * snapshots a PROJECT-sourced record's organization/owner/category/location from
+     * here at creation time), never for anything a caller can reach directly with an
+     * arbitrary id.
+     */
+    ProjectDto getDetail(String id, String resolvedLanguage);
+
     /** {@code actorIsAdmin}: gates whether {@code request.ownerId()} is honored — anyone else's is silently forced to {@code actorId} (02-PorjectOrganization.md §3). */
     ProjectDto createDraft(CreateProjectRequest request, String actorId, boolean actorIsAdmin, String resolvedLanguage);
 

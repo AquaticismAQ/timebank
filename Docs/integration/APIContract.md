@@ -241,12 +241,15 @@ Core fields:
 
 - `id`, `title`, `summary`, `description`
 - `categoryId`, `organizationId`, `ownerId`
+- `hostOrganizationId`, `hostOrganizationName`, `deliveryScope`
 - `originProposalId`, `studentOrganizerIds`
 - `startAt`, `endAt`, `location`
 - `capacity`, `recognizedMinutes`
 - `eligibleGrades`, `evidenceRequirements`
 - `registrationOpenAt`, `registrationCloseAt`
 - `status`, `version`, `createdAt`, `updatedAt`
+
+**`hostOrganizationId`/`hostOrganizationName`/`deliveryScope`** (added, `Docs/clarification/03-ServiceRecordFormOptimization.md` §4.2/§10): every project has exactly one host organization — the school itself, a single system-wide singleton (`GET /organizations`' `isSchoolOrganization: true` row) — resolved server-side and never client-writable. `organizationId`/`organizationName` keep their pre-existing meaning: the project's **partner** organization, if any (never the school organization itself — `POST`/`PATCH /projects` reject an `organizationId` equal to the host as a `400`, since that's automatic already). `deliveryScope` is `onCampus`/`offCampus`/`hybrid`, **required** on `POST /projects` (never inferred from organization type), optional on `PATCH`; projects that pre-date this field were backfilled to `hybrid` ("unknown, needs manual review"), not guessed either way.
 
 Status:
 
@@ -314,7 +317,7 @@ confirmed → cancelled
 
 ### 3.4 Service Record `ServiceRecord`
 
-`sourceType` distinguishes how the service arose, and is set at creation: `project` (performed under a registered project), `external` (organized by an external organization), `self` (student-initiated). It changes which fields are required at submission, not which state machine applies.
+`sourceType` distinguishes how the service arose, and is set at creation, never changed on update. **New records only accept `project` (performed under a project the student has a `confirmed` registration for) or `self` (student-initiated)** (`Docs/clarification/03-ServiceRecordFormOptimization.md` §3/§7.3, replacing the earlier three-way `project`/`external`/`self` split). `external` is **historical data only** — existing records keep it, are readable/reviewable, and a `draft`/`returned` one can still be edited and resubmitted with its original free-text fields (source never changes), but `POST /service-records` rejects `sourceType: "external"` outright. `sourceType` changes which fields are required/server-derived at creation and submission, not which state machine applies.
 
 Status:
 
@@ -327,16 +330,24 @@ approved → corrected
 
 Core fields:
 
-- `id`, `studentId`, `projectId`, `sourceType`
+- `id`, `studentId`, `projectId`, `sourceType`, `recordNumber`
 - `serviceDate`, `startAt`, `endAt`, `durationMinutes`
 - `location`, `organizationId`, `organizationName`
+- `hostOrganizationName`, `partnerOrganizationNames`
 - `serviceCategoryId`, `description`
-- `supervisor`, `evidenceFiles`, `includesTravelTime`
+- `supervisorKind`, `supervisorSubjectId`, `supervisorName`, `supervisorContact`
+- `evidenceFiles`, `includesTravelTime`, `travelTimeReason`
 - `status`, `currentRevision`, `reviewSummary`
 - `creditedUnits`, `accountTransactionId`
 - `version`, `createdAt`, `submittedAt`, `updatedAt`
 
-`includesTravelTime` is a disclosure flag (whether the claimed duration includes travel time), writable at creation and update, not derived.
+`includesTravelTime` is a disclosure flag (whether the claimed duration includes travel time), writable at creation and update, not derived; `travelTimeReason` is required (submission-time check, not a create-time hard block — a draft may be saved incomplete) whenever `includesTravelTime` is true, and is never counted toward `durationMinutes`.
+
+**`sourceType: "project"`** (§10 D1/Q1): the client supplies only `projectId` — `organizationId`/`organizationName`/`location`/`serviceCategoryId`/`supervisorKind`/`supervisorSubjectId`/`supervisorName`/`supervisorContact` are all silently ignored if sent, and instead derived server-side from the project and snapshotted immutably at creation (a later edit to the project itself never retroactively changes an already-created record). The registration is validated as `confirmed` at **both** creation and submission — cancelling it after a draft was created blocks submission. `hostOrganizationName`/`partnerOrganizationNames` mirror the project's own host/partner organizations at snapshot time. `supervisorKind` is always `projectOwner`, resolved to the project owner's account (name + email); if that account has no email on file, submission fails with a `supervisorContact`/`CONTACT_MISSING` field error rather than silently omitting contact info. This applies uniformly to on-campus and off-campus (partner-organized) projects alike — the project owner (always an internal teacher/admin) is the recorded supervisor either way, never the partner organization's own contact person.
+
+**`sourceType: "self"`**: `organizationId`/`organizationName` stay free text (no server-side validation against a real organization), same as the old `external` source. `supervisorKind` is one of `internalUser`/`student`/`externalManual` + `supervisorSubjectId` (a real user or student id, resolved server-side to name + email/contact — rejected with a `CONTACT_MISSING` field error if that account has no contact on file) — or, for `externalManual`, `supervisorName`/`supervisorContact` directly from the client, both required up front (no account to fall back on). A missing `supervisorKind` altogether is a `REQUIRED` field error at submission.
+
+**`recordNumber`** (§5.3/§10 D3): server-generated at creation, unique, immutable, format `TB-{academicYearCode}-{gradeLevel}-{studentNumber}-{seq}` where `seq` is a per-(academic year, student) atomically-incrementing counter — never a "select max + 1" race. `null` for historical records that pre-date this field.
 
 ### 3.5 Review `Review`
 
@@ -419,6 +430,8 @@ The frontend polls the job query endpoint; long-lived connections are not a requ
 | `POST` | `/projects/{id}/archive` | `projects.archive` | Archive a completed project |
 | `POST` | `/projects/{id}/cancel` | `projects.cancel` | Cancel and archive a live (or completed) project outright, with a reason |
 | `GET` | `/projects/{id}/timeline` | `projects.audit.read` | Project change timeline |
+
+`deliveryScope` (`onCampus`/`offCampus`/`hybrid`) is required on `POST /projects`, optional on `PATCH` — see §3.1.
 
 Project status changes use action endpoints to avoid bypassing business validation via a generic `PATCH status`.
 
@@ -591,6 +604,8 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 | `PATCH` | `/service-categories/{id}` | `rules.manage` | Update category |
 
 `organizations.manage` is granted to `role_admin` and `role_teacher` (changed 2026-08-08 — previously admin-only). `Organization` gained a `description` field (free text, alongside the existing structured `type`/`contactName`/`contactEmail`/`contactPhone`/`address`) in the same change; `CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` all carry it.
+
+`OrganizationDto` also carries a read-only `isSchoolOrganization` boolean (`Docs/clarification/03-ServiceRecordFormOptimization.md` §4.1) — exactly one row in the whole system has this `true`, seeded once and never through `POST /organizations`. `PATCH /organizations/{id}` and `POST /organizations/{id}/archive` both `409` on that row — its name/address/contact can only change through school settings, not the normal organization-management flow, and it can never be archived. Every project's host organization (§3.1) resolves to this row.
 
 ### 4.11 Accounts & Transactions
 

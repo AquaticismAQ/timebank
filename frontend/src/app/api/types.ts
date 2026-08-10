@@ -46,8 +46,13 @@ export interface Project {
   description: string;
   categoryId: string;
   categoryName: string;
+  /** The project's PARTNER organization, if any — never the school organization (that's automatic, see hostOrganizationId). */
   organizationId: string;
   organizationName: string;
+  /** Always the single school-organization singleton (issue 03 §4.2), server-resolved, never client-writable. */
+  hostOrganizationId: string;
+  hostOrganizationName: string;
+  deliveryScope: 'onCampus' | 'offCampus' | 'hybrid';
   ownerId: string;
   ownerName: string;
   startAt: string;
@@ -92,6 +97,7 @@ export interface ServiceRecord {
   studentName: string;
   projectId?: string;
   projectTitle?: string;
+  /** `project`/`self` only for new records; `external` is historical data — still readable/editable/resubmittable, never newly creatable (issue 03 §3/§7.3). */
   sourceType: 'project' | 'external' | 'self';
   serviceDate: string;
   startAt: string;
@@ -100,11 +106,21 @@ export interface ServiceRecord {
   location: string;
   organizationId?: string;
   organizationName: string;
+  /** PROJECT source only — the project's own host/partner organizations at snapshot time (issue 03 §3.1). Empty for SELF/EXTERNAL. */
+  hostOrganizationName?: string;
+  partnerOrganizationNames?: string[];
   serviceCategoryId: string;
   serviceCategoryName: string;
   description: string;
+  /** `projectOwner` (PROJECT, server-derived) | `internalUser` | `student` | `externalManual` (SELF, client-chosen) — undefined for historical EXTERNAL records. */
+  supervisorKind?: 'projectOwner' | 'internalUser' | 'student' | 'externalManual';
+  supervisorSubjectId?: string;
   supervisorName: string;
   supervisorContact: string;
+  includesTravelTime?: boolean;
+  travelTimeReason?: string;
+  /** Server-generated at creation, unique, immutable; undefined for historical records that pre-date it (issue 03 §5.3). */
+  recordNumber?: string;
   evidenceFiles: EvidenceFile[];
   status: RecordStatus;
   reviewSummary?: string;
@@ -117,7 +133,6 @@ export interface ServiceRecord {
   updatedAt: string;
   returnReason?: string;
   rejectReason?: string;
-  includesTravelTime?: boolean;
 }
 
 export interface EvidenceFile {
@@ -290,6 +305,8 @@ export interface Organization {
   contactPhone: string;
   address: string;
   status: 'active' | 'inactive' | 'archived';
+  /** True for exactly one row system-wide — the school itself (issue 03 §4.1). Read-only; never settable via create/update. */
+  isSchoolOrganization: boolean;
   projectCount: number;
   version: number;
   createdAt: string;

@@ -129,7 +129,7 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
         Instant end = start.plusSeconds(3600);
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, LocalDate.now().plusDays(2), start, end,
-                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
+                "Somewhere", "cat_campus", "desc", null, null, null, null, List.of(readyFile()), false, null);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
 
         assertThatThrownBy(() -> serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-2", "zh-CN"))
@@ -138,21 +138,22 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
                         .anyMatch(fe -> fe.field().equals("serviceDate")));
     }
 
+    /** issue 03 §3.2/§10 Q1 — supersedes the old EXTERNAL-source "organizationName + supervisorName required" test; EXTERNAL is historical-only now, SELF requires a resolved supervisor instead. */
     @Test
-    void anExternalRecordRequiresOrganizationAndSupervisor() {
+    void aSelfInitiatedRecordRequiresASupervisor() {
         StudentDetailDto student = createStudent();
         Instant end = Instant.now().minus(1, ChronoUnit.DAYS);
         Instant start = end.minusSeconds(3600);
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
-                "EXTERNAL", null, null, null, LocalDate.now().minusDays(1), start, end,
-                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
+                "SELF", null, null, null, LocalDate.now().minusDays(1), start, end,
+                "Somewhere", "cat_campus", "desc", null, null, null, null, List.of(readyFile()), false, null);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
 
         assertThatThrownBy(() -> serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-3", "zh-CN"))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> assertThat(((ApiException) e).fieldErrors())
                         .extracting(fe -> fe.field())
-                        .contains("organizationName", "supervisorName"));
+                        .contains("supervisorKind"));
     }
 
     @Test
@@ -190,11 +191,11 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
         ServiceRecordDto draft = createDraft(student, List.of("file_1"), false);
 
         // (projectId, organizationId, organizationName, serviceDate, startAt, endAt, location,
-        //  serviceCategoryId, description, supervisorName, supervisorContact, evidenceFileIds,
-        //  includesTravelTime, version)
+        //  serviceCategoryId, description, supervisorKind, supervisorSubjectId, supervisorName,
+        //  supervisorContact, evidenceFileIds, includesTravelTime, travelTimeReason, version)
         UpdateServiceRecordRequest staleUpdate = new UpdateServiceRecordRequest(
-                null, null, null, null, null, null, null, null, "Updated description", null, null, null, null,
-                draft.version());
+                null, null, null, null, null, null, null, null, "Updated description", null, null, null, null, null,
+                null, null, draft.version());
         serviceRecordService.updateDraft(draft.id(), staleUpdate, studentAuth(student.id()), "zh-CN");
 
         // Reusing the now-stale `draft.version()` a second time must conflict.
@@ -211,13 +212,14 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
         Instant start = end.minusSeconds(3600);
         CreateServiceRecordRequest requestA = new CreateServiceRecordRequest(
                 "SELF", null, null, "Sunrise Shelter", LocalDate.now().minusDays(1), start, end,
-                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
+                "Somewhere", "cat_campus", "desc", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
+                List.of(readyFile()), false, null);
         ServiceRecordDto recordA = serviceRecordService.createDraft(requestA, student.id(), student.id(), "zh-CN");
         serviceRecordService.submit(recordA.id(), studentAuth(student.id()), "idem-list-a", "zh-CN");
 
         CreateServiceRecordRequest requestB = new CreateServiceRecordRequest(
                 "SELF", null, null, "Riverside Library", LocalDate.now().minusDays(1), start, end,
-                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
+                "Somewhere", "cat_campus", "desc", null, null, null, null, List.of(readyFile()), false, null);
         // recordB is left in DRAFT status (not submitted).
         ServiceRecordDto recordB = serviceRecordService.createDraft(requestB, student.id(), student.id(), "zh-CN");
 
@@ -306,9 +308,14 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
 
     private ServiceRecordDto createDraft(StudentDetailDto student, List<String> evidenceFileIds, boolean includesTravelTime,
                                           LocalDate serviceDate, Instant start, Instant end) {
+        // EXTERNAL_MANUAL is the simplest resolvable supervisorKind for a test fixture
+        // (no real user/student subject lookup needed) — most tests here exercise
+        // evidence/date/anomaly rules, not supervisor resolution itself, and submission
+        // now requires SOME supervisor to be set (issue 03 §3.2).
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, serviceDate, start, end,
-                "Somewhere", "cat_campus", "desc", null, null, evidenceFileIds, includesTravelTime);
+                "Somewhere", "cat_campus", "desc", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
+                evidenceFileIds, includesTravelTime, includesTravelTime ? "Travel reason" : null);
         return serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
     }
 

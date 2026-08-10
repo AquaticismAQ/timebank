@@ -77,7 +77,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         Instant now = Instant.now();
         // Real future registration window, long enough to register a student in real time.
         CreateProjectRequest request = new CreateProjectRequest(
-                "Has Registrant Test Project", "summary", "description", "cat_campus", null, null,
+                "Has Registrant Test Project", "summary", "description", "cat_campus", null, null, "ON_CAMPUS",
                 now.plusSeconds(7200), now.plusSeconds(10800), "Hall", 5, 100, null, null,
                 now.minusSeconds(60), now.plusSeconds(3600));
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
@@ -96,7 +96,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         // Admin pushes registrationCloseAt into the past (startAt stays in the future) —
         // with a real confirmed registrant now, the next sync must land on CLOSED, not ARCHIVED.
         UpdateProjectRequest closeItNow = new UpdateProjectRequest(
-                null, null, null, null, null, null,
+                null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null,
                 null, now.minusSeconds(10), registrationOpen.version());
         ProjectDto updated = projectService.updateDraft(registrationOpen.id(), closeItNow, "usr_test_admin", true, "zh-CN");
@@ -126,7 +126,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         Instant now = Instant.now();
         // Registration window open long enough to register a student in real time.
         CreateProjectRequest request = new CreateProjectRequest(
-                "Gate Test Project", "summary", "description", "cat_campus", null, null,
+                "Gate Test Project", "summary", "description", "cat_campus", null, null, "ON_CAMPUS",
                 now.plusSeconds(7200), now.plusSeconds(10800), "Hall", 1, 100, null, null,
                 now.minusSeconds(60), now.plusSeconds(3600));
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
@@ -147,7 +147,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         // cascades all the way to COMPLETED — no record was ever submitted for
         // the confirmed student, so the archive gate must reject.
         UpdateProjectRequest pushToPast = new UpdateProjectRequest(
-                null, null, null, null, null, null,
+                null, null, null, null, null, null, null,
                 now.minusSeconds(40), now.minusSeconds(20), null, null, null, null, null,
                 null, now.minusSeconds(50), registrationOpen.version());
         ProjectDto updated = projectService.updateDraft(registrationOpen.id(), pushToPast, "usr_test_admin", true, "zh-CN");
@@ -207,7 +207,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         Instant start = Instant.now().plus(5, ChronoUnit.DAYS);
         Instant end = start.plusSeconds(7200);
         CreateProjectRequest request = new CreateProjectRequest(
-                title, "A summary", "A description", "cat_campus", null, null,
+                title, "A summary", "A description", "cat_campus", null, null, "ON_CAMPUS",
                 start, end, "Main Hall", 10, 100, null, null, registrationOpenAt, registrationCloseAt);
         return projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
     }

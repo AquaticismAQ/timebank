@@ -238,12 +238,15 @@ Web 前端提供中文与英文两种界面（默认 `zh-CN`）。本地化的�
 
 - `id`, `title`, `summary`, `description`
 - `categoryId`, `organizationId`, `ownerId`
+- `hostOrganizationId`, `hostOrganizationName`, `deliveryScope`
 - `originProposalId`, `studentOrganizerIds`
 - `startAt`, `endAt`, `location`
 - `capacity`, `recognizedMinutes`
 - `eligibleGrades`, `evidenceRequirements`
 - `registrationOpenAt`, `registrationCloseAt`
 - `status`, `version`, `createdAt`, `updatedAt`
+
+**`hostOrganizationId`/`hostOrganizationName`/`deliveryScope`**（新增，见 `Docs/clarification/03-ServiceRecordFormOptimization.md` §4.2/§10）：每个项目恰有一个本校组织——全系统唯一一条单例（`GET /organizations` 中 `isSchoolOrganization: true` 的那条），由服务端解析，客户端不可写。`organizationId`/`organizationName` 保持原义：项目的**合作**组织（如有）——绝不会是本校组织本身（`POST`/`PATCH /projects` 会拒绝与本校组织相同的 `organizationId`，返回 `400`，因为本校组织已经自动关联，无需再指定）。`deliveryScope` 取值 `onCampus`/`offCampus`/`hybrid`，`POST /projects` 时**必填**（绝不从组织类型推断），`PATCH` 时可选；早于此字段的历史项目一律回填为 `hybrid`（"未知，待人工复核"，不是对校内/校外的猜测）。
 
 状态：
 
@@ -311,7 +314,7 @@ confirmed → cancelled
 
 ### 3.4 服务记录 `ServiceRecord`
 
-`sourceType` 标识服务的来源方式，创建时确定：`project`（在已报名项目下完成）、`external`（外部组织组织）、`self`（学生自发）。它决定提交时的必填字段组合，不改变状态机本身。
+`sourceType` 标识服务的来源方式，创建时确定，更新时不可再变更。**新建记录只接受 `project`（学生对该项目持有 `confirmed` 报名）或 `self`（学生自发）**（见 `Docs/clarification/03-ServiceRecordFormOptimization.md` §3/§7.3，取代此前 `project`/`external`/`self` 三分）。`external` 仅作为**历史数据**保留——既有记录保留该来源、可读可审核，处于 `draft`/`returned` 的旧记录仍可用原有自由文本字段编辑并重新提交一次（来源本身不变），但 `POST /service-records` 会直接拒绝 `sourceType: "external"`。`sourceType` 决定创建和提交时哪些字段必填/由服务端派生，不改变状态机本身。
 
 状态：
 
@@ -324,16 +327,24 @@ approved → corrected
 
 核心字段：
 
-- `id`, `studentId`, `projectId`, `sourceType`
+- `id`, `studentId`, `projectId`, `sourceType`, `recordNumber`
 - `serviceDate`, `startAt`, `endAt`, `durationMinutes`
 - `location`, `organizationId`, `organizationName`
+- `hostOrganizationName`, `partnerOrganizationNames`
 - `serviceCategoryId`, `description`
-- `supervisor`, `evidenceFiles`, `includesTravelTime`
+- `supervisorKind`, `supervisorSubjectId`, `supervisorName`, `supervisorContact`
+- `evidenceFiles`, `includesTravelTime`, `travelTimeReason`
 - `status`, `currentRevision`, `reviewSummary`
 - `creditedUnits`, `accountTransactionId`
 - `version`, `createdAt`, `submittedAt`, `updatedAt`
 
-`includesTravelTime` 是披露标志（申报时长是否包含在途时间），创建与更新时可写，不是派生字段。
+`includesTravelTime` 是披露标志（申报时长是否包含在途时间），创建与更新时可写，不是派生字段；`includesTravelTime` 为 true 时 `travelTimeReason` 必填（提交时校验，创建草稿时不强制，允许保存不完整草稿），且从不计入 `durationMinutes`。
+
+**`sourceType: "project"`**（§10 D1/Q1）：客户端只需提供 `projectId`——`organizationId`/`organizationName`/`location`/`serviceCategoryId`/`supervisorKind`/`supervisorSubjectId`/`supervisorName`/`supervisorContact` 即使客户端传了也一律忽略，全部由服务端根据项目解析并在创建时不可变快照（之后修改项目本身不会追溯改变已创建的记录）。报名的 `confirmed` 状态在创建和提交时**都会**校验——草稿创建后取消报名会阻止提交。`hostOrganizationName`/`partnerOrganizationNames` 是快照时项目自身本校/合作组织的镜像。`supervisorKind` 恒为 `projectOwner`，解析自项目负责人账号（姓名+邮箱）；若该账号没有邮箱，提交会返回 `supervisorContact`/`CONTACT_MISSING` 字段错误，而不是静默省略联系方式。校内项目与校外合作项目一视同仁——项目负责人（恒为校内教师/管理员）始终是记录的主管，而不是合作组织自己的联系人。
+
+**`sourceType: "self"`**：`organizationId`/`organizationName` 仍为自由文本（不校验对应真实组织），与旧 `external` 来源一致。`supervisorKind` 为 `internalUser`/`student`/`externalManual` 之一 + `supervisorSubjectId`（真实用户或学生 id，服务端解析出姓名+邮箱/联系方式——若该账号无联系方式则返回 `CONTACT_MISSING` 字段错误），或者对 `externalManual` 直接使用客户端提供的 `supervisorName`/`supervisorContact`，二者均为必填（没有账号可回退）。完全不提供 `supervisorKind` 在提交时会报 `REQUIRED` 字段错误。
+
+**`recordNumber`**（§5.3/§10 D3）：创建时由服务端生成，唯一、不可变，格式为 `TB-{学年代码}-{年级}-{学号}-{序号}`，其中 `序号` 是按（学年、学生）维度原子递增的计数器——绝非"查最大值加一"。早于此字段的历史记录为 `null`。
 
 ### 3.5 审核 `Review`
 
@@ -416,6 +427,8 @@ queued → running → succeeded
 | `POST` | `/projects/{id}/archive` | `projects.archive` | 归档已完成的项目 |
 | `POST` | `/projects/{id}/cancel` | `projects.cancel` | 取消并直接归档一个进行中（或已完成）的项目，需填写原因 |
 | `GET` | `/projects/{id}/timeline` | `projects.audit.read` | 项目变更时间线 |
+
+`deliveryScope`（`onCampus`/`offCampus`/`hybrid`）在 `POST /projects` 时必填，`PATCH` 时可选——见 §3.1。
 
 项目状态变化使用动作端点，避免用通用 `PATCH status` 绕过业务校验。
 
@@ -588,6 +601,8 @@ queued → running → succeeded
 | `PATCH` | `/service-categories/{id}` | `rules.manage` | 更新类别 |
 
 `organizations.manage` 现由 `role_admin` 和 `role_teacher` 共同持有（2026-08-08 变更——此前仅管理员持有）。同一变更中，`Organization` 新增了 `description`（自由文本简介）字段，与既有的结构化字段 `type`/`contactName`/`contactEmail`/`contactPhone`/`address` 并列；`CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` 均已携带该字段。
+
+`OrganizationDto` 还携带只读的 `isSchoolOrganization` 布尔字段（见 `Docs/clarification/03-ServiceRecordFormOptimization.md` §4.1）——全系统恰有一条记录为 `true`，仅通过一次性种子创建，永远不经由 `POST /organizations`。`PATCH /organizations/{id}` 与 `POST /organizations/{id}/archive` 对该行均返回 `409`——其名称/地址/联系方式只能通过学校设置流程修改，不能走普通的组织管理流程，也永远不可被归档。每个项目的本校组织（见 §3.1）都解析自这一条记录。
 
 ### 4.11 账户与流水
 

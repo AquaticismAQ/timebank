@@ -108,6 +108,32 @@ public class ServiceRecord extends VersionedEntity {
     @Column(name = "supervisor_contact")
     private String supervisorContact;
 
+    /** Docs/clarification/03-ServiceRecordFormOptimization.md §5.1 — null for historical (pre-issue-03) and EXTERNAL-sourced records. */
+    @Setter
+    @Enumerated(EnumType.STRING)
+    @Column(name = "supervisor_kind", length = 20)
+    private SupervisorKind supervisorKind;
+
+    /** Null for {@code EXTERNAL_MANUAL} (no real account) and for {@code PROJECT_OWNER} snapshots taken before this field existed. */
+    @Setter
+    @Column(name = "supervisor_subject_id", length = 32)
+    private String supervisorSubjectId;
+
+    /** Server-generated, unique, immutable once assigned (§5.3) — null for historical records that pre-date this field. */
+    @Setter
+    @Column(name = "record_number", length = 64)
+    private String recordNumber;
+
+    /** Required when {@link #includesTravelTime} is true (§2); never counted toward {@link #durationMinutes}. */
+    @Setter
+    @Column(name = "travel_time_reason", length = 500)
+    private String travelTimeReason;
+
+    /** PROJECT-sourced only — the host/partner organization snapshot at creation time, as JSON (same pattern as {@code ServiceRecordRevision.snapshotJson}); null for SELF and historical records. */
+    @Setter
+    @Column(name = "project_organizations_snapshot", columnDefinition = "json")
+    private String projectOrganizationsSnapshot;
+
     @Setter
     @Convert(converter = StringListJsonConverter.class)
     @Column(name = "evidence_file_ids", columnDefinition = "json")

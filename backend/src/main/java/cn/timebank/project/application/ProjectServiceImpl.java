@@ -9,6 +9,7 @@ import cn.timebank.common.i18n.LocalizedNames;
 import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.organization.application.OrganizationService;
 import cn.timebank.organization.application.ServiceCategoryService;
+import cn.timebank.organization.application.dto.OrganizationDto;
 import cn.timebank.organization.application.dto.ServiceCategoryDto;
 import cn.timebank.project.application.dto.ProjectCapacitySnapshot;
 import cn.timebank.project.application.dto.ProjectDto;
@@ -17,13 +18,17 @@ import cn.timebank.project.application.dto.ProjectRequests.CancelProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.CreateProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.UpdateProjectRequest;
 import cn.timebank.project.application.dto.TimelineEntryDto;
+import cn.timebank.project.domain.DeliveryScope;
 import cn.timebank.project.domain.Project;
+import cn.timebank.project.domain.ProjectOrganization;
+import cn.timebank.project.domain.ProjectOrganizationRole;
 import cn.timebank.project.domain.ProjectRevision;
 import cn.timebank.project.domain.ProjectStateMachine;
 import cn.timebank.project.domain.ProjectStateMachine.ActorRole;
 import cn.timebank.project.domain.ProjectStatus;
 import cn.timebank.project.infrastructure.EnrollmentReadRepository;
 import cn.timebank.project.infrastructure.ProjectArchiveReadinessRepository;
+import cn.timebank.project.infrastructure.ProjectOrganizationRepository;
 import cn.timebank.project.infrastructure.ProjectRepository;
 import cn.timebank.project.infrastructure.ProjectRevisionRepository;
 import cn.timebank.security.application.CookieSessionUserDetails;
@@ -52,6 +57,7 @@ class ProjectServiceImpl implements ProjectService {
 
     private final ProjectRepository repository;
     private final ProjectRevisionRepository revisionRepository;
+    private final ProjectOrganizationRepository projectOrganizationRepository;
     private final EnrollmentReadRepository enrollmentReadRepository;
     private final ProjectArchiveReadinessRepository archiveReadinessRepository;
     private final ServiceCategoryService serviceCategoryService;
@@ -62,12 +68,14 @@ class ProjectServiceImpl implements ProjectService {
     private final ObjectMapper objectMapper;
 
     ProjectServiceImpl(ProjectRepository repository, ProjectRevisionRepository revisionRepository,
+                       ProjectOrganizationRepository projectOrganizationRepository,
                        EnrollmentReadRepository enrollmentReadRepository, ProjectArchiveReadinessRepository archiveReadinessRepository,
                        ServiceCategoryService serviceCategoryService,
                        OrganizationService organizationService, AcademicStructureService academicStructureService,
                        UserService userService, AuditService auditService, ObjectMapper objectMapper) {
         this.repository = repository;
         this.revisionRepository = revisionRepository;
+        this.projectOrganizationRepository = projectOrganizationRepository;
         this.enrollmentReadRepository = enrollmentReadRepository;
         this.archiveReadinessRepository = archiveReadinessRepository;
         this.serviceCategoryService = serviceCategoryService;
@@ -106,8 +114,9 @@ class ProjectServiceImpl implements ProjectService {
         Map<String, String> ownerNames = userService.displayNamesOf(
                 page.getContent().stream().map(Project::getOwnerId).distinct().toList());
         Map<String, String> orgNames = organizationNameMap(page.getContent());
+        OrganizationDto schoolOrg = schoolOrganization();
 
-        return page.map(p -> toDto(p, categoryNames, gradeNames, enrolledCounts, myStatuses, ownerNames, orgNames));
+        return page.map(p -> toDto(p, categoryNames, gradeNames, enrolledCounts, myStatuses, ownerNames, orgNames, schoolOrg));
     }
 
     @Override
@@ -127,11 +136,22 @@ class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
+    public ProjectDto getDetail(String id, String resolvedLanguage) {
+        Project project = findOrThrow(id);
+        syncTimeBasedStatus(project);
+        repository.saveAndFlush(project);
+        return toSingleDtoNoScope(project, null, resolvedLanguage);
+    }
+
+    @Override
+    @Transactional
     public ProjectDto createDraft(CreateProjectRequest request, String actorId, boolean actorIsAdmin, String resolvedLanguage) {
         requireCategory(request.categoryId());
+        String schoolOrgId = organizationService.getSchoolOrganization().id();
         if (request.organizationId() != null) {
-            organizationService.get(request.organizationId());
+            requirePartnerOrganization(request.organizationId(), schoolOrgId);
         }
+        DeliveryScope deliveryScope = parseDeliveryScope(request.deliveryScope());
         if (request.eligibleGradeIds() != null) {
             requireGrades(request.eligibleGradeIds());
         }
@@ -144,11 +164,13 @@ class ProjectServiceImpl implements ProjectService {
         project.setSummary(request.summary());
         project.setDescription(request.description());
         project.setOrganizationId(request.organizationId());
+        project.setDeliveryScope(deliveryScope);
         project.setLocation(request.location());
         project.setEligibleGradeIds(request.eligibleGradeIds());
         project.setEvidenceRequirements(request.evidenceRequirements());
         validateDateOrdering(project);
         repository.save(project);
+        writeProjectOrganizations(project.getId(), schoolOrgId, request.organizationId());
 
         auditService.record(new AuditEntry(actorId, "projects.create", "project.create", "project", project.getId(),
                 null, null, null));
@@ -170,8 +192,15 @@ class ProjectServiceImpl implements ProjectService {
             project.setCategoryId(request.categoryId());
         }
         if (request.organizationId() != null) {
-            organizationService.get(request.organizationId());
+            String schoolOrgId = organizationService.getSchoolOrganization().id();
+            requirePartnerOrganization(request.organizationId(), schoolOrgId);
             project.setOrganizationId(request.organizationId());
+            projectOrganizationRepository.deleteByProjectIdAndRole(project.getId(), ProjectOrganizationRole.PARTNER);
+            projectOrganizationRepository.save(new ProjectOrganization(OpaqueIds.generate("porg"), project.getId(),
+                    request.organizationId(), ProjectOrganizationRole.PARTNER, 1));
+        }
+        if (request.deliveryScope() != null) {
+            project.setDeliveryScope(parseDeliveryScope(request.deliveryScope()));
         }
         applyOwnerIfPermitted(project, request.ownerId(), actorIsAdmin);
         if (request.startAt() != null) project.setStartAt(request.startAt());
@@ -276,10 +305,16 @@ class ProjectServiceImpl implements ProjectService {
         project.setSummary(request.summary());
         project.setDescription(request.description());
         project.setOrganizationId(request.organizationId());
+        // The proposal flow has no on/off-campus question of its own — same
+        // "unknown, needs manual review" default V18's column default applies to
+        // pre-existing projects (issue 03 §10 D5), not a guess either way.
+        project.setDeliveryScope(DeliveryScope.HYBRID);
         project.setLocation(request.location());
         project.setEvidenceRequirements(request.evidenceRequirements());
         request.studentOrganizerIds().forEach(project::addStudentOrganizer);
         repository.save(project);
+        String schoolOrgId = organizationService.getSchoolOrganization().id();
+        writeProjectOrganizations(project.getId(), schoolOrgId, request.organizationId());
 
         auditService.record(new AuditEntry(request.ownerId(), "projects.create", "project.generatedFromProposal",
                 "project", project.getId(), null, request.originProposalId(), null));
@@ -370,6 +405,36 @@ class ProjectServiceImpl implements ProjectService {
                 1, snapshot, editedBy, Instant.now()));
     }
 
+    /** HOST_SCHOOL is automatic (§4.2) — a client naming the school org as `organizationId` is almost certainly confused, not intentional. */
+    private void requirePartnerOrganization(String organizationId, String schoolOrgId) {
+        organizationService.get(organizationId);
+        if (organizationId.equals(schoolOrgId)) {
+            throw ApiException.invalidRequest(
+                    "organizationId must be a partner organization — the school organization is already the host by default.");
+        }
+    }
+
+    /** Always writes HOST_SCHOOL; writes PARTNER only if a distinct organization was supplied (defensive on the school-org-equals check for the no-user-input proposal-generation path — that one has nothing to report a field error to). */
+    private void writeProjectOrganizations(String projectId, String schoolOrgId, String partnerOrganizationId) {
+        projectOrganizationRepository.save(new ProjectOrganization(OpaqueIds.generate("porg"), projectId,
+                schoolOrgId, ProjectOrganizationRole.HOST_SCHOOL, 0));
+        if (partnerOrganizationId != null && !partnerOrganizationId.equals(schoolOrgId)) {
+            projectOrganizationRepository.save(new ProjectOrganization(OpaqueIds.generate("porg"), projectId,
+                    partnerOrganizationId, ProjectOrganizationRole.PARTNER, 1));
+        }
+    }
+
+    private DeliveryScope parseDeliveryScope(String raw) {
+        if (raw == null) {
+            throw ApiException.invalidRequest("deliveryScope is required.");
+        }
+        try {
+            return DeliveryScope.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            throw ApiException.invalidRequest("Unknown deliveryScope: " + raw);
+        }
+    }
+
     private void requireCategory(String categoryId) {
         boolean exists = serviceCategoryService.list("zh-CN").stream().anyMatch(c -> c.id().equals(categoryId));
         if (!exists) {
@@ -444,7 +509,7 @@ class ProjectServiceImpl implements ProjectService {
         Map<String, String> myStatuses = enrollmentReadRepository.myApplicationStatusByProjectIds(List.of(p.getId()), principal.studentId());
         Map<String, String> ownerNames = userService.displayNamesOf(List.of(p.getOwnerId()));
         Map<String, String> orgNames = organizationNameMap(List.of(p));
-        return toDto(p, categoryNames, gradeNames, enrolledCounts, myStatuses, ownerNames, orgNames);
+        return toDto(p, categoryNames, gradeNames, enrolledCounts, myStatuses, ownerNames, orgNames, schoolOrganization());
     }
 
     /** For create/update/action responses, where there is no ambient scope-check to reuse (the actor already passed a permission check). */
@@ -454,17 +519,24 @@ class ProjectServiceImpl implements ProjectService {
         Map<String, Integer> enrolledCounts = enrollmentReadRepository.countConfirmedByProjectIds(List.of(p.getId()));
         Map<String, String> ownerNames = userService.displayNamesOf(List.of(p.getOwnerId()));
         Map<String, String> orgNames = organizationNameMap(List.of(p));
-        return toDto(p, categoryNames, gradeNames, enrolledCounts, Map.of(), ownerNames, orgNames);
+        return toDto(p, categoryNames, gradeNames, enrolledCounts, Map.of(), ownerNames, orgNames, schoolOrganization());
+    }
+
+    /** Every project's host is the same singleton (§4.2) — resolved once per response batch, not per project. */
+    private OrganizationDto schoolOrganization() {
+        return organizationService.getSchoolOrganization();
     }
 
     private ProjectDto toDto(Project p, Map<String, String> categoryNames, Map<String, String> gradeNames,
                               Map<String, Integer> enrolledCounts, Map<String, String> myStatuses,
-                              Map<String, String> ownerNames, Map<String, String> orgNames) {
+                              Map<String, String> ownerNames, Map<String, String> orgNames,
+                              OrganizationDto schoolOrg) {
         List<String> eligibleGradeNames = p.getEligibleGradeIds() == null ? List.of()
                 : p.getEligibleGradeIds().stream().map(id -> gradeNames.getOrDefault(id, "")).toList();
         return new ProjectDto(p.getId(), p.getTitle(), p.getSummary(), p.getDescription(),
                 p.getCategoryId(), categoryNames.getOrDefault(p.getCategoryId(), ""),
                 p.getOrganizationId(), p.getOrganizationId() != null ? orgNames.getOrDefault(p.getOrganizationId(), "") : null,
+                schoolOrg.id(), schoolOrg.name(), p.getDeliveryScope().name(),
                 p.getOwnerId(), ownerNames.getOrDefault(p.getOwnerId(), ""),
                 p.getOriginProposalId(), List.copyOf(p.getStudentOrganizerIds()),
                 p.getStartAt(), p.getEndAt(), p.getLocation(),

@@ -8,9 +8,14 @@ import cn.timebank.common.error.ApiException;
 import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.common.idempotency.IdempotencyService;
 import cn.timebank.common.pagination.FilterSpecifications;
+import cn.timebank.enrollment.application.EnrollmentService;
 import cn.timebank.file.application.FileService;
+import cn.timebank.iam.application.UserService;
+import cn.timebank.iam.application.dto.UserDto;
 import cn.timebank.organization.application.ServiceCategoryService;
 import cn.timebank.organization.application.dto.ServiceCategoryDto;
+import cn.timebank.project.application.ProjectService;
+import cn.timebank.project.application.dto.ProjectDto;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.DataScopeResolver;
 import cn.timebank.security.application.DataScopeSpecifications;
@@ -29,10 +34,14 @@ import cn.timebank.servicerecord.domain.ServiceRecordStateMachine;
 import cn.timebank.servicerecord.domain.ServiceRecordStateMachine.ActorRole;
 import cn.timebank.servicerecord.domain.ServiceRecordStatus;
 import cn.timebank.servicerecord.domain.SourceType;
+import cn.timebank.servicerecord.domain.SupervisorKind;
 import cn.timebank.servicerecord.infrastructure.ServiceRecordRepository;
 import cn.timebank.servicerecord.infrastructure.ServiceRecordRevisionRepository;
+import cn.timebank.student.application.AcademicStructureService;
 import cn.timebank.student.application.StudentService;
+import cn.timebank.student.application.dto.AcademicYearDto;
 import cn.timebank.student.application.dto.StudentDetailDto;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -62,6 +71,11 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
     private final ServiceRecordRevisionRepository revisionRepository;
     private final StudentService studentService;
     private final ServiceCategoryService serviceCategoryService;
+    private final ProjectService projectService;
+    private final EnrollmentService enrollmentService;
+    private final UserService userService;
+    private final AcademicStructureService academicStructureService;
+    private final RecordNumberGenerator recordNumberGenerator;
     private final AuditService auditService;
     private final DataScopeResolver dataScopeResolver;
     private final IdempotencyService idempotencyService;
@@ -71,6 +85,8 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
 
     ServiceRecordServiceImpl(ServiceRecordRepository repository, ServiceRecordRevisionRepository revisionRepository,
                               StudentService studentService, ServiceCategoryService serviceCategoryService,
+                              ProjectService projectService, EnrollmentService enrollmentService, UserService userService,
+                              AcademicStructureService academicStructureService, RecordNumberGenerator recordNumberGenerator,
                               AuditService auditService, DataScopeResolver dataScopeResolver,
                               IdempotencyService idempotencyService, ObjectMapper objectMapper,
                               FileService fileService) {
@@ -78,6 +94,11 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         this.revisionRepository = revisionRepository;
         this.studentService = studentService;
         this.serviceCategoryService = serviceCategoryService;
+        this.projectService = projectService;
+        this.enrollmentService = enrollmentService;
+        this.userService = userService;
+        this.academicStructureService = academicStructureService;
+        this.recordNumberGenerator = recordNumberGenerator;
         this.auditService = auditService;
         this.dataScopeResolver = dataScopeResolver;
         this.idempotencyService = idempotencyService;
@@ -110,7 +131,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
     @Override
     @Transactional
     public ServiceRecordDto createDraft(CreateServiceRecordRequest request, String studentId, String actorId, String resolvedLanguage) {
-        SourceType sourceType = parseSourceType(request.sourceType());
+        SourceType sourceType = parseSourceTypeForCreate(request.sourceType());
         StudentDetailDto student = studentService.getDetail(studentId, false, actorId, resolvedLanguage);
         int durationMinutes = (int) Duration.between(request.startAt(), request.endAt()).toMinutes();
 
@@ -118,15 +139,19 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         ServiceRecord record = new ServiceRecord(OpaqueIds.generate("rec"), studentId, student.displayName(),
                 student.gradeId(), student.classId(), sourceType, request.serviceDate(), request.startAt(),
                 request.endAt(), durationMinutes, request.serviceCategoryId(), now);
-        record.setProjectId(request.projectId());
-        record.setOrganizationId(request.organizationId());
-        record.setOrganizationName(request.organizationName());
         record.setLocation(request.location());
         record.setDescription(request.description());
-        record.setSupervisorName(request.supervisorName());
-        record.setSupervisorContact(request.supervisorContact());
         record.setEvidenceFileIds(request.evidenceFileIds());
         record.setIncludesTravelTime(request.includesTravelTime());
+        record.setTravelTimeReason(request.travelTimeReason());
+
+        if (sourceType == SourceType.PROJECT) {
+            applyProjectSnapshot(record, request.projectId(), studentId, resolvedLanguage);
+        } else {
+            record.setProjectId(null);
+            applySelfFields(record, request);
+        }
+        record.setRecordNumber(generateRecordNumber(student));
         repository.save(record);
 
         auditService.record(new AuditEntry(actorId, "serviceRecords.create", "serviceRecord.create", "serviceRecord",
@@ -144,22 +169,37 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         ConcurrencyControl.checkVersion(record.getVersion(), request.version());
         writeRevision(record, principalId(auth));
 
-        if (request.projectId() != null) record.setProjectId(request.projectId());
-        if (request.organizationId() != null) record.setOrganizationId(request.organizationId());
-        if (request.organizationName() != null) record.setOrganizationName(request.organizationName());
+        // Source is locked (never changes on update — issue 03 §3). PROJECT's
+        // organization/category/location/supervisor snapshot is likewise locked:
+        // it was fixed at creation time and is never re-derived from the project's
+        // *current* state, so a later edit to the project can't retroactively alter
+        // an already-drafted record's semantics (§4.3). Only date/time/description/
+        // evidence/travel-time are ever editable for a PROJECT-sourced record.
+        if (record.getSourceType() == SourceType.SELF) {
+            applySelfFieldsForUpdate(record, request);
+        } else if (record.getSourceType() == SourceType.EXTERNAL) {
+            // Historical data only (§7.3) — the pre-issue-03 free-text behavior,
+            // unchanged, so an old returned EXTERNAL record can still be edited and
+            // resubmitted without being silently rewritten into a new source.
+            if (request.organizationId() != null) record.setOrganizationId(request.organizationId());
+            if (request.organizationName() != null) record.setOrganizationName(request.organizationName());
+            if (request.supervisorName() != null) record.setSupervisorName(request.supervisorName());
+            if (request.supervisorContact() != null) record.setSupervisorContact(request.supervisorContact());
+            if (request.serviceCategoryId() != null) record.setServiceCategoryId(request.serviceCategoryId());
+            if (request.location() != null) record.setLocation(request.location());
+        }
+        // PROJECT: none of the above — request fields for these are silently ignored.
+
         if (request.serviceDate() != null) record.setServiceDate(request.serviceDate());
         if (request.startAt() != null) record.setStartAt(request.startAt());
         if (request.endAt() != null) record.setEndAt(request.endAt());
         if (request.startAt() != null || request.endAt() != null) {
             record.setDurationMinutes((int) Duration.between(record.getStartAt(), record.getEndAt()).toMinutes());
         }
-        if (request.location() != null) record.setLocation(request.location());
-        if (request.serviceCategoryId() != null) record.setServiceCategoryId(request.serviceCategoryId());
         if (request.description() != null) record.setDescription(request.description());
-        if (request.supervisorName() != null) record.setSupervisorName(request.supervisorName());
-        if (request.supervisorContact() != null) record.setSupervisorContact(request.supervisorContact());
         if (request.evidenceFileIds() != null) record.setEvidenceFileIds(request.evidenceFileIds());
         if (request.includesTravelTime() != null) record.setIncludesTravelTime(request.includesTravelTime());
+        if (request.travelTimeReason() != null) record.setTravelTimeReason(request.travelTimeReason());
         record.setUpdatedAt(Instant.now());
 
         auditService.record(new AuditEntry(principalId(auth), "serviceRecords.create", "serviceRecord.update",
@@ -311,7 +351,165 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         return new AnnualProgressSummary(approved, submitted + underReview);
     }
 
-    // --- B3.3 submission validation ---
+    // --- issue 03: source-aware field resolution ---
+
+    private record OrgSnapshotEntry(String organizationId, String organizationName, String role) {
+    }
+
+    /**
+     * PROJECT source: every organization/category/location/supervisor field comes
+     * from the project, never the client (§3.1/§5.2) — re-validated here (not just
+     * trusted from a picker) since a tampered projectId must be rejected the same
+     * way at both draft-creation and submission time (§10 D-notes).
+     */
+    private void applyProjectSnapshot(ServiceRecord record, String projectId, String studentId, String resolvedLanguage) {
+        if (projectId == null || projectId.isBlank()) {
+            throw ApiException.invalidRequest("A project-sourced record needs a projectId.");
+        }
+        if (!enrollmentService.isConfirmed(projectId, studentId)) {
+            throw ApiException.invalidRequest("You do not have a confirmed registration for this project.");
+        }
+        ProjectDto project = projectService.getDetail(projectId, resolvedLanguage);
+
+        record.setProjectId(projectId);
+        record.setOrganizationId(project.organizationId());
+        record.setOrganizationName(project.organizationName());
+        record.setLocation(project.location());
+        record.setServiceCategoryId(project.categoryId());
+
+        UserDto owner = userService.getById(project.ownerId());
+        if (owner.email() == null || owner.email().isBlank()) {
+            throw ApiException.validationFailed("Submission failed validation.", List.of(new FieldErrorDetail(
+                    "supervisorContact", "CONTACT_MISSING", "The project owner has no contact information on file.")));
+        }
+        record.setSupervisorKind(SupervisorKind.PROJECT_OWNER);
+        record.setSupervisorSubjectId(project.ownerId());
+        record.setSupervisorName(project.ownerName());
+        record.setSupervisorContact(owner.email());
+
+        List<OrgSnapshotEntry> snapshot = new ArrayList<>();
+        snapshot.add(new OrgSnapshotEntry(project.hostOrganizationId(), project.hostOrganizationName(), "HOST_SCHOOL"));
+        if (project.organizationId() != null) {
+            snapshot.add(new OrgSnapshotEntry(project.organizationId(), project.organizationName(), "PARTNER"));
+        }
+        record.setProjectOrganizationsSnapshot(writeSnapshot(snapshot));
+    }
+
+    /** SELF source (create): free organization text, client-chosen supervisor kind, all server-resolved into a snapshot (§3.2/§6). */
+    private void applySelfFields(ServiceRecord record, CreateServiceRecordRequest request) {
+        record.setOrganizationId(request.organizationId());
+        record.setOrganizationName(request.organizationName());
+        resolveSupervisor(record, request.supervisorKind(), request.supervisorSubjectId(),
+                request.supervisorName(), request.supervisorContact());
+    }
+
+    /** Same as {@link #applySelfFields} but only touches fields the client actually sent (PATCH semantics). */
+    private void applySelfFieldsForUpdate(ServiceRecord record, UpdateServiceRecordRequest request) {
+        if (request.organizationId() != null) record.setOrganizationId(request.organizationId());
+        if (request.organizationName() != null) record.setOrganizationName(request.organizationName());
+        if (request.serviceCategoryId() != null) record.setServiceCategoryId(request.serviceCategoryId());
+        if (request.location() != null) record.setLocation(request.location());
+        if (request.supervisorKind() != null) {
+            resolveSupervisor(record, request.supervisorKind(), request.supervisorSubjectId(),
+                    request.supervisorName(), request.supervisorContact());
+        }
+    }
+
+    /** §6: "select an identity, the server resolves it" — never trust a client-submitted name/contact for anything but EXTERNAL_MANUAL. */
+    private void resolveSupervisor(ServiceRecord record, String kindRaw, String subjectId, String manualName, String manualContact) {
+        if (kindRaw == null) {
+            return; // not provided on this call — nothing to resolve (e.g. a PATCH touching unrelated fields)
+        }
+        SupervisorKind kind;
+        try {
+            kind = SupervisorKind.valueOf(kindRaw);
+        } catch (IllegalArgumentException e) {
+            throw ApiException.invalidRequest("Unknown supervisorKind: " + kindRaw);
+        }
+        switch (kind) {
+            case INTERNAL_USER -> {
+                UserDto user = userService.getById(requireSubjectId(subjectId));
+                requireContact(user.email(), "supervisorSubjectId");
+                record.setSupervisorKind(SupervisorKind.INTERNAL_USER);
+                record.setSupervisorSubjectId(user.id());
+                record.setSupervisorName(user.displayName());
+                record.setSupervisorContact(user.email());
+            }
+            case STUDENT -> {
+                // includeSensitiveFields=true: a legitimate contact-resolution read,
+                // audited the same as any other sensitive-field access (§6 rule 2).
+                StudentDetailDto peer = studentService.getDetail(requireSubjectId(subjectId), true, "system", "zh-CN");
+                requireContact(peer.email(), "supervisorSubjectId");
+                record.setSupervisorKind(SupervisorKind.STUDENT);
+                record.setSupervisorSubjectId(peer.id());
+                record.setSupervisorName(peer.displayName());
+                record.setSupervisorContact(peer.email());
+            }
+            case EXTERNAL_MANUAL -> {
+                if (manualName == null || manualName.isBlank()) {
+                    throw ApiException.invalidRequest("supervisorName is required for an external manually-entered supervisor.");
+                }
+                if (manualContact == null || manualContact.isBlank()) {
+                    // §3.2: "允许手工填写外部主管，但其联系方式必填" — unlike INTERNAL_USER/STUDENT
+                    // (whose contact is resolved server-side and only fails if the account
+                    // genuinely has none on file), a manual entry has no account to fall back
+                    // on at all, so this is required up front, not just at submission time.
+                    throw ApiException.invalidRequest("supervisorContact is required for an external manually-entered supervisor.");
+                }
+                record.setSupervisorKind(SupervisorKind.EXTERNAL_MANUAL);
+                record.setSupervisorSubjectId(null);
+                record.setSupervisorName(manualName);
+                record.setSupervisorContact(manualContact);
+            }
+            case PROJECT_OWNER -> throw ApiException.invalidRequest(
+                    "supervisorKind PROJECT_OWNER is derived automatically for PROJECT-sourced records, not client-settable.");
+        }
+    }
+
+    private String requireSubjectId(String subjectId) {
+        if (subjectId == null || subjectId.isBlank()) {
+            throw ApiException.invalidRequest("supervisorSubjectId is required for this supervisorKind.");
+        }
+        return subjectId;
+    }
+
+    private void requireContact(String contact, String field) {
+        if (contact == null || contact.isBlank()) {
+            throw ApiException.validationFailed("Submission failed validation.",
+                    List.of(new FieldErrorDetail(field, "CONTACT_MISSING", "The selected person has no contact information on file.")));
+        }
+    }
+
+    /** §5.3/§10 D3 — `TB-{academicYearCode}-{gradeLevel}-{studentNumber}-{seq}`, all fields read from the student's own record, never client input. */
+    private String generateRecordNumber(StudentDetailDto student) {
+        AcademicYearDto currentYear = academicStructureService.listAcademicYears().stream()
+                .filter(AcademicYearDto::current).findFirst()
+                .orElseThrow(() -> new IllegalStateException("No current academic year is configured."));
+        int seq = recordNumberGenerator.nextSequence(currentYear.id(), student.id());
+        return "TB-%s-%d-%s-%03d".formatted(currentYear.code(), student.gradeLevel(), student.studentNumber(), seq);
+    }
+
+    private String writeSnapshot(List<OrgSnapshotEntry> entries) {
+        try {
+            return objectMapper.writeValueAsString(entries);
+        } catch (Exception e) {
+            return "[]";
+        }
+    }
+
+    private List<OrgSnapshotEntry> readSnapshot(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<OrgSnapshotEntry>>() {
+            });
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    // --- B3.3 submission validation (extended per issue 03 §3/§10) ---
 
     private void runSubmissionValidation(ServiceRecord record) {
         List<FieldErrorDetail> errors = new ArrayList<>();
@@ -320,12 +518,15 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
             case PROJECT -> {
                 if (isBlank(record.getProjectId())) {
                     errors.add(new FieldErrorDetail("projectId", "REQUIRED", "A project-sourced record needs a projectId."));
+                } else if (!enrollmentService.isConfirmed(record.getProjectId(), record.getStudentId())) {
+                    // Re-checked at submission (§3.1) — a confirmed registration cancelled
+                    // between draft-save and submit must block submission too, not just creation.
+                    errors.add(new FieldErrorDetail("projectId", "NOT_CONFIRMED",
+                            "You no longer have a confirmed registration for this project."));
                 }
-                // Project eligibility/registration-relationship validation is an honest
-                // placeholder here: `project`/`enrollment` don't exist until B4, so only
-                // structural presence is checked (mirrors B2's organization.projectCount=0).
             }
             case EXTERNAL -> {
+                // Historical source only (§7.3) — unchanged original validation.
                 if (isBlank(record.getOrganizationName())) {
                     errors.add(new FieldErrorDetail("organizationName", "REQUIRED", "An external record needs an organization name."));
                 }
@@ -334,10 +535,15 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
                 }
             }
             case SELF -> {
-                // No additional required companions.
+                if (record.getSupervisorKind() == null) {
+                    errors.add(new FieldErrorDetail("supervisorKind", "REQUIRED", "A self-initiated record needs a supervisor."));
+                }
             }
         }
 
+        if (record.isIncludesTravelTime() && isBlank(record.getTravelTimeReason())) {
+            errors.add(new FieldErrorDetail("travelTimeReason", "REQUIRED", "A reason is required when travel time is included."));
+        }
         if (!record.getEndAt().isAfter(record.getStartAt())) {
             errors.add(new FieldErrorDetail("endAt", "INVALID_RANGE", "End time must be after start time."));
         }
@@ -392,12 +598,18 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         return (existing == null || existing.isBlank()) ? addition : existing + " " + addition;
     }
 
-    private SourceType parseSourceType(String raw) {
+    /** New creates only accept PROJECT/SELF (§7.3) — EXTERNAL is historical data, reachable only via an existing record's PATCH/submit path. */
+    private SourceType parseSourceTypeForCreate(String raw) {
+        SourceType type;
         try {
-            return SourceType.valueOf(raw);
+            type = SourceType.valueOf(raw);
         } catch (IllegalArgumentException e) {
             throw ApiException.invalidRequest("Unknown sourceType: " + raw);
         }
+        if (type == SourceType.EXTERNAL) {
+            throw ApiException.invalidRequest("sourceType EXTERNAL is historical data only — new records must be PROJECT or SELF.");
+        }
+        return type;
     }
 
     private void writeRevision(ServiceRecord record, String editedBy) {
@@ -458,12 +670,19 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
     }
 
     private ServiceRecordDto toDto(ServiceRecord r, Map<String, String> categoryNames) {
+        List<OrgSnapshotEntry> snapshot = readSnapshot(r.getProjectOrganizationsSnapshot());
+        String hostOrganizationName = snapshot.stream().filter(e -> "HOST_SCHOOL".equals(e.role()))
+                .map(OrgSnapshotEntry::organizationName).findFirst().orElse(null);
+        List<String> partnerOrganizationNames = snapshot.stream().filter(e -> "PARTNER".equals(e.role()))
+                .map(OrgSnapshotEntry::organizationName).toList();
         return new ServiceRecordDto(r.getId(), r.getStudentId(), r.getStudentName(), r.getProjectId(),
                 r.getSourceType().name(), r.getServiceDate(), r.getStartAt(), r.getEndAt(), r.getDurationMinutes(),
                 r.getLocation(), r.getOrganizationId(), r.getOrganizationName(), r.getServiceCategoryId(),
-                categoryNames.getOrDefault(r.getServiceCategoryId(), ""), r.getDescription(), r.getSupervisorName(),
-                r.getSupervisorContact(), r.getEvidenceFileIds(), r.isIncludesTravelTime(), r.getStatus().name(),
-                r.getCurrentRevision(), r.getAssignedReviewerId(), r.isHasAnomaly(), r.getAnomalyNote(),
+                categoryNames.getOrDefault(r.getServiceCategoryId(), ""), r.getDescription(),
+                r.getSupervisorKind() != null ? r.getSupervisorKind().name() : null,
+                r.getSupervisorName(), r.getSupervisorContact(), r.getEvidenceFileIds(), r.isIncludesTravelTime(),
+                r.getTravelTimeReason(), r.getRecordNumber(), hostOrganizationName, partnerOrganizationNames,
+                r.getStatus().name(), r.getCurrentRevision(), r.getAssignedReviewerId(), r.isHasAnomaly(), r.getAnomalyNote(),
                 r.getReviewSummary(), r.getCreditedUnits(), r.getAccountTransactionId(), r.getVersion(),
                 r.getCreatedAt(), r.getSubmittedAt(), r.getUpdatedAt());
     }

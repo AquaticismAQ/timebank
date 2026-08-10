@@ -53,6 +53,46 @@ INSERT IGNORE INTO service_category (id, code, name_zh, name_en, active, created
 INSERT IGNORE INTO school_info (id, name, full_name, student_dev_center, contact, default_language, current_academic_year_code, updated_at) VALUES
     ('school_default', 'Example City HD', 'Example Township Middle School', 'Student Development Center H300', 'Teacher Wei Chen', 'zh-CN', '2025-2026', NOW(3));
 
+-- The singleton school Organization row (V17's schema, issue 03-ServiceRecordFormOptimization
+-- §4.1) — mirrors school_info's own values rather than being derived from it, since this
+-- repeatable migration and school_info's own seed above are independent INSERT IGNOREs with
+-- no ordering guarantee relative to each other within the same file run.
+INSERT IGNORE INTO organization (id, name, type, description, contact_name, contact_email, contact_phone, address,
+                                  status, is_school_organization, version, created_at, updated_at) VALUES
+    ('org_school_default', 'Example City HD', 'SCHOOL', 'Example Township Middle School', 'Teacher Wei Chen', NULL, NULL, NULL,
+     'ACTIVE', 1, 1, NOW(3), NOW(3));
+
+-- Backfill (issue 03 §10 D5): every project must have exactly one HOST_SCHOOL row.
+-- New projects get theirs from ProjectServiceImpl.createDraft()/.createFromProposal()
+-- at creation time (via OpaqueIds.generate("porg"), 31 chars, safely under the 32-char
+-- column); this backfill only ever matters for projects that pre-date V18. Ids here are
+-- MD5(...) (exactly 32 hex chars) rather than CONCAT('porg_host_', p.id) — that CONCAT
+-- form is 41+ chars against a VARCHAR(32) column, silently truncated by MySQL's default
+-- non-strict mode rather than rejected outright, which both loses the human-readable
+-- prefix's whole point and risks two different projects' truncated ids colliding at
+-- scale (caught live: every row on the shared test server's small dataset happened to
+-- stay unique by chance, not by correctness). INSERT IGNORE is a no-op once a
+-- HOST_SCHOOL row already exists for a project (checked by project_id+role below, not
+-- by id), so changing the id formula here doesn't re-trigger inserts for rows this
+-- migration already created under the old, truncated scheme.
+INSERT IGNORE INTO project_organization (id, project_id, organization_id, role, sort_order)
+SELECT MD5(CONCAT('host', p.id)), p.id, so.id, 'HOST_SCHOOL', 0
+FROM project p CROSS JOIN organization so
+WHERE so.is_school_organization = 1
+  AND NOT EXISTS (SELECT 1 FROM project_organization po WHERE po.project_id = p.id AND po.role = 'HOST_SCHOOL');
+
+-- Backfill: an existing single organization_id link becomes a PARTNER row, unless
+-- it already points at the school org itself (redundant with the HOST_SCHOOL row
+-- just inserted above, and would collide with it as an organization_id duplicate).
+INSERT IGNORE INTO project_organization (id, project_id, organization_id, role, sort_order)
+SELECT MD5(CONCAT('partner', p.id)), p.id, p.organization_id, 'PARTNER', 1
+FROM project p
+WHERE p.organization_id IS NOT NULL
+  AND p.organization_id NOT IN (SELECT id FROM organization WHERE is_school_organization = 1)
+  AND NOT EXISTS (
+      SELECT 1 FROM project_organization po
+      WHERE po.project_id = p.id AND po.organization_id = p.organization_id AND po.role = 'PARTNER');
+
 -- Feature flags: everything off (Design.md §14 — flags only, nothing flagged is built).
 INSERT IGNORE INTO feature_flag (code, enabled, updated_at) VALUES
     ('pov', 0, NOW(3)),

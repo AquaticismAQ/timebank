@@ -30,4 +30,12 @@ public interface EnrollmentService {
 
     /** B4.8: one row's failure does not discard the rest — each row runs in its own transaction. */
     List<BulkActionResult> bulkActions(BulkActionRequest request, String actorId, String resolvedLanguage);
+
+    /**
+     * Docs/clarification/03-ServiceRecordFormOptimization.md §3.1 — {@code servicerecord}
+     * validates a PROJECT-sourced record's {@code projectId} against this at both draft
+     * creation and submission (a tampered id must be rejected at both points, not just
+     * whichever one the client happened to hit first).
+     */
+    boolean isConfirmed(String projectId, String studentId);
 }

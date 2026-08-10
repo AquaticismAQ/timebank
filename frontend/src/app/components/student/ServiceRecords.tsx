@@ -1,10 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Plus, Search, X, FileText, AlertTriangle, ChevronDown, ChevronUp, Upload, Send, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { RECORD_STATUS_LABELS } from '../../lib/statusLabels';
-import { type RecordStatus, type ServiceRecord, type EvidenceFile } from '../../api/types';
+import { type RecordStatus, type ServiceRecord, type EvidenceFile, type Application, type Project } from '../../api/types';
 import { localDateTimeToISO, isoToLocalDateTime } from '../../lib/datetime';
-import { formatCoins } from '../../lib/format';
+import { formatCoins, minutesToHours, formatGradeClass } from '../../lib/format';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
@@ -14,6 +14,7 @@ import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { EvidenceLink } from '../EvidenceLink';
+import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -26,6 +27,7 @@ const colorMap: Record<string, string> = {
 };
 
 type ViewMode = 'list' | 'new';
+type SupervisorKind = '' | 'internalUser' | 'student' | 'externalManual';
 
 const STEP_KEYS = ['source', 'serviceInfo', 'evidence', 'confirmSubmit'];
 
@@ -121,9 +123,12 @@ export function ServiceRecords() {
 
   const removeEvidenceFile = (id: string) => setEvidenceFiles(prev => prev.filter(f => f.id !== id));
 
-  // New record form state
+  // New record form state — issue 03: only 'project'/'self' are selectable for a
+  // fresh record ('external' only ever appears here when resubmitting an existing
+  // historical record, never as a chooseable option — see sourceOptions below).
   const EMPTY_FORM = {
-    sourceType: 'external',
+    sourceType: 'self' as 'project' | 'external' | 'self',
+    projectId: '',
     serviceDate: '',
     startTime: '',
     endTime: '',
@@ -131,10 +136,15 @@ export function ServiceRecords() {
     organizationName: '',
     categoryId: 'cat_community',
     description: '',
+    supervisorKind: '' as SupervisorKind,
+    supervisorSubjectId: '',
     supervisorName: '',
     supervisorContact: '',
+    includesTravelTime: false,
+    travelTimeReason: '',
   };
   const [formData, setFormData] = useState(EMPTY_FORM);
+  const [supervisorOption, setSupervisorOption] = useState<SearchPickerOption[]>([]);
 
   // Distinguishes "resubmitting a returned record" (PATCH the existing
   // record, then submit) from "brand new record" (POST) — without this,
@@ -142,10 +152,39 @@ export function ServiceRecords() {
   // silently producing a duplicate record instead of fixing the returned one.
   const [editing, setEditing] = useState<{ id: string; version: number } | null>(null);
 
+  // PROJECT source: the student's own confirmed registrations (issue 03 §3.1 — only
+  // a project the student is actually CONFIRMED for is selectable), loaded once per
+  // "new record" session rather than per-keystroke since a student's own confirmed
+  // project list is small and doesn't need a search-as-you-type picker.
+  const [confirmedProjects, setConfirmedProjects] = useState<Application[]>([]);
+  useEffect(() => {
+    if (view !== 'new') return;
+    api.applications.list({ filter: { status: 'confirmed' }, pageSize: 100 })
+      .then(res => setConfirmedProjects(res.data))
+      .catch(() => setConfirmedProjects([]));
+  }, [view]);
+
+  // The full project detail (host/partner org, owner-as-supervisor, category, location,
+  // time range) is display-only here — the backend re-derives and snapshots all of it
+  // itself at create/submit time regardless of what this fetch shows (§3.1/§5.2).
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  useEffect(() => {
+    if (formData.sourceType !== 'project' || !formData.projectId) { setSelectedProject(null); return; }
+    let cancelled = false;
+    api.projects.get(formData.projectId).then(p => { if (!cancelled) setSelectedProject(p); }).catch(() => { if (!cancelled) setSelectedProject(null); });
+    return () => { cancelled = true; };
+  }, [formData.sourceType, formData.projectId]);
+
+  const durationMinutes = formData.startTime && formData.endTime
+    ? Math.round((new Date(`2000-01-01T${formData.endTime}`).getTime() - new Date(`2000-01-01T${formData.startTime}`).getTime()) / 60000)
+    : null;
+
   const openNewRecord = () => {
     setEditing(null);
     setFormData(EMPTY_FORM);
     setEvidenceFiles([]);
+    setSupervisorOption([]);
+    setSelectedProject(null);
     setStep(0);
     setView('new');
   };
@@ -169,6 +208,7 @@ export function ServiceRecords() {
     const end = isoToLocalDateTime(full.endAt);
     setFormData({
       sourceType: full.sourceType,
+      projectId: full.projectId || '',
       serviceDate: full.serviceDate || start.date,
       startTime: start.time,
       endTime: end.time,
@@ -176,9 +216,18 @@ export function ServiceRecords() {
       organizationName: full.organizationName,
       categoryId: full.serviceCategoryId,
       description: full.description,
+      supervisorKind: (full.supervisorKind as SupervisorKind) || '',
+      supervisorSubjectId: full.supervisorSubjectId || '',
       supervisorName: full.supervisorName,
       supervisorContact: full.supervisorContact,
+      includesTravelTime: full.includesTravelTime ?? false,
+      travelTimeReason: full.travelTimeReason || '',
     });
+    setSupervisorOption(
+      (full.supervisorKind === 'internalUser' || full.supervisorKind === 'student') && full.supervisorSubjectId
+        ? [{ id: full.supervisorSubjectId, label: full.supervisorName }]
+        : [],
+    );
     setEvidenceFiles(full.evidenceFiles);
     setStep(0);
     setView('new');
@@ -189,7 +238,8 @@ export function ServiceRecords() {
     const startTime = formData.startTime ? localDateTimeToISO(formData.serviceDate, formData.startTime) : undefined;
     const endTime = formData.endTime ? localDateTimeToISO(formData.serviceDate, formData.endTime) : undefined;
     return {
-      sourceType: formData.sourceType as 'project' | 'external' | 'self',
+      sourceType: formData.sourceType,
+      projectId: formData.sourceType === 'project' ? formData.projectId : undefined,
       serviceDate: formData.serviceDate,
       startAt: startTime,
       endAt: endTime,
@@ -197,9 +247,13 @@ export function ServiceRecords() {
       organizationName: formData.organizationName,
       serviceCategoryId: formData.categoryId,
       description: formData.description,
+      supervisorKind: formData.supervisorKind || undefined,
+      supervisorSubjectId: formData.supervisorSubjectId || undefined,
       supervisorName: formData.supervisorName,
       supervisorContact: formData.supervisorContact,
       evidenceFiles,
+      includesTravelTime: formData.includesTravelTime,
+      travelTimeReason: formData.travelTimeReason || undefined,
     };
   };
 
@@ -268,6 +322,37 @@ export function ServiceRecords() {
     }
   };
 
+  // Only 'project'/'self' are ever chooseable — 'external' is historical-only (§7.3):
+  // it can only appear here already-selected-and-locked, when resubmitting an
+  // existing record created before this change, never as a fresh pick.
+  const sourceOptions: { value: 'project' | 'self' | 'external'; label: string; desc: string }[] = [
+    { value: 'project', label: t('student.records.sourceProject'), desc: t('student.records.sourceProjectDesc') },
+    { value: 'self', label: t('student.records.sourceSelf'), desc: t('student.records.sourceSelfDesc') },
+  ];
+  if (editing && formData.sourceType === 'external') {
+    sourceOptions.unshift({ value: 'external', label: t('student.records.sourceExternal'), desc: t('student.records.sourceExternalDesc') });
+  }
+
+  const fetchSupervisorOptions = async (search: string): Promise<SearchPickerOption[]> => {
+    if (formData.supervisorKind === 'internalUser') {
+      const users = await api.users.directory('teacher', search);
+      return users.map(u => ({ id: u.id, label: u.displayName }));
+    }
+    if (formData.supervisorKind === 'student') {
+      const students = await api.students.directory(search);
+      return students.map(s => ({ id: s.id, label: s.displayName, sublabel: formatGradeClass(s.gradeLevel, s.className) }));
+    }
+    return [];
+  };
+
+  // Confirm-step summary — resolved once here rather than repeated inline
+  // conditionals, since PROJECT sources every field from `selectedProject`.
+  const confirmLocation = formData.sourceType === 'project' ? selectedProject?.location ?? '' : formData.location;
+  const confirmOrganization = formData.sourceType === 'project'
+    ? [selectedProject?.hostOrganizationName, selectedProject?.organizationName].filter(Boolean).join(' / ')
+    : formData.organizationName;
+  const confirmSupervisorName = formData.sourceType === 'project' ? selectedProject?.ownerName ?? '' : formData.supervisorName;
+
   if (view === 'new') {
     return (
       <div className="px-4 py-4">
@@ -302,11 +387,7 @@ export function ServiceRecords() {
                 <label className="block text-sm text-foreground mb-2">{t('student.records.serviceSource')}</label>
                 {editing && <p className="text-xs text-muted-foreground mb-2">{t('student.records.sourceLocked')}</p>}
                 <div className="space-y-2">
-                  {[
-                    { value: 'project', label: t('student.records.sourceProject'), desc: t('student.records.sourceProjectDesc') },
-                    { value: 'external', label: t('student.records.sourceExternal'), desc: t('student.records.sourceExternalDesc') },
-                    { value: 'self', label: t('student.records.sourceSelf'), desc: t('student.records.sourceSelfDesc') },
-                  ].map(opt => (
+                  {sourceOptions.map(opt => (
                     <button
                       type="button"
                       key={opt.value}
@@ -328,6 +409,36 @@ export function ServiceRecords() {
           {/* Step 1: Service info */}
           {step === 1 && (
             <div className="space-y-4">
+              {formData.sourceType === 'project' && (
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.selectProject')} *</label>
+                  <select required disabled={!!editing} value={formData.projectId}
+                    onChange={e => { fieldErrors.clearField('projectId'); setFormData(f => ({ ...f, projectId: e.target.value })); }}
+                    className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm disabled:opacity-60">
+                    <option value="">{t('student.records.selectProjectPlaceholder')}</option>
+                    {confirmedProjects.map(a => <option key={a.projectId} value={a.projectId}>{a.projectTitle}</option>)}
+                  </select>
+                  <FieldError message={fieldErrors.getError('projectId')} />
+                  {selectedProject && (
+                    <div className="mt-3 bg-muted rounded-xl p-3 space-y-1.5 text-xs">
+                      <div className="flex justify-between gap-3">
+                        <span className="text-muted-foreground shrink-0">{t('student.records.organization')}</span>
+                        <span className="text-foreground text-right">
+                          {[selectedProject.hostOrganizationName, selectedProject.organizationName].filter(Boolean).join(' / ')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-muted-foreground shrink-0">{t('student.records.serviceCategory')}</span>
+                        <span className="text-foreground">{selectedProject.categoryName}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-muted-foreground shrink-0">{t('student.records.serviceLocation')}</span>
+                        <span className="text-foreground text-right">{selectedProject.location}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.serviceDate')} *</label>
                 <input type="date" required value={formData.serviceDate} onChange={e => { fieldErrors.clearField('serviceDate'); setFormData(f => ({ ...f, serviceDate: e.target.value })); }}
@@ -348,28 +459,52 @@ export function ServiceRecords() {
                   <FieldError message={fieldErrors.getError('endAt', 'endTime')} />
                 </div>
               </div>
+              {durationMinutes !== null && durationMinutes > 0 && (
+                <p className="text-xs text-muted-foreground">{t('student.records.durationPreview', { hours: minutesToHours(durationMinutes) })}</p>
+              )}
+              {formData.sourceType === 'self' && (
+                <>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.serviceLocation')} *</label>
+                    <input type="text" required placeholder={t('student.records.locationPlaceholder')} value={formData.location} onChange={e => { fieldErrors.clearField('location'); setFormData(f => ({ ...f, location: e.target.value })); }}
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                    <FieldError message={fieldErrors.getError('location')} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.orgName')}</label>
+                    <input type="text" placeholder={t('student.records.locationPlaceholder')} value={formData.organizationName} onChange={e => { fieldErrors.clearField('organizationName'); setFormData(f => ({ ...f, organizationName: e.target.value })); }}
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                    <FieldError message={fieldErrors.getError('organizationName')} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.serviceCategory')}</label>
+                    <select value={formData.categoryId} onChange={e => { fieldErrors.clearField('serviceCategoryId'); setFormData(f => ({ ...f, categoryId: e.target.value })); }}
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
+                      {serviceCategories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <FieldError message={fieldErrors.getError('serviceCategoryId', 'categoryId')} />
+                  </div>
+                </>
+              )}
               <div>
-                <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.serviceLocation')} *</label>
-                <input type="text" required placeholder={t('student.records.locationPlaceholder')} value={formData.location} onChange={e => { fieldErrors.clearField('location'); setFormData(f => ({ ...f, location: e.target.value })); }}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
-                <FieldError message={fieldErrors.getError('location')} />
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input type="checkbox" checked={formData.includesTravelTime}
+                    onChange={e => { fieldErrors.clearField('travelTimeReason'); setFormData(f => ({ ...f, includesTravelTime: e.target.checked })); }}
+                    className="w-4 h-4 rounded border-border" />
+                  {t('student.records.includesTravelTime')}
+                </label>
               </div>
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.orgName')} *</label>
-                <input type="text" required placeholder={t('student.records.locationPlaceholder')} value={formData.organizationName} onChange={e => { fieldErrors.clearField('organizationName'); setFormData(f => ({ ...f, organizationName: e.target.value })); }}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
-                <FieldError message={fieldErrors.getError('organizationName')} />
-              </div>
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.serviceCategory')}</label>
-                <select value={formData.categoryId} onChange={e => { fieldErrors.clearField('serviceCategoryId'); setFormData(f => ({ ...f, categoryId: e.target.value })); }}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
-                  {serviceCategories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
-                <FieldError message={fieldErrors.getError('serviceCategoryId', 'categoryId')} />
-              </div>
+              {formData.includesTravelTime && (
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.travelTimeReason')} *</label>
+                  <textarea rows={2} value={formData.travelTimeReason}
+                    onChange={e => { fieldErrors.clearField('travelTimeReason'); setFormData(f => ({ ...f, travelTimeReason: e.target.value })); }}
+                    className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm resize-none" />
+                  <FieldError message={fieldErrors.getError('travelTimeReason')} />
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.serviceDesc')} *</label>
                 <textarea
@@ -385,21 +520,89 @@ export function ServiceRecords() {
             </div>
           )}
 
-          {/* Step 2: Evidence */}
+          {/* Step 2: Supervisor + Evidence */}
           {step === 2 && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.supervisorName')} *</label>
-                <input type="text" required placeholder={t('student.records.supervisorPlaceholder')} value={formData.supervisorName} onChange={e => { fieldErrors.clearField('supervisorName'); setFormData(f => ({ ...f, supervisorName: e.target.value })); }}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
-                <FieldError message={fieldErrors.getError('supervisorName')} />
-              </div>
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.contactInfo')}</label>
-                <input type="text" placeholder={t('student.records.contactPlaceholder')} value={formData.supervisorContact} onChange={e => { fieldErrors.clearField('supervisorContact'); setFormData(f => ({ ...f, supervisorContact: e.target.value })); }}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
-                <FieldError message={fieldErrors.getError('supervisorContact')} />
-              </div>
+              {formData.sourceType === 'project' && (
+                <div className="bg-muted rounded-xl p-3 text-xs space-y-1">
+                  <div className="text-muted-foreground">{t('student.records.supervisor')}</div>
+                  <div className="text-foreground">{selectedProject?.ownerName ?? '—'}</div>
+                </div>
+              )}
+              {formData.sourceType === 'self' && (
+                <>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.supervisorKind')} *</label>
+                    <select required value={formData.supervisorKind}
+                      onChange={e => {
+                        fieldErrors.clearField('supervisorKind');
+                        const kind = e.target.value as SupervisorKind;
+                        setSupervisorOption([]);
+                        setFormData(f => ({ ...f, supervisorKind: kind, supervisorSubjectId: '', supervisorName: '', supervisorContact: '' }));
+                      }}
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
+                      <option value="">{t('student.records.supervisorKindPlaceholder')}</option>
+                      <option value="internalUser">{t('student.records.supervisorKindInternal')}</option>
+                      <option value="student">{t('student.records.supervisorKindStudent')}</option>
+                      <option value="externalManual">{t('student.records.supervisorKindExternal')}</option>
+                    </select>
+                    <FieldError message={fieldErrors.getError('supervisorKind')} />
+                  </div>
+                  {(formData.supervisorKind === 'internalUser' || formData.supervisorKind === 'student') && (
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.supervisorName')} *</label>
+                      <SearchPicker
+                        selected={supervisorOption}
+                        onChange={opts => {
+                          fieldErrors.clearField('supervisorSubjectId');
+                          setSupervisorOption(opts);
+                          setFormData(f => ({ ...f, supervisorSubjectId: opts[0]?.id ?? '', supervisorName: opts[0]?.label ?? '' }));
+                        }}
+                        fetchOptions={fetchSupervisorOptions}
+                        placeholder={t('student.records.supervisorPlaceholder')}
+                        searchPlaceholder={t('student.records.supervisorSearchPlaceholder')}
+                        noResultsLabel={t('student.proposals.noResults')}
+                        loadingLabel={t('common.loading')}
+                      />
+                      <FieldError message={fieldErrors.getError('supervisorSubjectId')} />
+                    </div>
+                  )}
+                  {formData.supervisorKind === 'externalManual' && (
+                    <>
+                      <div>
+                        <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.supervisorName')} *</label>
+                        <input type="text" required placeholder={t('student.records.supervisorPlaceholder')} value={formData.supervisorName}
+                          onChange={e => { fieldErrors.clearField('supervisorName'); setFormData(f => ({ ...f, supervisorName: e.target.value })); }}
+                          className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                        <FieldError message={fieldErrors.getError('supervisorName')} />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.contactInfo')} *</label>
+                        <input type="text" required placeholder={t('student.records.contactPlaceholder')} value={formData.supervisorContact}
+                          onChange={e => { fieldErrors.clearField('supervisorContact'); setFormData(f => ({ ...f, supervisorContact: e.target.value })); }}
+                          className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                        <FieldError message={fieldErrors.getError('supervisorContact')} />
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+              {formData.sourceType === 'external' && (
+                <>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.supervisorName')} *</label>
+                    <input type="text" required placeholder={t('student.records.supervisorPlaceholder')} value={formData.supervisorName} onChange={e => { fieldErrors.clearField('supervisorName'); setFormData(f => ({ ...f, supervisorName: e.target.value })); }}
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                    <FieldError message={fieldErrors.getError('supervisorName')} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.contactInfo')}</label>
+                    <input type="text" placeholder={t('student.records.contactPlaceholder')} value={formData.supervisorContact} onChange={e => { fieldErrors.clearField('supervisorContact'); setFormData(f => ({ ...f, supervisorContact: e.target.value })); }}
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                    <FieldError message={fieldErrors.getError('supervisorContact')} />
+                  </div>
+                </>
+              )}
               <div>
                 <label className="block text-xs text-muted-foreground mb-2">{t('student.records.uploadEvidence')}</label>
                 <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf" className="hidden"
@@ -439,19 +642,22 @@ export function ServiceRecords() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{t('student.records.time')}</span>
-                  <span className="text-foreground">{formData.startTime} - {formData.endTime || '—'}</span>
+                  <span className="text-foreground">
+                    {formData.startTime} - {formData.endTime || '—'}
+                    {durationMinutes !== null && durationMinutes > 0 && ` (${minutesToHours(durationMinutes)}${t('common.hours')})`}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{t('student.records.serviceLocation')}</span>
-                  <span className="text-foreground text-right max-w-[60%]">{formData.location || '—'}</span>
+                  <span className="text-foreground text-right max-w-[60%]">{confirmLocation || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{t('student.records.orgName')}</span>
-                  <span className="text-foreground">{formData.organizationName || '—'}</span>
+                  <span className="text-foreground">{confirmOrganization || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{t('student.records.supervisorName')}</span>
-                  <span className="text-foreground">{formData.supervisorName || '—'}</span>
+                  <span className="text-foreground">{confirmSupervisorName || '—'}</span>
                 </div>
               </div>
               <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 text-xs text-yellow-800 dark:text-yellow-300">
@@ -576,6 +782,7 @@ export function ServiceRecords() {
                     <tr key={rec.id} className="hover:bg-muted/30 transition-colors group">
                       <td className="px-4 py-3">
                         <div className="text-sm text-foreground font-medium">{rec.projectTitle || rec.organizationName}</div>
+                        {rec.recordNumber && <div className="text-xs text-muted-foreground">{rec.recordNumber}</div>}
                         {rec.status === 'returned' && (rec.returnReason || rec.reviewSummary) && (
                           <div className="text-xs text-orange-600 dark:text-orange-400 flex items-start gap-1 mt-0.5">
                             <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
@@ -646,6 +853,7 @@ export function ServiceRecords() {
                         </div>
                         <div className="text-sm text-foreground font-medium truncate">{rec.projectTitle || rec.organizationName}</div>
                         <div className="text-xs text-muted-foreground">{rec.serviceDate} · {rec.durationMinutes / 60} {t('common.hours')} · {rec.serviceCategoryName}</div>
+                        {rec.recordNumber && <div className="text-xs text-muted-foreground">{rec.recordNumber}</div>}
                       </div>
                     </div>
                     {rec.status === 'returned' && (rec.returnReason || rec.reviewSummary) && (
@@ -662,6 +870,9 @@ export function ServiceRecords() {
                         <p><span className="font-medium text-foreground">{t('student.records.serviceLocation')}:</span>{rec.location}</p>
                         <p><span className="font-medium text-foreground">{t('student.records.orgName')}:</span>{rec.organizationName}</p>
                         <p><span className="font-medium text-foreground">{t('student.records.supervisorName')}:</span>{rec.supervisorName} {rec.supervisorContact}</p>
+                        {rec.includesTravelTime && rec.travelTimeReason && (
+                          <p><span className="font-medium text-foreground">{t('student.records.travelTimeReason')}:</span>{rec.travelTimeReason}</p>
+                        )}
                         {rec.reviewSummary && <p><span className="font-medium text-foreground">{t('student.records.reviewNotes')}:</span>{rec.reviewSummary}</p>}
                         {rec.evidenceFiles.length > 0 && (
                           <div className="flex flex-wrap items-center gap-2">

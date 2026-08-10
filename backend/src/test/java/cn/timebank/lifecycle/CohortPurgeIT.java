@@ -137,7 +137,8 @@ class CohortPurgeIT extends AbstractIntegrationTest {
         Instant start = end.minusSeconds(3600);
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, LocalDate.now().minusDays(1), start, end,
-                "Somewhere", "cat_campus", "desc", null, null, List.of(fileId), false);
+                "Somewhere", "cat_campus", "desc", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
+                List.of(fileId), false, null);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
         ServiceRecordDto submitted = serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-purge-submit-" + draft.id(), "zh-CN");
         reviewService.decide(submitted.id(),

@@ -156,7 +156,8 @@ class DashboardReportingIT extends AbstractIntegrationTest {
         Instant start = end.minus(durationMinutes, ChronoUnit.MINUTES);
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, LocalDate.now().minusDays(1), start, end,
-                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
+                "Somewhere", "cat_campus", "desc", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
+                List.of(readyFile()), false, null);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
         serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-report-submit-" + draft.id(), "zh-CN");
     }
@@ -166,7 +167,8 @@ class DashboardReportingIT extends AbstractIntegrationTest {
         Instant start = end.minus(durationMinutes, ChronoUnit.MINUTES);
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
                 "SELF", null, null, null, LocalDate.now().minusDays(1), start, end,
-                "Somewhere", "cat_campus", "desc", null, null, List.of(readyFile()), false);
+                "Somewhere", "cat_campus", "desc", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
+                List.of(readyFile()), false, null);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
         ServiceRecordDto submitted = serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-report-submit-" + draft.id(), "zh-CN");
         reviewService.decide(submitted.id(), new DecideRequest("APPROVE", "GOOD", null, submitted.version()),

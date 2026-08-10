@@ -19,4 +19,14 @@ public interface OrganizationService {
     OrganizationDto update(String id, UpdateOrganizationRequest request, String actorId);
 
     void archive(String id, String actorId);
+
+    /**
+     * The one {@code isSchoolOrganization = true} row (Docs/clarification/03-ServiceRecordFormOptimization.md
+     * §4.1) — the host organization for every project, and the source `ProjectServiceImpl`/
+     * `ServiceRecordServiceImpl` resolve it from rather than trusting a client-supplied id.
+     * Throws if the row is missing; a missing row means the startup health check
+     * (`SchoolOrganizationHealthCheck`) already failed to bring the app up in the first place,
+     * so this is a genuine invariant violation, not a normal "not found".
+     */
+    OrganizationDto getSchoolOrganization();
 }
