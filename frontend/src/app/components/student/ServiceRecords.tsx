@@ -3,7 +3,7 @@ import { Plus, Search, X, FileText, AlertTriangle, ChevronDown, ChevronUp, Uploa
 import { useTranslation } from 'react-i18next';
 import { RECORD_STATUS_LABELS } from '../../lib/statusLabels';
 import { type RecordStatus, type ServiceRecord, type EvidenceFile, type Application, type Project } from '../../api/types';
-import { localDateTimeToISO, isoToLocalDateTime } from '../../lib/datetime';
+import { localDateTimeToISO, isoToLocalDateTime, addOneDay } from '../../lib/datetime';
 import { formatCoins, minutesToHours, formatGradeClass } from '../../lib/format';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
@@ -132,6 +132,7 @@ export function ServiceRecords() {
     serviceDate: '',
     startTime: '',
     endTime: '',
+    endsNextDay: false,
     location: '',
     organizationName: '',
     categoryId: 'cat_community',
@@ -176,7 +177,7 @@ export function ServiceRecords() {
   }, [formData.sourceType, formData.projectId]);
 
   const durationMinutes = formData.startTime && formData.endTime
-    ? Math.round((new Date(`2000-01-01T${formData.endTime}`).getTime() - new Date(`2000-01-01T${formData.startTime}`).getTime()) / 60000)
+    ? Math.round((new Date(`2000-01-0${formData.endsNextDay ? 2 : 1}T${formData.endTime}`).getTime() - new Date('2000-01-01T' + formData.startTime).getTime()) / 60000)
     : null;
 
   const openNewRecord = () => {
@@ -212,6 +213,7 @@ export function ServiceRecords() {
       serviceDate: full.serviceDate || start.date,
       startTime: start.time,
       endTime: end.time,
+      endsNextDay: end.date !== start.date,
       location: full.location,
       organizationName: full.organizationName,
       categoryId: full.serviceCategoryId,
@@ -235,8 +237,9 @@ export function ServiceRecords() {
   };
 
   const buildRecordPayload = () => {
+    const endDate = formData.endsNextDay ? addOneDay(formData.serviceDate) : formData.serviceDate;
     const startTime = formData.startTime ? localDateTimeToISO(formData.serviceDate, formData.startTime) : undefined;
-    const endTime = formData.endTime ? localDateTimeToISO(formData.serviceDate, formData.endTime) : undefined;
+    const endTime = formData.endTime ? localDateTimeToISO(endDate, formData.endTime) : undefined;
     return {
       sourceType: formData.sourceType,
       projectId: formData.sourceType === 'project' ? formData.projectId : undefined,
@@ -267,6 +270,10 @@ export function ServiceRecords() {
     setSaving(true);
     try {
       const record = await saveRecord();
+      // A submit-time-only validation failure below must not leave `editing`
+      // holding the pre-save version — a retry's PATCH would send it and get
+      // a spurious 409 from the server, which has already moved on (issue 014).
+      if (editing) setEditing({ id: record.id, version: record.version });
       await api.serviceRecords.submit(record.id, submitKeyRef.current);
       submitKeyRef.current = newIdempotencyKey();
       fieldErrors.clearAll();
@@ -459,6 +466,14 @@ export function ServiceRecords() {
                   <FieldError message={fieldErrors.getError('endAt', 'endTime')} />
                 </div>
               </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input type="checkbox" checked={formData.endsNextDay}
+                    onChange={e => setFormData(f => ({ ...f, endsNextDay: e.target.checked }))}
+                    className="w-4 h-4 rounded border-border" />
+                  {t('student.records.endsNextDay')}
+                </label>
+              </div>
               {durationMinutes !== null && durationMinutes > 0 && (
                 <p className="text-xs text-muted-foreground">{t('student.records.durationPreview', { hours: minutesToHours(durationMinutes) })}</p>
               )}
@@ -643,7 +658,7 @@ export function ServiceRecords() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{t('student.records.time')}</span>
                   <span className="text-foreground">
-                    {formData.startTime} - {formData.endTime || '—'}
+                    {formData.startTime} - {formData.endTime || '—'}{formData.endsNextDay && ` (${t('student.records.endsNextDay')})`}
                     {durationMinutes !== null && durationMinutes > 0 && ` (${minutesToHours(durationMinutes)}${t('common.hours')})`}
                   </span>
                 </div>

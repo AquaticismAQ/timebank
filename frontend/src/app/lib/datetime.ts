@@ -27,3 +27,11 @@ export function isoToLocalDateTime(iso: string): { date: string; time: string } 
   const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   return { date, time };
 }
+
+/** Adds one calendar day to a `<input type="date">`-shaped "YYYY-MM-DD" string, for an overnight service window's end date. */
+export function addOneDay(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(year, month - 1, day + 1);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}

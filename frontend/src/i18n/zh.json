@@ -331,6 +331,7 @@
       "selectProject": "选择项目",
       "selectProjectPlaceholder": "选择一个你已确认报名的项目",
       "durationPreview": "时长：{{hours}} 小时",
+      "endsNextDay": "跨日结束（次日）",
       "includesTravelTime": "包含路途时间",
       "travelTimeReason": "路途时间原因",
       "supervisorKind": "主管类型",

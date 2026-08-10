@@ -1,6 +1,6 @@
 # 013 — Editing/resubmitting a record with an overnight (crosses-midnight) time range corrupts the end time
 
-Status: **Proposed fix** (found 2026-08-10, not yet implemented)
+Status: **Fixed and live-verified (2026-08-10)**
 
 ## Symptom
 
@@ -56,35 +56,59 @@ only surfaced now because live-verifying the new supervisor-kind/PROJECT-SELF
 split exercised the resubmit path against a seed record that happens to span
 midnight.
 
-## Proposed fix
+## Fix
 
-Add an explicit "ends the next day" checkbox (or a second date field) to the
-service-info step, defaulting to checked when `endTime < startTime` on load
-from an existing record, and have `buildRecordPayload()` add one day to the
-end date when set. This is a product/UX decision (checkbox vs. explicit end
-date input) best made alongside the rest of the form's design, not bundled
-into this write-up.
+Added an explicit "Ends the next day" checkbox to the service-info step
+(`student.records.endsNextDay`, both locales). New `formData.endsNextDay`
+boolean: `openResubmit()` now sets it to `end.date !== start.date` when
+pre-filling from an existing record (so a genuinely overnight record loads
+with the box already checked); `buildRecordPayload()` adds one calendar day
+to the end date via a new `addOneDay()` helper (`lib/datetime.ts`) before
+building `endAt`, instead of always reusing `serviceDate`. The live duration
+preview (`durationMinutes`) and the confirm-step summary were both updated to
+account for the extra day too, so the preview matches what actually gets
+submitted.
 
-## Test plan (once fixed)
+Files: `frontend/src/app/lib/datetime.ts` (new `addOneDay`),
+`frontend/src/app/components/student/ServiceRecords.tsx` (`EMPTY_FORM`,
+`openResubmit`, `buildRecordPayload`, `durationMinutes`, the new checkbox
+UI, the confirm-step time line).
 
-- Live: as `student001`, open the "Example District A Community" returned record
-  (or any record with a genuinely overnight window), confirm the end date is
-  preserved on load, and confirm a resubmit with an unmodified overnight range
-  succeeds without an `INVALID_RANGE` error.
-- Regression: a same-day range still works unchanged.
+## Test plan
+
+- Live: create a new SELF-sourced record with a genuine overnight window
+  (23:00 → 01:00 next day), check "Ends the next day", confirm the duration
+  preview shows 2 hours (not a negative/zero value), submit, confirm no
+  `INVALID_RANGE`/`INVALID_DURATION` error.
+- Live: resubmit that same record (after a teacher return), confirm the
+  checkbox reloads pre-checked and the time fields show the original
+  23:00/01:00 values, not silently collapsed to a same-day range.
+- Regression: a same-day range still works unchanged (verified via the
+  earlier PROJECT/SELF-source records created during
+  `03-ServiceRecordFormOptimization.md`'s verification, all same-day).
 
 ## Resolution
 
-Not yet implemented — filed for a future session. The one live record this
-corrupted (`rec_3t67kqy4q6pqggapzmrtm3qhwr`, "Example District A Community") was
-fixed forward during discovery: its time range was manually corrected to a
-valid same-day window (23:00–23:59, 59 minutes) and successfully resubmitted,
-so no record is left in a broken state — but its service window no longer
-matches the original overnight seed data exactly.
+- `frontend/src/app/lib/datetime.ts`: added `addOneDay(dateStr)`.
+- `frontend/src/app/components/student/ServiceRecords.tsx`: `endsNextDay`
+  form field, wired through load/save/duration-preview/confirm-summary; new
+  checkbox UI after the End Time field.
+- `frontend/src/i18n/en.json`/`zh.json`: new `student.records.endsNextDay` key.
+- Deployed to `https://tb.example.com/` via `frontend/scripts/deploy.sh`.
+
+The one live record this had corrupted during discovery
+(`rec_3t67kqy4q6pqggapzmrtm3qhwr`, "Example District A Community") was already
+fixed forward at discovery time (manually corrected to a valid same-day
+window and resubmitted) — its service window still doesn't match the
+original overnight seed data, but no record is in a broken state.
 
 ---
-*Found live 2026-08-10 against `https://tb.example.com/` via browser MCP while
-verifying issue `03-ServiceRecordFormOptimization.md`'s implementation
-(resubmitting a locked-source historical record). Not fixed this session —
-proposed fix only, since the correct UX (checkbox vs. explicit end-date field)
-is a product decision out of scope for that feature's implementation pass.*
+*Live-verified 2026-08-10 against `https://tb.example.com/` via browser MCP,
+logged in as `student001`: created a new SELF-sourced record with a genuine
+23:00→01:00(+1d) window (`rec_p7s7j89aqphs3jymg6aca02n6d`,
+`TB-2025-2026-10-2024001-005`), confirmed the 2-hour duration preview and a
+clean submit (`startAt`/`endAt` confirmed via the API response to span two
+different UTC calendar dates with `durationMinutes: 120`), then — after a
+teacher (`teacher001`) returned it — reopened it for resubmit and confirmed
+the "Ends the next day" checkbox reloaded pre-checked with the original
+23:00/01:00 values intact.*

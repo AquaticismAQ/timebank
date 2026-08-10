@@ -331,6 +331,7 @@
       "selectProject": "Select Project",
       "selectProjectPlaceholder": "Select a project you're confirmed for",
       "durationPreview": "Duration: {{hours}} hours",
+      "endsNextDay": "Ends the next day",
       "includesTravelTime": "This includes travel time",
       "travelTimeReason": "Reason for travel time",
       "supervisorKind": "Supervisor Type",

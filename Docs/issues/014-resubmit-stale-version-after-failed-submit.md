@@ -1,6 +1,6 @@
 # 014 — Resubmit form keeps a stale `version` after a save-then-submit fails, causing a spurious 409 on retry
 
-Status: **Proposed fix** (found 2026-08-10, not yet implemented)
+Status: **Fixed and live-verified (2026-08-10)**
 
 ## Symptom
 
@@ -46,11 +46,12 @@ live verification of the resubmit path happened to hit a first-attempt submit
 failure (issue `013`) immediately followed by a same-session retry, a
 sequence no prior live-testing session had exercised.
 
-## Proposed fix
+## Fix
 
-After a successful `saveRecord()` inside `handleSubmitRecord` (and
-`handleSaveDraft`), update `editing` with the returned record's new
-`version` before calling `submit()`, e.g.:
+Implemented exactly as proposed: after a successful `saveRecord()` inside
+`handleSubmitRecord`, `editing` is updated with the just-saved record's fresh
+`id`/`version` before calling `submit()`, so a submit-time-only validation
+failure no longer leaves the form holding a stale version for the next PATCH.
 
 ```ts
 const record = await saveRecord();
@@ -58,21 +59,32 @@ if (editing) setEditing({ id: record.id, version: record.version });
 await api.serviceRecords.submit(record.id, submitKeyRef.current);
 ```
 
-## Test plan (once fixed)
+File: `frontend/src/app/components/student/ServiceRecords.tsx`
+(`handleSubmitRecord`).
 
-- Live: reproduce a save-then-submit-fails sequence (e.g. via issue 013's
-  overnight-date scenario, or any other submit-time-only validation error),
-  correct the problem without leaving the form, submit again, confirm no 409.
+## Test plan
+
+- Live: reproduce a save-then-submit-fails sequence (removing a record's
+  evidence file so submit's `EVIDENCE_REQUIRED` check fails after a
+  successful PATCH), correct the problem (re-add evidence) without leaving
+  the form, submit again, confirm the retry's PATCH returns `200` not `409`.
 
 ## Resolution
 
-Not yet implemented — filed for a future session. Worked around during
-discovery by leaving the form and re-opening "Resubmit" from the list (fresh
-`GET` picks up the current `version`), which is how the affected live record
-was ultimately submitted successfully.
+- `frontend/src/app/components/student/ServiceRecords.tsx`: `handleSubmitRecord`
+  now refreshes `editing`'s version after every successful save.
+- Deployed to `https://tb.example.com/` via `frontend/scripts/deploy.sh`.
+
+`handleSaveDraft` was left unchanged — it already sets `editing` to `null`
+after a successful draft save (unrelated existing behavior, out of scope
+here).
 
 ---
-*Found live 2026-08-10 against `https://tb.example.com/` via browser MCP while
-verifying issue `03-ServiceRecordFormOptimization.md`'s implementation. Not
-fixed this session — proposed fix only, out of scope for that feature's
-implementation pass.*
+*Live-verified 2026-08-10 against `https://tb.example.com/` via browser MCP,
+logged in as `student001`: reopened `rec_p7s7j89aqphs3jymg6aca02n6d` (issue
+013's overnight test record, returned by `teacher001` for this test) for
+resubmit, removed its evidence file and submitted — PATCH `200`, submit `422
+EVIDENCE_REQUIRED` as expected. Re-added the evidence file in the same form
+session (no navigation away) and submitted again — PATCH `200` (previously
+would have been `409`), submit `200`, record correctly transitioned to
+`submitted`.*
