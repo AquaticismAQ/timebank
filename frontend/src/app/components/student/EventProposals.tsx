@@ -87,7 +87,7 @@ export function EventProposals() {
         plannedDate: template.plannedDate,
         location: template.location,
         activityFormat: template.activityFormat,
-        estimatedDurationHours: template.estimatedDurationMinutes / 60,
+        estimatedDurationHours: Math.round((template.estimatedDurationMinutes / 60) * 100) / 100,
         estimatedCapacity: template.estimatedCapacity,
         targetParticipants: template.targetParticipants,
         volunteerTasks: template.volunteerTasks,
@@ -107,7 +107,7 @@ export function EventProposals() {
         recruitmentMethod: template.recruitmentMethod,
         eligibility: template.eligibility,
         proofMethod: template.proofMethod,
-        suggestedHours: template.suggestedMinutes / 60,
+        suggestedHours: Math.round((template.suggestedMinutes / 60) * 100) / 100,
       });
     } else {
       setEditing(null);

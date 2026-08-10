@@ -175,7 +175,7 @@ export function StudentHome() {
                     <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-foreground truncate">{rec.projectTitle || rec.organizationName}</div>
-                      <div className="text-xs text-muted-foreground">{rec.serviceDate} · {rec.durationMinutes / 60}h</div>
+                      <div className="text-xs text-muted-foreground">{rec.serviceDate} · {minutesToHours(rec.durationMinutes)}h</div>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
                   </div>
@@ -201,7 +201,7 @@ export function StudentHome() {
                     <tr key={rec.id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3 text-foreground">{rec.projectTitle || rec.organizationName}</td>
                       <td className="px-4 py-3 text-muted-foreground">{rec.serviceDate}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{rec.durationMinutes / 60}h</td>
+                      <td className="px-4 py-3 text-muted-foreground">{minutesToHours(rec.durationMinutes)}h</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{rec.serviceCategoryName}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
@@ -264,7 +264,7 @@ export function StudentHome() {
                       <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full shrink-0">Open</span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {proj.recognizedMinutes / 60}h · {proj.capacity - proj.enrolledCount} {t('student.home.slots')}
+                      {minutesToHours(proj.recognizedMinutes)}h · {proj.capacity - proj.enrolledCount} {t('student.home.slots')}
                     </div>
                   </div>
                 ))}

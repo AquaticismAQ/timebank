@@ -10,6 +10,7 @@ import { usePagedApi } from '../../api/useApi';
 import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
+import { minutesToHours } from '../../lib/format';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -254,7 +255,7 @@ export function ProjectCenter() {
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Clock className="w-3 h-3 shrink-0" />
-                          <span>{proj.recognizedMinutes / 60} {t('common.hours')}</span>
+                          <span>{minutesToHours(proj.recognizedMinutes)} {t('common.hours')}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Users className="w-3 h-3 shrink-0" />

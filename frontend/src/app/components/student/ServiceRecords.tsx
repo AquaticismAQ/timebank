@@ -807,7 +807,7 @@ export function ServiceRecords() {
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{rec.serviceCategoryName}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{rec.serviceDate}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{rec.durationMinutes / 60}h</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{minutesToHours(rec.durationMinutes)}h</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
                       </td>
@@ -867,7 +867,7 @@ export function ServiceRecords() {
                           {rec.creditedUnits && <span className="text-xs text-yellow-600 dark:text-yellow-400">+{formatCoins(rec.creditedUnits)} {t('common.coins')}</span>}
                         </div>
                         <div className="text-sm text-foreground font-medium truncate">{rec.projectTitle || rec.organizationName}</div>
-                        <div className="text-xs text-muted-foreground">{rec.serviceDate} · {rec.durationMinutes / 60} {t('common.hours')} · {rec.serviceCategoryName}</div>
+                        <div className="text-xs text-muted-foreground">{rec.serviceDate} · {minutesToHours(rec.durationMinutes)} {t('common.hours')} · {rec.serviceCategoryName}</div>
                         {rec.recordNumber && <div className="text-xs text-muted-foreground">{rec.recordNumber}</div>}
                       </div>
                     </div>

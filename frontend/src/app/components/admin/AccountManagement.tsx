@@ -205,7 +205,7 @@ export function AccountManagement() {
                     <span className="text-sm text-foreground font-medium">{student.name}</span>
                     <span className="text-xs text-muted-foreground">{formatGradeClass(student.gradeLevel, student.className)}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: ((student.completedMinutes ?? 0) / 60) * 2, redeemed: 0 })}</div>
+                  <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: formatCoins(Math.round((student.completedMinutes ?? 0) / 60 * 2 * 100)), redeemed: 0 })}</div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-lg font-semibold text-foreground">{formatCoins(getBalance(student))}</div>

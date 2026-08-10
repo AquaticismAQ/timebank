@@ -138,7 +138,7 @@ export function StudentList() {
       studentNumber: s.studentNumber,
       gradeId: s.gradeId,
       classId: s.classId,
-      completedHours: (s.completedMinutes ?? 0) / 60,
+      completedHours: Math.round(((s.completedMinutes ?? 0) / 60) * 100) / 100,
       timeCoinBalance: (s.timeCoinBalance ?? 0) / 100,
       memo: '',
     });
@@ -149,7 +149,7 @@ export function StudentList() {
     if (editForm.completedHours < 0) { toast.error('Completed hours cannot be negative'); return; }
     if (editForm.timeCoinBalance < 0) { toast.error('Time coins cannot be negative'); return; }
 
-    const priorCompletedHours = (editStudent.completedMinutes ?? 0) / 60;
+    const priorCompletedHours = Math.round(((editStudent.completedMinutes ?? 0) / 60) * 100) / 100;
     const priorTimeCoinBalance = (editStudent.timeCoinBalance ?? 0) / 100;
     const newGradeName = grades.find(g => g.id === editForm.gradeId)?.name ?? editForm.gradeId;
     const newClassName = classes.find(c => c.id === editForm.classId)?.name ?? editForm.classId;

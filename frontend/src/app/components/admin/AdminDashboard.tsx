@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { ClipboardCheck, Users, AlertTriangle, Clock, CheckCircle, ArrowRight } from 'lucide-react';
 import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
-import { formatGradeClass } from '../../lib/format';
+import { formatGradeClass, minutesToHours } from '../../lib/format';
 import { type AdminStats, type ReviewQueueItem, type Project } from '../../api/types';
 import { useAuth } from '../../App';
 import { api } from '../../api/client';
@@ -159,7 +159,7 @@ export function AdminDashboard() {
                       <div className="text-xs text-muted-foreground">{formatGradeClass(r.gradeLevel, r.className)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{r.organizationName}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{r.durationMinutes / 60}h</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{minutesToHours(r.durationMinutes)}h</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs ${r.daysWaiting >= 7 ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>{t('admin.dashboard.tableDays', { days: r.daysWaiting })}</span>
                       {r.hasAnomaly && <span className="ml-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1 rounded">{t('admin.dashboard.anomaly')}</span>}
@@ -181,7 +181,7 @@ export function AdminDashboard() {
                     <span className="text-xs text-muted-foreground">{formatGradeClass(r.gradeLevel, r.className)}</span>
                     {r.hasAnomaly && <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded">{t('admin.dashboard.anomaly')}</span>}
                   </div>
-                  <div className="text-xs text-muted-foreground">{r.organizationName} · {r.durationMinutes / 60}h · {r.serviceDate}</div>
+                  <div className="text-xs text-muted-foreground">{r.organizationName} · {minutesToHours(r.durationMinutes)}h · {r.serviceDate}</div>
                 </div>
                 <div className="text-xs text-muted-foreground shrink-0">{t('admin.dashboard.tableDaysAgo', { days: r.daysWaiting })}</div>
               </div>
@@ -209,7 +209,7 @@ export function AdminDashboard() {
                     }`}>{t(status.label)}</span>
                   </div>
                   <div className="text-sm text-foreground mb-1">{proj.title}</div>
-                  <div className="text-xs text-muted-foreground mb-2">{proj.enrolledCount}/{proj.capacity} {t('admin.dashboard.people')} · {proj.recognizedMinutes / 60}h</div>
+                  <div className="text-xs text-muted-foreground mb-2">{proj.enrolledCount}/{proj.capacity} {t('admin.dashboard.people')} · {minutesToHours(proj.recognizedMinutes)}h</div>
                   <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                     <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min((proj.enrolledCount / proj.capacity) * 100, 100)}%` }} />
                   </div>

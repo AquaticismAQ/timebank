@@ -11,7 +11,7 @@ import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { EvidenceLink } from '../EvidenceLink';
 import { type EvidenceFile } from '../../api/types';
-import { formatGradeClass } from '../../lib/format';
+import { formatGradeClass, minutesToHours } from '../../lib/format';
 
 type SortKey = 'daysWaiting' | 'submittedAt' | 'durationMinutes';
 
@@ -272,7 +272,7 @@ export function AuditCenter() {
                         {item.projectTitle || item.organizationName}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{item.serviceDate}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{item.durationMinutes / 60}h</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{minutesToHours(item.durationMinutes)}h</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs ${item.daysWaiting >= 7 ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                           {t('admin.audit.daysWaiting', { days: item.daysWaiting })}
@@ -334,7 +334,7 @@ export function AuditCenter() {
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground mb-2">
-                          {item.projectTitle || item.organizationName} · {item.durationMinutes / 60}h · {item.serviceDate}
+                          {item.projectTitle || item.organizationName} · {minutesToHours(item.durationMinutes)}h · {item.serviceDate}
                         </div>
                         {item.hasAnomaly && item.anomalyNote && (
                           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 mb-2">
@@ -344,7 +344,7 @@ export function AuditCenter() {
                         {isExpanded && (
                           <div className="border-t border-border pt-3 mb-3 space-y-2 text-xs text-muted-foreground">
                             <p>{t('admin.audit.serviceDate')}: {item.serviceDate}</p>
-                            <p>{t('admin.audit.reportedHours')}: {item.durationMinutes / 60} {t('admin.audit.hoursUnit')}</p>
+                            <p>{t('admin.audit.reportedHours')}: {minutesToHours(item.durationMinutes)} {t('admin.audit.hoursUnit')}</p>
                             <p>{t('admin.audit.organization')}: {item.organizationName}</p>
                             <p>{t('admin.audit.submitted')}: {item.submittedAt.slice(0, 16).replace('T', ' ')}</p>
                             <div className="flex gap-2 flex-wrap mt-2">

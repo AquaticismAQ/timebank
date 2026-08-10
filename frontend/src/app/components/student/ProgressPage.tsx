@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
 import { useAuth } from '../../App';
+import { minutesToHours } from '../../lib/format';
 
 function CircleProgress({ value, max, size = 120, color = 'text-primary' }: { value: number; max: number; size?: number; color?: string }) {
   const r = (size - 12) / 2;
@@ -50,12 +51,22 @@ export function ProgressPage() {
 
   if (!progress) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
 
-  // Minutes-only on the wire (APIContract.md §2.1) — hours derived here for display.
+  // Minutes-only on the wire (APIContract.md §2.1) — raw hours kept as numbers
+  // for proportion/comparison math (CircleProgress/ProgressBar percentages,
+  // RECOGNITION_LEVELS thresholds); `*Label` variants below are the
+  // trailing-zero-trimmed strings actually shown to the user — raw division
+  // (e.g. 59min/60) produces "0.9833333333333333h" otherwise.
   const completedHours = progress.completedMinutes / 60;
   const annualRequiredHours = progress.annualRequiredMinutes / 60;
   const stageRequiredHours = progress.stageRequiredMinutes / 60;
   const underReviewHours = progress.underReviewMinutes / 60;
   const gapHours = progress.gapMinutes / 60;
+
+  const completedHoursLabel = minutesToHours(progress.completedMinutes);
+  const annualRequiredHoursLabel = minutesToHours(progress.annualRequiredMinutes);
+  const stageRequiredHoursLabel = minutesToHours(progress.stageRequiredMinutes);
+  const underReviewHoursLabel = minutesToHours(progress.underReviewMinutes);
+  const gapHoursLabel = minutesToHours(progress.gapMinutes);
 
   const annualPct = progress.completedMinutes / progress.annualRequiredMinutes;
   const stagePct = progress.completedMinutes / progress.stageRequiredMinutes;
@@ -92,13 +103,13 @@ export function ProgressPage() {
                 </div>
               </div>
               <div className="flex-1">
-                <div className="text-3xl font-semibold text-foreground">{completedHours}</div>
-                <div className="text-muted-foreground text-sm mb-2">/ {annualRequiredHours} {t('common.hours')}</div>
+                <div className="text-3xl font-semibold text-foreground">{completedHoursLabel}</div>
+                <div className="text-muted-foreground text-sm mb-2">/ {annualRequiredHoursLabel} {t('common.hours')}</div>
                 {underReviewHours > 0 && (
-                  <div className="text-xs text-blue-500 mb-1">+{underReviewHours}h {t('student.progress.hoursPending')}</div>
+                  <div className="text-xs text-blue-500 mb-1">+{underReviewHoursLabel}h {t('student.progress.hoursPending')}</div>
                 )}
                 <div className="text-sm text-muted-foreground">
-                  {t('student.progress.stillNeed')} <span className="text-destructive font-medium">{gapHours}</span> {t('common.hours')}
+                  {t('student.progress.stillNeed')} <span className="text-destructive font-medium">{gapHoursLabel}</span> {t('common.hours')}
                 </div>
               </div>
             </div>
@@ -116,7 +127,7 @@ export function ProgressPage() {
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="text-foreground mb-1">{t('student.progress.graduationReq')}</h3>
             <div className="text-muted-foreground text-sm mb-3">
-              {t('student.progress.completedLabel')} <span className="text-foreground font-semibold">{completedHours}</span> / {stageRequiredHours} {t('common.hours')}
+              {t('student.progress.completedLabel')} <span className="text-foreground font-semibold">{completedHoursLabel}</span> / {stageRequiredHoursLabel} {t('common.hours')}
             </div>
             <div className="mb-2 relative">
               <div className="h-3 bg-muted rounded-full overflow-hidden">
@@ -124,8 +135,8 @@ export function ProgressPage() {
               </div>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground mb-4">
-              <span>{completedHours}h</span>
-              <span>{stageRequiredHours}h</span>
+              <span>{completedHoursLabel}h</span>
+              <span>{stageRequiredHoursLabel}h</span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -157,7 +168,7 @@ export function ProgressPage() {
               <div>
                 <div className="text-sm text-orange-800 dark:text-orange-200 font-medium">{t('student.progress.insufficient')}</div>
                 <div className="text-xs text-orange-700 dark:text-orange-300 mt-0.5">
-                  {t('student.progress.gapMsg')}{gapHours}{t('student.progress.gapSuffix')}
+                  {t('student.progress.gapMsg')}{gapHoursLabel}{t('student.progress.gapSuffix')}
                 </div>
                 <button onClick={() => navigate('/student/projects')}
                   className="mt-2 text-xs text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1">
@@ -185,7 +196,7 @@ export function ProgressPage() {
               {nextLevel && (
                 <div className="text-right">
                   <div className="text-xs text-muted-foreground mb-0.5">{t('student.progress.distanceToNext')}</div>
-                  <div className="text-2xl font-bold text-foreground">{nextLevel.minHours - completedHours}h</div>
+                  <div className="text-2xl font-bold text-foreground">{minutesToHours(nextLevel.minHours * 60 - progress.completedMinutes)}h</div>
                 </div>
               )}
             </div>
@@ -205,8 +216,8 @@ export function ProgressPage() {
                     <div className="flex items-center justify-between text-xs mb-1.5">
                       <span className="text-foreground font-medium">{cat.categoryName}</span>
                       <span className="text-muted-foreground">
-                        {cat.completedMinutes / 60}h
-                        {cat.underReviewMinutes > 0 && <span className="text-blue-500"> +{cat.underReviewMinutes / 60}h</span>}
+                        {minutesToHours(cat.completedMinutes)}h
+                        {cat.underReviewMinutes > 0 && <span className="text-blue-500"> +{minutesToHours(cat.underReviewMinutes)}h</span>}
                       </span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden flex">

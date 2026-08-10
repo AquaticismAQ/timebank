@@ -15,6 +15,7 @@ import { ListStateBanner } from '../ListStateBanner';
 import { ProjectRegistrants } from './ProjectRegistrants';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { GradePicker } from '../GradePicker';
+import { minutesToHours } from '../../lib/format';
 
 const colorMap: Record<string, string> = {
   gray:   'bg-muted text-muted-foreground',
@@ -255,7 +256,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.verifiedHours')}</label>
-                <input type="number" min={0.5} step={0.5} value={form.recognizedMinutes / 60}
+                <input type="number" min={0.5} step={0.5} value={Math.round((form.recognizedMinutes / 60) * 100) / 100}
                   onChange={e => edit('recognizedMinutes', { recognizedMinutes: Math.round(Number(e.target.value) * 60) })} className={INPUT} />
                 <FieldError message={fe('recognizedMinutes')} />
               </div>
@@ -571,7 +572,7 @@ export function ProjectManagement() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-3 h-3" />
-                      <span>{proj.recognizedMinutes / 60}h</span>
+                      <span>{minutesToHours(proj.recognizedMinutes)}h</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Users className="w-3 h-3" />
@@ -691,7 +692,7 @@ export function ProjectManagement() {
                 </div>
                 <div>
                   <label className={LABEL}>{t('admin.projects.verifiedHours')}</label>
-                  <input type="number" min="0.5" step="0.5" value={newForm.recognizedMinutes / 60} onChange={e => setNewForm(f => ({ ...f, recognizedMinutes: Number(e.target.value) * 60 }))} placeholder="2" className={INPUT} />
+                  <input type="number" min="0.5" step="0.5" value={Math.round((newForm.recognizedMinutes / 60) * 100) / 100} onChange={e => setNewForm(f => ({ ...f, recognizedMinutes: Number(e.target.value) * 60 }))} placeholder="2" className={INPUT} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
