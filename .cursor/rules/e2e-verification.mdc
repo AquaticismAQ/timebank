@@ -93,8 +93,10 @@ For testing against the deployed `https://tb.example.com/` directly, this workar
 
 ### 6. Reporting
 
-Record findings in `Docs/implementation/00-Status.md` as a new numbered section (§35+), following the established pattern:
-- What was verified (with curl/Playwright evidence)
-- Bugs found and fixed
-- What's still open, honestly
-- Test count if backend tests were run
+When a real defect is found and reproduced against the deployed app, follow the full bug-tracking workflow (see `bug-tracking.mdc`):
+
+1. **`Docs/issues/0NN-<slug>.md`** — one doc per bug, numbered sequentially
+2. **`integration-test/STATUS.md`** — append to §2 bug log table + §4 fix history
+3. **`Docs/implementation/00-Status.md`** — new numbered section (§N+1) with full narrative
+
+All three, in the same session. Don't skip the issue doc just because the fix is small or data-only.

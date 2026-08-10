@@ -577,9 +577,9 @@ export function ServiceRecords() {
                       <td className="px-4 py-3">
                         <div className="text-sm text-foreground font-medium">{rec.projectTitle || rec.organizationName}</div>
                         {rec.status === 'returned' && (rec.returnReason || rec.reviewSummary) && (
-                          <div className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1 mt-0.5">
-                            <AlertTriangle className="w-3 h-3 shrink-0" />
-                            <span className="truncate max-w-48">{rec.returnReason || rec.reviewSummary}</span>
+                          <div className="text-xs text-orange-600 dark:text-orange-400 flex items-start gap-1 mt-0.5">
+                            <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                            <span className="max-w-sm whitespace-pre-wrap">{rec.returnReason || rec.reviewSummary}</span>
                           </div>
                         )}
                       </td>
