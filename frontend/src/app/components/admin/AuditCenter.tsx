@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, CheckCircle, XCircle, RotateCcw, AlertTriangle, Clock, Eye, Send } from 'lucide-react';
+import { Search, CheckCircle, XCircle, RotateCcw, AlertTriangle, Clock, MoreHorizontal, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
@@ -68,8 +68,13 @@ export function AuditCenter() {
   // and sorted, no client-side re-derivation.
   const sortKey = (params.sort?.replace(/^-/, '') as SortKey) ?? 'daysWaiting';
   const sortDesc = params.sort?.startsWith('-') ?? true;
-  const setSortKey = (key: SortKey) => setSort(sortDesc ? `-${key}` : key);
-  const toggleSortDir = () => setSort(sortDesc ? sortKey : `-${sortKey}`);
+  // 05-SearchFilterSortConsistency.md §2.1: one button per sort field (ProjectManagement's
+  // handleSortClick pattern) — clicking the active field toggles direction, clicking a
+  // different field switches to it at the default (descending) direction.
+  const handleSortClick = (key: SortKey) => {
+    const nextDesc = sortKey === key ? !sortDesc : true;
+    setSort(nextDesc ? `-${key}` : key);
+  };
 
   const openDetail = (id: string) => { setDetailId(id); setDetailTab('basic'); };
 
@@ -190,43 +195,43 @@ export function AuditCenter() {
         </div>
       )}
 
-      {/* Filters row */}
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-0">
+      {/* Filters row — 05-SearchFilterSortConsistency.md §2.4: search alone below lg:, filters as an
+          Nx1 grid alongside it, merged into one row at lg: and up. */}
+      <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
+        <div className="relative lg:flex-1 lg:min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)} placeholder={t('admin.audit.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
-        <select value={params.filter?.gradeId ?? 'all'} onChange={e => setFilter('gradeId', e.target.value === 'all' ? undefined : e.target.value)}
-          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
-          <option value="all">{t('admin.audit.allGrades')}</option>
-          {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
-        <button
-          onClick={() => setFilter('hasAnomaly', params.filter?.hasAnomaly ? undefined : 'true')}
-          className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm transition-colors ${
-            params.filter?.hasAnomaly ? 'bg-red-100 dark:bg-red-900/30 border-red-300 text-red-700 dark:text-red-400' : 'border-border text-muted-foreground hover:bg-accent'
-          }`}
-        >
-          <AlertTriangle className="w-4 h-4" />
-          {t('admin.audit.onlyAnomalies')}
-        </button>
+        <div className="grid grid-cols-2 gap-2 lg:contents">
+          <select value={params.filter?.gradeId ?? 'all'} onChange={e => setFilter('gradeId', e.target.value === 'all' ? undefined : e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.audit.allGrades')}</option>
+            {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+          <button
+            onClick={() => setFilter('hasAnomaly', params.filter?.hasAnomaly ? undefined : 'true')}
+            className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm transition-colors ${
+              params.filter?.hasAnomaly ? 'bg-red-100 dark:bg-red-900/30 border-red-300 text-red-700 dark:text-red-400' : 'border-border text-muted-foreground hover:bg-accent'
+            }`}
+          >
+            <AlertTriangle className="w-4 h-4" />
+            {t('admin.audit.onlyAnomalies')}
+          </button>
+        </div>
       </div>
 
-      {/* Sort controls: one field dropdown + one direction toggle (04-DataViewOptimization.md §2.1.4), server-side. */}
-      <div className="flex items-center gap-2">
-        <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)}
-          className="px-3 py-1.5 rounded-lg border border-border bg-input-background dark:bg-muted text-foreground text-xs focus:outline-none">
-          {SORT_KEYS.map(key => (
-            <option key={key} value={key}>
-              {key === 'daysWaiting' ? t('admin.audit.sortDaysWaiting') : key === 'submittedAt' ? t('admin.audit.sortSubmitted') : t('admin.audit.sortServiceHours')}
-            </option>
-          ))}
-        </select>
-        <button onClick={toggleSortDir}
-          className="px-2.5 py-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-accent text-xs transition-colors">
-          {sortDesc ? '↓' : '↑'}
-        </button>
+      {/* Sort controls: one button per field (§2.1), always an Nx1 grid (§2.5). */}
+      <div className="grid grid-cols-3 gap-2">
+        {SORT_KEYS.map(key => (
+          <button key={key} onClick={() => handleSortClick(key)}
+            className={`px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors ${
+              sortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'
+            }`}>
+            {key === 'daysWaiting' ? t('admin.audit.sortDaysWaiting') : key === 'submittedAt' ? t('admin.audit.sortSubmitted') : t('admin.audit.sortServiceHours')}
+            {sortKey === key && (sortDesc ? ' ↓' : ' ↑')}
+          </button>
+        ))}
       </div>
 
       {/* Results */}
@@ -292,28 +297,12 @@ export function AuditCenter() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-1 justify-end">
-                          {/* Explicit, keyboard/screen-reader-reachable open trigger (D5) — the row click above is a mouse convenience, not the only path. */}
+                        <div className="flex justify-end">
+                          {/* Explicit, keyboard/screen-reader-reachable open trigger (D5) — the row click above is a mouse convenience, not the only path. Decision actions live in the detail modal's footer only, not duplicated here. */}
                           <button onClick={e => { e.stopPropagation(); openDetail(item.id); }}
-                            className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent transition-colors flex items-center gap-1">
-                            <Eye className="w-3 h-3" /> {t('common.viewDetails')}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                            <MoreHorizontal className="w-4 h-4" />
                           </button>
-                          {canDecide && (
-                            <>
-                              <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'return'); }}
-                                className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1">
-                                <RotateCcw className="w-3 h-3" /> {t('admin.audit.return')}
-                              </button>
-                              <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'reject'); }}
-                                className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1">
-                                <XCircle className="w-3 h-3" /> {t('admin.audit.reject')}
-                              </button>
-                              <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'approve'); }}
-                                className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-green-50 hover:text-green-600 hover:border-green-300 dark:hover:bg-green-900/20 transition-colors flex items-center gap-1">
-                                <CheckCircle className="w-3 h-3" /> {t('admin.audit.approve')}
-                              </button>
-                            </>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -357,35 +346,16 @@ export function AuditCenter() {
                           {item.projectTitle || item.organizationName} · {minutesToHours(item.durationMinutes)}h · {item.serviceDate}
                         </div>
                         {item.hasAnomaly && item.anomalyNote && (
-                          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 mb-2">
+                          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
                             <div className="text-xs text-red-700 dark:text-red-300">{item.anomalyNote}</div>
                           </div>
                         )}
-                        <div className="flex items-center justify-between">
-                          <button onClick={e => { e.stopPropagation(); openDetail(item.id); }}
-                            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                            <Eye className="w-3 h-3" /> {t('common.viewDetails')}
-                          </button>
-                          <div className="flex gap-2">
-                            {canDecide && (
-                              <>
-                                <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'return'); }}
-                                  className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1">
-                                  <RotateCcw className="w-3 h-3" /> {t('admin.audit.return')}
-                                </button>
-                                <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'reject'); }}
-                                  className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1">
-                                  <XCircle className="w-3 h-3" /> {t('admin.audit.reject')}
-                                </button>
-                                <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'approve'); }}
-                                  className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-green-50 hover:text-green-600 hover:border-green-300 dark:hover:bg-green-900/20 transition-colors flex items-center gap-1">
-                                  <CheckCircle className="w-3 h-3" /> {t('admin.audit.approve')}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
                       </div>
+                      {/* Decision actions live in the detail modal's footer only — this just opens it (D5's explicit open trigger). */}
+                      <button onClick={e => { e.stopPropagation(); openDetail(item.id); }}
+                        className="p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0">
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -465,6 +435,7 @@ export function AuditCenter() {
             ),
           },
         ];
+        const showDecisions = canDecide && (detailQueueItem.status === 'pending' || detailQueueItem.status === 'underReview');
         return (
           <DetailWorkbench
             open
@@ -474,22 +445,33 @@ export function AuditCenter() {
             tabs={tabs}
             activeTab={detailTab}
             onTabChange={setDetailTab}
-            footer={canDecide && (detailQueueItem.status === 'pending' || detailQueueItem.status === 'underReview') ? (
-              <div className="flex gap-3">
-                <button onClick={() => handleDecision(detailQueueItem.id, 'return')}
-                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center justify-center gap-1.5">
-                  <RotateCcw className="w-4 h-4" /> {t('admin.audit.return')}
+            closeButton="none"
+            footer={
+              // Cancel replaces the removed header X; grid-cols-2 gives a 2x2 layout on mobile
+              // for the 4-button case (Cancel + 3 decisions), sm:flex returns it to a row on desktop.
+              <div className={`grid gap-3 ${showDecisions ? 'grid-cols-2 sm:flex' : ''}`}>
+                <button onClick={() => setDetailId(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent transition-colors">
+                  {t('common.cancel')}
                 </button>
-                <button onClick={() => handleDecision(detailQueueItem.id, 'reject')}
-                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1.5">
-                  <XCircle className="w-4 h-4" /> {t('admin.audit.reject')}
-                </button>
-                <button onClick={() => handleDecision(detailQueueItem.id, 'approve')}
-                  className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5">
-                  <CheckCircle className="w-4 h-4" /> {t('admin.audit.approve')}
-                </button>
+                {showDecisions && (
+                  <>
+                    <button onClick={() => handleDecision(detailQueueItem.id, 'return')}
+                      className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center justify-center gap-1.5">
+                      <RotateCcw className="w-4 h-4" /> {t('admin.audit.return')}
+                    </button>
+                    <button onClick={() => handleDecision(detailQueueItem.id, 'reject')}
+                      className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1.5">
+                      <XCircle className="w-4 h-4" /> {t('admin.audit.reject')}
+                    </button>
+                    <button onClick={() => handleDecision(detailQueueItem.id, 'approve')}
+                      className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5">
+                      <CheckCircle className="w-4 h-4" /> {t('admin.audit.approve')}
+                    </button>
+                  </>
+                )}
               </div>
-            ) : undefined}
+            }
           />
         );
       })()}

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, XCircle, RotateCcw, ThumbsUp, Search, Eye } from 'lucide-react';
+import { CheckCircle, XCircle, RotateCcw, ThumbsUp, Search, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
@@ -58,8 +58,12 @@ export function ProposalReview() {
 
   const sortKey = (params.sort?.replace(/^-/, '') as SortKey) ?? 'plannedStartAt';
   const sortDesc = params.sort?.startsWith('-') ?? true;
-  const setSortKey = (key: SortKey) => setSort(sortDesc ? `-${key}` : key);
-  const toggleSortDir = () => setSort(sortDesc ? sortKey : `-${sortKey}`);
+  // 05-SearchFilterSortConsistency.md §2.1: one button per sort field, same click-to-toggle-direction
+  // interaction as ProjectManagement's handleSortClick.
+  const handleSortClick = (key: SortKey) => {
+    const nextDesc = sortKey === key ? !sortDesc : true;
+    setSort(nextDesc ? `-${key}` : key);
+  };
   const hasActiveFilters = !!(params.search || params.filter?.categoryId);
   const clearFilters = () => { setSearch(''); setFilter('categoryId', undefined); };
 
@@ -118,35 +122,39 @@ export function ProposalReview() {
         <p className="text-sm text-muted-foreground">{t('admin.proposals.count', { count: page?.totalItems ?? items.length })}</p>
       </div>
 
-      {/* Unified filter bar (04-DataViewOptimization.md §2.1): search + dropdowns, no status pills. */}
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-40">
+      {/* Search & filters — 05-SearchFilterSortConsistency.md §2.4: search alone below lg:, filters as an
+          Nx1 grid alongside it, merged into one row at lg: and up. */}
+      <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
+        <div className="relative lg:flex-1 lg:min-w-40">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)} placeholder={t('admin.proposals.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
-        <select value={params.filter?.categoryId ?? 'all'} onChange={e => setFilter('categoryId', e.target.value === 'all' ? undefined : e.target.value)}
-          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
-          <option value="all">{t('common.all')}</option>
-          {serviceCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select value={params.filter?.status ?? 'all'} onChange={e => setFilter('status', e.target.value === 'all' ? undefined : e.target.value)}
-          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
-          <option value="all">{t('common.all')}</option>
-          {STATUSES.map(s => <option key={s} value={s}>{t(PROPOSAL_STATUS_LABELS[s].label)}</option>)}
-        </select>
-        <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)}
-          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
-          {SORT_KEYS.map(key => (
-            <option key={key} value={key}>
-              {key === 'plannedStartAt' ? t('admin.proposals.sortPlannedDate') : key === 'createdAt' ? t('admin.proposals.sortCreated') : t('admin.proposals.sortStatus')}
-            </option>
-          ))}
-        </select>
-        <button onClick={toggleSortDir}
-          className="px-2.5 py-2.5 rounded-xl bg-muted text-muted-foreground hover:bg-accent text-sm transition-colors">
-          {sortDesc ? '↓' : '↑'}
-        </button>
+        <div className="grid grid-cols-2 gap-2 lg:contents">
+          <select value={params.filter?.categoryId ?? 'all'} onChange={e => setFilter('categoryId', e.target.value === 'all' ? undefined : e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.proposals.allCategories')}</option>
+            {serviceCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={params.filter?.status ?? 'all'} onChange={e => setFilter('status', e.target.value === 'all' ? undefined : e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.proposals.allStatuses')}</option>
+            {STATUSES.map(s => <option key={s} value={s}>{t(PROPOSAL_STATUS_LABELS[s].label)}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Sort controls: one button per field (§2.1), always an Nx1 grid (§2.5). */}
+      <div className="grid grid-cols-3 gap-2">
+        {SORT_KEYS.map(key => (
+          <button key={key} onClick={() => handleSortClick(key)}
+            className={`px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors ${
+              sortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'
+            }`}>
+            {key === 'plannedStartAt' ? t('admin.proposals.sortPlannedDate') : key === 'createdAt' ? t('admin.proposals.sortCreated') : t('admin.proposals.sortStatus')}
+            {sortKey === key && (sortDesc ? ' ↓' : ' ↑')}
+          </button>
+        ))}
       </div>
 
       <ListStateBanner
@@ -171,32 +179,11 @@ export function ProposalReview() {
                 <div className="text-xs text-muted-foreground">{p.initiatorName}{p.plannedDate ? ` · ${p.plannedDate}` : ''}{p.location ? ` · ${p.location}` : ''}</div>
                 {p.goal && <p className="text-xs text-muted-foreground mt-2">{p.goal}</p>}
               </div>
-              <div className="flex flex-col items-end gap-1.5 shrink-0">
-                <button onClick={e => { e.stopPropagation(); openDetail(p.id); }}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:bg-accent flex items-center gap-1 text-xs">
-                  <Eye className="w-3.5 h-3.5" /> {t('common.viewDetails')}
-                </button>
-                {canReview && (p.status === 'submitted' || p.status === 'underReview') && (
-                  <div className="flex gap-1.5 flex-wrap justify-end">
-                    <button onClick={e => { e.stopPropagation(); openDecision(p, 'approve'); }}
-                      className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-green-50 hover:text-green-600 hover:border-green-300 dark:hover:bg-green-900/20 transition-colors flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3" /> {decisionLabel('approve')}
-                    </button>
-                    <button onClick={e => { e.stopPropagation(); openDecision(p, 'requestChanges'); }}
-                      className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1">
-                      <RotateCcw className="w-3 h-3" /> {decisionLabel('requestChanges')}
-                    </button>
-                    <button onClick={e => { e.stopPropagation(); openDecision(p, 'recommendApproval'); }}
-                      className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:hover:bg-blue-900/20 transition-colors flex items-center gap-1">
-                      <ThumbsUp className="w-3 h-3" /> {decisionLabel('recommendApproval')}
-                    </button>
-                    <button onClick={e => { e.stopPropagation(); openDecision(p, 'reject'); }}
-                      className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1">
-                      <XCircle className="w-3 h-3" /> {decisionLabel('reject')}
-                    </button>
-                  </div>
-                )}
-              </div>
+              {/* Decision actions live in the detail modal's footer only — this just opens it. */}
+              <button onClick={e => { e.stopPropagation(); openDetail(p.id); }}
+                className="p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0">
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
             </div>
           </div>
         ))}
@@ -275,6 +262,7 @@ export function ProposalReview() {
             ),
           },
         ];
+        const showDecisions = canReview && (detailProposal.status === 'submitted' || detailProposal.status === 'underReview');
         return (
           <DetailWorkbench
             open
@@ -284,26 +272,60 @@ export function ProposalReview() {
             tabs={tabs}
             activeTab={detailTab}
             onTabChange={setDetailTab}
-            footer={canReview && (detailProposal.status === 'submitted' || detailProposal.status === 'underReview') ? (
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={() => openDecision(detailProposal, 'approve')}
-                  className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5">
-                  <CheckCircle className="w-4 h-4" /> {decisionLabel('approve')}
-                </button>
-                <button onClick={() => openDecision(detailProposal, 'requestChanges')}
-                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center justify-center gap-1.5">
-                  <RotateCcw className="w-4 h-4" /> {decisionLabel('requestChanges')}
-                </button>
-                <button onClick={() => openDecision(detailProposal, 'recommendApproval')}
-                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-1.5">
-                  <ThumbsUp className="w-4 h-4" /> {decisionLabel('recommendApproval')}
-                </button>
-                <button onClick={() => openDecision(detailProposal, 'reject')}
-                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1.5">
-                  <XCircle className="w-4 h-4" /> {decisionLabel('reject')}
-                </button>
-              </div>
-            ) : undefined}
+            // 4 decision buttons leave no room to also fit Cancel in a clean 2x2 grid on mobile, so mobile
+            // keeps the header X as its close affordance instead; desktop has room, so it drops the X and
+            // gets Cancel added to the row (5-across) like the other two review pages.
+            closeButton="mobileOnly"
+            footer={
+              <>
+                {showDecisions && (
+                  <div className="grid grid-cols-2 gap-2 sm:hidden">
+                    <button onClick={() => openDecision(detailProposal, 'approve')}
+                      className="py-2.5 rounded-xl bg-green-600 text-white text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5">
+                      <CheckCircle className="w-4 h-4" /> {decisionLabel('approve')}
+                    </button>
+                    <button onClick={() => openDecision(detailProposal, 'requestChanges')}
+                      className="py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center justify-center gap-1.5">
+                      <RotateCcw className="w-4 h-4" /> {decisionLabel('requestChanges')}
+                    </button>
+                    <button onClick={() => openDecision(detailProposal, 'recommendApproval')}
+                      className="py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-1.5">
+                      <ThumbsUp className="w-4 h-4" /> {decisionLabel('recommendApproval')}
+                    </button>
+                    <button onClick={() => openDecision(detailProposal, 'reject')}
+                      className="py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1.5">
+                      <XCircle className="w-4 h-4" /> {decisionLabel('reject')}
+                    </button>
+                  </div>
+                )}
+                <div className="hidden sm:flex gap-2">
+                  <button onClick={() => setDetailId(null)}
+                    className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent transition-colors">
+                    {t('common.cancel')}
+                  </button>
+                  {showDecisions && (
+                    <>
+                      <button onClick={() => openDecision(detailProposal, 'approve')}
+                        className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5">
+                        <CheckCircle className="w-4 h-4" /> {decisionLabel('approve')}
+                      </button>
+                      <button onClick={() => openDecision(detailProposal, 'requestChanges')}
+                        className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center justify-center gap-1.5">
+                        <RotateCcw className="w-4 h-4" /> {decisionLabel('requestChanges')}
+                      </button>
+                      <button onClick={() => openDecision(detailProposal, 'recommendApproval')}
+                        className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-1.5">
+                        <ThumbsUp className="w-4 h-4" /> {decisionLabel('recommendApproval')}
+                      </button>
+                      <button onClick={() => openDecision(detailProposal, 'reject')}
+                        className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1.5">
+                        <XCircle className="w-4 h-4" /> {decisionLabel('reject')}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
+            }
           />
         );
       })()}

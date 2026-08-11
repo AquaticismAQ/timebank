@@ -243,15 +243,23 @@ export function StudentList() {
     atRisk: students.filter(s => (s.completedMinutes ?? 0) / (s.annualRequiredMinutes ?? 1) < 0.25).length,
   };
 
-  const SortTh = ({ k, label }: { k: SortKey; label: string }) => (
-    <th className="text-left px-4 py-3 cursor-pointer select-none hover:bg-muted/70 transition-colors"
-      onClick={() => handleSortClick(k)}>
+  // 05-SearchFilterSortConsistency.md §2.2 (D2): headers are a static, non-clickable indicator of the
+  // active sort column — the sort-button row below is now the only way to change sort.
+  const SortTh = ({ label, active }: { label: string; active: boolean }) => (
+    <th className="text-left px-4 py-3">
       <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
         {label}
-        {sortKey === k && <span className="text-primary">{sortDesc ? '↓' : '↑'}</span>}
+        {active && <span className="text-primary">{sortDesc ? '↓' : '↑'}</span>}
       </div>
     </th>
   );
+
+  const SORT_BUTTONS: { key: SortKey; label: string }[] = [
+    { key: 'name', label: t('admin.students.sortName') },
+    { key: 'gradeLevel', label: t('admin.students.sortGrade') },
+    { key: 'completedHours', label: t('admin.students.sortHoursShort') },
+    { key: 'timeCoinBalance', label: t('admin.students.sortCoinsShort') },
+  ];
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
@@ -288,30 +296,47 @@ export function StudentList() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-40">
+      {/* Search & filters — 05-SearchFilterSortConsistency.md §2.4: search alone below lg:, filters as an
+          Nx1 grid alongside it, merged into one row at lg: and up. */}
+      <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
+        <div className="relative lg:flex-1 lg:min-w-40">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input type="text" value={search} onChange={e => handleSearchChange(e.target.value)} placeholder={t('admin.students.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
-        <select value={filterGrade} onChange={e => handleGradeChange(e.target.value)}
-          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
-          <option value="all">{t('admin.students.allGrades')}</option>
-          {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
-        <select value={filterClass} onChange={e => handleClassChange(e.target.value)}
-          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
-          <option value="all">{t('admin.students.allClasses')}</option>
-          {availableClasses.map(c => <option key={c.id} value={c.id}>{formatClassName(c.name)}</option>)}
-        </select>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)}
-          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
-          <option value="all">{t('admin.students.allStatuses')}</option>
-          <option value="onTrack">{t('admin.students.statusOnTrack')}</option>
-          <option value="below50">{t('admin.students.statusBehind')}</option>
-          <option value="below25">{t('admin.students.statusCritical')}</option>
-        </select>
+        <div className="grid grid-cols-3 gap-2 lg:contents">
+          <select value={filterGrade} onChange={e => handleGradeChange(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.students.allGrades')}</option>
+            {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+          <select value={filterClass} onChange={e => handleClassChange(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.students.allClasses')}</option>
+            {availableClasses.map(c => <option key={c.id} value={c.id}>{formatClassName(c.name)}</option>)}
+          </select>
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.students.allStatuses')}</option>
+            <option value="onTrack">{t('admin.students.statusOnTrack')}</option>
+            <option value="below50">{t('admin.students.statusBehind')}</option>
+            <option value="below25">{t('admin.students.statusCritical')}</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Sort controls: one button per field (§2.2/D2), always an Nx1 grid (§2.5, D3: forced 4-col row with
+          shortened labels rather than wrapping). */}
+      <div className="grid grid-cols-4 gap-2">
+        {SORT_BUTTONS.map(({ key, label }) => (
+          <button key={key} onClick={() => handleSortClick(key)}
+            className={`px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors ${
+              sortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'
+            }`}>
+            {label}
+            {sortKey === key && (sortDesc ? ' ↓' : ' ↑')}
+          </button>
+        ))}
       </div>
 
       <div className="text-xs text-muted-foreground">{t('admin.students.count', { count: filtered.length })}</div>
@@ -323,11 +348,11 @@ export function StudentList() {
         <table className="w-full text-sm">
           <thead className="bg-muted/50 border-b border-border">
             <tr>
-              <SortTh k="name" label={t('admin.students.sortName')} />
-              <SortTh k="gradeLevel" label={t('admin.students.sortGrade')} />
+              <SortTh label={t('admin.students.sortName')} active={sortKey === 'name'} />
+              <SortTh label={t('admin.students.sortGrade')} active={sortKey === 'gradeLevel'} />
               <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('admin.students.annualProgress')}</th>
-              <SortTh k="completedHours" label={t('admin.students.sortHours')} />
-              <SortTh k="timeCoinBalance" label={t('admin.students.sortCoins')} />
+              <SortTh label={t('admin.students.sortHours')} active={sortKey === 'completedHours'} />
+              <SortTh label={t('admin.students.sortCoins')} active={sortKey === 'timeCoinBalance'} />
               <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('admin.students.status')}</th>
               <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('admin.students.actions')}</th>
             </tr>

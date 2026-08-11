@@ -17,7 +17,7 @@ export interface DetailWorkbenchTab {
  * clicked row/card (D5's two entry points) both need to set the same state from outside.
  */
 export function DetailWorkbench({
-  open, onClose, title, subtitle, tabs, activeTab, onTabChange, footer,
+  open, onClose, title, subtitle, tabs, activeTab, onTabChange, footer, closeButton = 'always',
 }: {
   open: boolean;
   onClose: () => void;
@@ -27,6 +27,10 @@ export function DetailWorkbench({
   activeTab: string;
   onTabChange: (key: string) => void;
   footer?: React.ReactNode;
+  /** 05-SearchFilterSortConsistency.md addendum: callers with a "Cancel" button in their footer
+   * don't need the header X too — 'none' drops it entirely, 'mobileOnly' keeps it below `sm:`
+   * for callers whose footer button count doesn't leave room to add Cancel on small screens. */
+  closeButton?: 'always' | 'none' | 'mobileOnly';
 }) {
   if (!open) return null;
   const active = tabs.find(t => t.key === activeTab) ?? tabs[0];
@@ -44,9 +48,12 @@ export function DetailWorkbench({
             <h3 className="text-foreground leading-tight truncate">{title}</h3>
             {subtitle && <p className="text-xs text-muted-foreground truncate mt-0.5">{subtitle}</p>}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground shrink-0">
-            <X className="w-4 h-4" />
-          </button>
+          {closeButton !== 'none' && (
+            <button onClick={onClose}
+              className={`p-1.5 rounded-lg hover:bg-accent text-muted-foreground shrink-0 ${closeButton === 'mobileOnly' ? 'sm:hidden' : ''}`}>
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Tabs */}

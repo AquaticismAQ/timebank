@@ -511,27 +511,30 @@ export function ProjectManagement() {
         )}
       </div>
 
-      {/* Search & filters */}
-      <div className="flex gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-48">
+      {/* Search & filters — 05-SearchFilterSortConsistency.md §2.4: search alone below lg:, filters as an
+          Nx1 grid alongside it, merged into one row at lg: and up. */}
+      <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
+        <div className="relative lg:flex-1 lg:min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input type="text" value={search} onChange={e => handleSearchChange(e.target.value)}          placeholder={t('admin.projects.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
-        <select value={filterStatus} onChange={e => handleStatusChange(e.target.value as ProjectStatus | 'all')}
-          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
-          <option value="all">{t('admin.projects.allStatuses')}</option>
-          {Object.entries(PROJECT_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{t(v.label)}</option>)}
-        </select>
-        <select value={filterCategory} onChange={e => handleCategoryChange(e.target.value)}
-          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
-          <option value="all">{t('admin.projects.allCategories')}</option>
-          {serviceCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <div className="grid grid-cols-2 gap-2 lg:contents">
+          <select value={filterStatus} onChange={e => handleStatusChange(e.target.value as ProjectStatus | 'all')}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.projects.allStatuses')}</option>
+            {Object.entries(PROJECT_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{t(v.label)}</option>)}
+          </select>
+          <select value={filterCategory} onChange={e => handleCategoryChange(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.projects.allCategories')}</option>
+            {serviceCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
       </div>
 
-      {/* Sort */}
-      <div className="flex gap-2">
+      {/* Sort — always an Nx1 grid, no breakpoint condition (§2.5). */}
+      <div className="grid grid-cols-3 gap-2">
         {(
           [
             { key: 'createdAt' as SortKey, label: t('admin.projects.sortCreated') },
@@ -540,7 +543,7 @@ export function ProjectManagement() {
           ]
         ).map(({ key, label }) => (
           <button key={key} onClick={() => handleSortClick(key)}
-            className={`px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition-colors ${sortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+            className={`px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors ${sortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
             {label} {sortKey === key && (sortDesc ? '↓' : '↑')}
           </button>
         ))}
