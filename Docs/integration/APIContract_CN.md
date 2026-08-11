@@ -492,7 +492,7 @@ queued → running → succeeded
 
 | Method | Path | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/service-records` | `serviceRecords.read` | 查询本人或权限范围记录 |
+| `GET` | `/service-records` | `serviceRecords.read` | 查询本人或权限范围记录；支持 `filter[status]`/`filter[sourceType]`/`filter[serviceCategoryId]`/`filter[studentId]`/`search`（`filter[studentId]` 2026-08-12 新增，服务于管理端"查看该学生记录"页面——见 §4.9 表格后的说明） |
 | `POST` | `/service-records` | `serviceRecords.create` | 创建草稿 |
 | `GET` | `/service-records/{id}` | `serviceRecords.read` | 记录详情 |
 | `PATCH` | `/service-records/{id}` | 本人且为可编辑状态 | 更新草稿/退回记录 |
@@ -579,7 +579,7 @@ queued → running → succeeded
 | `POST` | `/students/{id}/activate` | `students.manage` | 启用 |
 | `POST` | `/students/{id}/deactivate` | `students.manage` | 停用 |
 | `GET` | `/students/{id}/progress` | 本人/`progress.read` | 达标进度 |
-| `GET` | `/students/{id}/service-records` | 本人/`students.read` | 服务历史 |
+| ~~`GET` `/students/{id}/service-records`~~ | — | 从未实现——这一行原本描述了预期形态，但服务端实际没有这个路由。解决方式与 `api.accounts.get(studentId)`（§13.1 后的说明）相同：前端改为调用 `GET /service-records?filter[studentId]=`，复用其它管理端服务记录页面已经在用的列表接口，而不是再维护一个带自己一套筛选/排序/分页逻辑的子资源接口。 |
 | `GET` | `/students/directory` | `students.read`/`directory.read` | 按姓名搜索，返回精简的 `{id, displayName, gradeLevel, className}`，用于挑选共同组织者（2026-08-06 新增，见 `Docs/clarification/01-i3-partner-school-terminology.md`；`gradeName` 已在 issue 010 中改为原始的 `gradeLevel`） |
 | `GET` | `/academic-years` | 已登录 | 学年 |
 | `GET` | `/grades` | 已登录 | 年级 |
@@ -985,6 +985,8 @@ TypeScript 类型（如 `Project`、`ServiceRecord`、`Account`）目前从 `../
 | `users.list` | `GET /users` | 否 |
 
 `api.accounts.get(studentId)` 传入的是学生 ID，而账户端点以账户 ID 为键。该差异在 Client 内解决——先按 `studentId` 过滤，再用返回的 `accountId`——而不是新增以学生为键的账户端点。
+
+`serviceRecords.list` 在管理端"查看该学生记录"场景（学生管理页的"记录"按钮）下传入 `filter: { studentId }`，调用的是其它服务记录页面已经在用的同一个方法/接口——与上面 `accounts.get` 的解决方式相同，不是新增第二个 Client 方法。
 
 ### 13.2 前端已验证与未验证的部分
 

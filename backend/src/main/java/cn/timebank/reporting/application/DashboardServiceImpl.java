@@ -86,7 +86,7 @@ class DashboardServiceImpl implements DashboardService {
         }
 
         List<ServiceRecordDto> recentRecords = serviceRecordService
-                .list(PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "createdAt")), auth, null, null, null, null, resolvedLanguage)
+                .list(PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "createdAt")), auth, null, null, null, null, null, resolvedLanguage)
                 .getContent();
         List<ProjectDto> upcomingProjects = projectService
                 .list(PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "startAt")), null, null, null, auth, resolvedLanguage)

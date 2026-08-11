@@ -227,16 +227,33 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
         Authentication auth = studentAuth(student.id());
 
         // A status filter narrows results to only the SUBMITTED record.
-        Page<ServiceRecordDto> submittedOnly = serviceRecordService.list(pageable, auth, "SUBMITTED", null, null, null, "zh-CN");
+        Page<ServiceRecordDto> submittedOnly = serviceRecordService.list(pageable, auth, "SUBMITTED", null, null, null, null, "zh-CN");
         assertThat(submittedOnly.getContent()).extracting(ServiceRecordDto::id).containsExactly(recordA.id());
 
         // A search substring matches on organizationName.
-        Page<ServiceRecordDto> searchMatch = serviceRecordService.list(pageable, auth, null, null, null, "sunrise", "zh-CN");
+        Page<ServiceRecordDto> searchMatch = serviceRecordService.list(pageable, auth, null, null, null, null, "sunrise", "zh-CN");
         assertThat(searchMatch.getContent()).extracting(ServiceRecordDto::id).containsExactly(recordA.id());
 
         // An unmatched search returns an empty page.
-        Page<ServiceRecordDto> searchNoMatch = serviceRecordService.list(pageable, auth, null, null, null, "no-such-organization", "zh-CN");
+        Page<ServiceRecordDto> searchNoMatch = serviceRecordService.list(pageable, auth, null, null, null, null, "no-such-organization", "zh-CN");
         assertThat(searchNoMatch.getContent()).isEmpty();
+
+        // A studentId filter (the admin "view this student's records" path) narrows to just that student's
+        // records, even though a second student also has records in the same window. Both students are
+        // grade_6 (createStudent()), so a grade_6-scoped teacher can see either — same scope mechanism
+        // AccountService.list's studentId filter already relies on.
+        StudentDetailDto otherStudent = createStudent();
+        CreateServiceRecordRequest requestC = new CreateServiceRecordRequest(
+                "SELF", null, null, "Harbor Museum", LocalDate.now().minusDays(1), start, end,
+                "Somewhere", "cat_campus", "desc", null, null, null, null, List.of(readyFile()), false, null);
+        ServiceRecordDto recordC = serviceRecordService.createDraft(requestC, otherStudent.id(), otherStudent.id(), "zh-CN");
+
+        Authentication scopedTeacher = teacherScopedToGrade6();
+        Page<ServiceRecordDto> byStudentA = serviceRecordService.list(pageable, scopedTeacher, null, null, null, student.id(), null, "zh-CN");
+        assertThat(byStudentA.getContent()).extracting(ServiceRecordDto::id).containsExactlyInAnyOrder(recordA.id(), recordB.id());
+
+        Page<ServiceRecordDto> byStudentC = serviceRecordService.list(pageable, scopedTeacher, null, null, null, otherStudent.id(), null, "zh-CN");
+        assertThat(byStudentC.getContent()).extracting(ServiceRecordDto::id).containsExactly(recordC.id());
 
         assertThat(recordB.status()).isEqualTo("DRAFT");
     }
@@ -268,7 +285,7 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
                 .isEqualTo(inScopeRecord.id());
 
         Page<ServiceRecordDto> list = serviceRecordService.list(
-                PageRequest.of(0, 20), teacherAuth, null, null, null, null, "zh-CN");
+                PageRequest.of(0, 20), teacherAuth, null, null, null, null, null, "zh-CN");
         assertThat(list.getContent()).extracting(ServiceRecordDto::id)
                 .contains(inScopeRecord.id())
                 .doesNotContain(outOfScopeRecord.id());

@@ -495,7 +495,7 @@ The frontend must not create a project first and then separately update the prop
 
 | Method | Path | Permission | Description |
 | --- | --- | --- | --- |
-| `GET` | `/service-records` | `serviceRecords.read` | Query own or in-scope records |
+| `GET` | `/service-records` | `serviceRecords.read` | Query own or in-scope records; `filter[status]`/`filter[sourceType]`/`filter[serviceCategoryId]`/`filter[studentId]`/`search` (added 2026-08-12 for the admin "view this student's records" screen — see the note after §4.9's table) |
 | `POST` | `/service-records` | `serviceRecords.create` | Create draft |
 | `GET` | `/service-records/{id}` | `serviceRecords.read` | Record detail |
 | `PATCH` | `/service-records/{id}` | Owner & editable state | Update draft/returned record |
@@ -582,7 +582,7 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 | `POST` | `/students/{id}/activate` | `students.manage` | Activate |
 | `POST` | `/students/{id}/deactivate` | `students.manage` | Deactivate |
 | `GET` | `/students/{id}/progress` | Owner/`progress.read` | Progress tracking |
-| `GET` | `/students/{id}/service-records` | Owner/`students.read` | Service history |
+| ~~`GET` `/students/{id}/service-records`~~ | — | Never implemented — this row described the intended shape but no such route exists server-side. Resolved the same way `api.accounts.get(studentId)` was (§13.1's note below): the frontend calls `GET /service-records?filter[studentId]=` instead of a dedicated sub-resource, reusing the list endpoint every other admin service-record screen already calls rather than adding a second route with its own filter/sort/pagination to maintain. |
 | `GET` | `/students/directory` | `students.read`/`directory.read` | Minimal `{id, displayName, gradeLevel, className}` search by name, for picking a co-organizer (added 2026-08-06, `Docs/clarification/01-i3-partner-school-terminology.md`; `gradeName` became raw `gradeLevel` in issue 010) |
 | `GET` | `/academic-years` | Authenticated | Academic years |
 | `GET` | `/grades` | Authenticated | Grades |
@@ -997,6 +997,8 @@ This section exists so the backend can be built against what the frontend actual
 | `users.list` | `GET /users` | No |
 
 `api.accounts.get(studentId)` takes a student ID while the account endpoints are keyed by account ID. This is resolved in the client — filter by `studentId`, then use the returned `accountId` — rather than by adding a student-scoped account endpoint.
+
+`serviceRecords.list`'s admin "view this student's records" caller (Student Management's Records button) passes `filter: { studentId }` through the same method/endpoint every other service-record screen uses — same resolution as `accounts.get` above, not a second client method.
 
 ### 13.2 What the Frontend Has and Has Not Validated
 

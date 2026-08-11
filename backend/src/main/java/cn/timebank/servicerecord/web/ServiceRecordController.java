@@ -65,7 +65,7 @@ public class ServiceRecordController {
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
         Page<ServiceRecordDto> page = serviceRecordService.list(pageable, auth, query.filter("status"),
-                query.filter("sourceType"), query.filter("serviceCategoryId"), query.search(),
+                query.filter("sourceType"), query.filter("serviceCategoryId"), query.filter("studentId"), query.search(),
                 resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }

@@ -19,7 +19,7 @@ import java.util.Optional;
 public interface ServiceRecordService {
 
     Page<ServiceRecordDto> list(Pageable pageable, Authentication auth, String status, String sourceType,
-                                 String serviceCategoryId, String search, String resolvedLanguage);
+                                 String serviceCategoryId, String studentId, String search, String resolvedLanguage);
 
     ServiceRecordDto getDetail(String id, Authentication auth, String resolvedLanguage);
 

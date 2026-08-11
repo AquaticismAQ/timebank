@@ -37,7 +37,8 @@ export function DetailWorkbench({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      {/* Backdrop is decorative only — no onClick — an accidental outside click must not discard the review in progress. */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div
         className="relative bg-card w-full sm:max-w-4xl sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col h-full sm:h-auto sm:max-h-[92vh] z-50"
         onClick={e => e.stopPropagation()}

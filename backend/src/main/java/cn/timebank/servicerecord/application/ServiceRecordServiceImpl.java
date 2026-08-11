@@ -113,12 +113,13 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
     @Override
     @Transactional(readOnly = true)
     public Page<ServiceRecordDto> list(Pageable pageable, Authentication auth, String status, String sourceType,
-                                        String serviceCategoryId, String search, String resolvedLanguage) {
+                                        String serviceCategoryId, String studentId, String search, String resolvedLanguage) {
         Specification<ServiceRecord> scopeSpec = scopeSpecification(auth);
         Specification<ServiceRecord> filterSpec = FilterSpecifications.and(
                 FilterSpecifications.equalToEnum("status", ServiceRecordStatus.class, status),
                 FilterSpecifications.equalToEnum("sourceType", SourceType.class, sourceType),
                 FilterSpecifications.equalTo("serviceCategoryId", serviceCategoryId),
+                FilterSpecifications.equalTo("studentId", studentId),
                 FilterSpecifications.searchAnyContains(search, "studentName", "organizationName"));
         Page<ServiceRecord> page = repository.findAll(FilterSpecifications.and(scopeSpec, filterSpec), pageable);
         DtoLookups lookups = lookupsFor(page.getContent(), resolvedLanguage);

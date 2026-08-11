@@ -331,8 +331,8 @@ export function ProposalReview() {
       })()}
 
       {decisionModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setDecisionModal(null)}>
-          <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-foreground">{decisionLabel(decisionModal.decision)}</h3>
             </div>

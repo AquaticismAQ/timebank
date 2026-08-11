@@ -479,7 +479,7 @@ export function AuditCenter() {
       {/* Decision modal */}
       {decisionModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={() => setDecisionModal(null)} />
+          <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-md mx-4 mb-4 sm:mb-0 z-50">
             <h3 className="text-foreground mb-4">
               {decisionModal.action === 'approve' ? `✅ ${t('admin.audit.confirmApprove')}` : decisionModal.action === 'return' ? `↩️ ${t('admin.audit.returnSupplement')}` : `❌ ${t('admin.audit.rejectRecord')}`}

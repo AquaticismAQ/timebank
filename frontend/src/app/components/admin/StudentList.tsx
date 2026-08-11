@@ -11,6 +11,7 @@ import { usePagedApi } from '../../api/useApi';
 import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
+import { StudentRecords } from './StudentRecords';
 
 type SortKey = 'name' | 'gradeLevel' | 'completedHours' | 'timeCoinBalance';
 
@@ -49,6 +50,7 @@ export function StudentList() {
   const [sortDesc, setSortDesc] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editStudent, setEditStudent] = useState<Student | null>(null);
+  const [recordsStudent, setRecordsStudent] = useState<Student | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
 
   const { items, page, loading, error, setPage, setSearch: setApiSearch, setFilter, setSort, refetch } =
@@ -410,7 +412,7 @@ export function StudentList() {
                         className="text-xs px-2 py-1 rounded-lg border border-border hover:bg-accent text-muted-foreground transition-colors">
                         {t('admin.students.remind')}
                       </button>
-                      <button onClick={() => toast.info(t('admin.students.recordsComingSoon'))}
+                      <button onClick={() => setRecordsStudent(student)}
                         className="text-xs px-2 py-1 rounded-lg border border-border hover:bg-accent text-muted-foreground transition-colors">
                         {t('admin.students.records')}
                       </button>
@@ -429,7 +431,7 @@ export function StudentList() {
       {/* Edit student modal */}
       {editStudent && editForm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setEditStudent(null)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[90vh]">
 
             {/* Header */}
@@ -628,7 +630,7 @@ export function StudentList() {
                       className="flex-1 py-2 rounded-lg border border-border text-xs text-foreground hover:bg-accent transition-colors">
                       {t('admin.students.remind')}
                     </button>
-                    <button onClick={() => toast.info(t('admin.students.recordsComingSoon'))}
+                    <button onClick={() => setRecordsStudent(student)}
                       className="flex-1 py-2 rounded-lg border border-border text-xs text-foreground hover:bg-accent transition-colors">
                       {t('admin.students.records')}
                     </button>
@@ -640,6 +642,10 @@ export function StudentList() {
         })}
         <PageControls page={page} onPageChange={setPage} />
       </div>
+
+      {recordsStudent && (
+        <StudentRecords studentId={recordsStudent.id} studentName={recordsStudent.name} onClose={() => setRecordsStudent(null)} />
+      )}
     </div>
   );
 }
