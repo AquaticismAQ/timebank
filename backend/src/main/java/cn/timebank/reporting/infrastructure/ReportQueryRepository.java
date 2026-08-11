@@ -89,6 +89,14 @@ public class ReportQueryRepository {
                 from review_decision rd
                 join service_record sr on sr.id = rd.service_record_id
                 where rd.created_at >= :start and rd.created_at < :end and sr.submitted_at is not null
+                  -- `service_record.submitted_at` only ever holds the *current* submission — a
+                  -- returned-then-resubmitted record overwrites it, so an earlier decision from the
+                  -- prior (already-superseded) review round would compare against a submission time
+                  -- from its own future, producing a large negative duration (found live: -73h on one
+                  -- record dragged the whole average to -0.3 days). A decision from a stale round
+                  -- always has created_at before the record's current submitted_at; only the
+                  -- decision(s) responding to the current submission satisfy created_at >= submitted_at.
+                  and rd.created_at >= sr.submitted_at
                 group by rd.reviewer_id
                 """;
         MapSqlParameterSource params = new MapSqlParameterSource()
