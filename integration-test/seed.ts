@@ -313,6 +313,7 @@ async function main() {
   }
 
   console.log('== Phase 4: API — service records ==');
+  const serviceRecordIdByKey = new Map<string, string>();
   for (const r of serviceRecords as SeedServiceRecord[]) {
     const student = session(r.studentUsername);
     const evidenceFileIds = r.targetStatus === 'draft' ? [] : [await uploadEvidence(student)];
@@ -322,9 +323,10 @@ async function main() {
       organizationName: r.organizationName, serviceCategoryId: r.serviceCategoryId,
       serviceDate: dateFromNow(r.serviceDateOffsetDays),
       startAt: daysFromNow(r.serviceDateOffsetDays, r.startHour), endAt: daysFromNow(r.serviceDateOffsetDays, r.endHour),
-      location: r.location, description: r.description, supervisorName: r.supervisorName,
+      location: r.location, description: r.description, supervisorKind: r.supervisorKind, supervisorName: r.supervisorName,
       supervisorContact: r.supervisorContact, evidenceFileIds, includesTravelTime: false,
     });
+    if (r.key) serviceRecordIdByKey.set(r.key, created.id);
     if (r.targetStatus === 'draft') {
       console.log(`  service record for ${r.studentUsername} -> draft`);
       continue;
@@ -378,9 +380,15 @@ async function main() {
   for (const c of cases as SeedCase[]) {
     const filer = session(c.filedByUsername ?? c.studentUsername);
     const student = session(c.studentUsername);
+    // `c.subjectId` is a SeedServiceRecord.key, not a real id, when subjectType is 'serviceRecord' —
+    // real ids don't exist until Phase 4 creates that record (see SeedCase.subjectId's doc comment).
+    const subjectId = c.subjectType === 'serviceRecord' && c.subjectId ? serviceRecordIdByKey.get(c.subjectId) : c.subjectId;
+    if (c.subjectType === 'serviceRecord' && c.subjectId && !subjectId) {
+      throw new Error(`Case "${c.title}" references unknown service record key "${c.subjectId}" — check serviceRecords[].key in mock-data.ts.`);
+    }
     const created = await filer.request('POST', '/api/v1/cases', {
       studentId: c.filedByUsername ? student.userId : undefined,
-      type: c.type, subjectType: c.subjectType, subjectId: c.subjectId,
+      type: c.type, subjectType: c.subjectType, subjectId,
       title: c.title, description: c.description,
       requestedAmountCentiCoins: c.requestedAmountCentiCoins, reasonCode: c.reasonCode,
     });

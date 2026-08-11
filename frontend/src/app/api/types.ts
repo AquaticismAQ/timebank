@@ -111,6 +111,9 @@ export interface ServiceRecord {
   partnerOrganizationNames?: string[];
   serviceCategoryId: string;
   serviceCategoryName: string;
+  /** 04-DataViewOptimization.md §3.2 — batch-resolved server-side, same as the review queue's own gradeLevel/className. */
+  gradeLevel?: number;
+  className?: string;
   description: string;
   /** `projectOwner` (PROJECT, server-derived) | `internalUser` | `student` | `externalManual` (SELF, client-chosen) — undefined for historical EXTERNAL records. */
   supervisorKind?: 'projectOwner' | 'internalUser' | 'student' | 'externalManual';
@@ -283,6 +286,8 @@ export interface Case {
   studentName: string;
   subjectType?: string;
   subjectId?: string;
+  /** Server-resolved display name for `subjectType`/`subjectId` (e.g. a service record's `recordNumber`) — 04-DataViewOptimization.md §4.2 (D8). Undefined when there's no subject or it isn't resolvable. */
+  subjectLabel?: string;
   title: string;
   description: string;
   requestedAmountCentiCoins?: number;
@@ -293,6 +298,14 @@ export interface Case {
   createdAt: string;
   submittedAt?: string;
   updatedAt: string;
+}
+
+/** Shared shape of `GET .../{id}/timeline` across service records, cases, and proposals — same real backend `TimelineEntryDto` in all three modules (04-DataViewOptimization.md §1.3 finding 2: the merged-history endpoint already existed server-side for all three, only the client wiring was missing). */
+export interface TimelineEntry {
+  type: string;
+  description: string;
+  actorId: string;
+  occurredAt: string;
 }
 
 export interface Organization {
@@ -445,7 +458,8 @@ export interface EventProposal {
   createdAt: string;
   updatedAt: string;
   submittedAt?: string;
-  timeline: ProposalTimeline[];
+  /** Never actually populated — the real backend `ProposalDto` has no `timeline` field; the real merged history lives at `api.eventProposals.timeline(id)` instead (issue 016). Left optional here rather than removed since `EventProposals.tsx` still renders this card; a future pass should replace it with a real `timeline()` call. */
+  timeline?: ProposalTimeline[];
 }
 
 // ── Envelope & error types (I0.4/I0.5) ──────────────────────────────────────

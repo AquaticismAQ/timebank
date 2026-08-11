@@ -3,7 +3,22 @@
 // categories, which come from real dictionary endpoints — see
 // api/useDictionaries.ts); these are UI concerns with no server
 // counterpart, so they stay hardcoded here rather than being fetched.
-import type { RecordStatus, ProjectStatus, ProposalStatus } from '../api/types';
+import type { RecordStatus, ProjectStatus, ProposalStatus, Case } from '../api/types';
+
+// Shared color-name -> Tailwind-class map, same values `ProjectManagement.tsx`'s
+// own local `colorMap` already used — lifted here once Case/Proposal Review
+// needed the identical mapping a second and third time (04-DataViewOptimization.md
+// §2.2, D2). `ProjectManagement.tsx` itself is left on its own copy; not part of
+// this round's scope (D9) to touch a screen that already works.
+export const STATUS_COLOR_CLASSES: Record<string, string> = {
+  gray: 'bg-muted text-muted-foreground',
+  blue: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+  yellow: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
+  green: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+  orange: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+  red: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+  purple: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
+};
 
 export const RECORD_STATUS_LABELS: Record<RecordStatus, { label: string; color: string }> = {
   draft: { label: 'labels.recordStatus.draft', color: 'gray' },
@@ -40,6 +55,17 @@ export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, { label: string; col
   approved: { label: 'labels.proposalStatus.approved', color: 'green' },
   rejected: { label: 'labels.proposalStatus.rejected', color: 'red' },
   withdrawn: { label: 'labels.proposalStatus.withdrawn', color: 'gray' },
+};
+
+// 04-DataViewOptimization.md §2.2 (D2): the previously-missing table — Cases had no
+// shared-table equivalent at all before, unlike records/projects/proposals.
+export const CASE_STATUS_LABELS: Record<Case['status'], { label: string; color: string }> = {
+  draft: { label: 'labels.caseStatus.draft', color: 'gray' },
+  submitted: { label: 'labels.caseStatus.submitted', color: 'blue' },
+  inReview: { label: 'labels.caseStatus.inReview', color: 'yellow' },
+  needsInformation: { label: 'labels.caseStatus.needsInformation', color: 'orange' },
+  resolved: { label: 'labels.caseStatus.resolved', color: 'green' },
+  rejected: { label: 'labels.caseStatus.rejected', color: 'red' },
 };
 
 export const TRANSACTION_TYPE_LABELS = {

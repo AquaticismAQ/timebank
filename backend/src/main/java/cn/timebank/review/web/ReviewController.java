@@ -35,7 +35,7 @@ import java.util.Set;
 @RestController
 public class ReviewController {
 
-    private static final Set<String> SORTABLE = Set.of();
+    private static final Set<String> SORTABLE = Set.of("submittedAt", "durationMinutes", "daysWaiting", "id");
 
     private final ReviewService reviewService;
     private final RequestLanguageService requestLanguageService;
@@ -50,9 +50,17 @@ public class ReviewController {
     public ApiResponse<List<ReviewQueueItemDto>> queue(
             PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
-        Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
+        // Doc 04 §3.1 D8: default sort is `daysWaiting desc` (oldest-submitted-first
+        // triage order) when the caller supplies none — PageableFactory always appends
+        // the `id` tiebreaker on top since "id" is in SORTABLE.
+        PageQuery effectiveQuery = query.sort().isEmpty()
+                ? new PageQuery(query.pageNumber(), query.pageSize(),
+                        List.of(new PageQuery.SortToken("daysWaiting", true)), query.filters(), query.search())
+                : query;
+        Pageable pageable = PageableFactory.toPageable(effectiveQuery, SORTABLE);
         Boolean hasAnomaly = query.filter("hasAnomaly") == null ? null : Boolean.valueOf(query.filter("hasAnomaly"));
-        Page<ReviewQueueItemDto> page = reviewService.queue(pageable, hasAnomaly, query.search(), auth, resolveLanguage(acceptLanguage, auth));
+        Page<ReviewQueueItemDto> page = reviewService.queue(pageable, hasAnomaly, query.filter("gradeId"), query.search(),
+                auth, resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

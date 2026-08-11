@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router';
 import type { PageResult } from './http';
-import { ApiError, mapApiError, type ErrorUiMapping } from './http';
+import { ApiError, mapApiError, buildListQuery, type ErrorUiMapping } from './http';
 import type { ListParams } from '../lib/pagination';
 
 interface ApiState<T> {
@@ -46,6 +47,7 @@ export interface PagedApiState<T> {
   error: ErrorUiMapping | null;
   params: ListParams;
   setPage: (n: number) => void;
+  setPageSize: (n: number) => void;
   setSearch: (s: string) => void;
   setFilter: (key: string, value: string | undefined) => void;
   setSort: (s: string | undefined) => void;
@@ -89,6 +91,8 @@ export function usePagedApi<T>(
   }, [paramsKey, tick]);
 
   const setPage = useCallback((n: number) => setParams(p => ({ ...p, page: n })), []);
+  // §2.2: changing page size resets to page 1, same as filter/search.
+  const setPageSize = useCallback((n: number) => setParams(p => ({ ...p, pageSize: n, page: 1 })), []);
   const setSearch = useCallback((s: string) => setParams(p => ({ ...p, search: s || undefined, page: 1 })), []);
   const setFilter = useCallback(
     (key: string, value: string | undefined) => setParams(p => ({ ...p, filter: { ...p.filter, [key]: value }, page: 1 })),
@@ -97,5 +101,63 @@ export function usePagedApi<T>(
   const setSort = useCallback((s: string | undefined) => setParams(p => ({ ...p, sort: s })), []);
   const refetch = useCallback(() => setTick(t => t + 1), []);
 
-  return { items, page, loading, error, params, setPage, setSearch, setFilter, setSort, refetch };
+  return { items, page, loading, error, params, setPage, setPageSize, setSearch, setFilter, setSort, refetch };
+}
+
+// ── Docs/clarification/04-DataViewOptimization.md §2.1 (D1): the shared URL-sync
+// wrapper every migrated list page uses, so filter/search/sort/page state survives
+// a refresh, back/forward, and a copied link — the first such mechanism in this
+// codebase (there was no prior art to extend). Reuses `buildListQuery`'s exact
+// `page[number]`/`page[size]`/`sort`/`search`/`filter[x]` shape for the URL query
+// string too, so it's the same dialect as the wire request, not a second one.
+
+const FILTER_KEY = /^filter\[(.+)\]$/;
+
+function paramsFromSearchParams(sp: URLSearchParams): ListParams {
+  const params: ListParams = {};
+  const page = sp.get('page[number]');
+  const pageSize = sp.get('page[size]');
+  const sort = sp.get('sort');
+  const search = sp.get('search');
+  if (page) params.page = Number(page);
+  if (pageSize) params.pageSize = Number(pageSize);
+  if (sort) params.sort = sort;
+  if (search) params.search = search;
+  const filter: Record<string, string | undefined> = {};
+  for (const key of sp.keys()) {
+    const match = key.match(FILTER_KEY);
+    if (match) filter[match[1]] = sp.get(key) ?? undefined;
+  }
+  if (Object.keys(filter).length > 0) params.filter = filter;
+  return params;
+}
+
+function searchParamsFromParams(params: ListParams): URLSearchParams {
+  const flat = buildListQuery(params);
+  const sp = new URLSearchParams();
+  for (const [key, value] of Object.entries(flat)) {
+    if (value !== undefined && value !== '') sp.set(key, String(value));
+  }
+  return sp;
+}
+
+export function useUrlSyncedPagedApi<T>(
+  fn: (params: ListParams) => Promise<PageResult<T>>,
+  initialParams: ListParams = {}
+): PagedApiState<T> {
+  const [searchParams, setSearchParams] = useSearchParams();
+  // URL is read once, on mount, to seed initial state (refresh/copied-link/
+  // back-forward all land here) — after that, state drives the URL one-way
+  // (the effect below), never the reverse, so typing in a debounced search
+  // box can't fight a URL->state->URL loop.
+  const initialRef = useRef<ListParams>({ ...initialParams, ...paramsFromSearchParams(searchParams) });
+  const paged = usePagedApi(fn, initialRef.current);
+  const paramsKey = JSON.stringify(paged.params);
+
+  useEffect(() => {
+    setSearchParams(searchParamsFromParams(paged.params), { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey]);
+
+  return paged;
 }

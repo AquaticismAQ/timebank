@@ -25,6 +25,7 @@ import type {
   SchoolClass,
   AcademicYear,
   ServiceCategory,
+  TimelineEntry,
 } from './types';
 import { http, ApiError, buildListQuery, getWithEtag, withVersion, type PageResult } from './http';
 import { toBackendEnum, fromBackendEnum, type ListParams } from '../lib/pagination';
@@ -388,6 +389,10 @@ export const api = {
       }
       return mapped;
     },
+    /** `GET /event-proposals/{id}/timeline` — already merges revisions + review decisions server-side (04-DataViewOptimization.md §1.3 finding 2, §5.2 finding); this was the missing client wiring, not a new backend capability. */
+    async timeline(id: string): Promise<TimelineEntry[]> {
+      return http.get(`/event-proposals/${id}/timeline`);
+    },
   },
 
   applications: {
@@ -513,6 +518,10 @@ export const api = {
     async withdraw(id: string): Promise<ServiceRecord> {
       const dto = await http.post<ServiceRecord & { evidenceFileIds?: string[] }>(`/service-records/${id}/withdraw`);
       return fromServiceRecordDto(dto);
+    },
+    /** `GET /service-records/{id}/timeline` — already merges revisions + review decisions server-side (04-DataViewOptimization.md §1.3 finding 2); this was the missing client wiring, not a new backend capability. */
+    async timeline(id: string): Promise<TimelineEntry[]> {
+      return http.get(`/service-records/${id}/timeline`);
     },
   },
 
@@ -833,6 +842,7 @@ export const api = {
     async list(params?: ListParams): Promise<PageResult<Case>> {
       const filter = { ...params?.filter };
       if (filter.status) filter.status = toBackendEnum(filter.status);
+      if (filter.type) filter.type = toBackendEnum(filter.type);
       const page = await http.getPage<Case>('/cases', buildListQuery({ ...params, filter }));
       return { data: page.data.map(c => mapEnumFields(c, ['status', 'type'])), page: page.page };
     },

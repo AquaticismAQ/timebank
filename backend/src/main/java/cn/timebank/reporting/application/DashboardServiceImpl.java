@@ -105,7 +105,7 @@ class DashboardServiceImpl implements DashboardService {
         ReviewQueueSummaryDto summary = reviewService.summary(auth);
         long scopedStudentCount = queryRepository.scopedActiveStudentCount(resolveScope(auth));
         // queue() already orders by submittedAt internally (B3.6's ReviewQueueRepository); no Sort needed here.
-        List<ReviewQueueItemDto> topPending = reviewService.queue(PageRequest.of(0, 5), null, null, auth, resolvedLanguage).getContent();
+        List<ReviewQueueItemDto> topPending = reviewService.queue(PageRequest.of(0, 5), null, null, null, auth, resolvedLanguage).getContent();
         return new DashboardTeacherDto(Instant.now(), summary, scopedStudentCount, topPending);
     }
 
@@ -122,7 +122,7 @@ class DashboardServiceImpl implements DashboardService {
         AdminStatsDto stats = new AdminStatsDto(row.totalStudents(), row.activeStudents(), row.totalProjects(),
                 row.activeProjects(), pendingReviews, row.approvedThisMonth(), row.totalServiceHoursThisYear(), reviewAvgHours);
 
-        List<ReviewQueueItemDto> pendingReviewItems = reviewService.queue(PageRequest.of(0, 5), null, null, auth, resolvedLanguage).getContent();
+        List<ReviewQueueItemDto> pendingReviewItems = reviewService.queue(PageRequest.of(0, 5), null, null, null, auth, resolvedLanguage).getContent();
         List<ProjectDto> activeProjects = projectService
                 .list(PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "startAt")), null, null, null, auth, resolvedLanguage)
                 .getContent().stream()

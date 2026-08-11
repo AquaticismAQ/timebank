@@ -1,23 +1,22 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, XCircle, HelpCircle, X } from 'lucide-react';
+import { CheckCircle, XCircle, HelpCircle, X, Search, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { usePermissions } from '../../App';
-import { usePagedApi } from '../../api/useApi';
+import { useUrlSyncedPagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
-import { type Case } from '../../api/types';
+import { EvidenceLink } from '../EvidenceLink';
+import { DetailWorkbench, type DetailWorkbenchTab } from '../shared/DetailWorkbench';
+import { type Case, type EvidenceFile, type TimelineEntry } from '../../api/types';
+import { CASE_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 
-const STATUS_COLOR: Record<Case['status'], string> = {
-  draft: 'bg-muted text-muted-foreground',
-  submitted: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-  inReview: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
-  needsInformation: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
-  resolved: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
-  rejected: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
-};
+const STATUSES: (Case['status'])[] = ['submitted', 'inReview', 'needsInformation', 'resolved', 'rejected'];
+const TYPES: (Case['type'])[] = ['appeal', 'supplement', 'manualCorrection'];
+type SortKey = 'submittedAt' | 'createdAt' | 'status';
+const SORT_KEYS: SortKey[] = ['submittedAt', 'createdAt', 'status'];
 
 const TYPE_LABEL: Record<Case['type'], string> = {
   appeal: 'admin.cases.typeAppeal',
@@ -25,22 +24,68 @@ const TYPE_LABEL: Record<Case['type'], string> = {
   manualCorrection: 'admin.cases.typeManualCorrection',
 };
 
+/** Small label/value pair for the detail workbench's Basic Info tab — same pattern as AuditCenter's own local `Field`, not shared since the two domains' field sets don't overlap enough to be worth it. */
+function Field({ label, value }: { label: string; value?: string | number | null }) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-sm text-foreground whitespace-pre-wrap">{value || '—'}</div>
+    </div>
+  );
+}
+
 export function CaseReview() {
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
   const canDecide = hasPermission('cases.decide');
-  const [filterStatus, setFilterStatus] = useState<Case['status'] | 'all'>('all');
   const [decisionModal, setDecisionModal] = useState<{ item: Case; decision: 'resolve' | 'requestInformation' | 'reject' } | null>(null);
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const decisionKeyRef = useRef(newIdempotencyKey());
 
-  const { items, page, loading, error, setFilter, setPage, refetch } = usePagedApi(api.cases.list, {});
+  // 04-DataViewOptimization.md §4.2: unified detail workbench.
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState('basic');
+  const [detailTimeline, setDetailTimeline] = useState<TimelineEntry[]>([]);
+  const [detailTimelineLoading, setDetailTimelineLoading] = useState(false);
+  // null = no linked resource, or the current user can't access it — either way, no materials section content.
+  const [detailEvidence, setDetailEvidence] = useState<EvidenceFile[] | null>(null);
+  const [detailEvidenceLoading, setDetailEvidenceLoading] = useState(false);
 
-  const handleStatusChange = (value: Case['status'] | 'all') => {
-    setFilterStatus(value);
-    setFilter('status', value === 'all' ? undefined : value);
-  };
+  const { items, page, loading, error, params, setSearch, setFilter, setSort, setPage, setPageSize, refetch } =
+    useUrlSyncedPagedApi(api.cases.list, { sort: '-submittedAt' });
+
+  const openDetail = (id: string) => { setDetailId(id); setDetailTab('basic'); };
+
+  useEffect(() => {
+    if (!detailId) { setDetailTimeline([]); setDetailEvidence(null); return; }
+    let cancelled = false;
+    setDetailTimelineLoading(true);
+    api.cases.timeline(detailId)
+      .then(entries => { if (!cancelled) setDetailTimeline(entries as TimelineEntry[]); })
+      .catch(() => { if (!cancelled) setDetailTimeline([]); })
+      .finally(() => { if (!cancelled) setDetailTimelineLoading(false); });
+    const item = items.find(i => i.id === detailId);
+    if (item?.subjectType === 'serviceRecord' && item.subjectId) {
+      setDetailEvidenceLoading(true);
+      // Real permission check happens server-side (a 403/404 here just means no materials to show) —
+      // deliberately not duplicating a client-side scope check per §4.2 (D8)'s reasoning.
+      api.serviceRecords.get(item.subjectId)
+        .then(record => { if (!cancelled) setDetailEvidence(record.evidenceFiles); })
+        .catch(() => { if (!cancelled) setDetailEvidence(null); })
+        .finally(() => { if (!cancelled) setDetailEvidenceLoading(false); });
+    } else {
+      setDetailEvidence(null);
+    }
+    return () => { cancelled = true; };
+  }, [detailId, items]);
+
+  const sortKey = (params.sort?.replace(/^-/, '') as SortKey) ?? 'submittedAt';
+  const sortDesc = params.sort?.startsWith('-') ?? true;
+  const setSortKey = (key: SortKey) => setSort(sortDesc ? `-${key}` : key);
+  const toggleSortDir = () => setSort(sortDesc ? sortKey : `-${sortKey}`);
+  const hasActiveFilters = !!(params.search || params.filter?.status || params.filter?.type);
+  const clearFilters = () => { setSearch(''); setFilter('status', undefined); setFilter('type', undefined); };
 
   const openDecision = (item: Case, decision: 'resolve' | 'requestInformation' | 'reject') => {
     setDecisionModal({ item, decision });
@@ -57,6 +102,7 @@ export function CaseReview() {
       decisionKeyRef.current = newIdempotencyKey();
       toast.success(t('admin.cases.decisionRecorded'));
       setDecisionModal(null);
+      setDetailId(null);
       refetch();
     } catch (err) {
       if (err instanceof ApiError) toast.error(mapApiError(err).message);
@@ -77,46 +123,178 @@ export function CaseReview() {
         <p className="text-sm text-muted-foreground">{t('admin.cases.count', { count: page?.totalItems ?? items.length })}</p>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        {(['all', 'submitted', 'inReview', 'needsInformation', 'resolved', 'rejected'] as const).map(s => (
-          <button key={s} onClick={() => handleStatusChange(s)}
-            className={`text-xs px-3 py-1.5 rounded-full border ${filterStatus === s ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-accent'}`}>
-            {s === 'all' ? t('common.all', { defaultValue: 'All' }) : t(`admin.cases.status${s.charAt(0).toUpperCase() + s.slice(1)}`)}
-          </button>
-        ))}
+      {/* Unified filter bar (04-DataViewOptimization.md §2.1): search + dropdowns, no status pills. */}
+      <div className="flex flex-wrap gap-2">
+        <div className="relative flex-1 min-w-40">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)} placeholder={t('admin.cases.searchPlaceholder')}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+        </div>
+        <select value={params.filter?.type ?? 'all'} onChange={e => setFilter('type', e.target.value === 'all' ? undefined : e.target.value)}
+          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+          <option value="all">{t('common.all')}</option>
+          {TYPES.map(type => <option key={type} value={type}>{t(TYPE_LABEL[type])}</option>)}
+        </select>
+        <select value={params.filter?.status ?? 'all'} onChange={e => setFilter('status', e.target.value === 'all' ? undefined : e.target.value)}
+          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+          <option value="all">{t('common.all')}</option>
+          {STATUSES.map(s => <option key={s} value={s}>{t(CASE_STATUS_LABELS[s].label)}</option>)}
+        </select>
+        <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)}
+          className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+          {SORT_KEYS.map(key => (
+            <option key={key} value={key}>
+              {key === 'submittedAt' ? t('admin.cases.sortSubmitted') : key === 'createdAt' ? t('admin.cases.sortCreated') : t('admin.cases.sortStatus')}
+            </option>
+          ))}
+        </select>
+        <button onClick={toggleSortDir}
+          className="px-2.5 py-2.5 rounded-xl bg-muted text-muted-foreground hover:bg-accent text-sm transition-colors">
+          {sortDesc ? '↓' : '↑'}
+        </button>
       </div>
 
-      <ListStateBanner error={error} empty={!loading && items.length === 0} emptyLabel={t('admin.cases.noCases')} />
+      <ListStateBanner
+        error={error}
+        empty={!loading && items.length === 0}
+        emptyLabel={t(hasActiveFilters ? 'common.list.emptyNoResults' : 'admin.cases.noCases')}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={clearFilters}
+      />
 
       <div className="space-y-3">
         {items.map(c => (
-          <div key={c.id} className="bg-card border border-border rounded-2xl p-4">
+          <div key={c.id} onClick={() => openDetail(c.id)}
+            className="bg-card border border-border rounded-2xl p-4 cursor-pointer hover:bg-muted/30 transition-colors">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR[c.status]}`}>{t(`admin.cases.status${c.status.charAt(0).toUpperCase() + c.status.slice(1)}`)}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR_CLASSES[CASE_STATUS_LABELS[c.status].color]}`}>{t(CASE_STATUS_LABELS[c.status].label)}</span>
                   <span className="text-xs text-muted-foreground">{t(TYPE_LABEL[c.type])}</span>
                 </div>
                 <div className="text-sm text-foreground font-medium truncate">{c.title}</div>
                 <div className="text-xs text-muted-foreground">{c.studentName}{c.submittedAt ? ` · ${c.submittedAt.slice(0, 10)}` : ''}</div>
                 {c.description && <p className="text-xs text-muted-foreground mt-2">{c.description}</p>}
               </div>
-              {canDecide && (c.status === 'submitted' || c.status === 'inReview') && (
-                <div className="flex gap-1.5 shrink-0">
-                  <button onClick={() => openDecision(c, 'resolve')} title={t('admin.cases.resolve')}
-                    className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"><CheckCircle className="w-4 h-4" /></button>
-                  <button onClick={() => openDecision(c, 'requestInformation')} title={t('admin.cases.requestInfo')}
-                    className="p-1.5 rounded-lg text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"><HelpCircle className="w-4 h-4" /></button>
-                  <button onClick={() => openDecision(c, 'reject')} title={t('admin.cases.rejectCase')}
-                    className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"><XCircle className="w-4 h-4" /></button>
-                </div>
-              )}
+              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                <button onClick={e => { e.stopPropagation(); openDetail(c.id); }}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:bg-accent flex items-center gap-1 text-xs">
+                  <Eye className="w-3.5 h-3.5" /> {t('common.viewDetails')}
+                </button>
+                {canDecide && (c.status === 'submitted' || c.status === 'inReview') && (
+                  <div className="flex gap-1.5">
+                    <button onClick={e => { e.stopPropagation(); openDecision(c, 'resolve'); }}
+                      className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-green-50 hover:text-green-600 hover:border-green-300 dark:hover:bg-green-900/20 transition-colors flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> {t('admin.cases.resolve')}
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); openDecision(c, 'requestInformation'); }}
+                      className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-yellow-50 hover:text-yellow-600 hover:border-yellow-300 dark:hover:bg-yellow-900/20 transition-colors flex items-center gap-1">
+                      <HelpCircle className="w-3 h-3" /> {t('admin.cases.requestInfo')}
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); openDecision(c, 'reject'); }}
+                      className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1">
+                      <XCircle className="w-3 h-3" /> {t('admin.cases.rejectCase')}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      <PageControls page={page} onPageChange={setPage} />
+      <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
+
+      {/* Detail workbench (04-DataViewOptimization.md §4.2) */}
+      {(() => {
+        const detailCase = items.find(i => i.id === detailId);
+        if (!detailId || !detailCase) return null;
+        const tabs: DetailWorkbenchTab[] = [
+          {
+            key: 'basic',
+            label: t('admin.cases.tabBasicInfo'),
+            content: (
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                <Field label={t('admin.cases.fieldType')} value={t(TYPE_LABEL[detailCase.type])} />
+                <Field label={t('admin.cases.fieldStatus')} value={t(CASE_STATUS_LABELS[detailCase.status].label)} />
+                <Field label={t('admin.cases.fieldStudent')} value={detailCase.studentName} />
+                <Field label={t('admin.cases.fieldReasonCode')} value={detailCase.reasonCode} />
+                {detailCase.subjectLabel && <Field label={t('admin.cases.fieldSubject')} value={detailCase.subjectLabel} />}
+                {detailCase.requestedAmountCentiCoins != null && <Field label={t('admin.cases.fieldAmount')} value={detailCase.requestedAmountCentiCoins} />}
+                <Field label={t('admin.cases.fieldSubmitted')} value={detailCase.submittedAt?.slice(0, 16).replace('T', ' ')} />
+                <div className="sm:col-span-2">
+                  <Field label={t('admin.cases.fieldDescription')} value={detailCase.description} />
+                </div>
+              </dl>
+            ),
+          },
+          {
+            key: 'history',
+            label: t('admin.cases.tabHistory'),
+            content: detailTimelineLoading ? (
+              <div className="text-sm text-muted-foreground">{t('common.loading')}</div>
+            ) : detailTimeline.length === 0 ? (
+              <div className="text-sm text-muted-foreground">{t('admin.cases.noHistory')}</div>
+            ) : (
+              <ol className="space-y-3">
+                {detailTimeline.map((entry, i) => (
+                  <li key={i} className="flex gap-3">
+                    <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-muted-foreground">{entry.occurredAt.slice(0, 16).replace('T', ' ')} · {entry.type}</div>
+                      <div className="text-sm text-foreground">{entry.description}</div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ),
+          },
+          {
+            key: 'materials',
+            label: t('admin.cases.tabMaterials'),
+            content: detailEvidenceLoading ? (
+              <div className="text-sm text-muted-foreground">{t('common.loading')}</div>
+            ) : !detailEvidence || detailEvidence.length === 0 ? (
+              <div className="text-sm text-muted-foreground">{t('admin.cases.noMaterials')}</div>
+            ) : (
+              <div className="flex gap-2 flex-wrap">
+                {detailEvidence.map(f => (
+                  <span key={f.id} className="px-2 py-1 bg-muted rounded">
+                    <EvidenceLink fileId={f.id} name={f.name} />
+                  </span>
+                ))}
+              </div>
+            ),
+          },
+        ];
+        return (
+          <DetailWorkbench
+            open
+            onClose={() => setDetailId(null)}
+            title={detailCase.title}
+            subtitle={detailCase.studentName}
+            tabs={tabs}
+            activeTab={detailTab}
+            onTabChange={setDetailTab}
+            footer={canDecide && (detailCase.status === 'submitted' || detailCase.status === 'inReview') ? (
+              <div className="flex gap-3">
+                <button onClick={() => openDecision(detailCase, 'resolve')}
+                  className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5">
+                  <CheckCircle className="w-4 h-4" /> {t('admin.cases.resolve')}
+                </button>
+                <button onClick={() => openDecision(detailCase, 'requestInformation')}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-yellow-50 hover:text-yellow-600 hover:border-yellow-300 dark:hover:bg-yellow-900/20 transition-colors flex items-center justify-center gap-1.5">
+                  <HelpCircle className="w-4 h-4" /> {t('admin.cases.requestInfo')}
+                </button>
+                <button onClick={() => openDecision(detailCase, 'reject')}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1.5">
+                  <XCircle className="w-4 h-4" /> {t('admin.cases.rejectCase')}
+                </button>
+              </div>
+            ) : undefined}
+          />
+        );
+      })()}
 
       {decisionModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setDecisionModal(null)}>

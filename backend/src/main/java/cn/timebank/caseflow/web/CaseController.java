@@ -34,7 +34,7 @@ import java.util.Set;
 @RestController
 public class CaseController {
 
-    private static final Set<String> SORTABLE = Set.of("id", "status", "createdAt");
+    private static final Set<String> SORTABLE = Set.of("id", "status", "createdAt", "submittedAt");
 
     private final CaseService caseService;
     private final RequestLanguageService requestLanguageService;
@@ -50,7 +50,8 @@ public class CaseController {
             PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<CaseDto> page = caseService.list(pageable, auth, resolveLanguage(acceptLanguage, auth));
+        Page<CaseDto> page = caseService.list(pageable, auth, query.filter("status"), query.filter("type"), query.search(),
+                resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

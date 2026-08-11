@@ -3,6 +3,8 @@ package cn.timebank.review.infrastructure;
 import cn.timebank.common.i18n.LocalizedNames;
 import cn.timebank.review.application.dto.ReviewQueueItemDto;
 import cn.timebank.security.application.ScopeDescriptor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -11,7 +13,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * B3.6: a purpose-built read DTO via {@code JdbcTemplate}, never an entity
@@ -25,6 +29,22 @@ import java.util.Set;
 @Repository
 public class ReviewQueueRepository {
 
+    /**
+     * Maps a {@link Sort} property name to its SQL ordering expression.
+     * {@code daysWaiting} has no backing column — it's computed at read time
+     * in {@link #queryPage} the same way {@code timestampdiff} computes it
+     * here — so this map, not {@code Pageable.getSort()} passed straight
+     * into JPA, is what makes it sortable at all. Keys must exactly match
+     * {@code ReviewController.SORTABLE}; that whitelist is what stands
+     * between a sort token and this map (never string-concatenate a raw
+     * sort property into SQL).
+     */
+    private static final Map<String, String> SORT_COLUMNS = Map.of(
+            "submittedAt", "sr.submitted_at",
+            "durationMinutes", "sr.duration_minutes",
+            "daysWaiting", "timestampdiff(day, sr.submitted_at, now())",
+            "id", "sr.id");
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     public ReviewQueueRepository(NamedParameterJdbcTemplate jdbcTemplate) {
@@ -32,20 +52,20 @@ public class ReviewQueueRepository {
     }
 
     /**
-     * {@code hasAnomaly}/{@code search} are contract §2.7's {@code
-     * filter[...]}/{@code search} (I1) — {@code search} matches student
-     * name, organization name, or linked project title. {@code status}
-     * isn't filterable: the queue is always the SUBMITTED/UNDER_REVIEW set
-     * by definition (§4.7).
+     * {@code hasAnomaly}/{@code gradeId}/{@code search} are contract §2.7's
+     * {@code filter[...]}/{@code search} (I1) — {@code search} matches
+     * student name, organization name, or linked project title. {@code
+     * status} isn't filterable: the queue is always the
+     * SUBMITTED/UNDER_REVIEW set by definition (§4.7).
      */
-    public List<ReviewQueueItemDto> queryPage(ScopeDescriptor scope, Boolean hasAnomaly, String search,
-                                               String resolvedLanguage, int limit, int offset) {
+    public List<ReviewQueueItemDto> queryPage(ScopeDescriptor scope, Boolean hasAnomaly, String search, String gradeId,
+                                               String resolvedLanguage, Pageable pageable) {
         MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("limit", limit).addValue("offset", offset);
-        String where = scopeClause(scope, params) + filterClause(hasAnomaly, search, params);
+                .addValue("limit", pageable.getPageSize()).addValue("offset", pageable.getOffset());
+        String where = scopeClause(scope, params) + filterClause(hasAnomaly, search, gradeId, params);
 
         String sql = """
-                select sr.id, sr.student_id, sr.student_name, g.sequence as grade_sequence, c.name as class_name,
+                select sr.id, sr.student_id, sr.student_name, sr.grade_id, g.sequence as grade_sequence, c.name as class_name,
                        sr.source_type, p.title as project_title, sr.organization_name,
                        sr.service_date, sr.duration_minutes,
                        sr.service_category_id, sc.name_zh, sc.name_en, sr.status, sr.submitted_at,
@@ -55,9 +75,9 @@ public class ReviewQueueRepository {
                 left join grade g on g.id = sr.grade_id
                 left join class c on c.id = sr.class_id
                 left join project p on p.id = sr.project_id
-                where sr.status in ('SUBMITTED', 'UNDER_REVIEW')""" + where + """
+                where sr.status in ('SUBMITTED', 'UNDER_REVIEW')""" + where
+                + orderByClause(pageable.getSort()) + """
 
-                order by sr.submitted_at asc
                 limit :limit offset :offset
                 """;
 
@@ -69,7 +89,7 @@ public class ReviewQueueRepository {
             Integer gradeSequence = (Integer) rs.getObject("grade_sequence");
             return new ReviewQueueItemDto(
                     rs.getString("id"), rs.getString("student_id"), rs.getString("student_name"),
-                    gradeSequence != null ? gradeSequence : 0,
+                    rs.getString("grade_id"), gradeSequence != null ? gradeSequence : 0,
                     rs.getString("class_name") != null ? rs.getString("class_name") : "",
                     rs.getString("source_type"), rs.getString("project_title"), rs.getString("organization_name"),
                     rs.getObject("service_date", LocalDate.class),
@@ -81,11 +101,29 @@ public class ReviewQueueRepository {
         });
     }
 
-    private String filterClause(Boolean hasAnomaly, String search, MapSqlParameterSource params) {
+    /** {@code sort} is always non-empty here — {@code ReviewController} supplies a {@code daysWaiting desc} default and an {@code id} tiebreaker is always appended by {@code PageableFactory}. */
+    private String orderByClause(Sort sort) {
+        String orderBy = sort.stream()
+                .map(order -> {
+                    String column = SORT_COLUMNS.get(order.getProperty());
+                    if (column == null) {
+                        throw new IllegalStateException("Unmapped review-queue sort property: " + order.getProperty());
+                    }
+                    return column + (order.isDescending() ? " desc" : " asc");
+                })
+                .collect(Collectors.joining(", "));
+        return orderBy.isEmpty() ? " order by sr.submitted_at asc" : " order by " + orderBy;
+    }
+
+    private String filterClause(Boolean hasAnomaly, String search, String gradeId, MapSqlParameterSource params) {
         StringBuilder clause = new StringBuilder();
         if (hasAnomaly != null) {
             params.addValue("hasAnomaly", hasAnomaly);
             clause.append(" and sr.has_anomaly = :hasAnomaly");
+        }
+        if (gradeId != null && !gradeId.isBlank()) {
+            params.addValue("gradeId", gradeId);
+            clause.append(" and sr.grade_id = :gradeId");
         }
         if (search != null && !search.isBlank()) {
             params.addValue("search", "%" + search.toLowerCase() + "%");
@@ -100,9 +138,9 @@ public class ReviewQueueRepository {
     }
 
     /** Same filters as {@link #queryPage} — the page envelope's `totalItems` must reflect the filtered set, not the whole queue. */
-    public long countMatching(ScopeDescriptor scope, Boolean hasAnomaly, String search) {
+    public long countMatching(ScopeDescriptor scope, Boolean hasAnomaly, String search, String gradeId) {
         MapSqlParameterSource params = new MapSqlParameterSource();
-        String where = scopeClause(scope, params) + filterClause(hasAnomaly, search, params);
+        String where = scopeClause(scope, params) + filterClause(hasAnomaly, search, gradeId, params);
         String sql = """
                 select count(*) from service_record sr
                 left join project p on p.id = sr.project_id

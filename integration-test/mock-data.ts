@@ -213,12 +213,16 @@ export interface SeedServiceRecord {
   endHour: number;
   location?: string;
   description?: string;
+  /** Required for SELF at submission time (`INTERNAL_USER`/`STUDENT`/`EXTERNAL_MANUAL`) — `EXTERNAL_MANUAL` is the only kind seed data can express, since the others resolve a real internal user/student subjectId server-side. Ignored for PROJECT (derived) and EXTERNAL (historical, uses supervisorName/supervisorContact directly). */
+  supervisorKind?: string;
   supervisorName?: string;
   supervisorContact?: string;
   targetStatus: RecordStatusTarget;
   reviewerUsername?: string;
   reasonCode?: string;
   comment?: string;
+  /** Stable lookup key for `SeedCase.subjectId` — real record ids are server-generated and don't exist until seed.ts creates this row, so cases reference records by this key instead (resolved to the real id in Phase 6). Only needed on records a case actually points to. */
+  key?: string;
 }
 
 export const serviceRecords: SeedServiceRecord[] = [
@@ -228,6 +232,7 @@ export const serviceRecords: SeedServiceRecord[] = [
     description: 'Assisted the librarian with reclassifying and shelving humanities and social science books.',
     supervisorName: 'Librarian Wang', supervisorContact: 'library@example-school.cn',
     targetStatus: 'approved', reviewerUsername: 'admin001', reasonCode: 'DOCUMENTATION_COMPLETE', comment: 'Documentation complete, service record verified, approved.',
+    key: 'student001_library_project',
   },
   {
     studentUsername: 'student001', sourceType: 'EXTERNAL', organizationName: 'Example City City Library',
@@ -235,12 +240,13 @@ export const serviceRecords: SeedServiceRecord[] = [
     description: 'Participated in the summer reading festival, assisted with organizing children reading activities.',
     supervisorName: 'Director Zhao', supervisorContact: 'zhao@nblib.cn',
     targetStatus: 'submitted',
+    key: 'student001_library_external',
   },
   {
     studentUsername: 'student001', sourceType: 'SELF', organizationName: 'Example District A Community',
     serviceCategoryId: 'cat_community', serviceDateOffsetDays: -28, startHour: 15, endHour: 17, location: 'Community Volunteer Station',
     description: 'Participated in the community summer drowning prevention campaign, distributed educational materials.',
-    supervisorName: 'Community Director Li', supervisorContact: '138xxxx8888',
+    supervisorKind: 'EXTERNAL_MANUAL', supervisorName: 'Community Director Li', supervisorContact: '138xxxx8888',
     targetStatus: 'returned', reviewerUsername: 'teacher001', reasonCode: 'INSUFFICIENT_EVIDENCE', comment: 'Documentation incomplete, please submit a stamped confirmation letter from the community.',
   },
   {
@@ -255,6 +261,7 @@ export const serviceRecords: SeedServiceRecord[] = [
     description: 'Chatted with elderly residents, assisted with origami crafts, performed songs.',
     supervisorName: 'Deputy Director Chen', supervisorContact: '0000-87654321',
     targetStatus: 'approved', reviewerUsername: 'admin001', reasonCode: 'DOCUMENTATION_COMPLETE', comment: 'Welfare home documentation complete, approved.',
+    key: 'student002_welfare_project',
   },
   {
     studentUsername: 'student002', sourceType: 'EXTERNAL', organizationName: 'Example District C Environmental Protection Association',
@@ -262,6 +269,19 @@ export const serviceRecords: SeedServiceRecord[] = [
     description: 'Helped with pre-event street cleanup and educational material distribution.',
     supervisorName: 'President Li', supervisorContact: 'enviro@example.org',
     targetStatus: 'submitted',
+  },
+  {
+    // Backs case "Appeal: record rejected without a documented reason" (subjectId: 'student002_returned_external')
+    // — no pre-existing returned record for student002 existed until this record was added for that purpose.
+    // sourceType SELF, not EXTERNAL — new-record creation rejects EXTERNAL entirely
+    // (issue 03 §3/§7.3: historical/resubmit-only), so a brand-new seed record needs SELF + an
+    // explicit supervisorKind (EXTERNAL_MANUAL requires supervisorName/supervisorContact too).
+    studentUsername: 'student002', sourceType: 'SELF', organizationName: 'Example City Youth Volunteer Association',
+    serviceCategoryId: 'cat_community', serviceDateOffsetDays: -25, startHour: 13, endHour: 16, location: 'Example City Youth Activity Center',
+    description: 'Assisted with a youth center open day, guided visiting families through activity stations.',
+    supervisorKind: 'EXTERNAL_MANUAL', supervisorName: 'Coordinator Wu', supervisorContact: 'coordinator@example.org',
+    targetStatus: 'returned', reviewerUsername: 'admin001', reasonCode: 'INSUFFICIENT_EVIDENCE', comment: 'Returned — no supervisor contact information provided at submission.',
+    key: 'student002_returned_external',
   },
   {
     studentUsername: 'both001', sourceType: 'EXTERNAL', organizationName: 'Example City First Welfare Home',
@@ -397,6 +417,7 @@ export interface SeedCase {
   filedByUsername?: string;
   type: 'appeal' | 'supplement' | 'manualCorrection';
   subjectType?: string;
+  /** When `subjectType` is `'serviceRecord'`, this is a `SeedServiceRecord.key`, not a real id (real ids don't exist until seed.ts creates that record) — resolved to the real id in Phase 6. */
   subjectId?: string;
   title: string;
   description?: string;
@@ -410,14 +431,14 @@ export interface SeedCase {
 
 export const cases: SeedCase[] = [
   {
-    studentUsername: 'student001', type: 'appeal', subjectType: 'serviceRecord',
+    studentUsername: 'student001', type: 'appeal', subjectType: 'serviceRecord', subjectId: 'student001_library_project',
     title: 'Appeal: hours undercounted on library service record',
     description: 'The approved record only credited 2 hours but I was there for 2.5 — the supervisor can confirm.',
     reasonCode: 'DISPUTE_REJECTION', targetStatus: 'resolved', reviewerUsername: 'admin001',
     decisionReasonCode: 'EVIDENCE_CONFIRMED', decisionComment: 'Confirmed with supervisor by phone, hours corrected.',
   },
   {
-    studentUsername: 'student002', type: 'appeal', subjectType: 'serviceRecord',
+    studentUsername: 'student002', type: 'appeal', subjectType: 'serviceRecord', subjectId: 'student002_returned_external',
     title: 'Appeal: record rejected without a documented reason',
     description: 'My external service record was returned with no explanation of what was missing.',
     // cases.decide is admin-only (role_teacher only holds cases.create/read) —
@@ -426,20 +447,20 @@ export const cases: SeedCase[] = [
     decisionReasonCode: 'INSUFFICIENT_EVIDENCE', decisionComment: 'Original rejection was correct — no supervisor contact info provided.',
   },
   {
-    studentUsername: 'student001', type: 'supplement', subjectType: 'serviceRecord',
+    studentUsername: 'student001', type: 'supplement', subjectType: 'serviceRecord', subjectId: 'student001_library_project',
     title: 'Supplement: missing evidence photo for approved activity',
     description: 'Requesting to add the evidence photo I forgot to attach at submission time.',
     reasonCode: 'MISSING_EVIDENCE', targetStatus: 'needsInformation', reviewerUsername: 'admin001',
     decisionReasonCode: 'NEED_ORIGINAL_TIMESTAMP', decisionComment: 'Please resubmit with the photo\'s original (unedited) timestamp visible.',
   },
   {
-    studentUsername: 'student002', filedByUsername: 'teacher001', type: 'manualCorrection', subjectType: 'serviceRecord',
+    studentUsername: 'student002', filedByUsername: 'teacher001', type: 'manualCorrection', subjectType: 'serviceRecord', subjectId: 'student002_welfare_project',
     title: 'Manual correction: hours adjustment for miscounted shift',
     description: 'Shift log shows 3 hours but the system only recorded 2 — filing on the student\'s behalf.',
     requestedAmountCentiCoins: 100, reasonCode: 'LATE_SIGNOFF', targetStatus: 'submitted',
   },
   {
-    studentUsername: 'student001', type: 'supplement', subjectType: 'serviceRecord',
+    studentUsername: 'student001', type: 'supplement', subjectType: 'serviceRecord', subjectId: 'student001_library_external',
     title: 'Supplement: additional context for a pending record',
     description: 'Draft only — still gathering evidence before submitting.',
     reasonCode: 'ADDITIONAL_CONTEXT', targetStatus: 'draft',

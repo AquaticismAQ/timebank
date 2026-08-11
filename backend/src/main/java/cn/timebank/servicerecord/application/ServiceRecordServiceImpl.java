@@ -40,6 +40,8 @@ import cn.timebank.servicerecord.infrastructure.ServiceRecordRevisionRepository;
 import cn.timebank.student.application.AcademicStructureService;
 import cn.timebank.student.application.StudentService;
 import cn.timebank.student.application.dto.AcademicYearDto;
+import cn.timebank.student.application.dto.ClassDto;
+import cn.timebank.student.application.dto.GradeDto;
 import cn.timebank.student.application.dto.StudentDetailDto;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -55,8 +57,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -117,15 +121,15 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
                 FilterSpecifications.equalTo("serviceCategoryId", serviceCategoryId),
                 FilterSpecifications.searchAnyContains(search, "studentName", "organizationName"));
         Page<ServiceRecord> page = repository.findAll(FilterSpecifications.and(scopeSpec, filterSpec), pageable);
-        Map<String, String> categoryNames = categoryNameMap(resolvedLanguage);
-        return page.map(r -> toDto(r, categoryNames));
+        DtoLookups lookups = lookupsFor(page.getContent(), resolvedLanguage);
+        return page.map(r -> toDto(r, lookups));
     }
 
     @Override
     @Transactional(readOnly = true)
     public ServiceRecordDto getDetail(String id, Authentication auth, String resolvedLanguage) {
         ServiceRecord record = findInScopeOrThrow(idEquals(id), auth);
-        return toDto(record, categoryNameMap(resolvedLanguage));
+        return toDto(record, lookupsFor(List.of(record), resolvedLanguage));
     }
 
     @Override
@@ -156,7 +160,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
 
         auditService.record(new AuditEntry(actorId, "serviceRecords.create", "serviceRecord.create", "serviceRecord",
                 record.getId(), null, null, null));
-        return toDto(record, categoryNameMap(resolvedLanguage));
+        return toDto(record, lookupsFor(List.of(record), resolvedLanguage));
     }
 
     @Override
@@ -205,7 +209,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         auditService.record(new AuditEntry(principalId(auth), "serviceRecords.create", "serviceRecord.update",
                 "serviceRecord", record.getId(), null, null, null));
         repository.saveAndFlush(record); // see submit()'s note on why this matters for a chained version check
-        return toDto(record, categoryNameMap(resolvedLanguage));
+        return toDto(record, lookupsFor(List.of(record), resolvedLanguage));
     }
 
     @Override
@@ -251,7 +255,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         // check. Caught live: chaining submit()'s returned version into
         // decide() failed with a spurious "changed by someone else" 409.
         repository.saveAndFlush(record);
-        return toDto(record, categoryNameMap(resolvedLanguage));
+        return toDto(record, lookupsFor(List.of(record), resolvedLanguage));
     }
 
     @Override
@@ -266,7 +270,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         auditService.record(new AuditEntry(principalId(auth), "serviceRecords.create", "serviceRecord.withdraw",
                 "serviceRecord", record.getId(), null, null, null));
         repository.saveAndFlush(record); // see submit()'s note on why this matters for a chained version check
-        return toDto(record, categoryNameMap(resolvedLanguage));
+        return toDto(record, lookupsFor(List.of(record), resolvedLanguage));
     }
 
     @Override
@@ -349,6 +353,12 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         int submitted = repository.sumDurationMinutes(studentId, yearStart, yearEnd, ServiceRecordStatus.SUBMITTED);
         int underReview = repository.sumDurationMinutes(studentId, yearStart, yearEnd, ServiceRecordStatus.UNDER_REVIEW);
         return new AnnualProgressSummary(approved, submitted + underReview);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> recordLabel(String id) {
+        return repository.findById(id).map(ServiceRecord::getRecordNumber).filter(n -> n != null && !n.isBlank());
     }
 
     // --- issue 03: source-aware field resolution ---
@@ -669,7 +679,33 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
                 .collect(Collectors.toMap(ServiceCategoryDto::id, ServiceCategoryDto::name));
     }
 
-    private ServiceRecordDto toDto(ServiceRecord r, Map<String, String> categoryNames) {
+    /** Bundles {@link #toDto}'s lookup tables so call sites (list and every single-record mutation) pass one object, not four. */
+    private record DtoLookups(Map<String, String> categoryNames, Map<String, Integer> gradeSequences,
+                               Map<String, String> classNames, Map<String, String> reviewerNames) {
+    }
+
+    /**
+     * Grade/category/class tables are resolved in full every call (cheap, cached-size lookups, same pattern as the
+     * pre-existing {@link #categoryNameMap}) — reviewer names are resolved only for the distinct {@code
+     * assignedReviewerId}s actually present in {@code records}, so a paged {@code list()} call never does more than
+     * one lookup per distinct reviewer on the page, not one per row.
+     */
+    private DtoLookups lookupsFor(Iterable<ServiceRecord> records, String resolvedLanguage) {
+        Map<String, Integer> gradeSequences = academicStructureService.listGrades(resolvedLanguage).stream()
+                .collect(Collectors.toMap(GradeDto::id, GradeDto::sequence));
+        Map<String, String> classNames = academicStructureService.listClasses().stream()
+                .collect(Collectors.toMap(ClassDto::id, ClassDto::name));
+        Map<String, String> reviewerNames = new HashMap<>();
+        for (ServiceRecord r : records) {
+            String reviewerId = r.getAssignedReviewerId();
+            if (reviewerId != null) {
+                reviewerNames.computeIfAbsent(reviewerId, id -> userService.getById(id).displayName());
+            }
+        }
+        return new DtoLookups(categoryNameMap(resolvedLanguage), gradeSequences, classNames, reviewerNames);
+    }
+
+    private ServiceRecordDto toDto(ServiceRecord r, DtoLookups lookups) {
         List<OrgSnapshotEntry> snapshot = readSnapshot(r.getProjectOrganizationsSnapshot());
         String hostOrganizationName = snapshot.stream().filter(e -> "HOST_SCHOOL".equals(e.role()))
                 .map(OrgSnapshotEntry::organizationName).findFirst().orElse(null);
@@ -678,13 +714,17 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         return new ServiceRecordDto(r.getId(), r.getStudentId(), r.getStudentName(), r.getProjectId(),
                 r.getSourceType().name(), r.getServiceDate(), r.getStartAt(), r.getEndAt(), r.getDurationMinutes(),
                 r.getLocation(), r.getOrganizationId(), r.getOrganizationName(), r.getServiceCategoryId(),
-                categoryNames.getOrDefault(r.getServiceCategoryId(), ""), r.getDescription(),
+                lookups.categoryNames().getOrDefault(r.getServiceCategoryId(), ""), r.getDescription(),
                 r.getSupervisorKind() != null ? r.getSupervisorKind().name() : null,
                 r.getSupervisorName(), r.getSupervisorContact(), r.getEvidenceFileIds(), r.isIncludesTravelTime(),
                 r.getTravelTimeReason(), r.getRecordNumber(), hostOrganizationName, partnerOrganizationNames,
-                r.getStatus().name(), r.getCurrentRevision(), r.getAssignedReviewerId(), r.isHasAnomaly(), r.getAnomalyNote(),
-                r.getReviewSummary(), r.getCreditedUnits(), r.getAccountTransactionId(), r.getVersion(),
-                r.getCreatedAt(), r.getSubmittedAt(), r.getUpdatedAt());
+                r.getStatus().name(), r.getCurrentRevision(), r.getAssignedReviewerId(),
+                r.getAssignedReviewerId() != null ? lookups.reviewerNames().get(r.getAssignedReviewerId()) : null,
+                r.isHasAnomaly(), r.getAnomalyNote(),
+                r.getReviewSummary(), r.getCreditedUnits(), r.getAccountTransactionId(),
+                lookups.gradeSequences().getOrDefault(r.getGradeId(), 0),
+                lookups.classNames().getOrDefault(r.getClassId(), ""),
+                r.getVersion(), r.getCreatedAt(), r.getSubmittedAt(), r.getUpdatedAt());
     }
 
     private String principalId(Authentication auth) {

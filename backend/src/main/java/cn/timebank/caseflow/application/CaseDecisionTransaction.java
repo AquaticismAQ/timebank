@@ -18,6 +18,7 @@ import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.notification.application.NotificationService;
+import cn.timebank.servicerecord.application.ServiceRecordService;
 import cn.timebank.student.application.StudentService;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,16 +41,19 @@ class CaseDecisionTransaction {
     private final NotificationService notificationService;
     private final UserService userService;
     private final StudentService studentService;
+    private final ServiceRecordService serviceRecordService;
 
     CaseDecisionTransaction(CaseRepository repository, CaseDecisionEventRepository decisionEventRepository,
                              AccountService accountService, NotificationService notificationService,
-                             UserService userService, StudentService studentService) {
+                             UserService userService, StudentService studentService,
+                             ServiceRecordService serviceRecordService) {
         this.repository = repository;
         this.decisionEventRepository = decisionEventRepository;
         this.accountService = accountService;
         this.notificationService = notificationService;
         this.userService = userService;
         this.studentService = studentService;
+        this.serviceRecordService = serviceRecordService;
     }
 
     @Transactional
@@ -120,9 +124,11 @@ class CaseDecisionTransaction {
         // Re-fetching via a lightweight inline mapper avoids a circular
         // dependency on CaseService (which depends on this bean).
         String studentName = studentService.getDetail(c.getStudentId(), false, "system", resolvedLanguage).displayName();
+        String subjectLabel = c.getSubjectId() != null && "serviceRecord".equals(c.getSubjectType())
+                ? serviceRecordService.recordLabel(c.getSubjectId()).orElse(null) : null;
         return new CaseDto(c.getId(), c.getType().name(), c.getStudentId(), studentName, c.getSubjectType(),
-                c.getSubjectId(), c.getTitle(), c.getDescription(), c.getRequestedAmountCentiCoins(), c.getReasonCode(),
-                c.getStatus().name(), c.getAssignedReviewerId(), c.getVersion(), c.getCreatedAt(), c.getSubmittedAt(),
-                c.getUpdatedAt());
+                c.getSubjectId(), subjectLabel, c.getTitle(), c.getDescription(), c.getRequestedAmountCentiCoins(),
+                c.getReasonCode(), c.getStatus().name(), c.getAssignedReviewerId(), c.getVersion(), c.getCreatedAt(),
+                c.getSubmittedAt(), c.getUpdatedAt());
     }
 }

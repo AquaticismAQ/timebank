@@ -16,7 +16,8 @@ import java.util.List;
 /** The `caseflow` module's published interface (Design.md §6). Hosts B5.2's manual-correction-to-ledger effect. */
 public interface CaseService {
 
-    Page<CaseDto> list(Pageable pageable, Authentication auth, String resolvedLanguage);
+    /** {@code status}/{@code type}/{@code search} are contract §2.7's filter/search (Docs/clarification/04-DataViewOptimization.md §4.1) — {@code search} matches case title. */
+    Page<CaseDto> list(Pageable pageable, Authentication auth, String status, String type, String search, String resolvedLanguage);
 
     CaseDto getDetail(String id, Authentication auth, String resolvedLanguage);
 

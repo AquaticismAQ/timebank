@@ -40,3 +40,6 @@ test-server-credits.md
 *.pem
 *.key
 id_rsa*
+
+# Playwright MCP snapshots
+.playwright-mcp/

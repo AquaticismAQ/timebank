@@ -1,19 +1,22 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, CheckCircle, XCircle, RotateCcw, AlertTriangle, Clock, ChevronDown, ChevronUp, Send } from 'lucide-react';
+import { Search, CheckCircle, XCircle, RotateCcw, AlertTriangle, Clock, Eye, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { handleMutationError } from '../../api/useFieldErrors';
-import { usePermissions } from '../../App';
-import { usePagedApi } from '../../api/useApi';
+import { usePermissions, useAuth } from '../../App';
+import { useUrlSyncedPagedApi } from '../../api/useApi';
+import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { EvidenceLink } from '../EvidenceLink';
-import { type EvidenceFile } from '../../api/types';
+import { DetailWorkbench, type DetailWorkbenchTab } from '../shared/DetailWorkbench';
+import { type ServiceRecord, type TimelineEntry } from '../../api/types';
 import { formatGradeClass, minutesToHours } from '../../lib/format';
 
 type SortKey = 'daysWaiting' | 'submittedAt' | 'durationMinutes';
+const SORT_KEYS: SortKey[] = ['daysWaiting', 'submittedAt', 'durationMinutes'];
 
 interface BulkFailure {
   id: string;
@@ -21,62 +24,72 @@ interface BulkFailure {
   message: string;
 }
 
+/** Small label/value pair for the detail workbench's Basic Info tab — not shared beyond this file since Case/Proposal Review's field sets differ enough that a shared component would just be a thin wrapper around a `<div>`. */
+function Field({ label, value }: { label: string; value?: string | number | null }) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-sm text-foreground whitespace-pre-wrap">{value || '—'}</div>
+    </div>
+  );
+}
+
 export function AuditCenter() {
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
+  const { user } = useAuth();
   const canDecide = hasPermission('reviews.decide');
-  const [filterGrade, setFilterGrade] = useState('all');
-  const [showAnomaly, setShowAnomaly] = useState(false);
-  const [sortKey, setSortKey] = useState<SortKey>('daysWaiting');
-  const [sortDesc, setSortDesc] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  // I3.3: the expanded row previously showed two hardcoded fake labels
-  // ("Service Confirmation" / "Activity Photos") no matter what evidence
-  // was actually uploaded — a reviewer had no way to see the real files.
-  const [expandedEvidence, setExpandedEvidence] = useState<EvidenceFile[]>([]);
-  const [expandedEvidenceLoading, setExpandedEvidenceLoading] = useState(false);
+  // 04-DataViewOptimization.md §3.2: unified detail workbench — replaces the old
+  // mobile-only inline "expand for materials" row (I3.3's fix, superseded here).
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState('basic');
+  const [detailRecord, setDetailRecord] = useState<ServiceRecord | null>(null);
+  const [detailRecordLoading, setDetailRecordLoading] = useState(false);
+  const [detailTimeline, setDetailTimeline] = useState<TimelineEntry[]>([]);
+  const [detailTimelineLoading, setDetailTimelineLoading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [decisionModal, setDecisionModal] = useState<{ id: string; action: 'approve' | 'return' | 'reject' } | null>(null);
   const [decisionComment, setDecisionComment] = useState('');
   const [decisionReason, setDecisionReason] = useState('');
   const [bulkFailures, setBulkFailures] = useState<BulkFailure[]>([]);
 
-  const { items, page, loading, error, params, setPage, setSearch, setFilter, refetch } = usePagedApi(api.reviewQueue.list, {});
+  const { items, page, loading, error, params, setPage, setPageSize, setSearch, setFilter, setSort, refetch } =
+    useUrlSyncedPagedApi(api.reviewQueue.list, { sort: '-daysWaiting' });
+  const { grades } = useDictionaries();
+  // Same scoping AccountManagement.tsx applies to its own grade dropdown — a
+  // teacher only ever has rows in their own grades, so the picker shouldn't
+  // offer dead options even though the server would just return zero rows either way.
+  const availableGrades = user && user.roles.includes('teacher') && !user.roles.includes('admin') && user.scopeGradeIds.length > 0
+    ? grades.filter(g => user.scopeGradeIds.includes(g.id))
+    : grades;
 
-  // No server-side `grade` filter exists on /review-queue — kept client-side,
-  // so this only narrows within the currently fetched page, not the whole dataset.
-  const grades = [...new Set(items.map(r => r.gradeLevel))];
+  // 04-DataViewOptimization.md §3.1 (D8/D9): server-side grade filter + sort now that
+  // ReviewController.SORTABLE/filter[gradeId] are real — items already arrive filtered
+  // and sorted, no client-side re-derivation.
+  const sortKey = (params.sort?.replace(/^-/, '') as SortKey) ?? 'daysWaiting';
+  const sortDesc = params.sort?.startsWith('-') ?? true;
+  const setSortKey = (key: SortKey) => setSort(sortDesc ? `-${key}` : key);
+  const toggleSortDir = () => setSort(sortDesc ? sortKey : `-${sortKey}`);
 
-  // ReviewController's SORTABLE whitelist is currently empty (Set.of()), so no field
-  // is sortable server-side — sorting stays entirely client-side on the current page.
-  const filtered = useMemo(() => {
-    let rows = items.filter(r => filterGrade === 'all' || r.gradeLevel === Number(filterGrade));
-    rows = [...rows].sort((a, b) => {
-      const aVal = a[sortKey] as number | string;
-      const bVal = b[sortKey] as number | string;
-      if (sortDesc) return bVal > aVal ? 1 : -1;
-      return aVal > bVal ? 1 : -1;
-    });
-    return rows;
-  }, [items, filterGrade, sortKey, sortDesc]);
-
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDesc(!sortDesc);
-    else { setSortKey(key); setSortDesc(true); }
-  };
+  const openDetail = (id: string) => { setDetailId(id); setDetailTab('basic'); };
 
   useEffect(() => {
-    if (!expandedId) { setExpandedEvidence([]); return; }
-    const item = items.find(i => i.id === expandedId);
-    const recordId = item?.serviceRecordId ?? expandedId;
+    if (!detailId) { setDetailRecord(null); setDetailTimeline([]); return; }
+    const item = items.find(i => i.id === detailId);
+    const recordId = item?.serviceRecordId ?? detailId;
     let cancelled = false;
-    setExpandedEvidenceLoading(true);
+    setDetailRecordLoading(true);
     api.serviceRecords.get(recordId)
-      .then(record => { if (!cancelled) setExpandedEvidence(record.evidenceFiles); })
-      .catch(() => { if (!cancelled) setExpandedEvidence([]); })
-      .finally(() => { if (!cancelled) setExpandedEvidenceLoading(false); });
+      .then(record => { if (!cancelled) setDetailRecord(record); })
+      .catch(() => { if (!cancelled) setDetailRecord(null); })
+      .finally(() => { if (!cancelled) setDetailRecordLoading(false); });
+    setDetailTimelineLoading(true);
+    api.serviceRecords.timeline(recordId)
+      .then(entries => { if (!cancelled) setDetailTimeline(entries); })
+      .catch(() => { if (!cancelled) setDetailTimeline([]); })
+      .finally(() => { if (!cancelled) setDetailTimelineLoading(false); });
     return () => { cancelled = true; };
-  }, [expandedId, items]);
+  }, [detailId, items]);
 
   const toggleSelect = (id: string) => {
     setSelected(prev => {
@@ -116,7 +129,7 @@ export function AuditCenter() {
         toast.success(t('admin.audit.recordDecision', { action: actionLabels[action] }));
       }
       setDecisionModal(null);
-      setExpandedId(null);
+      setDetailId(null);
       refetch();
     } catch (err) {
       handleMutationError(err, { refetch, fallbackMessage: t('common.unknownError') });
@@ -184,19 +197,15 @@ export function AuditCenter() {
           <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)} placeholder={t('admin.audit.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
-        <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)}
+        <select value={params.filter?.gradeId ?? 'all'} onChange={e => setFilter('gradeId', e.target.value === 'all' ? undefined : e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
           <option value="all">{t('admin.audit.allGrades')}</option>
-          {grades.map(g => <option key={g} value={g}>{formatGradeClass(g, '')}</option>)}
+          {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
         <button
-          onClick={() => {
-            const next = !showAnomaly;
-            setShowAnomaly(next);
-            setFilter('hasAnomaly', next ? 'true' : undefined);
-          }}
+          onClick={() => setFilter('hasAnomaly', params.filter?.hasAnomaly ? undefined : 'true')}
           className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm transition-colors ${
-            showAnomaly ? 'bg-red-100 dark:bg-red-900/30 border-red-300 text-red-700 dark:text-red-400' : 'border-border text-muted-foreground hover:bg-accent'
+            params.filter?.hasAnomaly ? 'bg-red-100 dark:bg-red-900/30 border-red-300 text-red-700 dark:text-red-400' : 'border-border text-muted-foreground hover:bg-accent'
           }`}
         >
           <AlertTriangle className="w-4 h-4" />
@@ -204,29 +213,32 @@ export function AuditCenter() {
         </button>
       </div>
 
-      {/* Sort controls */}
-      <div className="flex gap-2 overflow-x-auto">
-        {[
-          { key: 'daysWaiting' as SortKey, label: t('admin.audit.sortDaysWaiting') },
-          { key: 'submittedAt' as SortKey, label: t('admin.audit.sortSubmitted') },
-          { key: 'durationMinutes' as SortKey, label: t('admin.audit.sortServiceHours') },
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => toggleSort(key)}
-            className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap flex items-center gap-1 transition-colors ${
-              sortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'
-            }`}
-          >
-            {label} {sortKey === key && (sortDesc ? '↓' : '↑')}
-          </button>
-        ))}
+      {/* Sort controls: one field dropdown + one direction toggle (04-DataViewOptimization.md §2.1.4), server-side. */}
+      <div className="flex items-center gap-2">
+        <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)}
+          className="px-3 py-1.5 rounded-lg border border-border bg-input-background dark:bg-muted text-foreground text-xs focus:outline-none">
+          {SORT_KEYS.map(key => (
+            <option key={key} value={key}>
+              {key === 'daysWaiting' ? t('admin.audit.sortDaysWaiting') : key === 'submittedAt' ? t('admin.audit.sortSubmitted') : t('admin.audit.sortServiceHours')}
+            </option>
+          ))}
+        </select>
+        <button onClick={toggleSortDir}
+          className="px-2.5 py-1.5 rounded-lg bg-muted text-muted-foreground hover:bg-accent text-xs transition-colors">
+          {sortDesc ? '↓' : '↑'}
+        </button>
       </div>
 
       {/* Results */}
-      <div className="text-xs text-muted-foreground">{t('admin.audit.recordsCount', { count: filtered.length })}</div>
+      <div className="text-xs text-muted-foreground">{t('admin.audit.recordsCount', { count: page?.totalItems ?? items.length })}</div>
 
-      <ListStateBanner error={error} empty={!loading && items.length === 0} emptyLabel={t('admin.audit.queueEmpty')} />
+      <ListStateBanner
+        error={error}
+        empty={!loading && items.length === 0}
+        emptyLabel={t(params.search || params.filter?.gradeId || params.filter?.hasAnomaly ? 'common.list.emptyNoResults' : 'admin.audit.queueEmpty')}
+        hasActiveFilters={!!(params.search || params.filter?.gradeId || params.filter?.hasAnomaly)}
+        onClearFilters={() => { setSearch(''); setFilter('gradeId', undefined); setFilter('hasAnomaly', undefined); }}
+      />
 
       {/* Review items */}
       {!error && !(!loading && items.length === 0) && (
@@ -246,12 +258,13 @@ export function AuditCenter() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map(item => {
+                {items.map(item => {
                   const isSelected = selected.has(item.id);
                   return (
-                    <tr key={item.id} className={`hover:bg-muted/30 transition-colors ${isSelected ? 'bg-primary/5' : ''}`}>
+                    <tr key={item.id} onClick={() => openDetail(item.id)}
+                      className={`hover:bg-muted/30 transition-colors cursor-pointer ${isSelected ? 'bg-primary/5' : ''}`}>
                       <td className="px-4 py-3">
-                        <button onClick={() => toggleSelect(item.id)}
+                        <button onClick={e => { e.stopPropagation(); toggleSelect(item.id); }}
                           className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'border-border hover:border-primary'}`}>
                           {isSelected && <span className="text-primary-foreground text-xs">✓</span>}
                         </button>
@@ -279,22 +292,29 @@ export function AuditCenter() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        {canDecide ? (
-                          <div className="flex gap-1 justify-end">
-                            <button onClick={() => handleDecision(item.id, 'return')}
-                              className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1">
-                              <RotateCcw className="w-3 h-3" /> {t('admin.audit.return')}
-                            </button>
-                            <button onClick={() => handleDecision(item.id, 'reject')}
-                              className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1">
-                              <XCircle className="w-3 h-3" /> {t('admin.audit.reject')}
-                            </button>
-                            <button onClick={() => handleDecision(item.id, 'approve')}
-                              className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-green-50 hover:text-green-600 hover:border-green-300 dark:hover:bg-green-900/20 transition-colors flex items-center gap-1">
-                              <CheckCircle className="w-3 h-3" /> {t('admin.audit.approve')}
-                            </button>
-                          </div>
-                        ) : null}
+                        <div className="flex gap-1 justify-end">
+                          {/* Explicit, keyboard/screen-reader-reachable open trigger (D5) — the row click above is a mouse convenience, not the only path. */}
+                          <button onClick={e => { e.stopPropagation(); openDetail(item.id); }}
+                            className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent transition-colors flex items-center gap-1">
+                            <Eye className="w-3 h-3" /> {t('common.viewDetails')}
+                          </button>
+                          {canDecide && (
+                            <>
+                              <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'return'); }}
+                                className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1">
+                                <RotateCcw className="w-3 h-3" /> {t('admin.audit.return')}
+                              </button>
+                              <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'reject'); }}
+                                className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1">
+                                <XCircle className="w-3 h-3" /> {t('admin.audit.reject')}
+                              </button>
+                              <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'approve'); }}
+                                className="px-2 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:bg-green-50 hover:text-green-600 hover:border-green-300 dark:hover:bg-green-900/20 transition-colors flex items-center gap-1">
+                                <CheckCircle className="w-3 h-3" /> {t('admin.audit.approve')}
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -302,20 +322,20 @@ export function AuditCenter() {
               </tbody>
             </table>
             <div className="px-4 pb-4">
-              <PageControls page={page} onPageChange={setPage} />
+              <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
             </div>
           </div>
 
           {/* Mobile: card view */}
           <div className="lg:hidden space-y-2">
-            {filtered.map(item => {
-              const isExpanded = expandedId === item.id;
+            {items.map(item => {
               const isSelected = selected.has(item.id);
               return (
-                <div key={item.id} className={`bg-card border rounded-2xl overflow-hidden transition-colors ${isSelected ? 'border-primary/50 bg-primary/5' : 'border-border'}`}>
+                <div key={item.id} onClick={() => openDetail(item.id)}
+                  className={`bg-card border rounded-2xl overflow-hidden transition-colors cursor-pointer ${isSelected ? 'border-primary/50 bg-primary/5' : 'border-border'}`}>
                   <div className="p-4">
                     <div className="flex items-start gap-3">
-                      <button onClick={() => toggleSelect(item.id)}
+                      <button onClick={e => { e.stopPropagation(); toggleSelect(item.id); }}
                         className={`mt-0.5 w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'border-border hover:border-primary'}`}>
                         {isSelected && <span className="text-primary-foreground text-xs">✓</span>}
                       </button>
@@ -341,42 +361,23 @@ export function AuditCenter() {
                             <div className="text-xs text-red-700 dark:text-red-300">{item.anomalyNote}</div>
                           </div>
                         )}
-                        {isExpanded && (
-                          <div className="border-t border-border pt-3 mb-3 space-y-2 text-xs text-muted-foreground">
-                            <p>{t('admin.audit.serviceDate')}: {item.serviceDate}</p>
-                            <p>{t('admin.audit.reportedHours')}: {minutesToHours(item.durationMinutes)} {t('admin.audit.hoursUnit')}</p>
-                            <p>{t('admin.audit.organization')}: {item.organizationName}</p>
-                            <p>{t('admin.audit.submitted')}: {item.submittedAt.slice(0, 16).replace('T', ' ')}</p>
-                            <div className="flex gap-2 flex-wrap mt-2">
-                              {expandedEvidenceLoading && <span className="text-muted-foreground">{t('common.loading')}</span>}
-                              {!expandedEvidenceLoading && expandedEvidence.length === 0 && (
-                                <span className="text-muted-foreground">{t('admin.audit.noEvidence')}</span>
-                              )}
-                              {expandedEvidence.map(f => (
-                                <span key={f.id} className="px-2 py-1 bg-muted rounded">
-                                  <EvidenceLink fileId={f.id} name={f.name} />
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                         <div className="flex items-center justify-between">
-                          <button onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                          <button onClick={e => { e.stopPropagation(); openDetail(item.id); }}
                             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                            {isExpanded ? <><ChevronUp className="w-3 h-3" /> {t('admin.audit.collapse')}</> : <><ChevronDown className="w-3 h-3" /> {t('admin.audit.viewMaterials')}</>}
+                            <Eye className="w-3 h-3" /> {t('common.viewDetails')}
                           </button>
                           <div className="flex gap-2">
                             {canDecide && (
                               <>
-                                <button onClick={() => handleDecision(item.id, 'return')}
+                                <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'return'); }}
                                   className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1">
                                   <RotateCcw className="w-3 h-3" /> {t('admin.audit.return')}
                                 </button>
-                                <button onClick={() => handleDecision(item.id, 'reject')}
+                                <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'reject'); }}
                                   className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1">
                                   <XCircle className="w-3 h-3" /> {t('admin.audit.reject')}
                                 </button>
-                                <button onClick={() => handleDecision(item.id, 'approve')}
+                                <button onClick={e => { e.stopPropagation(); handleDecision(item.id, 'approve'); }}
                                   className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-green-50 hover:text-green-600 hover:border-green-300 dark:hover:bg-green-900/20 transition-colors flex items-center gap-1">
                                   <CheckCircle className="w-3 h-3" /> {t('admin.audit.approve')}
                                 </button>
@@ -390,10 +391,108 @@ export function AuditCenter() {
                 </div>
               );
             })}
-            <PageControls page={page} onPageChange={setPage} />
+            <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
           </div>
         </>
       )}
+
+      {/* Detail workbench (04-DataViewOptimization.md §3.2) */}
+      {(() => {
+        const detailQueueItem = items.find(i => i.id === detailId);
+        if (!detailId || !detailQueueItem) return null;
+        const tabs: DetailWorkbenchTab[] = [
+          {
+            key: 'basic',
+            label: t('admin.audit.tabBasicInfo'),
+            content: detailRecordLoading || !detailRecord ? (
+              <div className="text-sm text-muted-foreground">{t('common.loading')}</div>
+            ) : (
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                <Field label={t('admin.audit.fieldStudent')} value={`${detailRecord.studentName} · ${formatGradeClass(detailQueueItem.gradeLevel, detailQueueItem.className)}`} />
+                <Field label={t('admin.audit.fieldRecordNumber')} value={detailRecord.recordNumber} />
+                <Field label={t('admin.audit.fieldSource')} value={t(`admin.audit.source${detailRecord.sourceType.charAt(0).toUpperCase() + detailRecord.sourceType.slice(1)}`)} />
+                <Field label={t('admin.audit.fieldProjectOrg')} value={detailRecord.projectTitle || detailRecord.organizationName} />
+                <Field label={t('admin.audit.fieldServiceDate')} value={detailRecord.serviceDate} />
+                <Field label={t('admin.audit.fieldDuration')} value={`${minutesToHours(detailRecord.durationMinutes)} ${t('admin.audit.hoursUnit')}`} />
+                <Field label={t('admin.audit.fieldStartTime')} value={detailRecord.startAt?.slice(0, 16).replace('T', ' ')} />
+                <Field label={t('admin.audit.fieldEndTime')} value={detailRecord.endAt?.slice(0, 16).replace('T', ' ')} />
+                <Field label={t('admin.audit.fieldLocation')} value={detailRecord.location} />
+                <Field label={t('admin.audit.fieldCategory')} value={detailRecord.serviceCategoryName} />
+                <Field label={t('admin.audit.fieldSupervisor')} value={[detailRecord.supervisorName, detailRecord.supervisorContact].filter(Boolean).join(' · ')} />
+                <Field label={t('admin.audit.fieldTravelTime')} value={detailRecord.includesTravelTime ? (detailRecord.travelTimeReason || t('common.yes')) : t('common.no')} />
+                <div className="sm:col-span-2">
+                  <Field label={t('admin.audit.fieldDescription')} value={detailRecord.description} />
+                </div>
+              </dl>
+            ),
+          },
+          {
+            key: 'history',
+            label: t('admin.audit.tabHistory'),
+            content: detailTimelineLoading ? (
+              <div className="text-sm text-muted-foreground">{t('common.loading')}</div>
+            ) : detailTimeline.length === 0 ? (
+              <div className="text-sm text-muted-foreground">{t('admin.audit.noHistory')}</div>
+            ) : (
+              <ol className="space-y-3">
+                {detailTimeline.map((entry, i) => (
+                  <li key={i} className="flex gap-3">
+                    <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-muted-foreground">{entry.occurredAt.slice(0, 16).replace('T', ' ')} · {entry.type}</div>
+                      <div className="text-sm text-foreground">{entry.description}</div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ),
+          },
+          {
+            key: 'evidence',
+            label: t('admin.audit.tabEvidence'),
+            content: detailRecordLoading || !detailRecord ? (
+              <div className="text-sm text-muted-foreground">{t('common.loading')}</div>
+            ) : detailRecord.evidenceFiles.length === 0 ? (
+              <div className="text-sm text-muted-foreground">{t('admin.audit.noEvidence')}</div>
+            ) : (
+              <div className="flex gap-2 flex-wrap">
+                {detailRecord.evidenceFiles.map(f => (
+                  <span key={f.id} className="px-2 py-1 bg-muted rounded">
+                    <EvidenceLink fileId={f.id} name={f.name} />
+                  </span>
+                ))}
+              </div>
+            ),
+          },
+        ];
+        return (
+          <DetailWorkbench
+            open
+            onClose={() => setDetailId(null)}
+            title={detailQueueItem.studentName}
+            subtitle={detailRecord?.recordNumber}
+            tabs={tabs}
+            activeTab={detailTab}
+            onTabChange={setDetailTab}
+            footer={canDecide && (detailQueueItem.status === 'pending' || detailQueueItem.status === 'underReview') ? (
+              <div className="flex gap-3">
+                <button onClick={() => handleDecision(detailQueueItem.id, 'return')}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center justify-center gap-1.5">
+                  <RotateCcw className="w-4 h-4" /> {t('admin.audit.return')}
+                </button>
+                <button onClick={() => handleDecision(detailQueueItem.id, 'reject')}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1.5">
+                  <XCircle className="w-4 h-4" /> {t('admin.audit.reject')}
+                </button>
+                <button onClick={() => handleDecision(detailQueueItem.id, 'approve')}
+                  className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5">
+                  <CheckCircle className="w-4 h-4" /> {t('admin.audit.approve')}
+                </button>
+              </div>
+            ) : undefined}
+          />
+        );
+      })()}
 
       {/* Decision modal */}
       {decisionModal && (

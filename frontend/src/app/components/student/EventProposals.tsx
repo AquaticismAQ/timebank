@@ -687,11 +687,11 @@ export function EventProposals() {
             <div className="bg-card border border-border rounded-2xl p-4">
               <h3 className="text-sm font-medium text-foreground mb-3">{t('student.proposals.timeline')}</h3>
               <div className="space-y-3">
-                {p.timeline.map((evt, i) => (
+                {(p.timeline ?? []).map((evt, i) => (
                   <div key={i} className="flex gap-3">
                     <div className="flex flex-col items-center shrink-0">
                       <div className="w-2 h-2 rounded-full bg-primary mt-1" />
-                      {i < p.timeline.length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
+                      {i < (p.timeline ?? []).length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
                     </div>
                     <div className="pb-3 flex-1">
                       <div className="text-xs font-medium text-foreground">{evt.action}</div>

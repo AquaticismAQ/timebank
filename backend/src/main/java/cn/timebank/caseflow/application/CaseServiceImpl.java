@@ -22,11 +22,13 @@ import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.idempotency.IdempotencyService;
+import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.DataScopeResolver;
 import cn.timebank.security.application.DataScopeSpecifications;
 import cn.timebank.security.application.ScopeDescriptor;
 import cn.timebank.security.application.TimeBankPrincipal;
+import cn.timebank.servicerecord.application.ServiceRecordService;
 import cn.timebank.student.application.StudentService;
 import cn.timebank.student.application.dto.StudentDetailDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,6 +54,7 @@ class CaseServiceImpl implements CaseService {
     private final CaseRevisionRepository revisionRepository;
     private final CaseDecisionEventRepository decisionEventRepository;
     private final StudentService studentService;
+    private final ServiceRecordService serviceRecordService;
     private final AuditService auditService;
     private final DataScopeResolver dataScopeResolver;
     private final IdempotencyService idempotencyService;
@@ -61,6 +64,7 @@ class CaseServiceImpl implements CaseService {
 
     CaseServiceImpl(CaseRepository repository, CaseRevisionRepository revisionRepository,
                     CaseDecisionEventRepository decisionEventRepository, StudentService studentService,
+                    ServiceRecordService serviceRecordService,
                     AuditService auditService, DataScopeResolver dataScopeResolver,
                     IdempotencyService idempotencyService, ObjectMapper objectMapper,
                     CaseDecisionTransaction decisionTransaction) {
@@ -68,6 +72,7 @@ class CaseServiceImpl implements CaseService {
         this.revisionRepository = revisionRepository;
         this.decisionEventRepository = decisionEventRepository;
         this.studentService = studentService;
+        this.serviceRecordService = serviceRecordService;
         this.auditService = auditService;
         this.dataScopeResolver = dataScopeResolver;
         this.idempotencyService = idempotencyService;
@@ -77,8 +82,13 @@ class CaseServiceImpl implements CaseService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<CaseDto> list(Pageable pageable, Authentication auth, String resolvedLanguage) {
-        Page<Case> page = repository.findAll(scopeSpecification(auth), pageable);
+    public Page<CaseDto> list(Pageable pageable, Authentication auth, String status, String type, String search, String resolvedLanguage) {
+        Specification<Case> filterSpec = FilterSpecifications.and(
+                FilterSpecifications.equalToEnum("status", CaseStatus.class, status),
+                FilterSpecifications.equalToEnum("type", CaseType.class, type),
+                FilterSpecifications.searchAnyContains(search, "title"));
+        Specification<Case> spec = FilterSpecifications.and(scopeSpecification(auth), filterSpec);
+        Page<Case> page = repository.findAll(spec, pageable);
         return page.map(c -> toDto(c, resolvedLanguage));
     }
 
@@ -266,8 +276,16 @@ class CaseServiceImpl implements CaseService {
     private CaseDto toDto(Case c, String resolvedLanguage) {
         String studentName = studentService.getDetail(c.getStudentId(), false, "system", resolvedLanguage).displayName();
         return new CaseDto(c.getId(), c.getType().name(), c.getStudentId(), studentName, c.getSubjectType(),
-                c.getSubjectId(), c.getTitle(), c.getDescription(), c.getRequestedAmountCentiCoins(), c.getReasonCode(),
-                c.getStatus().name(), c.getAssignedReviewerId(), c.getVersion(), c.getCreatedAt(), c.getSubmittedAt(),
-                c.getUpdatedAt());
+                c.getSubjectId(), subjectLabel(c), c.getTitle(), c.getDescription(), c.getRequestedAmountCentiCoins(),
+                c.getReasonCode(), c.getStatus().name(), c.getAssignedReviewerId(), c.getVersion(), c.getCreatedAt(),
+                c.getSubmittedAt(), c.getUpdatedAt());
+    }
+
+    /** Only {@code serviceRecord} is a resolvable subject type today (the only one any create path sets) — anything else is null, not guessed. */
+    private String subjectLabel(Case c) {
+        if (c.getSubjectId() == null || !"serviceRecord".equals(c.getSubjectType())) {
+            return null;
+        }
+        return serviceRecordService.recordLabel(c.getSubjectId()).orElse(null);
     }
 }

@@ -48,12 +48,10 @@ class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ReviewQueueItemDto> queue(Pageable pageable, Boolean hasAnomaly, String search, Authentication auth, String resolvedLanguage) {
+    public Page<ReviewQueueItemDto> queue(Pageable pageable, Boolean hasAnomaly, String gradeId, String search, Authentication auth, String resolvedLanguage) {
         ScopeDescriptor scope = resolveScope(auth);
-        int limit = pageable.getPageSize();
-        int offset = (int) pageable.getOffset();
-        List<ReviewQueueItemDto> items = reviewQueueRepository.queryPage(scope, hasAnomaly, search, resolvedLanguage, limit, offset);
-        long total = reviewQueueRepository.countMatching(scope, hasAnomaly, search);
+        List<ReviewQueueItemDto> items = reviewQueueRepository.queryPage(scope, hasAnomaly, search, gradeId, resolvedLanguage, pageable);
+        long total = reviewQueueRepository.countMatching(scope, hasAnomaly, search, gradeId);
         return new PageImpl<>(items, pageable, total);
     }
 
