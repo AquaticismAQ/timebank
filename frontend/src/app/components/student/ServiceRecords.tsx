@@ -15,6 +15,8 @@ import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { EvidenceLink } from '../EvidenceLink';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
+import { CaseFilingModal } from './CaseFilingModal';
+import { StudentCases } from './StudentCases';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -44,36 +46,12 @@ export function ServiceRecords() {
   const submitKeyRef = useRef(newIdempotencyKey());
   const fieldErrors = useFieldErrors();
 
-  // Appeal-a-rejected-record modal state (I2-d8, cases domain)
-  const [appealRecord, setAppealRecord] = useState<ServiceRecord | null>(null);
-  const [appealReason, setAppealReason] = useState('');
-  const [appealSaving, setAppealSaving] = useState(false);
-  const appealKeyRef = useRef(newIdempotencyKey());
-
-  const handleSubmitAppeal = async () => {
-    if (!appealRecord || !appealReason.trim()) { toast.error(t('student.records.appealReasonRequired')); return; }
-    setAppealSaving(true);
-    try {
-      const created = await api.cases.create({
-        type: 'appeal',
-        subjectType: 'serviceRecord',
-        subjectId: appealRecord.id,
-        title: `${t('student.records.appeal')}: ${appealRecord.projectTitle || appealRecord.organizationName}`,
-        description: appealReason,
-        reasonCode: 'STUDENT_APPEAL',
-      });
-      await api.cases.submit(created.id, appealKeyRef.current);
-      appealKeyRef.current = newIdempotencyKey();
-      toast.success(t('student.records.appealSubmitted'));
-      setAppealRecord(null);
-      setAppealReason('');
-    } catch (err) {
-      if (err instanceof ApiError) toast.error(mapApiError(err).message);
-      else toast.error(t('common.unknownError'));
-    } finally {
-      setAppealSaving(false);
-    }
-  };
+  // Case filing (appeal/supplement) — 06-StudentCaseFiling.md. `caseFiling.record` is
+  // null for a standalone/unattached supplement request (§2.3), set for a per-record
+  // Appeal or Supplement button.
+  const [caseFiling, setCaseFiling] = useState<{ type: 'appeal' | 'supplement'; record: ServiceRecord | null } | null>(null);
+  const [recordsView, setRecordsView] = useState<'records' | 'cases'>('records');
+  const [casesRefreshKey, setCasesRefreshKey] = useState(0);
 
   // Evidence upload — the "evidence" step existed as a purely decorative
   // dropzone (no <input>, no handler) even though `api.files` was fully
@@ -718,15 +696,39 @@ export function ServiceRecords() {
     <div className="p-4 lg:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-foreground">{t('student.records.title')}</h2>
-        <button
-          onClick={openNewRecord}
-          className="flex items-center gap-1.5 px-3 py-2 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90 transition-opacity"
-        >
-          <Plus className="w-4 h-4" />
-          {t('student.records.newRecord')}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setCaseFiling({ type: 'supplement', record: null })}
+            className="flex items-center gap-1.5 px-3 py-2 border border-border text-foreground rounded-xl text-sm hover:bg-accent transition-colors"
+          >
+            {t('student.records.fileRequest')}
+          </button>
+          <button
+            onClick={openNewRecord}
+            className="flex items-center gap-1.5 px-3 py-2 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90 transition-opacity"
+          >
+            <Plus className="w-4 h-4" />
+            {t('student.records.newRecord')}
+          </button>
+        </div>
+      </div>
+
+      {/* My Records / My Cases — 06-StudentCaseFiling.md §2.4: case history folded into this page, not a new nav item. */}
+      <div className="flex gap-2 border-b border-border">
+        <button onClick={() => setRecordsView('records')}
+          className={`px-3 py-2 text-sm border-b-2 transition-colors -mb-px ${recordsView === 'records' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+          {t('student.records.myRecords')}
+        </button>
+        <button onClick={() => setRecordsView('cases')}
+          className={`px-3 py-2 text-sm border-b-2 transition-colors -mb-px ${recordsView === 'cases' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+          {t('student.records.myCases')}
         </button>
       </div>
 
+      {recordsView === 'cases' ? (
+        <StudentCases key={casesRefreshKey} />
+      ) : (
+      <>
       {/* Status tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4">
         {([
@@ -835,9 +837,15 @@ export function ServiceRecords() {
                             </>
                           )}
                           {rec.status === 'rejected' && (
-                            <button onClick={() => setAppealRecord(rec)}
+                            <button onClick={() => setCaseFiling({ type: 'appeal', record: rec })}
                               className="text-xs px-2 py-1 border border-border text-foreground rounded-lg hover:bg-accent">
                               {t('student.records.appeal')}
+                            </button>
+                          )}
+                          {rec.status === 'approved' && (
+                            <button onClick={() => setCaseFiling({ type: 'supplement', record: rec })}
+                              className="text-xs px-2 py-1 border border-border text-foreground rounded-lg hover:bg-accent">
+                              {t('student.records.supplement')}
                             </button>
                           )}
                         </div>
@@ -934,8 +942,12 @@ export function ServiceRecords() {
                           </>
                         )}
                         {rec.status === 'rejected' && (
-                          <button onClick={() => setAppealRecord(rec)}
+                          <button onClick={() => setCaseFiling({ type: 'appeal', record: rec })}
                             className="text-xs px-3 py-1.5 border border-border text-foreground rounded-lg hover:bg-accent">{t('student.records.appeal')}</button>
+                        )}
+                        {rec.status === 'approved' && (
+                          <button onClick={() => setCaseFiling({ type: 'supplement', record: rec })}
+                            className="text-xs px-3 py-1.5 border border-border text-foreground rounded-lg hover:bg-accent">{t('student.records.supplement')}</button>
                         )}
                       </div>
                     </div>
@@ -947,28 +959,16 @@ export function ServiceRecords() {
         </>
       )}
       <PageControls page={page} onPageChange={setPage} />
+      </>
+      )}
 
-      {appealRecord && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setAppealRecord(null)}>
-          <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-foreground">{t('student.records.appeal')}</h3>
-              <button onClick={() => setAppealRecord(null)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
-            </div>
-            <p className="text-xs text-muted-foreground mb-3">{appealRecord.projectTitle || appealRecord.organizationName} · {appealRecord.serviceDate}</p>
-            <textarea rows={4} value={appealReason} onChange={e => setAppealReason(e.target.value)}
-              placeholder={t('student.records.appealReasonPlaceholder')}
-              className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none" />
-            <div className="flex gap-3 mt-4">
-              <button onClick={() => setAppealRecord(null)} disabled={appealSaving}
-                className="flex-1 py-2.5 rounded-xl border border-border text-foreground hover:bg-accent text-sm">{t('common.cancel')}</button>
-              <button onClick={handleSubmitAppeal} disabled={appealSaving}
-                className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 text-sm disabled:opacity-50">
-                {appealSaving ? t('common.saving', { defaultValue: 'Saving...' }) : t('common.submit')}
-              </button>
-            </div>
-          </div>
-        </div>
+      {caseFiling && (
+        <CaseFilingModal
+          type={caseFiling.type}
+          record={caseFiling.record}
+          onClose={() => setCaseFiling(null)}
+          onFiled={() => { setCaseFiling(null); setCasesRefreshKey(k => k + 1); }}
+        />
       )}
     </div>
   );

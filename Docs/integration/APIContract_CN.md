@@ -567,6 +567,10 @@ queued → running → succeeded
 | `POST` | `/cases/{id}/submit` | 本人 | 提交 |
 | `POST` | `/cases/{id}/decisions` | `cases.decide` | 管理员处理 |
 | `GET` | `/cases/{id}/timeline` | `cases.read` | 时间线 |
+| `GET` | `/cases/{id}/revisions` | `cases.read` | 修订历史（2026-08-12 补录此表——功能早已实现，只是此前漏收录） |
+| `GET` | `/cases/{id}/decisions` | `cases.read` | 处理历史 |
+
+`type` 取值为 `appeal`（复核）\| `supplement`（补录）\| `manualCorrection`（人工调整）。`subjectType`/`subjectId` 在接口层是可选、自由文本的，但目前只有 `subjectType: "serviceRecord"` 才会解析出可读的 `subjectLabel`（`CaseServiceImpl.subjectLabel()`）——其它取值，或完全不带 subject（不关联具体记录的一般性申请），同样合法，只是没有 `subjectLabel`。`manualCorrection` 是唯一一种"通过"决定会直接调整学生时间币账户的类型，通过 `requestedAmountCentiCoins`（见 §3.6）——`cases.create` 权限本身对 `role_student` 和教职工角色都有授予，但学生端 UI 只提供 `appeal`/`supplement` 两种入口；`manualCorrection` 按约定仅由教职工发起，不是权限层面的限制（详见 `06-StudentCaseFiling.md` §2.1）。
 
 ### 4.9 学生、班级、年级与学年
 

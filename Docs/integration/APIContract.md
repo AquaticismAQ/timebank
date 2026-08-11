@@ -570,6 +570,10 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 | `POST` | `/cases/{id}/submit` | Owner | Submit |
 | `POST` | `/cases/{id}/decisions` | `cases.decide` | Admin processing |
 | `GET` | `/cases/{id}/timeline` | `cases.read` | Timeline |
+| `GET` | `/cases/{id}/revisions` | `cases.read` | Revision history (added here 2026-08-12 — was already implemented, just missing from this table) |
+| `GET` | `/cases/{id}/decisions` | `cases.read` | Decision history |
+
+`type` is `appeal` \| `supplement` \| `manualCorrection`. `subjectType`/`subjectId` are optional and free-form at the API layer, but only `subjectType: "serviceRecord"` resolves to a human-readable `subjectLabel` today (`CaseServiceImpl.subjectLabel()`) — any other value, or an omitted subject entirely (a standalone request not tied to a specific record), is valid and simply carries no `subjectLabel`. `manualCorrection` is the one type whose `resolve` decision directly adjusts the student's time-coin ledger via `requestedAmountCentiCoins` (§3.6) — `cases.create` is granted to `role_student` as well as staff roles, but student-facing UI only offers `appeal`/`supplement`; `manualCorrection` is staff-initiated-only by convention, not by a permission restriction (`06-StudentCaseFiling.md` §2.1).
 
 ### 4.9 Students, Classes, Grades & Academic Years
 
