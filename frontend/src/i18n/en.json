@@ -1273,7 +1273,8 @@
       "lowestMonthDesc": "Reduced activity during winter break",
       "topProjects": "Top Projects",
       "people": "people",
-      "total": "total"
+      "total": "total",
+      "noProjectData": "No projects have confirmed registrants yet."
     },
     "system": {
       "title": "System Admin",

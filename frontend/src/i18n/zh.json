@@ -1273,7 +1273,8 @@
       "lowestMonthDesc": "寒假期间活动减少",
       "topProjects": "热门项目",
       "people": "人",
-      "total": "累计"
+      "total": "累计",
+      "noProjectData": "暂无已确认报名的项目。"
     },
     "system": {
       "title": "系统管理",

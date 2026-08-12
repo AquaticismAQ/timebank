@@ -8,6 +8,7 @@ const TOTAL_BAR_COLOR = '#94a3b8'; // slate-400 — visible in both light and da
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError } from '../../api/http';
+import { ListStateBanner } from '../ListStateBanner';
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
@@ -266,42 +267,50 @@ export function ReportsPage() {
 
       {activeTab === 'projects' && (
         <div className="space-y-4">
-          <div className="bg-card border border-border rounded-2xl p-4">
-            <h3 className="text-foreground mb-4">{t('admin.reports.popularProjects')}</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie key="pie" data={pieData} cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="value" label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}>
-                  {pieData.map((_, i) => (
-                    <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip key="tooltip" contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          {data.topProjects.length === 0 ? (
+            <div className="bg-card border border-border rounded-2xl">
+              <ListStateBanner error={null} empty emptyLabel={t('admin.reports.noProjectData')} />
+            </div>
+          ) : (
+            <>
+              <div className="bg-card border border-border rounded-2xl p-4">
+                <h3 className="text-foreground mb-4">{t('admin.reports.popularProjects')}</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie key="pie" data={pieData} cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="value" label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}>
+                      {pieData.map((_, i) => (
+                        <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip key="tooltip" contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
 
-          <div className="bg-card border border-border rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
-              <h3 className="text-foreground">{t('admin.reports.topProjects')}</h3>
-            </div>
-            <div className="divide-y divide-border">
-              {data.topProjects.map((proj, i) => (
-                <div key={i} className="flex items-center gap-3 px-4 py-3">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                    i === 0 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
-                    i === 1 ? 'bg-slate-100 dark:bg-slate-900/30 text-slate-600 dark:text-slate-400' :
-                    i === 2 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
-                    'bg-muted text-muted-foreground'
-                  }`}>{i + 1}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-foreground truncate">{proj.title}</div>
-                    <div className="text-xs text-muted-foreground">{proj.participants} {t('admin.reports.people')} · {proj.totalHours}h {t('admin.reports.total')}</div>
-                  </div>
-                  <div className="text-sm font-medium text-foreground">{proj.totalHours}h</div>
+              <div className="bg-card border border-border rounded-2xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-border">
+                  <h3 className="text-foreground">{t('admin.reports.topProjects')}</h3>
                 </div>
-              ))}
-            </div>
-          </div>
+                <div className="divide-y divide-border">
+                  {data.topProjects.map((proj, i) => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                        i === 0 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
+                        i === 1 ? 'bg-slate-100 dark:bg-slate-900/30 text-slate-600 dark:text-slate-400' :
+                        i === 2 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
+                        'bg-muted text-muted-foreground'
+                      }`}>{i + 1}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-foreground truncate">{proj.title}</div>
+                        <div className="text-xs text-muted-foreground">{proj.participants} {t('admin.reports.people')} · {proj.totalHours}h {t('admin.reports.total')}</div>
+                      </div>
+                      <div className="text-sm font-medium text-foreground">{proj.totalHours}h</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
