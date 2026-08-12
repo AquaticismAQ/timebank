@@ -198,6 +198,14 @@ function dateFromNow(offsetDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// MySQL's DATETIME string literal wants 'YYYY-MM-DD HH:MM:SS.sss', not the
+// 'T'-separated/'Z'-suffixed ISO 8601 shape `daysFromNow` returns — used only
+// by the Phase 3.5 direct-SQL enrollment insert below (every other SQL phase
+// uses the `NOW(3)` function, not a JS-computed timestamp).
+function sqlDateTime(iso: string): string {
+  return sqlString(iso.replace('T', ' ').replace('Z', ''));
+}
+
 // ── Main ────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -310,6 +318,27 @@ async function main() {
       await owner.request('POST', `/api/v1/projects/${created.id}/close`, { version });
     }
     console.log(`  project "${p.title}" -> ${p.targetStatus}`);
+  }
+
+  console.log('== Phase 3.5: SQL — enrollments (see SeedProject.registrantStudentNumbers doc comment) ==');
+  const enrollmentInserts: string[] = [];
+  for (const p of projects as SeedProject[]) {
+    if (!p.registrantStudentNumbers?.length) continue;
+    const projectId = projectIdByTitle.get(p.title)!;
+    const appliedAt = daysFromNow(p.registrationOpenOffsetDays + 1, 10);
+    const confirmedAt = daysFromNow(p.registrationOpenOffsetDays + 1, 11);
+    for (const studentNumber of p.registrantStudentNumbers) {
+      const studentId = studentIdByNumber.get(studentNumber);
+      if (!studentId) throw new Error(`Project "${p.title}" references unknown student number "${studentNumber}".`);
+      enrollmentInserts.push(
+        `INSERT INTO enrollment (id, project_id, student_id, status, applied_at, confirmed_at, version) VALUES ` +
+        `(${sqlString(genId('enr'))}, ${sqlString(projectId)}, ${sqlString(studentId)}, 'CONFIRMED', ${sqlDateTime(appliedAt)}, ${sqlDateTime(confirmedAt)}, 1);`
+      );
+    }
+  }
+  if (enrollmentInserts.length > 0) {
+    runSqlOnServer(['START TRANSACTION;', ...enrollmentInserts, 'COMMIT;'].join('\n'));
+    console.log(`Inserted ${enrollmentInserts.length} CONFIRMED enrollments.`);
   }
 
   console.log('== Phase 4: API — service records ==');

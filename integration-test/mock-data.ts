@@ -132,6 +132,21 @@ export interface SeedProject {
   registrationOpenOffsetDays: number;
   registrationCloseOffsetDays: number;
   targetStatus: ProjectStatusTarget;
+  /**
+   * Student numbers to seed as CONFIRMED enrollments (drives
+   * `enrolledCount`, Project Center/Management's registrant lists, and
+   * Reports' "Project Distribution" tab — `ReportQueryRepository.topProjects`
+   * only counts CONFIRMED/COMPLETED enrollments, so a project with none of
+   * these renders as zero participants). Inserted directly via SQL in
+   * seed.ts (like organizations/users/students), not through the real
+   * `POST /projects/{id}/applications` endpoint: that call only succeeds
+   * while a project's registration window is genuinely open *right now*,
+   * which is true for at most one project in this dataset at any given
+   * time (targetStatus 'registrationOpen') — every other target status's
+   * window has already elapsed by design, so the real API can't be used to
+   * backfill historical registrants no matter when seed.ts runs.
+   */
+  registrantStudentNumbers?: string[];
 }
 
 export const projects: SeedProject[] = [
@@ -143,6 +158,7 @@ export const projects: SeedProject[] = [
     evidenceRequirements: 'On-site photos and signed confirmation form from supervising teacher', location: 'Example Township Middle School Exhibition Areas',
     startOffsetDays: 30, endOffsetDays: 30, registrationOpenOffsetDays: -10, registrationCloseOffsetDays: 20,
     targetStatus: 'registrationOpen',
+    registrantStudentNumbers: ['2024001', '2024002', '2024003'],
   },
   {
     title: 'Rural Teaching Support Team (Summer)', summary: 'Week-long teaching support program at a rural elementary school.',
@@ -152,6 +168,7 @@ export const projects: SeedProject[] = [
     evidenceRequirements: 'Hours certificate from the teaching institution and personal work journal', location: 'Example County Example Town Two Central Elementary School',
     startOffsetDays: -2, endOffsetDays: 3, registrationOpenOffsetDays: -30, registrationCloseOffsetDays: -10,
     targetStatus: 'inProgress',
+    registrantStudentNumbers: ['2023001', '2023002'],
   },
   {
     title: 'School Library Organization and Classification', summary: 'Assist the librarian with organizing books and maintaining the reading environment.',
@@ -161,6 +178,11 @@ export const projects: SeedProject[] = [
     evidenceRequirements: 'Signed confirmation form from the librarian', location: 'Library (H504)',
     startOffsetDays: -60, endOffsetDays: -30, registrationOpenOffsetDays: -90, registrationCloseOffsetDays: -65,
     targetStatus: 'completed',
+    // student001 (Jia Ming) already has an approved PROJECT-sourced service
+    // record against this project (`student001_library_project` below) —
+    // registering him confirms that record's real prerequisite, not just
+    // adding an arbitrary participant.
+    registrantStudentNumbers: ['2024001', '2024002'],
   },
   {
     title: 'Example District C Community Environmental Cleanup', summary: 'Clean community parks and streets, raise environmental awareness.',
@@ -179,6 +201,9 @@ export const projects: SeedProject[] = [
     evidenceRequirements: 'Stamped confirmation letter from the welfare home and activity photos', location: 'Example City First Welfare Home',
     startOffsetDays: -5, endOffsetDays: 10, registrationOpenOffsetDays: -20, registrationCloseOffsetDays: -8,
     targetStatus: 'closed',
+    // student002 (Yun Li) already has an approved PROJECT-sourced service
+    // record against this project (`student002_welfare_project` below).
+    registrantStudentNumbers: ['2024002', '2024004'],
   },
   {
     title: 'Student Council Welcome Party Assistance', summary: 'Assist the student council with the welcome party — check-in, stage setup, crowd control.',
