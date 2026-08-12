@@ -327,7 +327,7 @@ export function ProjectManagement() {
   const canCancel = hasPermission('projects.cancel');
   const canViewRegistrants = hasPermission('applications.read');
   const fieldErrors = useFieldErrors();
-  const { items, page, loading, error, setFilter, setSearch: setPagedSearch, setSort, setPage, refetch } =
+  const { items, page, loading, error, params, setFilter, setSearch: setPagedSearch, setSort, setPage, setPageSize, refetch } =
     usePagedApi<Project>(api.projects.list, {});
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -648,7 +648,7 @@ export function ProjectManagement() {
           );
         })}
       </div>
-      <PageControls page={page} onPageChange={setPage} />
+      <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
 
       {/* Edit modal */}
       {editProject && editForm && (

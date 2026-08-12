@@ -53,7 +53,7 @@ export function StudentList() {
   const [recordsStudent, setRecordsStudent] = useState<Student | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
 
-  const { items, page, loading, error, setPage, setSearch: setApiSearch, setFilter, setSort, refetch } =
+  const { items, page, loading, error, params, setPage, setPageSize, setSearch: setApiSearch, setFilter, setSort, refetch } =
     usePagedApi<Student>(api.students.list, {});
 
   // Only `name` maps onto a real, sortable backend column (`StudentController.SORTABLE` only allows
@@ -424,7 +424,7 @@ export function StudentList() {
           </tbody>
         </table>
         <div className="px-4 pb-4">
-          <PageControls page={page} onPageChange={setPage} />
+          <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
         </div>
       </div>
 
@@ -640,7 +640,7 @@ export function StudentList() {
             </div>
           );
         })}
-        <PageControls page={page} onPageChange={setPage} />
+        <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
       </div>
 
       {recordsStudent && (

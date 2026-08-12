@@ -18,7 +18,7 @@ export function AccountManagement() {
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
   const canManage = hasPermission('accounts.adjust');
-  const { items, page, loading, error, setPage, setSearch: setApiSearch, setFilter, refetch } = usePagedApi<Student>(api.students.list, {});
+  const { items, page, loading, error, params, setPage, setPageSize, setSearch: setApiSearch, setFilter, refetch } = usePagedApi<Student>(api.students.list, {});
   const { grades, classes } = useDictionaries();
   const [search, setSearch] = useState('');
   const [filterGrade, setFilterGrade] = useState('all');
@@ -272,7 +272,7 @@ export function AccountManagement() {
         })}
       </div>
 
-      <PageControls page={page} onPageChange={setPage} />
+      <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
 
       {/* Adjust modal */}
       {showAdjust && (
