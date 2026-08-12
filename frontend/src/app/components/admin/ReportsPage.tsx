@@ -244,7 +244,11 @@ export function ReportsPage() {
                 <CartesianGrid key="grid" strokeDasharray="3 3" stroke="currentColor" className="text-border" />
                 <XAxis key="xaxis" dataKey="month" tick={{ fontSize: 12 }} />
                 <YAxis key="yaxis" tick={{ fontSize: 12 }} />
-                <Tooltip key="tooltip" contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12 }} />
+                <Tooltip key="tooltip"
+                  contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12 }}
+                  labelStyle={{ color: 'var(--foreground)' }}
+                  itemStyle={{ color: 'var(--foreground)' }}
+                />
                 <Line key="line" type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Service Hours (h)" />
               </LineChart>
             </ResponsiveContainer>
@@ -282,7 +286,11 @@ export function ReportsPage() {
                         <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip key="tooltip" contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12 }} />
+                    <Tooltip key="tooltip"
+                      contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12 }}
+                      labelStyle={{ color: 'var(--foreground)' }}
+                      itemStyle={{ color: 'var(--foreground)' }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
