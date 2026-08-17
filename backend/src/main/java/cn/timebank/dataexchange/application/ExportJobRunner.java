@@ -2,6 +2,7 @@ package cn.timebank.dataexchange.application;
 
 import cn.timebank.dataexchange.infrastructure.ServiceRecordExportRepository;
 import cn.timebank.dataexchange.infrastructure.ServiceRecordExportRepository.ExportRow;
+import cn.timebank.dataexchange.infrastructure.StudentExportRepository;
 import cn.timebank.file.application.FileStorage;
 import cn.timebank.reporting.application.ReportService;
 import cn.timebank.reporting.application.dto.CompletionReportDto;
@@ -38,13 +39,16 @@ class ExportJobRunner {
     private final JobProgressWriter progressWriter;
     private final ReportService reportService;
     private final ServiceRecordExportRepository serviceRecordExportRepository;
+    private final StudentExportRepository studentExportRepository;
     private final FileStorage fileStorage;
 
     ExportJobRunner(JobProgressWriter progressWriter, ReportService reportService,
-                     ServiceRecordExportRepository serviceRecordExportRepository, FileStorage fileStorage) {
+                     ServiceRecordExportRepository serviceRecordExportRepository,
+                     StudentExportRepository studentExportRepository, FileStorage fileStorage) {
         this.progressWriter = progressWriter;
         this.reportService = reportService;
         this.serviceRecordExportRepository = serviceRecordExportRepository;
+        this.studentExportRepository = studentExportRepository;
         this.fileStorage = fileStorage;
     }
 
@@ -60,9 +64,11 @@ class ExportJobRunner {
             return;
         }
         try {
-            int rows = "serviceRecords".equals(reportType)
-                    ? writeServiceRecordsCsv(jobId, tempFile)
-                    : writeReportCsv(reportType, tempFile);
+            int rows = switch (reportType) {
+                case "serviceRecords" -> writeServiceRecordsCsv(jobId, tempFile);
+                case "students" -> writeStudentsCsv(jobId, tempFile);
+                default -> writeReportCsv(reportType, tempFile);
+            };
 
             String storageKey = "export_" + jobId + ".csv";
             try (var in = new FileInputStream(tempFile.toFile())) {
@@ -95,6 +101,30 @@ class ExportJobRunner {
                 for (ExportRow row : chunk) {
                     writer.write(csvLine(row.id(), row.studentId(), row.studentName(), String.valueOf(row.serviceDate()),
                             String.valueOf(row.durationMinutes()), String.valueOf(row.creditedUnits()), row.status()));
+                    writer.newLine();
+                    afterId = row.id();
+                }
+                total += chunk.size();
+                progressWriter.renewLeaseAndProgress(jobId, total, total);
+            } while (chunk.size() == CHUNK_SIZE);
+            return total;
+        }
+    }
+
+    /** Student roster export — keyset-paginated, same chunking pattern as service records. */
+    private int writeStudentsCsv(String jobId, Path tempFile) throws Exception {
+        try (BufferedWriter writer = Files.newBufferedWriter(tempFile)) {
+            writer.write("id,studentNumber,displayName,gradeId,classId,status,graduationYear,joinedAt");
+            writer.newLine();
+            String afterId = null;
+            int total = 0;
+            List<StudentExportRepository.ExportRow> chunk;
+            do {
+                chunk = studentExportRepository.page(afterId, CHUNK_SIZE);
+                for (StudentExportRepository.ExportRow row : chunk) {
+                    writer.write(csvLine(row.id(), row.studentNumber(), row.displayName(),
+                            row.gradeId(), row.classId(), row.status(),
+                            String.valueOf(row.graduationYear()), String.valueOf(row.joinedAt())));
                     writer.newLine();
                     afterId = row.id();
                 }

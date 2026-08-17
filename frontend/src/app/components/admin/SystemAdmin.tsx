@@ -940,8 +940,9 @@ export function SystemAdmin() {
               <Download className="w-8 h-8 text-green-500 mb-3" />
               <h3 className="text-foreground mb-1">{t('admin.system.exportData')}</h3>
               <p className="text-xs text-muted-foreground mb-4">{t('admin.system.exportDesc')}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 {([
+                  { label: t('admin.system.exportStudents'), type: 'students' },
                   { label: t('admin.system.exportAllRecords'), type: 'serviceRecords' },
                   { label: t('admin.system.exportTransactions'), type: 'serviceHours' },
                   { label: t('admin.system.exportReports'), type: 'participation' },

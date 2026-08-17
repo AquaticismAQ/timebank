@@ -22,7 +22,7 @@ import java.util.Set;
 class ExportServiceImpl implements ExportService {
 
     static final Set<String> SUPPORTED_REPORT_TYPES = Set.of(
-            "participation", "completion", "serviceHours", "reviewEfficiency", "topProjects", "serviceRecords");
+            "participation", "completion", "serviceHours", "reviewEfficiency", "topProjects", "serviceRecords", "students");
 
     private final JobRepository jobRepository;
     private final ExportJobRunner exportJobRunner;

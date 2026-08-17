@@ -1362,6 +1362,7 @@
       "uploadStudentFile": "Upload Student File",
       "exportData": "Export Data",
       "exportDesc": "Exports are async tasks; download via in-app notification when ready",
+      "exportStudents": "Students",
       "exportAllRecords": "All Service Records",
       "exportTransactions": "Account Transactions",
       "exportReports": "Reports",

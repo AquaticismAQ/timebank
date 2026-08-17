@@ -1362,6 +1362,7 @@
       "uploadStudentFile": "上传学生文件",
       "exportData": "导出数据",
       "exportDesc": "导出为异步任务，完成后通过站内通知下载",
+      "exportStudents": "学生信息",
       "exportAllRecords": "全部服务记录",
       "exportTransactions": "账户流水",
       "exportReports": "统计报表",
