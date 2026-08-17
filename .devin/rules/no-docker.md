@@ -1,0 +1,17 @@
+---
+description: Hard constraint — no Docker/containers anywhere in this project
+trigger: always_on
+---
+
+# No Docker
+
+**There is no Docker in this project** — not in development, not in tests, not in deployment.
+
+- App runs as a **systemd unit** from a fat JAR
+- Tests run against **real MySQL on the shared test server** (env vars for credentials)
+- No Testcontainers — per-run schema isolation via `MySqlTestSchemaExtension`
+- No `docker compose`, no Dockerfile, no container registry
+- MinIO (when added) runs as a **native binary under systemd**, not a container
+- Deployment: `backend/scripts/deploy.sh` → `mvn package` → `systemctl restart`
+
+If you're tempted to suggest Docker for anything, the answer is: systemd unit + real MySQL.

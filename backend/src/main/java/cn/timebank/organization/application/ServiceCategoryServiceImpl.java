@@ -32,6 +32,13 @@ class ServiceCategoryServiceImpl implements ServiceCategoryService {
     @Cacheable(value = CacheConfig.DICTIONARIES, key = "'serviceCategories:' + #resolvedLanguage")
     public java.util.List<ServiceCategoryDto> list(String resolvedLanguage) {
         return repository.findAll().stream()
+                .sorted(java.util.Comparator.comparing(ServiceCategory::getCode,
+                        (a, b) -> {
+                            boolean aOther = a.endsWith("_other");
+                            boolean bOther = b.endsWith("_other");
+                            if (aOther != bOther) return aOther ? 1 : -1;
+                            return a.compareTo(b);
+                        }))
                 .map(c -> toDto(c, resolvedLanguage))
                 .toList();
     }

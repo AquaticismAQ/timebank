@@ -1,6 +1,6 @@
 # 011 — Grade filter dropdown stays in the old language after switching UI language without a reload
 
-Status: **Not fixed** (found and confirmed live while verifying issue 010; out of scope for that fix, logged separately per the bug-tracking convention)
+Status: **Fixed and verified** (2026-08-17)
 
 ## Symptom
 
@@ -54,7 +54,7 @@ Not yet fixed — no test plan to report.
 
 ## Resolution
 
-Not yet fixed.
+Fixed by [issue 024](./024-service-category-dropdown-i18n-and-ordering.md)'s fix to `useDictionaries.ts`: the module-level cache is now language-aware (`cacheLanguage` tracking + `i18n.language` in the `useEffect` dependency array), and `changeLanguage()` in `lib/language.ts` calls `clearDictionaryCache()` to proactively invalidate the cache on language switch. Since grades and service categories share the same `useDictionaries` cache, both dropdowns now re-fetch with the new `Accept-Language` immediately on language toggle, without a page reload.
 
 ---
 *Found live on `https://tb.example.com/` (Admin → Student Management, EN/中 toggle without a page reload) while verifying issue 010, 2026-08-10. Confirmed pre-existing (unrelated to issue 010's change — a full reload immediately shows the correct language) and confirmed NOT a regression before logging it here rather than fixing it silently.*

@@ -1,0 +1,60 @@
+---
+description: Domain invariants and business rules that must never be violated
+trigger: always_on
+---
+
+# Domain Invariants
+
+These are load-bearing rules from the institutional design and API contract. Violating any of them is a defect.
+
+## Ledger & Accounts
+
+- **Balances change only through `AccountService`** — no direct SQL update, no balance-setter
+- **Every balance change is an immutable `AccountTransaction`** — corrections/reversals append opposite-signed entries
+- **Crediting calculation uses integers only** — minutes for duration, centi-coins for amounts, no floats/doubles/BigDecimal
+- **Rounding happens at crediting only** — nearest 30 minutes, per the versioned rule
+
+## The Approval Transaction (5 effects, atomic)
+
+Review approval must produce exactly these in ONE transaction, or none:
+1. Review decision event (append-only)
+2. Service record status update
+3. Account transaction (ledger credit)
+4. Student progress update
+5. Notification
+
+**Never split this.** A partially-applied approval is the failure mode this entire design prevents.
+
+## Status Machines
+
+- **Backend owns all status transitions** — frontend displays state, never derives it
+- **Use action endpoints** (`/submit`, `/publish`, `/close`), never `PATCH {status}`
+- Defined for: `Project`, `EventProposal`, `Application` (Enrollment), `ServiceRecord`, `Case`
+
+## Event Proposal → Project Pipeline
+
+- A proposal is NOT a project until approved
+- Approval must **atomically** generate the project draft AND backfill `approvedProjectId`
+- Never create the project first and link separately
+
+## Reviews & Decisions
+
+- **Non-overwritable** — changing a decision appends a new event, never mutates the old one
+- Review history is complete and readable
+
+## Data Privacy
+
+- Guardian/contact fields excluded from list responses
+- Evidence file access requires permission check + short-lived URL + audit log for cross-student access
+- Never log tokens, session IDs, evidence URLs, or personal-data bodies
+
+## Time Coins — Not Currency
+
+- Never call them "tokens", "currency", or use financial vocabulary (代币/发币/挖矿/提现/钱包)
+- No transfer between students, no cash-out, no tradeable semantics
+- Phase 3/4 features are feature-flagged, show "Not yet available", never half-built
+
+## IDs
+
+- Opaque server-generated strings — never parse or derive meaning from format
+- Generated via `OpaqueIds` (32-char)

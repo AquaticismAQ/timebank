@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import i18n from '../../i18n';
 import { api } from './client';
 import type { Grade, SchoolClass, AcademicYear, ServiceCategory } from './types';
 
@@ -9,6 +10,12 @@ import type { Grade, SchoolClass, AcademicYear, ServiceCategory } from './types'
  * near-static lists on its own mount. Module-level, not a Context — nothing
  * here needs to be provider-scoped or mockable per test, it's the same for
  * every logged-in user.
+ *
+ * The cache is language-keyed: dictionary `name` fields are resolved
+ * server-side per `Accept-Language`, so switching language must trigger a
+ * re-fetch rather than serving stale names from the previous language.
+ * Resolves issue 011 (grade dropdown staleness) and issue 024 (service
+ * category dropdown staleness) — both share this cache.
  */
 let cache: Promise<{
   grades: Grade[];
@@ -16,16 +23,25 @@ let cache: Promise<{
   academicYears: AcademicYear[];
   serviceCategories: ServiceCategory[];
 }> | null = null;
+let cacheLanguage: string | null = null;
+
+/** Clear the dictionary cache so the next access re-fetches with the current language. */
+export function clearDictionaryCache(): void {
+  cache = null;
+  cacheLanguage = null;
+}
 
 function loadDictionaries() {
-  if (!cache) {
+  const lang = i18n.language;
+  if (!cache || cacheLanguage !== lang) {
     cache = Promise.all([
       api.dictionaries.grades(),
       api.dictionaries.classes(),
       api.dictionaries.academicYears(),
       api.dictionaries.serviceCategories(),
     ]).then(([grades, classes, academicYears, serviceCategories]) => ({ grades, classes, academicYears, serviceCategories }))
-      .catch(err => { cache = null; throw err; });
+      .catch(err => { cache = null; cacheLanguage = null; throw err; });
+    cacheLanguage = lang;
   }
   return cache;
 }
@@ -49,7 +65,7 @@ export function useDictionaries(): Dictionaries {
       if (!cancelled) setState(s => ({ ...s, loading: false }));
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [i18n.language]);
 
   return state;
 }

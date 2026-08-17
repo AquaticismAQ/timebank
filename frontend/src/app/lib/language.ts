@@ -1,5 +1,6 @@
 import i18n from '../../i18n';
 import { api } from '../api/client';
+import { clearDictionaryCache } from '../api/useDictionaries';
 
 /**
  * I3.4: the three places a user can change language (`LanguageSwitcher`,
@@ -12,5 +13,6 @@ import { api } from '../api/client';
 export function changeLanguage(code: 'zh' | 'en'): void {
   i18n.changeLanguage(code);
   localStorage.setItem('timebank-lang', code);
+  clearDictionaryCache();
   api.auth.updateProfile({ preferredLanguage: code === 'zh' ? 'zh-CN' : 'en' }).catch(() => {});
 }
