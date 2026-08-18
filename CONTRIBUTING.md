@@ -99,10 +99,9 @@ All sub-documents cross-reference each other and link back to `TimeBankDesign.md
 
 4. **Push** your branch and open a **Pull Request** against `main`.
 
-5. In your PR description, briefly explain:
-   - What changed and why
-   - Which documents are affected
-   - Any cross-references updated
+5. Fill out the PR template that's pre-populated when you open the PR
+   (`.github/PULL_REQUEST_TEMPLATE.md`) — Summary, Testing, Security &
+   Privacy Impact, Compatibility, and Rollback sections.
 
 ---
 
