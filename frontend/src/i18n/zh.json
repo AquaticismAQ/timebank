@@ -2,7 +2,7 @@
   "common": {
     "appName": "时间银行",
     "schoolFullName": "示例中学学生志愿服务管理平台",
-    "schoolFooter": "示例中学学生志愿服务时间银行 · 学生发展中心 H300 · Wei 陈老师",
+    "schoolFooter": "示例中学学生志愿服务时间银行 · 学生发展中心 H300 · 魏晨老师",
     "loginNotice": "本系统仅限示例中学中学部师生使用 · 示例中学学生发展中心 H300",
     "theme": {
       "light": "浅色",
@@ -1304,9 +1304,9 @@
       "inactive": "停用",
       "edit": "编辑",
       "nameLabel": "姓名",
-      "namePlaceholder": "如：Alex 林",
+      "namePlaceholder": "如：Louis 余",
       "emailLabel": "邮箱",
-      "emailPlaceholder": "如：alex.lin@example-school.cn",
+      "emailPlaceholder": "如：louis.yu@example.edu.cn",
       "rolesLabel": "角色",
       "multiSelect": "可多选",
       "scopeGradesLabel": "年级绑定",
@@ -1353,7 +1353,7 @@
       "ruleMustBePositive": "「{{label}}」必须大于 0",
       "checkConfirmationBox": "请勾选确认方可保存",
       "adminOnlyRules": "仅系统管理员可修改规则",
-      "adminOnlyRulesDesc": "规则修改会立即重新计算全体学生达标状态，请联系 Wei 陈老师或 Mei 赵老师操作。",
+      "adminOnlyRulesDesc": "规则修改会立即重新计算全体学生达标状态，请联系 魏晨老师或 Vera 徐老师操作。",
       "importHistoricalRecords": "导入历史台账",
       "importHistoricalDesc": "从 Excel 模板批量导入既有纸质服务记录",
       "downloadTemplate": "下载模板",
@@ -1416,9 +1416,9 @@
         "createTitle": "创建用户",
         "editTitle": "编辑用户",
         "name": "姓名 *",
-        "namePlaceholder": "例：Alex 林",
+        "namePlaceholder": "例：Louis 余",
         "email": "邮箱 *",
-        "emailPlaceholder": "例：alex.lin@example-school.cn",
+        "emailPlaceholder": "例：louis.yu@example.edu.cn",
         "roles": "角色 *（可多选）",
         "accountStatus": "账号状态",
         "accountStatusDesc": "停用后该用户将无法登录",
@@ -1480,7 +1480,7 @@
         "logModifyRule": "修改规则：{{title}}",
         "logRuleTarget": "全体学生达标状态将重新计算",
         "adminOnly": "仅系统管理员可修改规则",
-        "adminOnlyDesc": "规则修改会立即重新计算全体学生的达标状态，请联系 Wei 陈老师或 Mei 赵老师进行操作。"
+        "adminOnlyDesc": "规则修改会立即重新计算全体学生的达标状态，请联系 魏晨老师或 Vera 徐老师进行操作。"
       },
       "import": {
         "importHistory": "导入历史台账",
@@ -1537,7 +1537,7 @@
         "storageUsage": "存储用量",
         "storageUsageValue": "2.3 GB / 10 GB",
         "supportContact": "技术支持",
-        "supportContactValue": "学生发展中心 H300 · Wei 陈老师"
+        "supportContactValue": "学生发展中心 H300 · 魏晨老师"
       }
     },
     "profile": {

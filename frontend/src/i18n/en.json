@@ -472,7 +472,7 @@
       "rights1": "You have the right to access all your service records and review history. If you find errors or disputes, you can file an appeal at the Audit Center or contact the Student Development Center directly.",
       "rights2": "After graduation, you may request an export of your personal service records (PDF format). Please submit the request to an administrator before leaving school.",
       "rights3": "If you have any questions about privacy protection, please email the Student Development Center or visit the H300 office in person.",
-      "privacyFooter": "This statement is formulated in accordance with the Personal Information Protection Law of the People's Republic of China and Example Township Middle School Student Data Management Measures, last updated July 2026. Any policy changes will be announced via system notifications.",
+      "privacyFooter": "This statement is formulated in accordance with the Personal Information Protection Law of the People's Republic of China and Example City HD School Student Data Management Measures, last updated July 2026. Any policy changes will be announced via system notifications.",
       "understood": "I Understand"
     },
     "notifications": {
@@ -526,7 +526,7 @@
       "targetParticipantsPlaceholder": "e.g., all students, community elderly, Grade 7-8",
       "volunteerTasks": "Volunteer Task Assignment",
       "volunteerTasksPlaceholder": "List each role and its responsibilities",
-      "initiator": "Student Initiator: Jia Ming (current logged-in user, auto-filled)",
+      "initiator": "Student Initiator: Zhang Ming (current logged-in user, auto-filled)",
       "coOrganizers": "Co-organizers",
       "coOrganizersPlaceholder": "Search classmates by name (optional)",
       "mentorTeacher": "Mentor Teacher",
@@ -673,7 +673,7 @@
       "formatPlaceholder": "e.g. on-site promotion, workshop, online tutoring, etc.",
       "participantsPlaceholder": "e.g. all students, community seniors, Grade 7-8, etc.",
       "tasksPlaceholder": "List each role and its responsibilities",
-      "initiatorAuto": "Student Initiator: Jia Ming (current logged-in user, auto-filled)",
+      "initiatorAuto": "Student Initiator: Zhang Ming (current logged-in user, auto-filled)",
       "mentorPlaceholder": "Search teachers by name",
       "contactPlaceholder": "Email / phone for reviewer to contact",
       "riskPlaceholder": "Identify potential risks and explain mitigation measures",
@@ -1304,9 +1304,9 @@
       "inactive": "Inactive",
       "edit": "Edit",
       "nameLabel": "Name",
-      "namePlaceholder": "e.g. Alex Lin",
+      "namePlaceholder": "e.g. Louis Yu",
       "emailLabel": "Email",
-      "emailPlaceholder": "e.g. alex.lin@example-school.cn",
+      "emailPlaceholder": "e.g. louis.yu@example.edu.cn",
       "rolesLabel": "Roles",
       "multiSelect": "multi-select",
       "scopeGradesLabel": "Grade Bonding",
@@ -1353,7 +1353,7 @@
       "ruleMustBePositive": "\"{{label}}\" must be greater than 0",
       "checkConfirmationBox": "Please check the confirmation box to save",
       "adminOnlyRules": "Only system admins can modify rules",
-      "adminOnlyRulesDesc": "Rule changes will immediately recalculate all students' compliance status. Please contact Wei Chen or Mei Zhao to proceed.",
+      "adminOnlyRulesDesc": "Rule changes will immediately recalculate all students' compliance status. Please contact Wei Chen or Vera Xu to proceed.",
       "importHistoricalRecords": "Import Historical Records",
       "importHistoricalDesc": "Bulk import existing paper service records from Excel template",
       "downloadTemplate": "Download Template",
@@ -1416,9 +1416,9 @@
         "createTitle": "Create User",
         "editTitle": "Edit User",
         "name": "Name *",
-        "namePlaceholder": "e.g., Alex Lin",
+        "namePlaceholder": "e.g., Louis Yu",
         "email": "Email *",
-        "emailPlaceholder": "e.g., alex.lin@example-school.cn",
+        "emailPlaceholder": "e.g., louis.yu@example.edu.cn",
         "roles": "Roles * (multi-select)",
         "accountStatus": "Account Status",
         "accountStatusDesc": "When disabled, this user cannot log in",
@@ -1480,7 +1480,7 @@
         "logModifyRule": "Modify rule: {{title}}",
         "logRuleTarget": "All students' completion status will be recalculated",
         "adminOnly": "Only system administrators can modify rules",
-        "adminOnlyDesc": "Rule changes will immediately recalculate all students' completion status. Please contact Teacher Wei Chen or Teacher Mei Zhao to make changes."
+        "adminOnlyDesc": "Rule changes will immediately recalculate all students' completion status. Please contact Teacher Wei Chen or Teacher Vera Xu to make changes."
       },
       "import": {
         "importHistory": "Import Historical Records",
@@ -1576,7 +1576,7 @@
       "rights1": "You have the right to access your own account information and audit history. Contact the system administrator for any discrepancies.",
       "rights2": "System administrators can export full audit logs for compliance review purposes.",
       "rights3": "If you have questions about privacy protection, please email the Student Development Center or visit H300 in person.",
-      "privacyFooter": "This statement is formulated in accordance with the Personal Information Protection Law of the People's Republic of China and Example Township Middle School Student Data Management Measures, last updated July 2026. Any policy changes will be announced via system notifications.",
+      "privacyFooter": "This statement is formulated in accordance with the Personal Information Protection Law of the People's Republic of China and Example City HD School Student Data Management Measures, last updated July 2026. Any policy changes will be announced via system notifications.",
       "understood": "I Understand"
     }
   },
