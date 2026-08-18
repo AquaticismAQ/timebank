@@ -1,7 +1,7 @@
 name: Bug report
 description: Something in the app, backend, or docs isn't working as expected
 title: "[Bug]: "
-labels: ["type: bug", "status: needs-triage"]
+labels: ["type: fix", "status: needs-triage"]
 body:
   - type: markdown
     attributes:

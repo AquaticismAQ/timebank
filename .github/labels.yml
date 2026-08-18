@@ -3,12 +3,14 @@
 # overwritten on the next push to main. See .github/LABELS.md for the policy.
 
 # ── Type (exactly one per issue/PR) ─────────────────────────────────────
-- name: "type: bug"
+- name: "type: fix"
   color: "d73a4a"
   description: Something isn't working
-- name: "type: enhancement"
+  aliases: ["type: bug"]
+- name: "type: feat"
   color: "a2eeef"
   description: New feature or improvement request
+  aliases: ["type: enhancement"]
 - name: "type: documentation"
   color: "0075ca"
   description: Design/Docs content — errors, gaps, translation sync
@@ -21,6 +23,9 @@
 - name: "type: refactor"
   color: "c5def5"
   description: Code change with no behavior change
+- name: "type: test"
+  color: "bfe5bf"
+  description: Test-only change, no production behavior change
 - name: "type: security"
   color: "b60205"
   description: Security-relevant issue

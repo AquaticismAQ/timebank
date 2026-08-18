@@ -16,6 +16,11 @@ not turn into a `Docs/issues/` entry once someone verifies them live.
 ## Categories
 
 - **`type: *`** — exactly one per issue/PR. What kind of thing this is.
+  Names deliberately match the Conventional Commits types enforced on PR
+  titles (`fix`, `feat`, `docs`, `chore`, `refactor`, `test`), not GitHub's
+  traditional `bug`/`enhancement` wording — so a PR's `type: *` label and
+  its title prefix should always agree. `type: question` and
+  `type: security` are the two exceptions with no commit-type equivalent.
 - **`status: *`** — exactly one, and it should reflect current lifecycle
   state (defaults to `status: needs-triage` on creation via the issue
   templates; move it forward as it's worked).
@@ -35,3 +40,18 @@ not turn into a `Docs/issues/` entry once someone verifies them live.
 Add an entry to `.github/labels.yml` (name, color, description) in a PR.
 Once merged to `main`, the sync workflow creates it on the repo. Don't
 create ad-hoc labels through the GitHub UI for anything meant to persist.
+
+## Renaming a label
+
+Don't just change `name:` in place — the sync workflow runs with
+`delete-other-labels: true`, so a bare rename deletes the old label
+(stripping it from any issue/PR still wearing it) and creates the new one
+empty. Add an `aliases:` list with the old name(s) instead, e.g.:
+
+```yaml
+- name: "type: fix"
+  aliases: ["type: bug"]
+```
+
+`EndBug/label-sync` then renames the existing label in place, carrying its
+associations forward.
