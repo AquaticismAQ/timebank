@@ -92,8 +92,10 @@ logging:
 timebank:
   environment: ${TIMEBANK_ENVIRONMENT:unspecified}
   security:
-    # Contract §2.3. Comma-separated. The test-server frontend origin is the
-    # sane default; production deployments override via env var.
+    # Contract §2.3. Comma-separated. The default below is a placeholder
+    # (this repo is public) — the real test-server origin must be set via
+    # TIMEBANK_ALLOWED_ORIGINS on the server (see test-server-credits.md),
+    # not left to this fallback, or CORS breaks for the real frontend.
     allowed-origins: ${TIMEBANK_ALLOWED_ORIGINS:https://tb.example.com}
   auth:
     lockout:

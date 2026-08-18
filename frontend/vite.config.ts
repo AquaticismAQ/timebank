@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode, command }) => {
   // I0.12: point the local dev server at the remote test server as if it
   // were same-origin. This sidesteps two things that would otherwise break
-  // a locally-run SPA talking to https://tb.example.com — there is no CORS
+  // a locally-run SPA talking to the real test server — there is no CORS
   // config on the backend (SecurityConfig.java has none), and the session
   // cookie is `SameSite=Lax` (application.yml), which a true cross-origin
   // fetch would silently drop. See frontend/README.md for the full recipe.

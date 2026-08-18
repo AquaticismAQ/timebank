@@ -63,13 +63,13 @@ There is no lint, test, or typecheck script in `frontend/package.json`; do not a
 
 There is no frontend mock mode. It was removed 2026-08-07. Every `api.*` method in `frontend/src/app/api/client.ts` calls the real backend through `api/http.ts`; `frontend/src/app/mock/`, `api/config.ts`, `isRealDomain`, and `VITE_API_REAL_DOMAINS` no longer exist. Do not recreate mock branches or bypass the API client.
 
-`pnpm dev` requires a real backend proxy target. Copy `frontend/.env.example` to the git-ignored `frontend/.env.local` and set `VITE_DEV_PROXY_TARGET=https://tb.example.com`. `vite.config.ts` intentionally fails at startup without it. Production is same-origin: nginx serves the static bundle and proxies `/api/*`, so `frontend/.env.production` is intentionally empty of API toggles.
+`pnpm dev` requires a real backend proxy target. Copy `frontend/.env.example` to the git-ignored `frontend/.env.local` and set `VITE_DEV_PROXY_TARGET` to the real test-server URL (see the untracked `test-server-credits.md` — this repo is public, so `tb.example.com` elsewhere in these docs is a placeholder, not the real host). `vite.config.ts` intentionally fails at startup without it. Production is same-origin: nginx serves the static bundle and proxies `/api/*`, so `frontend/.env.production` is intentionally empty of API toggles.
 
 `frontend/src/app/api/useApi.ts` provides `usePagedApi` and `useApi`. `api/http.ts` handles envelope unwrapping, CSRF, `Accept-Language`, idempotency keys, session-expiry redirects, and `ApiError` classification. Continue using these shared paths rather than component-specific `fetch` calls.
 
 ### Deploy and browser verification
 
-`https://tb.example.com/` is the shared test deployment, not a production school deployment. The server has no Node/pnpm. Build locally and deploy static output with:
+The shared test deployment (real hostname in the untracked `test-server-credits.md`) is not a production school deployment. The server has no Node/pnpm. Build locally and deploy static output with:
 
 ```bash
 frontend/scripts/deploy.sh                    # defaults to root@tb.example.com

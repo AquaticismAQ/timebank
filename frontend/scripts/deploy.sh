@@ -14,10 +14,12 @@
 #
 # Usage (from a workstation with SSH key access to the server):
 #   frontend/scripts/deploy.sh [user@host]
+# The real host isn't hardcoded here (this repo is public) — pass it as an
+# arg, or export TIMEBANK_DEPLOY_TARGET (see the untracked test-server-credits.md).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-TARGET="${1:-root@tb.example.com}"
+TARGET="${1:-${TIMEBANK_DEPLOY_TARGET:-root@tb.example.com}}"
 REMOTE_DOCROOT="/var/www/timebank"
 
 echo "deploy.sh: installing dependencies..."

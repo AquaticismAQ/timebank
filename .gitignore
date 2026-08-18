@@ -41,5 +41,9 @@ test-server-credits.md
 *.key
 id_rsa*
 
+# Real test-account credentials for the live shared test server — this repo
+# is public; keep the real file locally only (not rotated, just untracked)
+Docs/TestAccounts.md
+
 # Playwright MCP snapshots
 .playwright-mcp/

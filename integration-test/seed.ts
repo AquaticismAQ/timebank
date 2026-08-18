@@ -10,7 +10,8 @@
 //
 // Required env vars (no secrets are hardcoded here):
 //   TIMEBANK_DB_USERNAME, TIMEBANK_DB_PASSWORD   the app DB account (timebank_app)
-// Optional:
+// Optional (real defaults live in the untracked test-server-credits.md — this
+// repo is public, so the fallbacks below are placeholders, not the real host):
 //   TIMEBANK_SSH_TARGET   default root@tb.example.com
 //   TIMEBANK_BASE_URL     default https://tb.example.com
 //
