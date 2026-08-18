@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, ChevronDown, ChevronUp, Download, Upload, AlertCircle, Pencil, X, Save } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, AlertCircle, Pencil, X, Save } from 'lucide-react';
 import { type Student } from '../../api/types';
 import { formatCoins, minutesToHours, formatGradeClass, formatClassName } from '../../lib/format';
 import { toast } from 'sonner';
@@ -269,16 +269,6 @@ export function StudentList() {
         <div>
           <h1 className="text-foreground">{t('admin.students.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('admin.students.count', { count: students.length })}</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => toast.info('Bulk export coming soon')}
-            className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-xl text-sm text-muted-foreground hover:bg-accent">
-            <Download className="w-4 h-4" /> {t('admin.students.export')}
-          </button>
-          <button onClick={() => toast.info('Bulk import coming soon')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-xl text-sm hover:opacity-90">
-            <Upload className="w-4 h-4" /> {t('admin.students.import')}
-          </button>
         </div>
       </div>
 

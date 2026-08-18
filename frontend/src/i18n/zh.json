@@ -361,7 +361,12 @@
       "supervisorKindInternal": "校内教职工",
       "supervisorKindStudent": "其他学生",
       "supervisorKindExternal": "外部人员（手动填写）",
-      "supervisorSearchPlaceholder": "按姓名搜索..."
+      "supervisorSearchPlaceholder": "按姓名搜索...",
+      "edit": "编辑",
+      "revert": "撤回",
+      "editDraftTitle": "编辑草稿记录",
+      "revertedToDraft": "记录已撤回为草稿",
+      "draftLoaded": "草稿已载入，可编辑后提交"
     },
     "account": {
       "title": "时间币账户",
@@ -1362,6 +1367,7 @@
       "uploadStudentFile": "上传学生文件",
       "exportData": "导出数据",
       "exportDesc": "导出为异步任务，完成后通过站内通知下载",
+      "exportStudents": "学生信息",
       "exportAllRecords": "全部服务记录",
       "exportTransactions": "账户流水",
       "exportReports": "统计报表",

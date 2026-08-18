@@ -361,7 +361,12 @@
       "supervisorKindInternal": "School staff member",
       "supervisorKindStudent": "Another student",
       "supervisorKindExternal": "External (enter manually)",
-      "supervisorSearchPlaceholder": "Search by name..."
+      "supervisorSearchPlaceholder": "Search by name...",
+      "edit": "Edit",
+      "revert": "Revert",
+      "editDraftTitle": "Edit Draft Record",
+      "revertedToDraft": "Record reverted to draft",
+      "draftLoaded": "Draft loaded for editing"
     },
     "account": {
       "title": "Time Coin Account",
@@ -1362,6 +1367,7 @@
       "uploadStudentFile": "Upload Student File",
       "exportData": "Export Data",
       "exportDesc": "Exports are async tasks; download via in-app notification when ready",
+      "exportStudents": "Students",
       "exportAllRecords": "All Service Records",
       "exportTransactions": "Account Transactions",
       "exportReports": "Reports",

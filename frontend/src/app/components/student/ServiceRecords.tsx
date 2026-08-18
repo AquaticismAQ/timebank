@@ -129,7 +129,7 @@ export function ServiceRecords() {
   // record, then submit) from "brand new record" (POST) — without this,
   // the resubmit buttons below had nothing to route through but `create()`,
   // silently producing a duplicate record instead of fixing the returned one.
-  const [editing, setEditing] = useState<{ id: string; version: number } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; version: number; status?: RecordStatus } | null>(null);
 
   // PROJECT source: the student's own confirmed registrations (issue 03 §3.1 — only
   // a project the student is actually CONFIRMED for is selectable), loaded once per
@@ -169,6 +169,14 @@ export function ServiceRecords() {
   };
 
   const openResubmit = async (rec: ServiceRecord) => {
+    await openEdit(rec, t('student.records.loadedReturned'));
+  };
+
+  const openEditDraft = async (rec: ServiceRecord) => {
+    await openEdit(rec, t('student.records.draftLoaded'));
+  };
+
+  const openEdit = async (rec: ServiceRecord, toastMsg: string) => {
     // `list()`'s real-branch mapping always returns `evidenceFiles: []` (no
     // denormalized name/size/url without a per-file `GET /files/{id}` —
     // see `fromServiceRecordDto`'s own note in client.ts); only `.get(id)`
@@ -182,7 +190,7 @@ export function ServiceRecords() {
       else toast.error(t('common.unknownError'));
       return;
     }
-    setEditing({ id: full.id, version: full.version });
+    setEditing({ id: full.id, version: full.version, status: full.status });
     const start = isoToLocalDateTime(full.startAt);
     const end = isoToLocalDateTime(full.endAt);
     setFormData({
@@ -211,7 +219,7 @@ export function ServiceRecords() {
     setEvidenceFiles(full.evidenceFiles);
     setStep(0);
     setView('new');
-    toast.info(t('student.records.loadedReturned'));
+    toast.info(toastMsg);
   };
 
   const buildRecordPayload = () => {
@@ -251,7 +259,7 @@ export function ServiceRecords() {
       // A submit-time-only validation failure below must not leave `editing`
       // holding the pre-save version — a retry's PATCH would send it and get
       // a spurious 409 from the server, which has already moved on (issue 014).
-      if (editing) setEditing({ id: record.id, version: record.version });
+      if (editing) setEditing({ id: record.id, version: record.version, status: editing.status });
       await api.serviceRecords.submit(record.id, submitKeyRef.current);
       submitKeyRef.current = newIdempotencyKey();
       fieldErrors.clearAll();
@@ -307,6 +315,17 @@ export function ServiceRecords() {
     }
   };
 
+  const handleRevert = async (id: string) => {
+    try {
+      await api.serviceRecords.withdraw(id);
+      toast.success(t('student.records.revertedToDraft'));
+      refetch();
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(t('common.unknownError'));
+    }
+  };
+
   // Only 'project'/'self' are ever chooseable — 'external' is historical-only (§7.3):
   // it can only appear here already-selected-and-locked, when resubmitting an
   // existing record created before this change, never as a fresh pick.
@@ -346,7 +365,7 @@ export function ServiceRecords() {
           <button onClick={() => { setView('list'); setStep(0); setEditing(null); }} className="text-muted-foreground hover:text-foreground p-1">
             <X className="w-5 h-5" />
           </button>
-          <h2 className="text-foreground flex-1">{t(editing ? 'student.records.editTitle' : 'student.records.submitTitle')}</h2>
+          <h2 className="text-foreground flex-1">{t(editing ? (editing.status === 'draft' ? 'student.records.editDraftTitle' : 'student.records.editTitle') : 'student.records.submitTitle')}</h2>
         </div>
 
         {/* Step indicator */}
@@ -826,6 +845,10 @@ export function ServiceRecords() {
                           )}
                           {rec.status === 'draft' && (
                             <>
+                              <button onClick={() => openEditDraft(rec)}
+                                className="text-xs px-2 py-1 border border-border text-foreground rounded-lg hover:bg-accent">
+                                {t('student.records.edit')}
+                              </button>
                               <button onClick={() => handleDeleteDraft(rec.id)}
                                 className="text-xs px-2 py-1 border border-border text-muted-foreground rounded-lg hover:bg-accent">
                                 {t('common.delete')}
@@ -836,16 +859,16 @@ export function ServiceRecords() {
                               </button>
                             </>
                           )}
+                          {rec.status === 'submitted' && (
+                            <button onClick={() => handleRevert(rec.id)}
+                              className="text-xs px-2 py-1 border border-border text-foreground rounded-lg hover:bg-accent">
+                              {t('student.records.revert')}
+                            </button>
+                          )}
                           {rec.status === 'rejected' && (
                             <button onClick={() => setCaseFiling({ type: 'appeal', record: rec })}
                               className="text-xs px-2 py-1 border border-border text-foreground rounded-lg hover:bg-accent">
                               {t('student.records.appeal')}
-                            </button>
-                          )}
-                          {rec.status === 'approved' && (
-                            <button onClick={() => setCaseFiling({ type: 'supplement', record: rec })}
-                              className="text-xs px-2 py-1 border border-border text-foreground rounded-lg hover:bg-accent">
-                              {t('student.records.supplement')}
                             </button>
                           )}
                         </div>
@@ -931,6 +954,10 @@ export function ServiceRecords() {
                         )}
                         {rec.status === 'draft' && (
                           <>
+                            <button onClick={() => openEditDraft(rec)}
+                              className="text-xs px-3 py-1.5 border border-border text-foreground rounded-lg hover:bg-accent">
+                              {t('student.records.edit')}
+                            </button>
                             <button onClick={() => handleDeleteDraft(rec.id)}
                               className="text-xs px-3 py-1.5 border border-border text-muted-foreground rounded-lg hover:bg-accent flex items-center gap-1">
                               <Trash2 className="w-3 h-3" /> {t('common.delete')}
@@ -941,13 +968,13 @@ export function ServiceRecords() {
                             </button>
                           </>
                         )}
+                        {rec.status === 'submitted' && (
+                          <button onClick={() => handleRevert(rec.id)}
+                            className="text-xs px-3 py-1.5 border border-border text-foreground rounded-lg hover:bg-accent">{t('student.records.revert')}</button>
+                        )}
                         {rec.status === 'rejected' && (
                           <button onClick={() => setCaseFiling({ type: 'appeal', record: rec })}
                             className="text-xs px-3 py-1.5 border border-border text-foreground rounded-lg hover:bg-accent">{t('student.records.appeal')}</button>
-                        )}
-                        {rec.status === 'approved' && (
-                          <button onClick={() => setCaseFiling({ type: 'supplement', record: rec })}
-                            className="text-xs px-3 py-1.5 border border-border text-foreground rounded-lg hover:bg-accent">{t('student.records.supplement')}</button>
                         )}
                       </div>
                     </div>
