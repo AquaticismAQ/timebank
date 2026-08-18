@@ -1,0 +1,54 @@
+name: CodeQL
+
+# NOTE: CodeQL analysis on private repos requires GitHub Advanced Security
+# to be enabled for the repo/org. This will run cleanly once the repo is
+# public (CodeQL is free for public repos); until then these runs may be
+# skipped/blocked by GitHub rather than by anything in this workflow.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 1" # weekly, Monday
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: java-kotlin
+            build-mode: manual
+    steps:
+      - uses: actions/checkout@v4
+
+      - if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      # pom.xml lives in backend/, not the repo root, so autobuild's
+      # heuristics can't be trusted to find it — build explicitly instead.
+      - if: matrix.language == 'java-kotlin'
+        working-directory: backend
+        run: mvn -B -ntp -DskipTests compile
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

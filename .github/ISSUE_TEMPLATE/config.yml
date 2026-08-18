@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Institutional design questions
+    url: https://github.com/AquaticismAQ/timebank/tree/main/Design/chinese
+    about: Questions about the underlying institutional design (not a bug/feature) should start by reading Design/chinese, per CONTRIBUTING.md.

@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest an idea or enhancement for the online system
+title: "[Feature]: "
+labels: ["type: enhancement", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Phase 3 (POV) and Phase 4 (redemption/borrowing/value-added) are reserved via feature flags and intentionally not implemented yet — see `CLAUDE.md`. If this request is about one of those, say so explicitly rather than proposing a partial build.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Frontend (Student Portal)
+        - Frontend (Admin/Teacher Portal)
+        - Backend / API
+        - Documentation
+        - Design / institutional (Design/chinese)
+        - Other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What's missing or awkward today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

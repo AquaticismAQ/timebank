@@ -1,0 +1,43 @@
+name: Documentation issue
+description: Report an error, gap, or out-of-sync translation in Design/Docs
+title: "[Docs]: "
+labels: ["type: documentation", "status: needs-triage"]
+body:
+  - type: dropdown
+    id: docset
+    attributes:
+      label: Which document set?
+      options:
+        - Design/chinese (institutional design)
+        - Docs/frontend/Design.md
+        - Docs/integration/APIContract.md
+        - Docs/implementation (backend build plan / status)
+        - README / CONTRIBUTING
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: issuetype
+    attributes:
+      label: Issue type
+      options:
+        - Factual error
+        - Logical gap / inconsistency
+        - Chinese/English (_CN) translation out of sync
+        - Broken cross-reference (see XDoc.md)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Where exactly (section/line), and what's wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix
+    validations:
+      required: false
