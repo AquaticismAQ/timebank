@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, X, Search, Lock, Trash2, KeyRound, AlertTriangle, LayoutTemplate } from 'lucide-react';
+import { Plus, X, Search, Lock, Pencil, Eye, Trash2, KeyRound, AlertTriangle, LayoutTemplate } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError } from '../../api/http';
@@ -8,6 +8,15 @@ import type { Permission, RoleSummary, RoleTemplateSummary } from '../../api/typ
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '../ui/accordion';
 import { Checkbox } from '../ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+
+/**
+ * Row-action button shape shared with the Users/Rule Settings tabs
+ * (`SystemAdmin.tsx`'s `ACTION_BTN_BLUE`) — icon + text, bordered, colored
+ * per action but never filled.
+ */
+const ACTION_BTN_BLUE = 'inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors';
+const ACTION_BTN_RED = 'inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors';
+const ACTION_BTN_RED_DISABLED = 'inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-border text-muted-foreground/50 cursor-not-allowed';
 
 // 07-RoleFinetune.md §2.3: reserved for the student role — never offered in
 // the picker, not just disabled. `projects.close` is dead (retired by
@@ -591,14 +600,12 @@ export function RoleManagement({ roles, canManage, canManageTemplates, onChanged
                   <td className="px-4 py-3 text-xs text-muted-foreground">{t('admin.roles.permissionCount', { count: tpl.permissionCodes.length })}</td>
                   <td className="px-4 py-3">
                     {canManageTemplates && (
-                      <div className="flex items-center gap-3">
-                        <button onClick={() => setTemplateEditTarget(tpl)}
-                          className="text-xs text-[oklch(0.488_0.243_264.376)] hover:opacity-70 transition-opacity">
-                          {t('admin.system.edit')}
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setTemplateEditTarget(tpl)} className={ACTION_BTN_BLUE}>
+                          <Pencil className="w-3 h-3" /> {t('admin.system.edit')}
                         </button>
-                        <button onClick={() => setTemplateDeleteTarget(tpl)}
-                          className="text-xs text-destructive hover:opacity-70 transition-opacity">
-                          {t('common.delete')}
+                        <button onClick={() => setTemplateDeleteTarget(tpl)} className={ACTION_BTN_RED}>
+                          <Trash2 className="w-3 h-3" /> {t('common.delete')}
                         </button>
                       </div>
                     )}
@@ -622,13 +629,11 @@ export function RoleManagement({ roles, canManage, canManageTemplates, onChanged
                 </div>
                 {canManageTemplates && (
                   <div className="flex flex-col gap-1.5 shrink-0">
-                    <button onClick={() => setTemplateEditTarget(tpl)}
-                      className="text-xs px-3 py-1.5 border border-border rounded-lg text-muted-foreground hover:bg-accent">
-                      {t('admin.system.edit')}
+                    <button onClick={() => setTemplateEditTarget(tpl)} className={ACTION_BTN_BLUE}>
+                      <Pencil className="w-3 h-3" /> {t('admin.system.edit')}
                     </button>
-                    <button onClick={() => setTemplateDeleteTarget(tpl)}
-                      className="text-xs px-3 py-1.5 border border-destructive/30 rounded-lg text-destructive hover:bg-destructive/10">
-                      {t('common.delete')}
+                    <button onClick={() => setTemplateDeleteTarget(tpl)} className={ACTION_BTN_RED}>
+                      <Trash2 className="w-3 h-3" /> {t('common.delete')}
                     </button>
                   </div>
                 )}
@@ -680,17 +685,17 @@ export function RoleManagement({ roles, canManage, canManageTemplates, onChanged
                   <td className="px-4 py-3 text-xs text-muted-foreground">{r.sessionTimeoutMinutes} {t('admin.roles.minutesUnit')}</td>
                   <td className="px-4 py-3">
                     {canManage && (
-                      <div className="flex items-center gap-3">
-                        <button onClick={() => setEditTarget(r)}
-                          className="text-xs text-[oklch(0.488_0.243_264.376)] hover:opacity-70 transition-opacity">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setEditTarget(r)} className={ACTION_BTN_BLUE}>
+                          {r.isProtected ? <Eye className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
                           {r.isProtected ? t('admin.system.view') : t('admin.system.edit')}
                         </button>
                         {!r.isProtected && (
                           <button onClick={() => !deleteDisabled && setDeleteTarget(r)}
                             disabled={deleteDisabled}
                             title={deleteDisabled ? t('admin.roles.deleteBlockedInUse', { count: r.userCount }) : undefined}
-                            className="text-xs text-destructive hover:opacity-70 transition-opacity disabled:text-muted-foreground/50 disabled:cursor-not-allowed disabled:hover:opacity-100">
-                            {t('common.delete')}
+                            className={deleteDisabled ? ACTION_BTN_RED_DISABLED : ACTION_BTN_RED}>
+                            <Trash2 className="w-3 h-3" /> {t('common.delete')}
                           </button>
                         )}
                       </div>
@@ -722,16 +727,16 @@ export function RoleManagement({ roles, canManage, canManageTemplates, onChanged
                 </div>
                 {canManage && (
                   <div className="flex flex-col gap-1.5 shrink-0">
-                    <button onClick={() => setEditTarget(r)}
-                      className="text-xs px-3 py-1.5 border border-border rounded-lg text-muted-foreground hover:bg-accent">
+                    <button onClick={() => setEditTarget(r)} className={ACTION_BTN_BLUE}>
+                      {r.isProtected ? <Eye className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
                       {r.isProtected ? t('admin.system.view') : t('admin.system.edit')}
                     </button>
                     {!r.isProtected && (
                       <button onClick={() => !deleteDisabled && setDeleteTarget(r)}
                         disabled={deleteDisabled}
                         title={deleteDisabled ? t('admin.roles.deleteBlockedInUse', { count: r.userCount }) : undefined}
-                        className="text-xs px-3 py-1.5 border border-destructive/30 rounded-lg text-destructive hover:bg-destructive/10 disabled:text-muted-foreground/50 disabled:border-border disabled:cursor-not-allowed disabled:hover:bg-transparent">
-                        {t('common.delete')}
+                        className={deleteDisabled ? ACTION_BTN_RED_DISABLED : ACTION_BTN_RED}>
+                        <Trash2 className="w-3 h-3" /> {t('common.delete')}
                       </button>
                     )}
                   </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Trash2, Lock, Building2, KeyRound } from 'lucide-react';
+import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Pencil, Trash2, Lock, Building2, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, useLogs, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
@@ -13,6 +13,13 @@ import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { formatGradeClass } from '../../lib/format';
 import type { RoleSummary } from '../../api/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+
+/**
+ * Row-action button shape shared by every list/table in the admin portal
+ * (Users, Roles, Rule Settings) — icon + text, bordered, colored per
+ * action but never filled, matching Student Management's row-action shape.
+ */
+const ACTION_BTN_BLUE = 'inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors';
 
 // ── Rule config types ──────────────────────────────────────────────────────
 
@@ -854,9 +861,8 @@ export function SystemAdmin() {
                     <td className="px-4 py-3 text-xs text-muted-foreground">{u.lastLogin}</td>
                     <td className="px-4 py-3">
                       {canManageUsers && (
-                      <button onClick={() => setEditTarget(u)}
-                        className="text-xs text-[oklch(0.488_0.243_264.376)] hover:opacity-70 transition-opacity">
-                        {t('admin.system.edit')}
+                      <button onClick={() => setEditTarget(u)} className={ACTION_BTN_BLUE}>
+                        <Pencil className="w-3 h-3" /> {t('admin.system.edit')}
                       </button>
                       )}
                     </td>
@@ -882,9 +888,8 @@ export function SystemAdmin() {
                     <span className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(u.roleCode)}`}>{roleName(u.roleCode)}</span>
                   </div>
                   {canManageUsers && (
-                  <button onClick={() => setEditTarget(u)}
-                    className="text-xs px-3 py-1.5 border border-border rounded-lg text-muted-foreground hover:bg-accent shrink-0">
-                    {t('admin.system.edit')}
+                  <button onClick={() => setEditTarget(u)} className={`${ACTION_BTN_BLUE} shrink-0`}>
+                    <Pencil className="w-3 h-3" /> {t('admin.system.edit')}
                   </button>
                   )}
                 </div>
@@ -913,9 +918,8 @@ export function SystemAdmin() {
               <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                 <h3 className="text-sm text-foreground">{t(section.title)}</h3>
                 {canManageRules ? (
-                  <button onClick={() => setEditingRule(section)}
-                    className="text-xs text-[oklch(0.488_0.243_264.376)] hover:opacity-70 transition-opacity">
-                    {t('admin.system.edit')}
+                  <button onClick={() => setEditingRule(section)} className={ACTION_BTN_BLUE}>
+                    <Pencil className="w-3 h-3" /> {t('admin.system.edit')}
                   </button>
                 ) : (
                   <Lock className="w-3.5 h-3.5 text-muted-foreground/50" />
