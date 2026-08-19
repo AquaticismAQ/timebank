@@ -177,7 +177,7 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
     }
 
     /**
-     * `GET /students/directory` (`Docs/clarification/01-i3-partner-school-terminology.md`):
+     * `GET /students/directory` (`Docs/optimization/01-i3-partner-school-terminology.md`):
      * a co-organizer picker's search — deliberately narrower than the list
      * above (no studentNumber/status/graduationYear/version), capped, and
      * blank on an empty search rather than returning the whole roster.

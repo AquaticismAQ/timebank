@@ -73,7 +73,7 @@ Web 推荐使用 Secure、HttpOnly、SameSite Cookie 管理会话；如采用访
 }
 ```
 
-`studentId`（2026-08-06 新增，见 `Docs/clarification/01-i3-partner-school-terminology.md`）对教职工账号（教师/管理员/系统管理员）为 `null`——它使前端无需额外请求即可在共同组织者搜索中排除"我自己"。
+`studentId`（2026-08-06 新增，见 `Docs/optimization/01-i3-partner-school-terminology.md`）对教职工账号（教师/管理员/系统管理员）为 `null`——它使前端无需额外请求即可在共同组织者搜索中排除"我自己"。
 
 ### 2.3 CSRF 与来源保护
 
@@ -246,7 +246,7 @@ Web 前端提供中文与英文两种界面（默认 `zh-CN`）。本地化的�
 - `registrationOpenAt`, `registrationCloseAt`
 - `status`, `version`, `createdAt`, `updatedAt`
 
-**`hostOrganizationId`/`hostOrganizationName`/`deliveryScope`**（新增，见 `Docs/clarification/03-ServiceRecordFormOptimization.md` §4.2/§10）：每个项目恰有一个本校组织——全系统唯一一条单例（`GET /organizations` 中 `isSchoolOrganization: true` 的那条），由服务端解析，客户端不可写。`organizationId`/`organizationName` 保持原义：项目的**合作**组织（如有）——绝不会是本校组织本身（`POST`/`PATCH /projects` 会拒绝与本校组织相同的 `organizationId`，返回 `400`，因为本校组织已经自动关联，无需再指定）。`deliveryScope` 取值 `onCampus`/`offCampus`/`hybrid`，`POST /projects` 时**必填**（绝不从组织类型推断），`PATCH` 时可选；早于此字段的历史项目一律回填为 `hybrid`（"未知，待人工复核"，不是对校内/校外的猜测）。
+**`hostOrganizationId`/`hostOrganizationName`/`deliveryScope`**（新增，见 `Docs/optimization/03-ServiceRecordFormOptimization.md` §4.2/§10）：每个项目恰有一个本校组织——全系统唯一一条单例（`GET /organizations` 中 `isSchoolOrganization: true` 的那条），由服务端解析，客户端不可写。`organizationId`/`organizationName` 保持原义：项目的**合作**组织（如有）——绝不会是本校组织本身（`POST`/`PATCH /projects` 会拒绝与本校组织相同的 `organizationId`，返回 `400`，因为本校组织已经自动关联，无需再指定）。`deliveryScope` 取值 `onCampus`/`offCampus`/`hybrid`，`POST /projects` 时**必填**（绝不从组织类型推断），`PATCH` 时可选；早于此字段的历史项目一律回填为 `hybrid`（"未知，待人工复核"，不是对校内/校外的猜测）。
 
 状态：
 
@@ -273,7 +273,7 @@ draft → published → registrationOpen → inProgress → completed → archiv
 - `status`, `currentRevision`, `assignedReviewerId`
 - `approvedProjectId`, `version`, `createdAt`, `submittedAt`, `updatedAt`
 
-`coOrganizerNames`（2026-08-06 随下方写入字段一并新增，见 `Docs/clarification/01-i3-partner-school-terminology.md`）由服务端解析、只读，与 `coOrganizerStudentIds` 按位置一一对应——与 `proposedSupervisorId`/`organizationId` 已有的 `proposedSupervisorName`/`organizationName` 是同一种模式。
+`coOrganizerNames`（2026-08-06 随下方写入字段一并新增，见 `Docs/optimization/01-i3-partner-school-terminology.md`）由服务端解析、只读，与 `coOrganizerStudentIds` 按位置一一对应——与 `proposedSupervisorId`/`organizationId` 已有的 `proposedSupervisorName`/`organizationName` 是同一种模式。
 
 **创建/更新提案**（`POST /event-proposals`、`PATCH /event-proposals/{id}`）接受 `organizationId` **或** `newOrganizationName`，二者不可同时提供：
 
@@ -314,7 +314,7 @@ confirmed → cancelled
 
 ### 3.4 服务记录 `ServiceRecord`
 
-`sourceType` 标识服务的来源方式，创建时确定，更新时不可再变更。**新建记录只接受 `project`（学生对该项目持有 `confirmed` 报名）或 `self`（学生自发）**（见 `Docs/clarification/03-ServiceRecordFormOptimization.md` §3/§7.3，取代此前 `project`/`external`/`self` 三分）。`external` 仅作为**历史数据**保留——既有记录保留该来源、可读可审核，处于 `draft`/`returned` 的旧记录仍可用原有自由文本字段编辑并重新提交一次（来源本身不变），但 `POST /service-records` 会直接拒绝 `sourceType: "external"`。`sourceType` 决定创建和提交时哪些字段必填/由服务端派生，不改变状态机本身。
+`sourceType` 标识服务的来源方式，创建时确定，更新时不可再变更。**新建记录只接受 `project`（学生对该项目持有 `confirmed` 报名）或 `self`（学生自发）**（见 `Docs/optimization/03-ServiceRecordFormOptimization.md` §3/§7.3，取代此前 `project`/`external`/`self` 三分）。`external` 仅作为**历史数据**保留——既有记录保留该来源、可读可审核，处于 `draft`/`returned` 的旧记录仍可用原有自由文本字段编辑并重新提交一次（来源本身不变），但 `POST /service-records` 会直接拒绝 `sourceType: "external"`。`sourceType` 决定创建和提交时哪些字段必填/由服务端派生，不改变状态机本身。
 
 状态：
 
@@ -432,7 +432,7 @@ queued → running → succeeded
 
 项目状态变化使用动作端点，避免用通用 `PATCH status` 绕过业务校验。
 
-**状态机（2026-08-08 修订，见 `Docs/clarification/02-PorjectOrganization.md` §2）：** `draft`（草稿）→ `published`（已发布）→ `registrationOpen`（报名开放）→ `closed`（报名关闭）→ `inProgress`（进行中）→ `completed`（已结束）→ `archived`（已归档），其中 `registrationOpen`→`closed`→`inProgress`→`completed` 均由系统按时间自动流转（在读取/操作访问时惰性同步），`closed` 仅表示"报名窗口已结束"，从来不是人工操作，也不代表取消。`POST /projects/{id}/archive` 只能在 `completed` 状态下成功，且必须所有 `CONFIRMED`（已确认）报名学生该项目的服务记录都已进入终态审核结果（`approved`/`rejected`/`corrected`）才能通过；否则返回 409 状态冲突错误，并说明还有多少名学生未完成审核。`POST /projects/{id}/cancel`（`reason` 必填，`@NotBlank`，作为审计记录的 `reasonCode` 存储）是独立的管理员覆盖操作——可从 `draft`/`published`/`registrationOpen`/`closed`/`inProgress`/`completed` 中的任一状态直接归档，完全绕过已审核记录的门槛检查，用于丢弃一个不需要的草稿、彻底放弃某个进行中的项目，或强制关闭一个停滞的项目。此前存在的手动 `POST /projects/{id}/close`（`projects.close`）提前关闭动作现已废弃——既然 `closed` 已完全自动化，`cancel` 承接了它原本的使用场景。`CreateProjectRequest`/`UpdateProjectRequest` 也新增了可选的 `ownerId` 字段：仅管理员可用（按角色校验，而非仅凭 `projects.create`/`.update` 权限，因为教师也持有这两项权限），非管理员提交的 `ownerId` 会被静默忽略并强制设为本人，而不是报错拒绝。
+**状态机（2026-08-08 修订，见 `Docs/optimization/02-PorjectOrganization.md` §2）：** `draft`（草稿）→ `published`（已发布）→ `registrationOpen`（报名开放）→ `closed`（报名关闭）→ `inProgress`（进行中）→ `completed`（已结束）→ `archived`（已归档），其中 `registrationOpen`→`closed`→`inProgress`→`completed` 均由系统按时间自动流转（在读取/操作访问时惰性同步），`closed` 仅表示"报名窗口已结束"，从来不是人工操作，也不代表取消。`POST /projects/{id}/archive` 只能在 `completed` 状态下成功，且必须所有 `CONFIRMED`（已确认）报名学生该项目的服务记录都已进入终态审核结果（`approved`/`rejected`/`corrected`）才能通过；否则返回 409 状态冲突错误，并说明还有多少名学生未完成审核。`POST /projects/{id}/cancel`（`reason` 必填，`@NotBlank`，作为审计记录的 `reasonCode` 存储）是独立的管理员覆盖操作——可从 `draft`/`published`/`registrationOpen`/`closed`/`inProgress`/`completed` 中的任一状态直接归档，完全绕过已审核记录的门槛检查，用于丢弃一个不需要的草稿、彻底放弃某个进行中的项目，或强制关闭一个停滞的项目。此前存在的手动 `POST /projects/{id}/close`（`projects.close`）提前关闭动作现已废弃——既然 `closed` 已完全自动化，`cancel` 承接了它原本的使用场景。`CreateProjectRequest`/`UpdateProjectRequest` 也新增了可选的 `ownerId` 字段：仅管理员可用（按角色校验，而非仅凭 `projects.create`/`.update` 权限，因为教师也持有这两项权限），非管理员提交的 `ownerId` 会被静默忽略并强制设为本人，而不是报错拒绝。
 
 **无人报名自动归档（2026-08-08 新增）：** `registrationOpen`→`closed` 的按时间自动流转在执行前会先检查该项目已确认的报名人数——若确认报名人数为零，项目会直接归档（新增 `registrationOpen`→`archived`，同样由系统触发），而不再进入 `closed`/`inProgress`/`completed`，因为这些状态对一个零报名的项目已没有实际意义。系统会写入一条专门的审计记录（`action: "project.autoArchiveNoRegistrants"`，`reasonCode: "NO_REGISTRANTS_AT_REGISTRATION_CLOSE"`，`actorId`/`permissionUsed` 均为空——因为没有人工操作者）说明原因，与其他状态变更的审计记录区分开来。只要该项目有至少一名已确认的报名学生，就不受影响，仍按原有流程进入 `closed`。
 
@@ -584,7 +584,7 @@ queued → running → succeeded
 | `POST` | `/students/{id}/deactivate` | `students.manage` | 停用 |
 | `GET` | `/students/{id}/progress` | 本人/`progress.read` | 达标进度 |
 | ~~`GET` `/students/{id}/service-records`~~ | — | 从未实现——这一行原本描述了预期形态，但服务端实际没有这个路由。解决方式与 `api.accounts.get(studentId)`（§13.1 后的说明）相同：前端改为调用 `GET /service-records?filter[studentId]=`，复用其它管理端服务记录页面已经在用的列表接口，而不是再维护一个带自己一套筛选/排序/分页逻辑的子资源接口。 |
-| `GET` | `/students/directory` | `students.read`/`directory.read` | 按姓名搜索，返回精简的 `{id, displayName, gradeLevel, className}`，用于挑选共同组织者（2026-08-06 新增，见 `Docs/clarification/01-i3-partner-school-terminology.md`；`gradeName` 已在 issue 010 中改为原始的 `gradeLevel`） |
+| `GET` | `/students/directory` | `students.read`/`directory.read` | 按姓名搜索，返回精简的 `{id, displayName, gradeLevel, className}`，用于挑选共同组织者（2026-08-06 新增，见 `Docs/optimization/01-i3-partner-school-terminology.md`；`gradeName` 已在 issue 010 中改为原始的 `gradeLevel`） |
 | `GET` | `/academic-years` | 已登录 | 学年 |
 | `GET` | `/grades` | 已登录 | 年级 |
 | `GET` | `/classes` | 已登录 | 班级 |
@@ -606,7 +606,7 @@ queued → running → succeeded
 
 `organizations.manage` 现由 `role_admin` 和 `role_teacher` 共同持有（2026-08-08 变更——此前仅管理员持有）。同一变更中，`Organization` 新增了 `description`（自由文本简介）字段，与既有的结构化字段 `type`/`contactName`/`contactEmail`/`contactPhone`/`address` 并列；`CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` 均已携带该字段。
 
-`OrganizationDto` 还携带只读的 `isSchoolOrganization` 布尔字段（见 `Docs/clarification/03-ServiceRecordFormOptimization.md` §4.1）——全系统恰有一条记录为 `true`，仅通过一次性种子创建，永远不经由 `POST /organizations`。`PATCH /organizations/{id}` 与 `POST /organizations/{id}/archive` 对该行均返回 `409`——其名称/地址/联系方式只能通过学校设置流程修改，不能走普通的组织管理流程，也永远不可被归档。每个项目的本校组织（见 §3.1）都解析自这一条记录。
+`OrganizationDto` 还携带只读的 `isSchoolOrganization` 布尔字段（见 `Docs/optimization/03-ServiceRecordFormOptimization.md` §4.1）——全系统恰有一条记录为 `true`，仅通过一次性种子创建，永远不经由 `POST /organizations`。`PATCH /organizations/{id}` 与 `POST /organizations/{id}/archive` 对该行均返回 `409`——其名称/地址/联系方式只能通过学校设置流程修改，不能走普通的组织管理流程，也永远不可被归档。每个项目的本校组织（见 §3.1）都解析自这一条记录。
 
 ### 4.11 账户与流水
 
@@ -682,7 +682,7 @@ queued → running → succeeded
 | `POST` | `/roles` | `roles.manage` | 创建角色 |
 | `PATCH` | `/roles/{id}` | `roles.manage` | 更新角色权限 |
 | `GET` | `/permissions` | `roles.read` | 权限码目录 |
-| `GET` | `/users/directory` | `users.read`/`directory.read` | 按姓名与角色搜索，返回精简的 `{id, displayName}`，用于挑选拟邀请指导教师（2026-08-06 新增，见 `Docs/clarification/01-i3-partner-school-terminology.md`）——必须提供 `role` 查询参数（如 `teacher`），不暴露 username/email/studentId/roleCodes/status 等其他用户字段 |
+| `GET` | `/users/directory` | `users.read`/`directory.read` | 按姓名与角色搜索，返回精简的 `{id, displayName}`，用于挑选拟邀请指导教师（2026-08-06 新增，见 `Docs/optimization/01-i3-partner-school-terminology.md`）——必须提供 `role` 查询参数（如 `teacher`），不暴露 username/email/studentId/roleCodes/status 等其他用户字段 |
 | `GET` | `/audit-logs` | `auditLogs.read` | 操作审计 |
 | `GET` | `/login-logs` | `securityLogs.read` | 登录日志 |
 | `GET` | `/system/settings` | `settings.read` | 系统参数 |

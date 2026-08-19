@@ -104,7 +104,7 @@ export function usePagedApi<T>(
   return { items, page, loading, error, params, setPage, setPageSize, setSearch, setFilter, setSort, refetch };
 }
 
-// ── Docs/clarification/04-DataViewOptimization.md §2.1 (D1): the shared URL-sync
+// ── Docs/optimization/04-DataViewOptimization.md §2.1 (D1): the shared URL-sync
 // wrapper every migrated list page uses, so filter/search/sort/page state survives
 // a refresh, back/forward, and a copied link — the first such mechanism in this
 // codebase (there was no prior art to extend). Reuses `buildListQuery`'s exact

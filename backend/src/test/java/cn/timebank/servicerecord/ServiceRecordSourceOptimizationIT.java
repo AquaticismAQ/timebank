@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Docs/clarification/03-ServiceRecordFormOptimization.md §3/§5/§10 — the PROJECT/SELF
+ * Docs/optimization/03-ServiceRecordFormOptimization.md §3/§5/§10 — the PROJECT/SELF
  * source split: PROJECT snapshots every organization/category/location/supervisor field
  * from the project (never the client), requires a CONFIRMED registration (re-checked at
  * both create and submit), and every new record gets a unique {@code recordNumber}.

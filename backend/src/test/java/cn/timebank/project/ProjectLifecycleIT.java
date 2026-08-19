@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * carry `status` at all — {@code UpdateProjectRequest} has no such field,
  * a compile-time guarantee, not merely a runtime check), and time-derived
  * statuses sync lazily on read/action access. Reworked per
- * `Docs/clarification/02-PorjectOrganization.md` §2: {@code CLOSED} is now
+ * `Docs/optimization/02-PorjectOrganization.md` §2: {@code CLOSED} is now
  * purely time-derived (registration window elapsed) sitting between {@code
  * REGISTRATION_OPEN} and {@code IN_PROGRESS}, the normal {@code archive()}
  * path is gated from {@code COMPLETED} on every confirmed student's record

@@ -197,7 +197,7 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
 
     /**
      * The organization/co-organizer/supervisor validation added alongside
-     * this test (`Docs/clarification/01-i3-partner-school-terminology.md`):
+     * this test (`Docs/optimization/01-i3-partner-school-terminology.md`):
      * before this pass, all three were accepted unvalidated free text.
      */
     @Test
@@ -352,7 +352,7 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
         return proposalService.submit(draft.id(), studentAuth(student.id()), "idem-propsubmit-" + draft.id(), "zh-CN");
     }
 
-    /** `proposedSupervisorId` is validated (`Docs/clarification/01-i3-partner-school-terminology.md`) — must be a real active `teacher`. */
+    /** `proposedSupervisorId` is validated (`Docs/optimization/01-i3-partner-school-terminology.md`) — must be a real active `teacher`. */
     private String realTeacherId() {
         UserDto teacher = userService.create(new CreateUserRequest(
                 "proposal_supervisor_" + OpaqueIds.generate("u"), "InitialPass123!", "Supervising Teacher", null,

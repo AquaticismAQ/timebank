@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * B4.2's exit criterion, unit-tested in isolation — copies {@code
  * ServiceRecordStateMachineTest}'s shape. Reworked per
- * `Docs/clarification/02-PorjectOrganization.md` §2: {@code CLOSED} is now
+ * `Docs/optimization/02-PorjectOrganization.md` §2: {@code CLOSED} is now
  * purely time-derived (registration window elapsed), and cancellation is a
  * separate path ({@link ProjectStateMachine#cancel}) rather than a manager
  * edge into {@code CLOSED}.

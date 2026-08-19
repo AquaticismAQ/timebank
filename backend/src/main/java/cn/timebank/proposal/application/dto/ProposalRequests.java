@@ -19,7 +19,7 @@ public final class ProposalRequests {
      * belong in a Bean Validation annotation): reference an existing
      * organization, or supply a new one's name for the backend to create
      * and link within the same transaction (contract §3.2, added
-     * `Docs/clarification/01-i3-partner-school-terminology.md`).
+     * `Docs/optimization/01-i3-partner-school-terminology.md`).
      */
     public record CreateProposalRequest(
             List<String> coOrganizerStudentIds, @NotBlank String title, String objective, String description,

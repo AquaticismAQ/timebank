@@ -4,7 +4,7 @@ Status: **Fixed and live-verified (2026-08-11)**
 
 ## Symptom
 
-Found while live-verifying `Docs/clarification/04-DataViewOptimization.md`'s Phase 3 work (Audit Center / Case Review / Proposal Review detail workbenches) against `https://tb.example.com/`, two unrelated real defects:
+Found while live-verifying `Docs/optimization/04-DataViewOptimization.md`'s Phase 3 work (Audit Center / Case Review / Proposal Review detail workbenches) against `https://tb.example.com/`, two unrelated real defects:
 
 1. **Audit Center — "Only Anomalies" toggle button shows the wrong visual state on a deep link or refresh.** Navigating directly to `/admin/audit?...&filter[hasAnomaly]=true` (or refreshing a page that already has the filter active) correctly narrows the list to anomaly records, but the toggle button itself renders in its inactive (gray) style instead of its active (red) style — the data is right, the affordance lies about it.
 2. **Proposal Review — the "Student Initiator" field in the new Organization & Safety tab shows a confusing sentence instead of a name.** Opening any proposal's detail workbench showed: *"Student Initiator: Jia Ming (current logged-in user, auto-filled)"* as the field's **value**, with the real initiator's name never appearing — regardless of which proposal was open or who actually submitted it.

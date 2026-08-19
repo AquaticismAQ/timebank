@@ -458,7 +458,7 @@ class ProposalServiceImpl implements ProposalService {
 
     /**
      * `organizationId`/`newOrganizationName` are mutually exclusive
-     * (contract §3.2, `Docs/clarification/01-i3-partner-school-terminology.md`).
+     * (contract §3.2, `Docs/optimization/01-i3-partner-school-terminology.md`).
      * A new organization is created transactionally here — the same
      * "resolve inside the write, never require a permission the caller
      * doesn't hold" pattern already used by proposal approval generating a

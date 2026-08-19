@@ -60,7 +60,7 @@ public interface ServiceRecordService {
     AnnualProgressSummary summarizeForProgress(String studentId, LocalDate yearStart, LocalDate yearEnd);
 
     /**
-     * Docs/clarification/04-DataViewOptimization.md §4.2 (D8): a human-readable label for
+     * Docs/optimization/04-DataViewOptimization.md §4.2 (D8): a human-readable label for
      * {@code CaseDto.subjectLabel} when a case's {@code subjectType} is {@code serviceRecord}.
      * Deliberately unscoped by {@code Authentication} — unlike every other read here — because
      * a case reviewer needs to see what record an appeal is about even if their own data scope

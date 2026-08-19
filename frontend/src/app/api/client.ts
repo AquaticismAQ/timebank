@@ -314,7 +314,7 @@ export const api = {
         capacity: data.estimatedCapacity,
         volunteerTasks: data.volunteerTasks,
         // Real ids resolved through the co-organizer/supervisor/organization
-        // pickers (`Docs/clarification/01-i3-partner-school-terminology.md`)
+        // pickers (`Docs/optimization/01-i3-partner-school-terminology.md`)
         // — never the display strings (mentorTeacher/partnerOrg/coOrganizers),
         // which are read-only summaries the server itself resolves on GET.
         proposedSupervisorId: data.proposedSupervisorId,
@@ -647,7 +647,7 @@ export const api = {
     },
     /**
      * A co-organizer picker's search (contract §4.9,
-     * `Docs/clarification/01-i3-partner-school-terminology.md`) — minimal
+     * `Docs/optimization/01-i3-partner-school-terminology.md`) — minimal
      * fields, capped, blank on an empty search (this is a typeahead, not a
      * browse). `excludeId` filters out the current student client-side,
      * since the backend has no way to know who "the current proposer" is
@@ -958,7 +958,7 @@ export const api = {
     },
     /**
      * A supervisor picker's search (contract §4.15,
-     * `Docs/clarification/01-i3-partner-school-terminology.md`) — minimal
+     * `Docs/optimization/01-i3-partner-school-terminology.md`) — minimal
      * fields, capped, scoped to one role, blank on an empty search.
      */
     async directory(role: string, search: string): Promise<TeacherDirectoryEntry[]> {

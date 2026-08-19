@@ -15,7 +15,7 @@ export const CREATE_NEW_ID = '__new__';
 /**
  * A debounced async search picker (single or multi), backed by real
  * directory/organization search endpoints instead of free text
- * (`Docs/clarification/01-i3-partner-school-terminology.md`). Generic on
+ * (`Docs/optimization/01-i3-partner-school-terminology.md`). Generic on
  * purpose — used for co-organizers, a supervisor, and a partner
  * organization, each with a different `fetchOptions`.
  */

@@ -14,7 +14,7 @@ public final class ServiceRecordRequests {
     }
 
     /**
-     * Docs/clarification/03-ServiceRecordFormOptimization.md §3/§5.2: {@code sourceType}
+     * Docs/optimization/03-ServiceRecordFormOptimization.md §3/§5.2: {@code sourceType}
      * is {@code PROJECT} or {@code SELF} for new records ({@code EXTERNAL} is historical
      * data only, rejected here — see {@code ServiceRecordServiceImpl.parseSourceTypeForCreate}).
      * For {@code PROJECT}, {@code organizationId}/{@code organizationName}/{@code location}/

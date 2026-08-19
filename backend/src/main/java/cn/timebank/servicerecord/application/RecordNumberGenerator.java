@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Docs/clarification/03-ServiceRecordFormOptimization.md §5.3/§10 D3: takes the next
+ * Docs/optimization/03-ServiceRecordFormOptimization.md §5.3/§10 D3: takes the next
  * per-(academic year, student) sequence number for {@code recordNumber} atomically —
  * one {@code INSERT ... ON DUPLICATE KEY UPDATE seq = LAST_INSERT_ID(seq + 1)}
  * statement, no separate {@code SELECT ... FOR UPDATE} read to hold a lock across.

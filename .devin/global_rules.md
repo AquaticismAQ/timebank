@@ -38,7 +38,7 @@ Use this order before changing code:
 1. Read the summary, phase table, acceptance table, and latest findings in `Docs/implementation/00-Status.md`.
 2. Read `integration-test/STATUS.md` for the deployed dataset and latest live-verification findings.
 3. Check `git status` and recent `git log`; inspect actual code and scripts. Historical status paragraphs describe what was true when written and may be superseded later.
-4. Read applicable clarification documents, especially `Docs/clarification/02-PorjectOrganization.md` for current project/organization behavior.
+4. Read applicable clarification documents, especially `Docs/optimization/02-PorjectOrganization.md` for current project/organization behavior.
 5. After a deployed-app test finds or verifies a defect, update `integration-test/STATUS.md`. Update `00-Status.md` when phase or acceptance evidence changes.
 
 ## Frontend
@@ -136,7 +136,7 @@ cd /opt/timebank-backend
 - **Append-only reviews**: review/approval changes append events rather than overwriting prior decisions.
 - **Proposal → Project**: proposal approval atomically writes the review event, marks the proposal approved, creates the official project draft, and backfills `approvedProjectId`. Never create then link in separate frontend calls.
 - **Proposal organization input**: choose an existing partner organization by opaque `organizationId`, or provide `newOrganizationName`; the backend atomically resolves/creates the organization during proposal creation. Students do not need `organizations.manage` merely to propose a new organization.
-- **Current project lifecycle**: `CLOSED` is time-derived and means the registration window elapsed. Managers use `POST /projects/{id}/cancel` with a required reason to cancel/archive unwanted projects, including drafts. Normal archive from `COMPLETED` is gated until every confirmed student's service record is reviewed. A registration-open project with zero confirmed registrants auto-archives when registration closes and records a system audit reason. Read `Docs/clarification/02-PorjectOrganization.md` and the bilingual contract before changing this state machine.
+- **Current project lifecycle**: `CLOSED` is time-derived and means the registration window elapsed. Managers use `POST /projects/{id}/cancel` with a required reason to cancel/archive unwanted projects, including drafts. Normal archive from `COMPLETED` is gated until every confirmed student's service record is reviewed. A registration-open project with zero confirmed registrants auto-archives when registration closes and records a system audit reason. Read `Docs/optimization/02-PorjectOrganization.md` and the bilingual contract before changing this state machine.
 - **Phase 3/4 flags**: disabled features show “Not yet available”; do not half-build POV or redemption/borrowing features.
 - **Opaque IDs**: IDs are server-generated strings. Never parse or derive semantics from their format.
 - **Integer units**: durations use integer minutes and time-coin amounts use integer minimum accounting units; never use floats.

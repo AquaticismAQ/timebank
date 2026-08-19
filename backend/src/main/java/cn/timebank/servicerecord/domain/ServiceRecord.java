@@ -108,7 +108,7 @@ public class ServiceRecord extends VersionedEntity {
     @Column(name = "supervisor_contact")
     private String supervisorContact;
 
-    /** Docs/clarification/03-ServiceRecordFormOptimization.md §5.1 — null for historical (pre-issue-03) and EXTERNAL-sourced records. */
+    /** Docs/optimization/03-ServiceRecordFormOptimization.md §5.1 — null for historical (pre-issue-03) and EXTERNAL-sourced records. */
     @Setter
     @Enumerated(EnumType.STRING)
     @Column(name = "supervisor_kind", length = 20)

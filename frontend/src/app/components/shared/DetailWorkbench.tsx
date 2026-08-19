@@ -7,7 +7,7 @@ export interface DetailWorkbenchTab {
 }
 
 /**
- * Docs/clarification/04-DataViewOptimization.md §2.3 (D4/D5)'s shared detail-workbench
+ * Docs/optimization/04-DataViewOptimization.md §2.3 (D4/D5)'s shared detail-workbench
  * chrome — Audit Center / Case Review / Proposal Review each supply their own tabs and
  * bottom action bar content; this only owns the responsive shell (full-screen sheet on
  * mobile, large centered modal on desktop — same `sm:` breakpoint and header/body/footer

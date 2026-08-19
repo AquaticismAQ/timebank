@@ -11,7 +11,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * A project's organization association (Docs/clarification/03-ServiceRecordFormOptimization.md
+ * A project's organization association (Docs/optimization/03-ServiceRecordFormOptimization.md
  * §4.2) — exactly one {@code HOST_SCHOOL} row (always the singleton school
  * organization, V17) plus zero or more {@code PARTNER} rows. {@code organizationId}
  * is a plain string, no JPA relationship, matching this codebase's no-cross-module-

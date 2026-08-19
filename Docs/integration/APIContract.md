@@ -73,7 +73,7 @@ Login response must at least return:
 }
 ```
 
-`studentId` (added 2026-08-06, `Docs/clarification/01-i3-partner-school-terminology.md`) is `null` for staff accounts (teacher/admin/sysadmin) — it's what lets the frontend exclude "myself" from a co-organizer search without a second round trip.
+`studentId` (added 2026-08-06, `Docs/optimization/01-i3-partner-school-terminology.md`) is `null` for staff accounts (teacher/admin/sysadmin) — it's what lets the frontend exclude "myself" from a co-organizer search without a second round trip.
 
 ### 2.3 CSRF & Origin Protection
 
@@ -249,7 +249,7 @@ Core fields:
 - `registrationOpenAt`, `registrationCloseAt`
 - `status`, `version`, `createdAt`, `updatedAt`
 
-**`hostOrganizationId`/`hostOrganizationName`/`deliveryScope`** (added, `Docs/clarification/03-ServiceRecordFormOptimization.md` §4.2/§10): every project has exactly one host organization — the school itself, a single system-wide singleton (`GET /organizations`' `isSchoolOrganization: true` row) — resolved server-side and never client-writable. `organizationId`/`organizationName` keep their pre-existing meaning: the project's **partner** organization, if any (never the school organization itself — `POST`/`PATCH /projects` reject an `organizationId` equal to the host as a `400`, since that's automatic already). `deliveryScope` is `onCampus`/`offCampus`/`hybrid`, **required** on `POST /projects` (never inferred from organization type), optional on `PATCH`; projects that pre-date this field were backfilled to `hybrid` ("unknown, needs manual review"), not guessed either way.
+**`hostOrganizationId`/`hostOrganizationName`/`deliveryScope`** (added, `Docs/optimization/03-ServiceRecordFormOptimization.md` §4.2/§10): every project has exactly one host organization — the school itself, a single system-wide singleton (`GET /organizations`' `isSchoolOrganization: true` row) — resolved server-side and never client-writable. `organizationId`/`organizationName` keep their pre-existing meaning: the project's **partner** organization, if any (never the school organization itself — `POST`/`PATCH /projects` reject an `organizationId` equal to the host as a `400`, since that's automatic already). `deliveryScope` is `onCampus`/`offCampus`/`hybrid`, **required** on `POST /projects` (never inferred from organization type), optional on `PATCH`; projects that pre-date this field were backfilled to `hybrid` ("unknown, needs manual review"), not guessed either way.
 
 Status:
 
@@ -276,7 +276,7 @@ Core fields:
 - `status`, `currentRevision`, `assignedReviewerId`
 - `approvedProjectId`, `version`, `createdAt`, `submittedAt`, `updatedAt`
 
-`coOrganizerNames` (added 2026-08-06 alongside the write-side fields below, `Docs/clarification/01-i3-partner-school-terminology.md`) is server-resolved, read-only, positionally matched to `coOrganizerStudentIds` — the same pattern `proposedSupervisorName`/`organizationName` already use for `proposedSupervisorId`/`organizationId`.
+`coOrganizerNames` (added 2026-08-06 alongside the write-side fields below, `Docs/optimization/01-i3-partner-school-terminology.md`) is server-resolved, read-only, positionally matched to `coOrganizerStudentIds` — the same pattern `proposedSupervisorName`/`organizationName` already use for `proposedSupervisorId`/`organizationId`.
 
 **Creating/updating a proposal** (`POST /event-proposals`, `PATCH /event-proposals/{id}`) accepts `organizationId` **or** `newOrganizationName`, never both:
 
@@ -317,7 +317,7 @@ confirmed → cancelled
 
 ### 3.4 Service Record `ServiceRecord`
 
-`sourceType` distinguishes how the service arose, and is set at creation, never changed on update. **New records only accept `project` (performed under a project the student has a `confirmed` registration for) or `self` (student-initiated)** (`Docs/clarification/03-ServiceRecordFormOptimization.md` §3/§7.3, replacing the earlier three-way `project`/`external`/`self` split). `external` is **historical data only** — existing records keep it, are readable/reviewable, and a `draft`/`returned` one can still be edited and resubmitted with its original free-text fields (source never changes), but `POST /service-records` rejects `sourceType: "external"` outright. `sourceType` changes which fields are required/server-derived at creation and submission, not which state machine applies.
+`sourceType` distinguishes how the service arose, and is set at creation, never changed on update. **New records only accept `project` (performed under a project the student has a `confirmed` registration for) or `self` (student-initiated)** (`Docs/optimization/03-ServiceRecordFormOptimization.md` §3/§7.3, replacing the earlier three-way `project`/`external`/`self` split). `external` is **historical data only** — existing records keep it, are readable/reviewable, and a `draft`/`returned` one can still be edited and resubmitted with its original free-text fields (source never changes), but `POST /service-records` rejects `sourceType: "external"` outright. `sourceType` changes which fields are required/server-derived at creation and submission, not which state machine applies.
 
 Status:
 
@@ -435,7 +435,7 @@ The frontend polls the job query endpoint; long-lived connections are not a requ
 
 Project status changes use action endpoints to avoid bypassing business validation via a generic `PATCH status`.
 
-**Status machine (revised 2026-08-08, `Docs/clarification/02-PorjectOrganization.md` §2):** `draft` → `published` → `registrationOpen` → `closed` → `inProgress` → `completed` → `archived`, where `registrationOpen`→`closed`→`inProgress`→`completed` are all system-driven (time-derived, synced lazily on read/action access) — `closed` means only "the registration window has elapsed," never a manual action and never a cancellation. `POST /projects/{id}/archive` only succeeds from `completed`, and only once every `CONFIRMED`-enrolled student's service record for that project has reached a terminal review decision (`approved`/`rejected`/`corrected`); otherwise it 409s with a state-conflict error naming how many students are still unresolved. `POST /projects/{id}/cancel` (`reason` required, `@NotBlank`, stored as the audit entry's `reasonCode`) is the separate manager override — it archives directly from any of `draft`/`published`/`registrationOpen`/`closed`/`inProgress`/`completed`, bypassing the reviewed-records gate entirely, for discarding an unwanted draft, abandoning a live project outright, or force-closing a stalled one. There used to be a manual `POST /projects/{id}/close` (`projects.close`) action for early cancellation; it is retired now that `closed` is purely automatic — `cancel` replaces its use case. `CreateProjectRequest`/`UpdateProjectRequest` also carry an optional `ownerId`: admin-only (checked by role, not just `projects.create`/`.update` — teachers hold those too), and a non-admin's `ownerId` is silently ignored/forced to themselves rather than rejected.
+**Status machine (revised 2026-08-08, `Docs/optimization/02-PorjectOrganization.md` §2):** `draft` → `published` → `registrationOpen` → `closed` → `inProgress` → `completed` → `archived`, where `registrationOpen`→`closed`→`inProgress`→`completed` are all system-driven (time-derived, synced lazily on read/action access) — `closed` means only "the registration window has elapsed," never a manual action and never a cancellation. `POST /projects/{id}/archive` only succeeds from `completed`, and only once every `CONFIRMED`-enrolled student's service record for that project has reached a terminal review decision (`approved`/`rejected`/`corrected`); otherwise it 409s with a state-conflict error naming how many students are still unresolved. `POST /projects/{id}/cancel` (`reason` required, `@NotBlank`, stored as the audit entry's `reasonCode`) is the separate manager override — it archives directly from any of `draft`/`published`/`registrationOpen`/`closed`/`inProgress`/`completed`, bypassing the reviewed-records gate entirely, for discarding an unwanted draft, abandoning a live project outright, or force-closing a stalled one. There used to be a manual `POST /projects/{id}/close` (`projects.close`) action for early cancellation; it is retired now that `closed` is purely automatic — `cancel` replaces its use case. `CreateProjectRequest`/`UpdateProjectRequest` also carry an optional `ownerId`: admin-only (checked by role, not just `projects.create`/`.update` — teachers hold those too), and a non-admin's `ownerId` is silently ignored/forced to themselves rather than rejected.
 
 **No-registrants auto-archive (added 2026-08-08):** the `registrationOpen`→`closed` time-derived transition first checks the project's confirmed-enrollment count — zero confirmed registrants archives the project directly (`registrationOpen`→`archived`, also system-driven) instead of proceeding to `closed`/`inProgress`/`completed`, since there's nothing left for those statuses to mean. A dedicated audit entry (`action: "project.autoArchiveNoRegistrants"`, `reasonCode: "NO_REGISTRANTS_AT_REGISTRATION_CLOSE"`, `actorId`/`permissionUsed` both null — there is no human actor) records why, distinguishable from every other status change. A project with at least one confirmed registrant is unaffected and proceeds through `closed` normally.
 
@@ -587,7 +587,7 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 | `POST` | `/students/{id}/deactivate` | `students.manage` | Deactivate |
 | `GET` | `/students/{id}/progress` | Owner/`progress.read` | Progress tracking |
 | ~~`GET` `/students/{id}/service-records`~~ | — | Never implemented — this row described the intended shape but no such route exists server-side. Resolved the same way `api.accounts.get(studentId)` was (§13.1's note below): the frontend calls `GET /service-records?filter[studentId]=` instead of a dedicated sub-resource, reusing the list endpoint every other admin service-record screen already calls rather than adding a second route with its own filter/sort/pagination to maintain. |
-| `GET` | `/students/directory` | `students.read`/`directory.read` | Minimal `{id, displayName, gradeLevel, className}` search by name, for picking a co-organizer (added 2026-08-06, `Docs/clarification/01-i3-partner-school-terminology.md`; `gradeName` became raw `gradeLevel` in issue 010) |
+| `GET` | `/students/directory` | `students.read`/`directory.read` | Minimal `{id, displayName, gradeLevel, className}` search by name, for picking a co-organizer (added 2026-08-06, `Docs/optimization/01-i3-partner-school-terminology.md`; `gradeName` became raw `gradeLevel` in issue 010) |
 | `GET` | `/academic-years` | Authenticated | Academic years |
 | `GET` | `/grades` | Authenticated | Grades |
 | `GET` | `/classes` | Authenticated | Classes |
@@ -609,7 +609,7 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 
 `organizations.manage` is granted to `role_admin` and `role_teacher` (changed 2026-08-08 — previously admin-only). `Organization` gained a `description` field (free text, alongside the existing structured `type`/`contactName`/`contactEmail`/`contactPhone`/`address`) in the same change; `CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` all carry it.
 
-`OrganizationDto` also carries a read-only `isSchoolOrganization` boolean (`Docs/clarification/03-ServiceRecordFormOptimization.md` §4.1) — exactly one row in the whole system has this `true`, seeded once and never through `POST /organizations`. `PATCH /organizations/{id}` and `POST /organizations/{id}/archive` both `409` on that row — its name/address/contact can only change through school settings, not the normal organization-management flow, and it can never be archived. Every project's host organization (§3.1) resolves to this row.
+`OrganizationDto` also carries a read-only `isSchoolOrganization` boolean (`Docs/optimization/03-ServiceRecordFormOptimization.md` §4.1) — exactly one row in the whole system has this `true`, seeded once and never through `POST /organizations`. `PATCH /organizations/{id}` and `POST /organizations/{id}/archive` both `409` on that row — its name/address/contact can only change through school settings, not the normal organization-management flow, and it can never be archived. Every project's host organization (§3.1) resolves to this row.
 
 ### 4.11 Accounts & Transactions
 
@@ -685,7 +685,7 @@ Imports must validate before commit. Duplicate imports are prevented by source f
 | `POST` | `/roles` | `roles.manage` | Create role |
 | `PATCH` | `/roles/{id}` | `roles.manage` | Update role permissions |
 | `GET` | `/permissions` | `roles.read` | Permission code catalog |
-| `GET` | `/users/directory` | `users.read`/`directory.read` | Minimal `{id, displayName}` search by name and role, for picking a proposed supervisor (added 2026-08-06, `Docs/clarification/01-i3-partner-school-terminology.md`) — `role` query param required (e.g. `teacher`), no other user fields (username/email/studentId/roleCodes/status) are exposed |
+| `GET` | `/users/directory` | `users.read`/`directory.read` | Minimal `{id, displayName}` search by name and role, for picking a proposed supervisor (added 2026-08-06, `Docs/optimization/01-i3-partner-school-terminology.md`) — `role` query param required (e.g. `teacher`), no other user fields (username/email/studentId/roleCodes/status) are exposed |
 | `GET` | `/audit-logs` | `auditLogs.read` | Operation audit |
 | `GET` | `/login-logs` | `securityLogs.read` | Login logs |
 | `GET` | `/system/settings` | `settings.read` | System parameters |

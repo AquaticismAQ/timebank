@@ -211,7 +211,7 @@ Behavior requirements:
 
 #### Create/Edit Record
 
-Uses a multi-step form. A record's source is one of two chooseable kinds, set once at creation and never changed afterward (`Docs/clarification/03-ServiceRecordFormOptimization.md`):
+Uses a multi-step form. A record's source is one of two chooseable kinds, set once at creation and never changed afterward (`Docs/optimization/03-ServiceRecordFormOptimization.md`):
 
 1. **Source**: Select "Registered Project" (a project the student holds a confirmed registration for) or "Self-Initiated" (student-organized, no project link). A third, historical-only source ("External," pre-dating this design) can still be viewed/edited/resubmitted on existing records but is never offered as a new choice.
 2. **Service Information**: Date, start/end time (live duration preview), and description are common to both sources. For a **registered project**, organization, service nature, and location are read-only, pulled from the project itself — the student never types them. For **self-initiated**, the student fills in location, an optional organization name, and service nature directly. Both sources expose a travel-time disclosure toggle with a required reason field once toggled on.

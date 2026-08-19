@@ -14,7 +14,7 @@ public final class ProjectRequests {
     }
 
     /**
-     * {@code ownerId}: admin-only override (silently forced to the caller for anyone else — Docs/clarification/02-PorjectOrganization.md §3).
+     * {@code ownerId}: admin-only override (silently forced to the caller for anyone else — Docs/optimization/02-PorjectOrganization.md §3).
      * {@code organizationId}: the project's PARTNER organization, if any (never the school organization itself — that's
      * automatic, issue 03 §4.2). {@code deliveryScope}: required, one of {@code ON_CAMPUS}/{@code OFF_CAMPUS}/{@code HYBRID}.
      */

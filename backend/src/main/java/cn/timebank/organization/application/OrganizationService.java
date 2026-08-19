@@ -21,7 +21,7 @@ public interface OrganizationService {
     void archive(String id, String actorId);
 
     /**
-     * The one {@code isSchoolOrganization = true} row (Docs/clarification/03-ServiceRecordFormOptimization.md
+     * The one {@code isSchoolOrganization = true} row (Docs/optimization/03-ServiceRecordFormOptimization.md
      * §4.1) — the host organization for every project, and the source `ProjectServiceImpl`/
      * `ServiceRecordServiceImpl` resolve it from rather than trusting a client-supplied id.
      * Throws if the row is missing; a missing row means the startup health check

@@ -431,7 +431,7 @@ export interface EventProposal {
   /**
    * Real ids behind the display fields above — added alongside the
    * co-organizer/supervisor/organization pickers
-   * (`Docs/clarification/01-i3-partner-school-terminology.md`).
+   * (`Docs/optimization/01-i3-partner-school-terminology.md`).
    * `newOrganizationName` is write-only (never comes back from a
    * read); it exists here only so `formToApiData` can round-trip through
    * the same `Partial<EventProposal>` the create/update calls already use.

@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * {@code GET /users/directory} and the {@code proposedSupervisorId}
- * validation it exists to support (`Docs/clarification/01-i3-partner-school-terminology.md`) —
+ * validation it exists to support (`Docs/optimization/01-i3-partner-school-terminology.md`) —
  * a minimal id+displayName search scoped to one role, and an existence+role
  * check for a supervisor id a student picked through it.
  */

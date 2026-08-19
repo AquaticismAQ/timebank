@@ -2,7 +2,7 @@ package cn.timebank.student.application.dto;
 
 /**
  * {@code GET /students/directory} row (contract §4.9, added alongside the
- * proposal co-organizer picker, `Docs/clarification/01-i3-partner-school-terminology.md`).
+ * proposal co-organizer picker, `Docs/optimization/01-i3-partner-school-terminology.md`).
  * Deliberately narrower than {@link StudentListItemDto} even though none of
  * that DTO's fields are contract-sensitive (§9 already excludes email/
  * guardian data from it) — this endpoint is reachable by any student via

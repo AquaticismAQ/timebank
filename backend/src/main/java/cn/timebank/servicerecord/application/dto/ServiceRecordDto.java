@@ -7,8 +7,8 @@ import java.util.List;
 /**
  * Denormalized names travel with their id (contract §2.11), resolved once per read by the service, never via lazy entity navigation.
  * {@code recordNumber}/{@code travelTimeReason}/{@code supervisorKind}/{@code hostOrganizationName}/{@code partnerOrganizationNames}
- * are issue-03 additions — null/empty for historical records that pre-date them (Docs/clarification/03-ServiceRecordFormOptimization.md §5).
- * {@code gradeLevel}/{@code className}/{@code reviewerName} are Docs/clarification/04-DataViewOptimization.md §3.2's addition, so the
+ * are issue-03 additions — null/empty for historical records that pre-date them (Docs/optimization/03-ServiceRecordFormOptimization.md §5).
+ * {@code gradeLevel}/{@code className}/{@code reviewerName} are Docs/optimization/04-DataViewOptimization.md §3.2's addition, so the
  * audit detail workbench doesn't have to merge this DTO with the review-queue-only {@code ReviewQueueItemDto} to show them —
  * {@code reviewedAt} was considered and deliberately left out: there's no single "last reviewed" column on the record itself, and the
  * real, multi-event review history belongs on the {@code /timeline} endpoint's review-history tab, not flattened onto this DTO.

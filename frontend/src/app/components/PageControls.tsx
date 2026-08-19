@@ -14,7 +14,7 @@ const SELECT_CLASS = 'px-2 py-1 rounded-lg border border-border bg-input-backgro
 /**
  * I1.2's shared pagination control — composes the vendored ui/pagination.tsx primitives, reused across every swapped list screen instead of rebuilt per screen.
  * `pageSize`/`onPageSizeChange` are optional and opt a caller into the page-size selector and page-jump input added by
- * Docs/clarification/04-DataViewOptimization.md §2.3/§6 phase 1 — omitting them (every screen this round doesn't migrate, per §2.5's scope decision)
+ * Docs/optimization/04-DataViewOptimization.md §2.3/§6 phase 1 — omitting them (every screen this round doesn't migrate, per §2.5's scope decision)
  * reproduces the exact prior behavior unchanged, prev/next included.
  */
 export function PageControls({

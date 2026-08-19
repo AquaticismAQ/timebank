@@ -21,7 +21,7 @@ import java.util.Set;
  *
  * {@code CLOSED} means exactly one thing — the registration window has
  * elapsed — never a manager-initiated cancellation (that used to share this
- * status; see {@code Docs/clarification/02-PorjectOrganization.md} §2 for
+ * status; see {@code Docs/optimization/02-PorjectOrganization.md} §2 for
  * why it was split out). Cancelling a live project is {@link #cancel}, a
  * deliberately separate path from this class's normal edge table — routing
  * it through {@link #transition} instead would make it reachable from the
