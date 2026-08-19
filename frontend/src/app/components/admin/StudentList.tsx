@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, ChevronDown, ChevronUp, AlertCircle, Pencil, X, Save } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, AlertCircle, Pencil, Bell, FileText, X, Save } from 'lucide-react';
 import { type Student } from '../../api/types';
 import { formatCoins, minutesToHours, formatGradeClass, formatClassName } from '../../lib/format';
 import { toast } from 'sonner';
@@ -14,6 +14,21 @@ import { ListStateBanner } from '../ListStateBanner';
 import { StudentRecords } from './StudentRecords';
 
 type SortKey = 'name' | 'gradeLevel' | 'completedHours' | 'timeCoinBalance';
+
+/**
+ * Docs/issues/028: row-action color per action — icon + label, bordered,
+ * never filled — matching the convention `SystemAdmin.tsx`/
+ * `RoleManagement.tsx` established (`ACTION_BTN_BLUE`/etc.) for
+ * Users/Roles/Templates/Rule Settings. Composed with layout-specific base
+ * classes at each call site (desktop table cell vs. mobile card's
+ * equal-width row), rather than one fixed className per color, since the
+ * two layouts need different padding/flex shape.
+ */
+const ACTION_COLORS = {
+  blue: 'border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20',
+  amber: 'border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20',
+  cyan: 'border-cyan-200 dark:border-cyan-800 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/20',
+} as const;
 
 function ProgressBar({ value, max, color = 'bg-primary' }: { value: number; max: number; color?: string }) {
   const pct = Math.min((value / max) * 100, 100);
@@ -395,16 +410,16 @@ export function StudentList() {
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
                       <button onClick={() => openEdit(student)}
-                        className="text-xs px-2 py-1 rounded-lg border border-border hover:bg-accent text-muted-foreground transition-colors flex items-center gap-1">
+                        className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.blue}`}>
                         <Pencil className="w-3 h-3" /> {t('admin.students.edit')}
                       </button>
                       <button onClick={() => toast.success(t('admin.students.toastRemindSent', { name: student.name }))}
-                        className="text-xs px-2 py-1 rounded-lg border border-border hover:bg-accent text-muted-foreground transition-colors">
-                        {t('admin.students.remind')}
+                        className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.amber}`}>
+                        <Bell className="w-3 h-3" /> {t('admin.students.remind')}
                       </button>
                       <button onClick={() => setRecordsStudent(student)}
-                        className="text-xs px-2 py-1 rounded-lg border border-border hover:bg-accent text-muted-foreground transition-colors">
-                        {t('admin.students.records')}
+                        className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.cyan}`}>
+                        <FileText className="w-3 h-3" /> {t('admin.students.records')}
                       </button>
                     </div>
                   </td>
@@ -613,16 +628,16 @@ export function StudentList() {
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => openEdit(student)}
-                      className="flex-1 py-2 rounded-lg border border-border text-xs text-foreground hover:bg-accent transition-colors flex items-center justify-center gap-1">
+                      className={`flex-1 py-2 rounded-lg border text-xs transition-colors flex items-center justify-center gap-1 ${ACTION_COLORS.blue}`}>
                       <Pencil className="w-3 h-3" /> {t('admin.students.edit')}
                     </button>
                     <button onClick={() => toast.success(t('admin.students.toastRemindSent', { name: student.name }))}
-                      className="flex-1 py-2 rounded-lg border border-border text-xs text-foreground hover:bg-accent transition-colors">
-                      {t('admin.students.remind')}
+                      className={`flex-1 py-2 rounded-lg border text-xs transition-colors flex items-center justify-center gap-1 ${ACTION_COLORS.amber}`}>
+                      <Bell className="w-3 h-3" /> {t('admin.students.remind')}
                     </button>
                     <button onClick={() => setRecordsStudent(student)}
-                      className="flex-1 py-2 rounded-lg border border-border text-xs text-foreground hover:bg-accent transition-colors">
-                      {t('admin.students.records')}
+                      className={`flex-1 py-2 rounded-lg border text-xs transition-colors flex items-center justify-center gap-1 ${ACTION_COLORS.cyan}`}>
+                      <FileText className="w-3 h-3" /> {t('admin.students.records')}
                     </button>
                   </div>
                 </div>
