@@ -20,6 +20,8 @@ TIMEBANK_DB_USERNAME=timebank_app TIMEBANK_DB_PASSWORD=<from test-server-credits
 
 Optional env vars: `TIMEBANK_SSH_TARGET` (default `root@tb.example.com`), `TIMEBANK_BASE_URL` (default `https://tb.example.com`).
 
+If you keep `~/.timebank.env` (see `Docs/operations/DeploymentEnv.md`), `source ~/.timebank.env` before `npm run seed` sets all of the above at once instead of exporting them inline.
+
 Requires: SSH key access to the server (same key used for `backend/scripts/deploy.sh`), Node 18+ (for global `fetch`/`Headers.getSetCookie()`).
 
 At the end, the script prints the username/password for every account it created — **that output is the only place the plaintext passwords exist**; copy them into `Docs/TestAccounts.md` yourself (the script doesn't touch that file, since it's a committed doc a human should review before it changes).

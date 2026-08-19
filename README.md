@@ -71,6 +71,48 @@ Documentation is currently available in **Chinese only**. English translations w
 
 ---
 
+## Building & Running Locally · 本地构建与运行
+
+**English** — The Phase 2 online system is a React/Vite frontend (`frontend/`) plus a Spring Boot/Java 21/MySQL backend (`backend/`), documented in full in `frontend/README.md`, `backend/scripts/`, and `CLAUDE.md`/`AGENTS.md`. Quick start:
+
+```bash
+# Frontend (needs a running backend to talk to — see frontend/README.md)
+cd frontend
+pnpm install
+cp .env.example .env.local   # set VITE_DEV_PROXY_TARGET to a real backend URL
+pnpm dev
+
+# Backend
+cd backend
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn compile   # local compile check
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn test        # fast tests, no external services
+```
+
+There is no local mock mode and no Docker anywhere in this project — the frontend always talks to a real backend, and `mvn verify`'s integration tests run against real MySQL (see `backend/scripts/verify.sh`, and `Docs/operations/DeploymentEnv.md` for the credentials/config those commands need).
+
+**中文** — 二期线上系统由 React/Vite 前端（`frontend/`）与 Spring Boot / Java 21 / MySQL 后端（`backend/`）组成，详细说明见 `frontend/README.md`、`backend/scripts/` 与 `CLAUDE.md`/`AGENTS.md`。快速开始见上方英文代码块。本项目不提供本地 Mock 模式，也不使用 Docker——前端始终对接真实后端，`mvn verify` 的集成测试运行在真实 MySQL 上（见 `backend/scripts/verify.sh`；所需凭证/配置见 `Docs/operations/DeploymentEnv.md`）。
+
+---
+
+## Deployment · 部署
+
+**English** — The frontend and backend deploy to a single shared test server (no staging environment yet — see `Docs/operations/Runbooks.md`). Both deploy scripts are designed to be safe to commit: neither hardcodes the real hostname or any secret, both source an optional, untracked `~/.timebank.env` for convenience (see `Docs/operations/DeploymentEnv.md`), and real credentials live only in the untracked `test-server-credits.md`.
+
+```bash
+frontend/scripts/deploy.sh [user@host]   # builds locally, rsyncs dist/ to nginx, reloads nginx
+
+# Backend: sync source, then run on the server itself (needs the target JVM)
+rsync -az --delete --exclude 'target/' --exclude '.git/' backend/ <user@host>:/opt/timebank-backend/
+ssh <user@host>
+cd /opt/timebank-backend && ./scripts/verify.sh && ./scripts/deploy.sh
+```
+
+`Docs/operations/DeploymentEnv.md` covers the `~/.timebank.env` convenience file that both scripts pick up automatically if present, so collaborators don't have to re-export the deploy target and database credentials by hand every session.
+
+**中文** — 前端与后端部署到同一台共享测试服务器（尚无独立的预发布环境，见 `Docs/operations/Runbooks.md`）。两个部署脚本均可安全提交：不硬编码真实主机名或任何密钥，均会在存在时自动加载未纳入版本控制的 `~/.timebank.env`（见 `Docs/operations/DeploymentEnv.md`），真实凭证仅保存在未纳入版本控制的 `test-server-credits.md` 中。命令示例见上方英文代码块。`Docs/operations/DeploymentEnv.md` 说明了 `~/.timebank.env` 这一便利文件的结构，两个脚本在其存在时会自动加载，协作者无需每次手动重新导出部署目标与数据库凭证。
+
+---
+
 ## License · 许可证
 
 This project's documentation is shared for educational and reference purposes. For licensing details, please contact the project maintainers.

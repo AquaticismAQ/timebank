@@ -16,8 +16,15 @@
 #   frontend/scripts/deploy.sh [user@host]
 # The real host isn't hardcoded here (this repo is public) — pass it as an
 # arg, or export TIMEBANK_DEPLOY_TARGET (see the untracked test-server-credits.md).
+# If ~/.timebank.env exists (see Docs/operations/DeploymentEnv.md), it's
+# sourced first so collaborators don't have to export this by hand.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+if [ -f "$HOME/.timebank.env" ]; then
+  # shellcheck disable=SC1090,SC1091
+  source "$HOME/.timebank.env"
+fi
 
 TARGET="${1:-${TIMEBANK_DEPLOY_TARGET:-root@tb.example.com}}"
 REMOTE_DOCROOT="/var/www/timebank"
