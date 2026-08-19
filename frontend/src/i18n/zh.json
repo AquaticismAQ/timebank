@@ -1285,7 +1285,8 @@
       "title": "系统管理",
       "subtitle": "仅系统管理员可操作",
       "featureToggleNotAvailable": "功能开关管理暂未开放",
-      "tabUsers": "用户与角色",
+      "tabUsers": "用户",
+      "tabRoles": "角色",
       "tabRules": "规则设置",
       "tabImport": "数据导入导出",
       "tabLogs": "审计日志",
@@ -1303,11 +1304,13 @@
       "active": "活跃",
       "inactive": "停用",
       "edit": "编辑",
+      "view": "查看",
       "nameLabel": "姓名",
       "namePlaceholder": "如：Louis 余",
       "emailLabel": "邮箱",
       "emailPlaceholder": "如：louis.yu@example.edu.cn",
       "rolesLabel": "角色",
+      "selectRolePlaceholder": "请选择角色",
       "multiSelect": "可多选",
       "scopeGradesLabel": "年级绑定",
       "scopeGradesAdminNote": "管理员默认拥有所有年级的访问权限，无需选择年级。",
@@ -1538,6 +1541,172 @@
         "storageUsageValue": "2.3 GB / 10 GB",
         "supportContact": "技术支持",
         "supportContactValue": "学生发展中心 H300 · 魏晨老师"
+      }
+    },
+    "roles": {
+      "roleCount": "{{count}} 个角色",
+      "permissionCount": "{{count}} 项权限",
+      "createRole": "创建角色",
+      "editRole": "编辑角色",
+      "viewRole": "查看角色",
+      "saveChanges": "保存更改",
+      "deleteRole": "删除角色",
+      "confirmDeleteRole": "确定删除该角色？此操作无法撤销。",
+      "roleCreated": "角色「{{name}}」已创建",
+      "roleUpdated": "角色已更新",
+      "roleDeleted": "角色「{{name}}」已删除",
+      "colName": "名称",
+      "colCode": "代码",
+      "colPermissions": "权限",
+      "colUsers": "用户数",
+      "colTimeout": "会话超时",
+      "colActions": "操作",
+      "userCount": "{{count}} 位用户",
+      "deleteBlockedInUse": "无法删除——当前有 {{count}} 位用户使用此角色",
+      "codeLabel": "角色代码",
+      "codePlaceholder": "例如 discipline_officer",
+      "codeHint": "机器可读标识符——创建后不可更改。",
+      "nameLabel": "显示名称",
+      "sessionTimeoutLabel": "会话超时",
+      "minutesUnit": "分钟",
+      "permissionsLabel": "权限",
+      "searchPermissions": "搜索权限...",
+      "studentOnlyDisclaimer": "仅限内置学生角色使用的权限不会在此显示。",
+      "riskyPermissionHint": "授予前请再次确认",
+      "protectedNote": "这是受保护的内置角色——无法删除，也无法编辑（名称、权限与会话超时均已锁定）。",
+      "closeReadOnly": "关闭",
+      "errorCodeRequired": "请填写角色代码",
+      "errorNameRequired": "请填写显示名称",
+      "errorTimeoutInvalid": "会话超时必须为正数",
+      "errorPermissionsRequired": "请至少选择一项权限",
+      "templateCount": "{{count}} 个模板",
+      "createTemplate": "创建模板",
+      "editTemplate": "编辑模板",
+      "deleteTemplate": "删除模板",
+      "confirmDeleteTemplate": "确定删除该模板？此操作无法撤销。",
+      "templateCreated": "模板「{{name}}」已创建",
+      "templateUpdated": "模板已更新",
+      "templateDeleted": "模板「{{name}}」已删除",
+      "noTemplates": "暂无模板",
+      "selectTemplatePlaceholder": "从模板开始",
+      "permissionGroups": {
+        "projects": "项目",
+        "eventProposals": "活动提案",
+        "applications": "报名",
+        "serviceRecords": "服务记录",
+        "reviews": "审核",
+        "cases": "申诉与复核",
+        "students": "学生",
+        "progress": "达标进度",
+        "organizations": "合作组织",
+        "accounts": "时间币账户",
+        "rules": "规则",
+        "reports": "统计报表",
+        "exports": "数据导出",
+        "imports": "数据导入",
+        "users": "用户",
+        "roles": "角色",
+        "auditLogs": "审计日志",
+        "securityLogs": "登录日志",
+        "settings": "系统设置",
+        "lifecycle": "数据生命周期",
+        "directory": "人员目录"
+      },
+      "permissionDescriptions": {
+        "projects": {
+          "read": "查看可见范围内的项目",
+          "create": "创建项目草稿",
+          "update": "编辑项目",
+          "publish": "发布项目",
+          "close": "提前关闭项目",
+          "archive": "在所有已确认学生的记录均通过审核后，归档已完成的项目",
+          "cancel": "直接取消并归档项目（跳过\"记录已审核\"限制，需填写原因）",
+          "audit": { "read": "查看项目变更时间线" }
+        },
+        "eventProposals": {
+          "read": "查看可见范围内的活动提案",
+          "create": "提交活动提案",
+          "review": "审核/批准/驳回活动提案",
+          "assign": "指派或转交提案审核人"
+        },
+        "applications": {
+          "read": "查看可见范围内的报名信息",
+          "create": "报名参加项目",
+          "manage": "确认、拒绝或批量管理报名"
+        },
+        "serviceRecords": {
+          "read": "查看可见范围内的服务记录",
+          "create": "创建并提交服务记录"
+        },
+        "reviews": {
+          "read": "查看审核队列",
+          "decide": "提交审核决定",
+          "bulkDecide": "批量提交审核决定",
+          "assign": "指派或转交记录审核人"
+        },
+        "cases": {
+          "read": "查看可见范围内的申诉/复核",
+          "create": "创建申诉或复核申请",
+          "decide": "裁定申诉或复核"
+        },
+        "students": {
+          "read": "查看可见范围内的学生名册",
+          "manage": "创建或更新学生信息"
+        },
+        "progress": {
+          "read": "查看达标进度"
+        },
+        "organizations": {
+          "read": "查看合作组织",
+          "manage": "创建或更新合作组织"
+        },
+        "accounts": {
+          "read": "查看时间币账户余额与交易记录",
+          "adjust": "创建人工账户调整",
+          "reverse": "撤销一笔账户交易",
+          "freeze": "冻结或解冻账户"
+        },
+        "rules": {
+          "read": "查看规则版本",
+          "manage": "创建或编辑规则草稿与服务类别",
+          "publish": "发布规则版本"
+        },
+        "reports": {
+          "read": "查看统计报表与仪表盘"
+        },
+        "exports": {
+          "create": "创建数据导出任务"
+        },
+        "imports": {
+          "create": "创建数据导入任务",
+          "read": "查看导入任务状态与错误",
+          "commit": "确认并提交导入"
+        },
+        "users": {
+          "read": "查看用户账号",
+          "manage": "创建、更新、解锁或重置用户"
+        },
+        "roles": {
+          "read": "查看角色与权限目录",
+          "manage": "创建、更新或删除角色"
+        },
+        "auditLogs": {
+          "read": "查看操作审计日志"
+        },
+        "securityLogs": {
+          "read": "查看登录日志"
+        },
+        "settings": {
+          "read": "查看系统设置",
+          "manage": "更新系统设置"
+        },
+        "lifecycle": {
+          "purge": "触发学籍留存清退（试运行或正式执行）",
+          "reconcile": "触发账本对账并查看结果"
+        },
+        "directory": {
+          "read": "搜索仅含姓名与ID的最简人员目录，用于挑选共同组织者或指导教师"
+        }
       }
     },
     "profile": {

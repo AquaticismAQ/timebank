@@ -13,7 +13,13 @@ export interface SchoolInfo {
   academicYear?: string;
 }
 
-export type Role = 'student' | 'teacher' | 'admin' | 'sysadmin';
+/**
+ * 07-RoleFinetune.md: was a fixed 4-value union before roles became
+ * data-driven/manageable — now any role code the backend returns, custom
+ * roles included. Kept as an alias (rather than inlining `string`) so call
+ * sites reads as "a role code," not an arbitrary string.
+ */
+export type Role = string;
 
 export interface User {
   id: string;
@@ -357,6 +363,38 @@ export interface ServiceCategory {
   code: string;
   name: string;
   active: boolean;
+}
+
+/** `GET /permissions` — the flat catalog (07-RoleFinetune.md §6); `code`'s prefix before the first `.` is the resource group. */
+export interface Permission {
+  id: string;
+  code: string;
+  description: string;
+}
+
+/** `GET/POST /roles`, `PATCH /roles/{id}` — 07-RoleFinetune.md §2.2/§2.3. */
+export interface RoleSummary {
+  id: string;
+  code: string;
+  name: string;
+  sessionTimeoutMinutes: number;
+  permissionCodes: string[];
+  isProtected: boolean;
+  /** §2.4/§2.9: how many users currently hold this role — `DELETE /roles/{id}` 409s if this is nonzero. */
+  userCount: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `GET/POST /role-templates`, `PATCH /role-templates/{id}` — 07-RoleFinetune.md §2.7. No `code`/`sessionTimeoutMinutes`: a template is never assigned to a user, so neither is meaningful. */
+export interface RoleTemplateSummary {
+  id: string;
+  name: string;
+  permissionCodes: string[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** `GET /students/directory` row — a co-organizer picker's search result, deliberately narrower than `Student` (contract §4.9). */

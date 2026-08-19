@@ -1285,7 +1285,8 @@
       "title": "System Admin",
       "subtitle": "System administrators only",
       "featureToggleNotAvailable": "Feature flag management is not yet available",
-      "tabUsers": "Users & Roles",
+      "tabUsers": "Users",
+      "tabRoles": "Roles",
       "tabRules": "Rule Settings",
       "tabImport": "Data Import/Export",
       "tabLogs": "Audit Logs",
@@ -1303,11 +1304,13 @@
       "active": "Active",
       "inactive": "Inactive",
       "edit": "Edit",
+      "view": "View",
       "nameLabel": "Name",
       "namePlaceholder": "e.g. Louis Yu",
       "emailLabel": "Email",
       "emailPlaceholder": "e.g. louis.yu@example.edu.cn",
       "rolesLabel": "Roles",
+      "selectRolePlaceholder": "Select a role",
       "multiSelect": "multi-select",
       "scopeGradesLabel": "Grade Bonding",
       "scopeGradesAdminNote": "Admins have access to all grades by design — no grade selection needed.",
@@ -1538,6 +1541,172 @@
         "storageUsageValue": "2.3 GB / 10 GB",
         "supportContact": "Technical Support",
         "supportContactValue": "Student Development Center H300 · Teacher Wei Chen"
+      }
+    },
+    "roles": {
+      "roleCount": "{{count}} roles",
+      "permissionCount": "{{count}} permissions",
+      "createRole": "Create Role",
+      "editRole": "Edit Role",
+      "viewRole": "View Role",
+      "saveChanges": "Save Changes",
+      "deleteRole": "Delete role",
+      "confirmDeleteRole": "Delete this role? This cannot be undone.",
+      "roleCreated": "Role \"{{name}}\" created",
+      "roleUpdated": "Role updated",
+      "roleDeleted": "Role \"{{name}}\" deleted",
+      "colName": "Name",
+      "colCode": "Code",
+      "colPermissions": "Permissions",
+      "colUsers": "Users",
+      "colTimeout": "Session Timeout",
+      "colActions": "Actions",
+      "userCount": "{{count}} users",
+      "deleteBlockedInUse": "Can't delete — {{count}} user(s) currently hold this role",
+      "codeLabel": "Role Code",
+      "codePlaceholder": "e.g. discipline_officer",
+      "codeHint": "A machine-readable identifier — cannot be changed after creation.",
+      "nameLabel": "Display Name",
+      "sessionTimeoutLabel": "Session Timeout",
+      "minutesUnit": "min",
+      "permissionsLabel": "Permissions",
+      "searchPermissions": "Search permissions...",
+      "studentOnlyDisclaimer": "Permissions reserved for the built-in Student role aren't shown here.",
+      "riskyPermissionHint": "Worth a second look before granting",
+      "protectedNote": "This is a protected built-in role — it cannot be deleted or edited (name, permissions, and session timeout are all fixed).",
+      "closeReadOnly": "Close",
+      "errorCodeRequired": "A role code is required",
+      "errorNameRequired": "A display name is required",
+      "errorTimeoutInvalid": "Session timeout must be a positive number",
+      "errorPermissionsRequired": "Select at least one permission",
+      "templateCount": "{{count}} templates",
+      "createTemplate": "Create Template",
+      "editTemplate": "Edit Template",
+      "deleteTemplate": "Delete template",
+      "confirmDeleteTemplate": "Delete this template? This cannot be undone.",
+      "templateCreated": "Template \"{{name}}\" created",
+      "templateUpdated": "Template updated",
+      "templateDeleted": "Template \"{{name}}\" deleted",
+      "noTemplates": "No templates yet",
+      "selectTemplatePlaceholder": "Start from a template",
+      "permissionGroups": {
+        "projects": "Projects",
+        "eventProposals": "Event Proposals",
+        "applications": "Applications",
+        "serviceRecords": "Service Records",
+        "reviews": "Reviews",
+        "cases": "Cases",
+        "students": "Students",
+        "progress": "Progress",
+        "organizations": "Organizations",
+        "accounts": "Accounts",
+        "rules": "Rules",
+        "reports": "Reports",
+        "exports": "Exports",
+        "imports": "Imports",
+        "users": "Users",
+        "roles": "Roles",
+        "auditLogs": "Audit Logs",
+        "securityLogs": "Security Logs",
+        "settings": "Settings",
+        "lifecycle": "Lifecycle",
+        "directory": "Directory"
+      },
+      "permissionDescriptions": {
+        "projects": {
+          "read": "View projects within visible scope",
+          "create": "Create project drafts",
+          "update": "Edit projects",
+          "publish": "Publish a project",
+          "close": "Close a project early",
+          "archive": "Archive a completed project once every confirmed student's record is reviewed",
+          "cancel": "Cancel and archive a project outright, with a reason, bypassing the reviewed-records gate",
+          "audit": { "read": "View project change timeline" }
+        },
+        "eventProposals": {
+          "read": "View event proposals within scope",
+          "create": "Submit an event proposal",
+          "review": "Review/approve/reject event proposals",
+          "assign": "Assign or transfer a proposal reviewer"
+        },
+        "applications": {
+          "read": "View registrations within scope",
+          "create": "Register for a project",
+          "manage": "Confirm, reject, or bulk-manage registrations"
+        },
+        "serviceRecords": {
+          "read": "View service records within scope",
+          "create": "Create and submit a service record"
+        },
+        "reviews": {
+          "read": "View the review queue",
+          "decide": "Submit a review decision",
+          "bulkDecide": "Submit batch review decisions",
+          "assign": "Assign or transfer a record reviewer"
+        },
+        "cases": {
+          "read": "View appeals/supplements within scope",
+          "create": "Create an appeal or supplement",
+          "decide": "Decide an appeal or supplement"
+        },
+        "students": {
+          "read": "View student directory within scope",
+          "manage": "Create or update student records"
+        },
+        "progress": {
+          "read": "View progress tracking"
+        },
+        "organizations": {
+          "read": "View partner organizations",
+          "manage": "Create or update partner organizations"
+        },
+        "accounts": {
+          "read": "View account balances and transactions",
+          "adjust": "Create a manual account adjustment",
+          "reverse": "Reverse an account transaction",
+          "freeze": "Freeze or unfreeze an account"
+        },
+        "rules": {
+          "read": "View rule versions",
+          "manage": "Create or edit rule drafts and service categories",
+          "publish": "Publish a rule version"
+        },
+        "reports": {
+          "read": "View dashboards and reports"
+        },
+        "exports": {
+          "create": "Create a data export job"
+        },
+        "imports": {
+          "create": "Create a data import job",
+          "read": "View import job status and errors",
+          "commit": "Confirm and commit an import"
+        },
+        "users": {
+          "read": "View user accounts",
+          "manage": "Create, update, unlock, or reset users"
+        },
+        "roles": {
+          "read": "View roles and the permission catalog",
+          "manage": "Create, update, or delete roles"
+        },
+        "auditLogs": {
+          "read": "View the operation audit log"
+        },
+        "securityLogs": {
+          "read": "View login logs"
+        },
+        "settings": {
+          "read": "View system settings",
+          "manage": "Update system settings"
+        },
+        "lifecycle": {
+          "purge": "Trigger a cohort retention purge (dry-run or real)",
+          "reconcile": "Trigger a ledger reconciliation run and view its results"
+        },
+        "directory": {
+          "read": "Search a minimal id+displayName directory of students/teachers, for picking a co-organizer or supervisor"
+        }
       }
     },
     "profile": {

@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Trash2, Lock, Building2 } from 'lucide-react';
+import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Trash2, Lock, Building2, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, useLogs, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { OrganizationManagement } from './OrganizationManagement';
+import { RoleManagement } from './RoleManagement';
 import { GradePicker } from '../GradePicker';
 import { useDictionaries } from '../../api/useDictionaries';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { formatGradeClass } from '../../lib/format';
+import type { RoleSummary } from '../../api/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 // ── Rule config types ──────────────────────────────────────────────────────
 
@@ -163,15 +166,14 @@ function RuleModal({ section, onClose, onSave }: RuleModalProps) {
   );
 }
 
-type Tab = 'users' | 'rules' | 'import' | 'logs' | 'organizations' | 'settings';
-type UserRole = 'admin' | 'teacher' | 'student';
+type Tab = 'users' | 'roles' | 'rules' | 'import' | 'logs' | 'organizations' | 'settings';
 type UserStatus = 'active' | 'inactive';
 
 interface AdminUser {
   id: string;
   name: string;
   email: string;
-  roles: UserRole[];
+  roleCode: string;
   status: UserStatus;
   lastLogin: string;
   version: number;
@@ -180,28 +182,43 @@ interface AdminUser {
   staffId?: string;
 }
 
-const INITIAL_USERS: AdminUser[] = [
-  { id: 'u1', name: 'Wei 陈老师', email: 'wei.chen@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-27', version: 1, scopeGradeIds: [] },
-  { id: 'u2', name: 'Alex 林', email: 'alex.lin@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-26', version: 1, scopeGradeIds: [] },
-  { id: 'u3', name: 'Mei 赵老师', email: 'mei.zhao@example-school.cn', roles: ['admin'], status: 'active', lastLogin: '2026-07-25', version: 1, scopeGradeIds: [] },
-  { id: 'u4', name: 'Jordan', email: 'jordan@example-school.cn', roles: ['teacher', 'student'], status: 'active', lastLogin: '2026-07-24', version: 1, scopeGradeIds: [] },
-  { id: 'u5', name: 'Nina 江', email: 'nina.jiang@example-school.cn', roles: ['teacher'], status: 'active', lastLogin: '2026-07-20', version: 1, scopeGradeIds: [] },
-];
+/**
+ * 07-RoleFinetune.md §2.2/§4: `sysadmin` is deliberately excluded from both
+ * the Roles tab's list and this picker — it stays protected and fully
+ * functional, just invisible to this round's UI (created only via direct
+ * SQL, as today). Roles are otherwise server data now, not a fixed set.
+ */
+const HIDDEN_ROLE_CODES = new Set(['sysadmin']);
 
+/**
+ * 07-RoleFinetune.md §2.6.2: grade assignment applies to any role except
+ * these three — admin (and sysadmin) cover every grade by design, student
+ * gets their grade from the linked roster row. A structural rule, not a
+ * per-role flag, so a newly created custom role gets the grade picker for
+ * free without any extra configuration.
+ */
+const NO_GRADE_SCOPE_ROLES = new Set(['admin', 'student', 'sysadmin']);
 
-const ROLE_LABELS: Record<UserRole, string> = { admin: 'labels.roles.admin', teacher: 'labels.roles.teacher', student: 'labels.roles.student' };
-const ALL_ROLES: UserRole[] = ['admin', 'teacher', 'student'];
+/** The three built-in, non-hidden roles keep their bilingual i18n labels; any custom role's `name` (as typed by whoever created it) is shown as-is — there's no per-locale name column to translate a custom role into. */
+const KNOWN_ROLE_LABEL_KEYS: Record<string, string> = {
+  admin: 'labels.roles.admin', teacher: 'labels.roles.teacher', student: 'labels.roles.student',
+};
 
-function roleColor(role: UserRole) {
-  if (role === 'admin') return 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300';
-  if (role === 'teacher') return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300';
+function roleDisplayName(role: Pick<RoleSummary, 'code' | 'name'>, t: (key: string) => string): string {
+  const key = KNOWN_ROLE_LABEL_KEYS[role.code];
+  return key ? t(key) : role.name;
+}
+
+function roleColor(roleCode: string) {
+  if (roleCode === 'admin' || roleCode === 'sysadmin') return 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300';
+  if (roleCode === 'teacher') return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300';
   return 'bg-muted text-muted-foreground';
 }
 
 interface UserFormState {
   name: string;
   email: string;
-  roles: UserRole[];
+  roleCode: string;
   status: UserStatus;
   password: string;
   confirmPassword: string;
@@ -212,14 +229,14 @@ interface UserFormState {
 }
 
 const emptyForm = (): UserFormState => ({
-  name: '', email: '', roles: [], status: 'active',
+  name: '', email: '', roleCode: '', status: 'active',
   password: '', confirmPassword: '', showResetPwd: false, scopeGradeIds: [],
   studentId: undefined, staffId: '',
 });
 
 function userToForm(u: AdminUser): UserFormState {
   return {
-    name: u.name, email: u.email, roles: [...u.roles], status: u.status,
+    name: u.name, email: u.email, roleCode: u.roleCode, status: u.status,
     password: '', confirmPassword: '', showResetPwd: false, scopeGradeIds: [...u.scopeGradeIds],
     studentId: u.studentId, staffId: u.staffId ?? '',
   };
@@ -228,12 +245,13 @@ function userToForm(u: AdminUser): UserFormState {
 interface UserModalProps {
   mode: 'create' | 'edit';
   initial: UserFormState;
+  roles: RoleSummary[];
   onClose: () => void;
   onSave: (form: UserFormState) => void;
   onDelete?: () => void;
 }
 
-function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps) {
+function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModalProps) {
   const { t } = useTranslation();
   const [form, setForm] = useState<UserFormState>(initial);
   const [showPwd, setShowPwd] = useState(false);
@@ -255,25 +273,26 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
 
   const set = (patch: Partial<UserFormState>) => setForm(prev => ({ ...prev, ...patch }));
 
-  const toggleRole = (role: UserRole) => {
-    set({ roles: form.roles.includes(role) ? form.roles.filter(r => r !== role) : [...form.roles, role] });
-  };
+  const selectRole = (roleCode: string) => set({ roleCode });
 
   const toggleScopeGrade = (gradeId: string) => {
     set({ scopeGradeIds: form.scopeGradeIds.includes(gradeId) ? form.scopeGradeIds.filter(g => g !== gradeId) : [...form.scopeGradeIds, gradeId] });
   };
 
-  const isTeacher = form.roles.includes('teacher');
-  const isAdmin = form.roles.includes('admin');
-  const isAdminOnly = isAdmin && !isTeacher;
-  const isStudent = form.roles.includes('student');
-  const needsStaffId = isTeacher || isAdmin;
+  // 07-RoleFinetune.md §2.5/§2.6.2: one role per user. Student's linked-
+  // roster search and the staffId requirement stay keyed to `isStudent`;
+  // grade assignment is now structural (§2.6.2) — any role other than
+  // admin/student/sysadmin needs it, not just literal "teacher".
+  const isStudent = form.roleCode === 'student';
+  const isAdmin = form.roleCode === 'admin';
+  const needsGradeScope = form.roleCode !== '' && !NO_GRADE_SCOPE_ROLES.has(form.roleCode);
+  const needsStaffId = form.roleCode !== '' && !isStudent;
 
   const handleSave = () => {
     if (!form.name.trim()) { toast.error(t('admin.system.errorNameRequired')); return; }
     if (!form.email.trim() || !form.email.includes('@')) { toast.error(t('admin.system.errorEmailInvalid')); return; }
-    if (form.roles.length === 0) { toast.error(t('admin.system.errorRoleRequired')); return; }
-    if (isTeacher && form.scopeGradeIds.length === 0) { toast.error(t('admin.system.errorGradeRequired')); return; }
+    if (!form.roleCode) { toast.error(t('admin.system.errorRoleRequired')); return; }
+    if (needsGradeScope && form.scopeGradeIds.length === 0) { toast.error(t('admin.system.errorGradeRequired')); return; }
     if (isStudent && !form.studentId) { toast.error(t('admin.system.errorStudentLinkRequired')); return; }
     if (needsStaffId && !form.staffId.trim()) { toast.error(t('admin.system.errorStaffIdRequired')); return; }
     if (mode === 'create') {
@@ -321,25 +340,27 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
               className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
           </div>
 
-          {/* Roles */}
+          {/* Role (single-select dropdown — 07-RoleFinetune.md §2.5/§2.6.3: a
+              button row doesn't scale once custom roles are added) */}
           <div>
-            <label className="block text-xs text-muted-foreground mb-2">{t('admin.system.rolesLabel')} * ({t('admin.system.multiSelect')})</label>
-            <div className="flex gap-2">
-              {ALL_ROLES.map(role => (
-                <button key={role} type="button" onClick={() => toggleRole(role)}
-                  className={`flex-1 py-2 rounded-xl border text-sm transition-colors ${
-                    form.roles.includes(role)
-                      ? 'bg-[oklch(0.488_0.243_264.376)] text-white border-[oklch(0.488_0.243_264.376)]'
-                      : 'border-border text-muted-foreground hover:bg-accent'
-                  }`}>
-                  {t(ROLE_LABELS[role])}
-                </button>
-              ))}
-            </div>
+            <label className="block text-xs text-muted-foreground mb-2">{t('admin.system.rolesLabel')} *</label>
+            <Select value={form.roleCode || undefined} onValueChange={selectRole}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t('admin.system.selectRolePlaceholder')} />
+              </SelectTrigger>
+              <SelectContent>
+                {roles.map(role => (
+                  <SelectItem key={role.id} value={role.code}>{roleDisplayName(role, t)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Grade bonding (teacher: real & required; admin-only: informational) */}
-          {isTeacher && (
+          {/* Grade bonding — required for any role except admin/student/
+              sysadmin (§2.6.2): admin covers every grade by design, student
+              gets theirs from the linked roster row, informational metadata
+              post-§2.1, not a visibility restriction. */}
+          {needsGradeScope && (
             <div>
               <label className="block text-xs text-muted-foreground mb-2">
                 {t('admin.system.scopeGradesLabel')} * ({t('admin.system.multiSelect')})
@@ -347,7 +368,8 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
               <GradePicker grades={grades} selected={form.scopeGradeIds} onToggle={toggleScopeGrade} />
             </div>
           )}
-          {isAdminOnly && (
+
+          {isAdmin && (
             <p className="text-xs text-muted-foreground bg-muted rounded-xl px-3 py-2.5">
               {t('admin.system.scopeGradesAdminNote')}
             </p>
@@ -374,7 +396,7 @@ function UserModal({ mode, initial, onClose, onSave, onDelete }: UserModalProps)
             </div>
           )}
 
-          {/* Staff ID (teacher or admin) */}
+          {/* Staff ID (any non-student role) */}
           {needsStaffId && (
             <div>
               <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.staffIdLabel')} *</label>
@@ -503,15 +525,27 @@ export function SystemAdmin() {
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const canManageUsers = hasPermission('users.manage');
+  // 07-RoleFinetune.md §2.3: was a literal `roles.includes('admin')` check,
+  // so a permission-equivalent sysadmin account (post admin/sysadmin merge)
+  // still couldn't edit rules from here — permission-based now, matching
+  // the backend's `ProjectController.isAdmin` fix.
+  const canManageRules = hasPermission('rules.manage');
+  const canReadRoles = hasPermission('roles.read');
+  const canManageRoles = hasPermission('roles.manage');
+  // 07-RoleFinetune.md §2.7: template management is admin/sysadmin-only by
+  // role code, not just roles.manage — narrower than ordinary role
+  // management (enforced server-side too; this only hides the buttons
+  // that would otherwise 403).
+  const canManageTemplates = canManageRoles && (user?.roles.includes('admin') || user?.roles.includes('sysadmin')) === true;
   const { logs, addLog } = useLogs();
-  const isAdmin = user?.roles?.includes('admin') ?? false;
   const [schoolName, setSchoolName] = useState('');
 
   useEffect(() => {
     api.school.getInfo().then(info => setSchoolName(info.name)).catch(() => {});
   }, []);
   const [activeTab, setActiveTab] = useState<Tab>('users');
-  const [users, setUsers] = useState<AdminUser[]>(INITIAL_USERS);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [roles, setRoles] = useState<RoleSummary[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
   const [rules, setRules] = useState<RuleSection[]>(INITIAL_RULES);
@@ -522,11 +556,21 @@ export function SystemAdmin() {
   const studentImportFileRef = useRef<HTMLInputElement>(null);
   const [importType, setImportType] = useState<string>('');
 
+  const loadRoles = () => {
+    api.roles.list().then(list => {
+      setRoles(list.filter(r => !HIDDEN_ROLE_CODES.has(r.code)));
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadRoles();
+  }, []);
+
   useEffect(() => {
     api.users.list().then(result => {
       setUsers(result.data.map(u => ({
         id: u.id, name: u.displayName, email: u.email,
-        roles: u.roles.map(r => r.toLowerCase()) as UserRole[],
+        roleCode: u.roleCode,
         status: (u.status as UserStatus) || 'active',
         lastLogin: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : '—',
         version: u.version, scopeGradeIds: u.scopeGradeIds,
@@ -534,6 +578,11 @@ export function SystemAdmin() {
       })));
     }).catch(() => {});
   }, []);
+
+  const roleName = (code: string): string => {
+    const role = roles.find(r => r.code === code);
+    return role ? roleDisplayName(role, t) : code;
+  };
 
   const toggleFeature = (_key: keyof typeof features) => {
     toast.info(t('admin.system.featureToggleNotAvailable') || 'Feature flag management is not yet available');
@@ -549,23 +598,23 @@ export function SystemAdmin() {
   const handleCreate = async (form: UserFormState) => {
     setSaving(true);
     try {
-      const isTeacher = form.roles.includes('teacher');
-      const needsStaffId = isTeacher || form.roles.includes('admin');
-      const isStudent = form.roles.includes('student');
+      const needsGradeScope = form.roleCode !== '' && !NO_GRADE_SCOPE_ROLES.has(form.roleCode);
+      const isStudent = form.roleCode === 'student';
+      const needsStaffId = form.roleCode !== '' && !isStudent;
       const result = await api.users.create({
         username: form.email.split('@')[0],
         initialPassword: form.password,
         displayName: form.name.trim(),
         email: form.email.trim(),
-        roleCodes: form.roles.map(r => r.toUpperCase()),
-        scopeGradeIds: isTeacher ? form.scopeGradeIds : undefined,
+        roleCode: form.roleCode,
+        scopeGradeIds: needsGradeScope ? form.scopeGradeIds : undefined,
         studentId: isStudent ? form.studentId : undefined,
         staffId: needsStaffId ? form.staffId.trim() : undefined,
       });
       setUsers(prev => [...prev, {
         id: result.id, name: form.name.trim(), email: form.email.trim(),
-        roles: form.roles, status: 'active', lastLogin: '—', version: 1,
-        scopeGradeIds: isTeacher ? form.scopeGradeIds : [],
+        roleCode: form.roleCode, status: 'active', lastLogin: '—', version: 1,
+        scopeGradeIds: needsGradeScope ? form.scopeGradeIds : [],
         studentId: isStudent ? form.studentId : undefined,
         staffId: needsStaffId ? form.staffId.trim() : undefined,
       }]);
@@ -584,16 +633,16 @@ export function SystemAdmin() {
     if (!editTarget) return;
     setSaving(true);
     try {
-      const isTeacher = form.roles.includes('teacher');
-      const needsStaffId = isTeacher || form.roles.includes('admin');
-      const isStudent = form.roles.includes('student');
+      const needsGradeScope = form.roleCode !== '' && !NO_GRADE_SCOPE_ROLES.has(form.roleCode);
+      const isStudent = form.roleCode === 'student';
+      const needsStaffId = form.roleCode !== '' && !isStudent;
       await api.users.update(editTarget.id, {
         displayName: form.name.trim(),
         email: form.email.trim(),
         status: form.status,
-        roleCodes: form.roles.map(r => r.toUpperCase()),
+        roleCode: form.roleCode,
         version: editTarget.version,
-        scopeGradeIds: isTeacher ? form.scopeGradeIds : [],
+        scopeGradeIds: needsGradeScope ? form.scopeGradeIds : [],
         studentId: isStudent ? form.studentId : undefined,
         staffId: needsStaffId ? form.staffId.trim() : undefined,
       });
@@ -602,8 +651,8 @@ export function SystemAdmin() {
         toast.success(t('admin.system.passwordReset') + (result.temporaryPassword ? `: ${result.temporaryPassword}` : ''));
       }
       setUsers(prev => prev.map(u => u.id === editTarget.id
-        ? { ...u, name: form.name.trim(), email: form.email.trim(), roles: form.roles, status: form.status, version: u.version + 1,
-            scopeGradeIds: isTeacher ? form.scopeGradeIds : [],
+        ? { ...u, name: form.name.trim(), email: form.email.trim(), roleCode: form.roleCode, status: form.status, version: u.version + 1,
+            scopeGradeIds: needsGradeScope ? form.scopeGradeIds : [],
             studentId: isStudent ? form.studentId : undefined,
             staffId: needsStaffId ? form.staffId.trim() : undefined }
         : u
@@ -738,6 +787,7 @@ export function SystemAdmin() {
 
   const tabs: { key: Tab; label: string; icon: typeof Users }[] = [
     { key: 'users', label: t('admin.system.tabUsers'), icon: Users },
+    ...(canReadRoles ? [{ key: 'roles' as const, label: t('admin.system.tabRoles'), icon: KeyRound }] : []),
     { key: 'rules', label: t('admin.system.tabRules'), icon: Shield },
     { key: 'import', label: t('admin.system.tabImport'), icon: FileText },
     { key: 'logs', label: t('admin.system.tabLogs'), icon: FileText },
@@ -794,11 +844,7 @@ export function SystemAdmin() {
                     <td className="px-4 py-3 text-sm text-foreground font-medium">{u.name}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{u.email}</td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-1 flex-wrap">
-                        {u.roles.map(r => (
-                          <span key={r} className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(r)}`}>{t(ROLE_LABELS[r])}</span>
-                        ))}
-                      </div>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(u.roleCode)}`}>{roleName(u.roleCode)}</span>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs ${u.status === 'active' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
@@ -833,11 +879,7 @@ export function SystemAdmin() {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground mb-2">{u.email}</div>
-                    <div className="flex gap-1 flex-wrap">
-                      {u.roles.map(r => (
-                        <span key={r} className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(r)}`}>{t(ROLE_LABELS[r])}</span>
-                      ))}
-                    </div>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(u.roleCode)}`}>{roleName(u.roleCode)}</span>
                   </div>
                   {canManageUsers && (
                   <button onClick={() => setEditTarget(u)}
@@ -855,7 +897,7 @@ export function SystemAdmin() {
       {/* ── Rules tab ─────────────────────────────────────────────── */}
       {activeTab === 'rules' && (
         <div className="space-y-4">
-          {!isAdmin && (
+          {!canManageRules && (
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-4 flex gap-3">
               <Lock className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
               <div>
@@ -870,7 +912,7 @@ export function SystemAdmin() {
             <div key={section.id} className="bg-card border border-border rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                 <h3 className="text-sm text-foreground">{t(section.title)}</h3>
-                {isAdmin ? (
+                {canManageRules ? (
                   <button onClick={() => setEditingRule(section)}
                     className="text-xs text-[oklch(0.488_0.243_264.376)] hover:opacity-70 transition-opacity">
                     {t('admin.system.edit')}
@@ -892,6 +934,11 @@ export function SystemAdmin() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* ── Roles tab ─────────────────────────────────────────────── */}
+      {activeTab === 'roles' && (
+        <RoleManagement roles={roles} canManage={canManageRoles} canManageTemplates={canManageTemplates} onChanged={loadRoles} />
       )}
 
       {/* ── Import/Export tab ─────────────────────────────────────── */}
@@ -1050,6 +1097,7 @@ export function SystemAdmin() {
         <UserModal
           mode="create"
           initial={emptyForm()}
+          roles={roles}
           onClose={() => setCreateOpen(false)}
           onSave={handleCreate}
         />
@@ -1060,6 +1108,7 @@ export function SystemAdmin() {
         <UserModal
           mode="edit"
           initial={userToForm(editTarget)}
+          roles={roles}
           onClose={() => setEditTarget(null)}
           onSave={handleEdit}
           onDelete={canManageUsers ? handleDelete : undefined}

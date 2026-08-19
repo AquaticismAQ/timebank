@@ -52,6 +52,31 @@ public class Role extends VersionedEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * 07-RoleFinetune.md §2.2, revised §2.6.1: {@code student}/{@code admin}/
+     * {@code sysadmin} only — fully locked via {@code PATCH}/{@code DELETE
+     * /roles/{id}}: undeletable, and name/permission set/session timeout are
+     * all immutable, not just deletion-blocked. Never set by {@link
+     * cn.timebank.iam.application.RoleServiceImpl#createRole} — only the
+     * seed migration marks a role protected.
+     */
+    @Column(name = "is_protected", nullable = false)
+    private boolean isProtected;
+
+    /**
+     * 07-RoleFinetune.md §2.7: a role template is a {@code role} row with
+     * this flag set — reuses the table/{@code role_permission} join rather
+     * than a parallel schema, since a template is only ever read for its
+     * permission set (to pre-fill a new role's picker) and never assigned
+     * to a user. {@code code}/{@code sessionTimeoutMinutes} are meaningless
+     * placeholders on a template row; {@code RoleTemplateDto} omits both.
+     * {@link cn.timebank.iam.application.RoleServiceImpl} keeps role and
+     * template rows strictly separate at every read/write path despite the
+     * shared storage — never both true and false for the same operation.
+     */
+    @Column(name = "is_template", nullable = false)
+    private boolean isTemplate;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "role_permission",
             joinColumns = @JoinColumn(name = "role_id"),
@@ -59,10 +84,16 @@ public class Role extends VersionedEntity {
     private Set<Permission> permissions = new HashSet<>();
 
     public Role(String id, String code, String name, int sessionTimeoutMinutes, Instant now) {
+        this(id, code, name, sessionTimeoutMinutes, now, false);
+    }
+
+    public Role(String id, String code, String name, int sessionTimeoutMinutes, Instant now, boolean isTemplate) {
         this.id = id;
         this.code = code;
         this.name = name;
         this.sessionTimeoutMinutes = sessionTimeoutMinutes;
+        this.isProtected = false;
+        this.isTemplate = isTemplate;
         this.createdAt = now;
         this.updatedAt = now;
     }

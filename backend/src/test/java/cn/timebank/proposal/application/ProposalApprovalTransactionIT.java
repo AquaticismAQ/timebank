@@ -2,9 +2,11 @@ package cn.timebank.proposal.application;
 
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.iam.application.RoleService;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.iam.application.dto.AuthenticatedUserView;
 import cn.timebank.iam.application.dto.CreateUserRequest;
+import cn.timebank.iam.application.dto.RoleRequests.CreateRoleRequest;
 import cn.timebank.iam.application.dto.UserDto;
 import cn.timebank.iam.domain.User;
 import cn.timebank.iam.infrastructure.UserRepository;
@@ -70,6 +72,8 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
     private NotificationRepository notificationRepository;
     @Autowired
     private UserService userService;
+    @Autowired
+    private RoleService roleService;
     @Autowired
     private UserRepository userRepository;
     @Autowired
@@ -174,9 +178,16 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
         assertThat(byUnmatchedSearch.getContent()).isEmpty();
     }
 
-    /** `APIContract.md` §11 acceptance scenario 8, for the proposal queue — see the equivalent test on `ServiceRecordSubmissionIT`. */
+    /**
+     * `APIContract.md` §11 acceptance scenario 8 described {@code teacher}
+     * as grade-scoped — no longer true after 07-RoleFinetune.md §2.1 made
+     * {@code teacher} a {@code hasFullDataScope()} role like {@code admin}/
+     * {@code sysadmin}. This test used to assert the out-of-scope proposal
+     * was invisible; that described the pre-07-RoleFinetune behavior §2.1
+     * deliberately changed, not a regression to guard against.
+     */
     @Test
-    void outOfScopeTeacherGetsAnInvisible404OnAProposal() {
+    void scopedTeacherSeesBothInScopeAndOutOfScopeProposalsSinceScopeNoLongerRestrictsTeachers() {
         StudentDetailDto inScopeStudent = createStudent(); // grade_6/class_6A
         StudentDetailDto outOfScopeStudent = createStudentInGrade9();
         ProposalDto inScopeProposal = createAndSubmitProposal(inScopeStudent, "In-Scope Cleanup");
@@ -184,13 +195,13 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
 
         var teacher = userService.create(new CreateUserRequest(
                 "proposal_scope_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Scope Teacher", null,
-                Set.of("teacher"), "zh-CN"), "usr_test_admin");
+                "teacher", "zh-CN"), "usr_test_admin");
         scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
                 "eventProposals", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", Instant.now()));
         Authentication teacherAuth = authFor(teacher.id(), null, Set.of("teacher"));
 
-        assertThatThrownBy(() -> proposalService.getDetail(outOfScopeProposal.id(), teacherAuth, "zh-CN"))
-                .isInstanceOf(ApiException.class);
+        assertThat(proposalService.getDetail(outOfScopeProposal.id(), teacherAuth, "zh-CN").id())
+                .isEqualTo(outOfScopeProposal.id());
         assertThat(proposalService.getDetail(inScopeProposal.id(), teacherAuth, "zh-CN").id())
                 .isEqualTo(inScopeProposal.id());
     }
@@ -288,13 +299,35 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
         StudentDetailDto student = createStudent();
         UserDto nonTeacher = userService.create(new CreateUserRequest(
                 "not_a_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Not A Teacher", null,
-                Set.of("student"), "zh-CN"), "usr_test_admin");
+                "student", "zh-CN"), "usr_test_admin");
 
         assertThatThrownBy(() -> proposalService.createDraft(
                 requestWithSupervisor(nonTeacher.id()), student.id(), student.id(), "zh-CN"))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> assertThat(((ApiException) e).fieldErrors())
                         .anyMatch(fe -> fe.field().equals("proposedSupervisorId") && fe.code().equals("NOT_FOUND")));
+    }
+
+    /**
+     * 07-RoleFinetune.md §2.2: supervisor eligibility is permission-based
+     * ({@code eventProposals.review}) now, not the literal {@code teacher}
+     * role code — a brand-new custom role holding that permission must be
+     * just as eligible as a real teacher, not only "not rejected as before."
+     */
+    @Test
+    void creatingAProposalWithACustomRoleSupervisorHoldingEventProposalsReviewSucceeds() {
+        StudentDetailDto student = createStudent();
+        var customRole = roleService.createRole(new CreateRoleRequest(
+                "supervisor_eligible_" + OpaqueIds.generate("r").substring(0, 10), "Supervisor-Eligible Custom Role", 480,
+                Set.of("eventProposals.review")), "usr_test_admin");
+        UserDto customSupervisor = userService.create(new CreateUserRequest(
+                "custom_supervisor_" + OpaqueIds.generate("u"), "InitialPass123!", "Custom Supervisor",
+                null, customRole.code(), "zh-CN"), "usr_test_admin");
+
+        ProposalDto created = proposalService.createDraft(
+                requestWithSupervisor(customSupervisor.id()), student.id(), student.id(), "zh-CN");
+
+        assertThat(created.proposedSupervisorId()).isEqualTo(customSupervisor.id());
     }
 
     private CreateProposalRequest requestWithOrganization(String organizationId, String newOrganizationName) {
@@ -356,7 +389,7 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
     private String realTeacherId() {
         UserDto teacher = userService.create(new CreateUserRequest(
                 "proposal_supervisor_" + OpaqueIds.generate("u"), "InitialPass123!", "Supervising Teacher", null,
-                Set.of("teacher"), "zh-CN"), "usr_test_admin");
+                "teacher", "zh-CN"), "usr_test_admin");
         return teacher.id();
     }
 
@@ -373,7 +406,7 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
     private void createLinkedUser(String studentId) {
         UserDto user = userService.create(new CreateUserRequest(
                 "proposal_user_" + studentId, "InitialPass123!", "Proposal User", null,
-                Set.of("student"), "zh-CN"), "usr_test_admin");
+                "student", "zh-CN"), "usr_test_admin");
         User entity = userRepository.findById(user.id()).orElseThrow();
         entity.setStudentId(studentId);
         userRepository.save(entity);

@@ -61,7 +61,6 @@ export function StudentLayout() {
       statsStrip={statsStrip}
       notificationsPath="/student/notifications"
       unreadCount={unreadCount}
-      switchTarget={{ workspace: 'admin', path: '/admin/dashboard', label: t('common.switchToAdmin') }}
     />
   );
 }

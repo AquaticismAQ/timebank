@@ -181,8 +181,8 @@ class ImportServiceImpl implements ImportService {
     private Job findAccessibleOrThrow(String jobId, Authentication auth) {
         Job job = jobRepository.findById(jobId).orElseThrow(() -> ApiException.notFound("Import not found."));
         TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
-        boolean isAdmin = principal.roleCodes().contains("admin") || principal.roleCodes().contains("sysadmin");
-        if (!isAdmin && !job.getCreatedBy().equals(principal.id())) {
+        boolean hasFullScope = principal.hasFullDataScope(); // 07-RoleFinetune.md §2.1
+        if (!hasFullScope && !job.getCreatedBy().equals(principal.id())) {
             throw ApiException.notFound("Import not found.");
         }
         return job;

@@ -34,7 +34,6 @@ export function AdminLayout() {
       navItems={navItems}
       brandSubtitle={t('layout.admin.brandSubtitle')}
       unreadCount={unreadCount}
-      switchTarget={{ workspace: 'student', path: '/student/home', label: t('common.switchToStudent') }}
     />
   );
 }

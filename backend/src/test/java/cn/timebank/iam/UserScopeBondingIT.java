@@ -4,9 +4,11 @@ import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.pagination.PageQuery;
 import cn.timebank.common.web.ApiResponse;
+import cn.timebank.iam.application.RoleService;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.iam.application.dto.AuthenticatedUserView;
 import cn.timebank.iam.application.dto.CreateUserRequest;
+import cn.timebank.iam.application.dto.RoleRequests.CreateRoleRequest;
 import cn.timebank.iam.application.dto.UpdateUserRequest;
 import cn.timebank.iam.application.dto.UserDto;
 import cn.timebank.iam.web.UserController;
@@ -53,6 +55,9 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
     private UserService userService;
 
     @Autowired
+    private RoleService roleService;
+
+    @Autowired
     private StudentService studentService;
 
     @Autowired
@@ -90,7 +95,7 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
         UserDto created = create("teacher", Set.of("grade_7"));
         assertThat(teacherScopeAssignmentService.gradesOf(created.id())).isNotEmpty();
 
-        UserDto updated = update(created, null, Set.of("admin"));
+        UserDto updated = update(created, null, "admin");
 
         assertThat(updated.scopeGradeIds()).isEmpty();
         assertThat(teacherScopeAssignmentService.gradesOf(created.id())).isEmpty();
@@ -102,6 +107,24 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
 
         assertThat(created.scopeGradeIds()).isEmpty();
         assertThat(teacherScopeAssignmentService.gradesOf(created.id())).isEmpty();
+    }
+
+    @Test
+    void aCustomNonTeacherStaffRoleAlsoRequiresAndWritesGradeScope() {
+        // 07-RoleFinetune.md §2.6.2: grade assignment is a structural rule —
+        // any role other than admin/student/sysadmin — not a literal
+        // "teacher" special case. Proven here with a role that is neither.
+        String code = "custom_staff_" + OpaqueIds.generate("r").substring(0, 8);
+        roleService.createRole(new CreateRoleRequest(code, "Custom Staff", 480, Set.of("serviceRecords.read")),
+                "usr_test_admin");
+
+        assertThatThrownBy(() -> create(code, Set.of()))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("grade");
+
+        UserDto created = create(code, Set.of("grade_7"));
+        assertThat(created.scopeGradeIds()).containsExactly("grade_7");
+        assertThat(teacherScopeAssignmentService.gradesOf(created.id())).containsExactly("grade_7");
     }
 
     @Test
@@ -130,7 +153,7 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
     void teacherWithoutStaffIdIsRejected() {
         Authentication auth = adminAuth();
         CreateUserRequest request = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialPass123!", "No Staff Id", null, Set.of("teacher"), "zh-CN", Set.of("grade_7"), null, null);
+                "InitialPass123!", "No Staff Id", null, "teacher", "zh-CN", Set.of("grade_7"), null, null);
         assertThatThrownBy(() -> asAdmin(auth, () -> userController.create(request, auth)))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("staff");
@@ -143,7 +166,7 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
 
         Authentication auth = adminAuth();
         CreateUserRequest request = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialPass123!", "Duplicate Staff Id", null, Set.of("teacher"), "zh-CN", Set.of("grade_8"), null, staffId);
+                "InitialPass123!", "Duplicate Staff Id", null, "teacher", "zh-CN", Set.of("grade_8"), null, staffId);
         assertThatThrownBy(() -> asAdmin(auth, () -> userController.create(request, auth)))
                 .isInstanceOf(ApiException.class);
     }
@@ -152,7 +175,7 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
     void studentRoleRequiresALinkedStudent() {
         Authentication auth = adminAuth();
         CreateUserRequest request = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialPass123!", "No Linked Student", null, Set.of("student"), "zh-CN", Set.of(), null, null);
+                "InitialPass123!", "No Linked Student", null, "student", "zh-CN", Set.of(), null, null);
         assertThatThrownBy(() -> asAdmin(auth, () -> userController.create(request, auth)))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("student");
@@ -162,7 +185,7 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
     void studentRoleRejectsAnUnknownStudentId() {
         Authentication auth = adminAuth();
         CreateUserRequest request = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialPass123!", "Bad Link", null, Set.of("student"), "zh-CN", Set.of(), "std_does_not_exist", null);
+                "InitialPass123!", "Bad Link", null, "student", "zh-CN", Set.of(), "std_does_not_exist", null);
         assertThatThrownBy(() -> asAdmin(auth, () -> userController.create(request, auth)))
                 .isInstanceOf(ApiException.class);
     }
@@ -173,12 +196,12 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
         Authentication auth = adminAuth();
 
         CreateUserRequest first = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialPass123!", "Linked Student", null, Set.of("student"), "zh-CN", Set.of(), student.id(), null);
+                "InitialPass123!", "Linked Student", null, "student", "zh-CN", Set.of(), student.id(), null);
         UserDto created = asAdmin(auth, () -> userController.create(first, auth)).data();
         assertThat(created.studentId()).isEqualTo(student.id());
 
         CreateUserRequest second = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialPass123!", "Same Student Again", null, Set.of("student"), "zh-CN", Set.of(), student.id(), null);
+                "InitialPass123!", "Same Student Again", null, "student", "zh-CN", Set.of(), student.id(), null);
         assertThatThrownBy(() -> asAdmin(auth, () -> userController.create(second, auth)))
                 .isInstanceOf(ApiException.class);
     }
@@ -190,7 +213,7 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
     private UserDto createWithStaffId(String roleCode, Set<String> scopeGradeIds, String staffId) {
         String username = "scope_bonding_" + OpaqueIds.generate("u");
         CreateUserRequest request = new CreateUserRequest(username, "InitialPass123!", "Scope Bonding Test", null,
-                Set.of(roleCode), "zh-CN", scopeGradeIds, null, staffId);
+                roleCode, "zh-CN", scopeGradeIds, null, staffId);
         Authentication auth = adminAuth();
         return asAdmin(auth, () -> userController.create(request, auth).data());
     }
@@ -203,14 +226,14 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
         return studentService.create(request, "usr_test_admin", "zh-CN");
     }
 
-    private UserDto update(UserDto current, Set<String> scopeGradeIds, Set<String> roleCodes) {
+    private UserDto update(UserDto current, Set<String> scopeGradeIds, String roleCode) {
         // Re-fetch rather than trust current.version() — the version at
         // creation time isn't necessarily still current by the time a
         // later, separate request updates the row (same reason a real
         // edit form re-fetches before submitting rather than reusing a
         // stale value from whenever the row was first loaded).
         Long latestVersion = userService.getById(current.id()).version();
-        UpdateUserRequest request = new UpdateUserRequest(null, null, null, roleCodes, latestVersion, scopeGradeIds);
+        UpdateUserRequest request = new UpdateUserRequest(null, null, null, roleCode, latestVersion, scopeGradeIds);
         Authentication auth = adminAuth();
         return asAdmin(auth, () -> userController.update(current.id(), request, auth).data());
     }

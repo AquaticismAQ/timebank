@@ -92,11 +92,15 @@ logging:
 timebank:
   environment: ${TIMEBANK_ENVIRONMENT:unspecified}
   security:
-    # Contract §2.3. Comma-separated. The default below is a placeholder
-    # (this repo is public) — the real test-server origin must be set via
-    # TIMEBANK_ALLOWED_ORIGINS on the server (see test-server-credits.md),
-    # not left to this fallback, or CORS breaks for the real frontend.
-    allowed-origins: ${TIMEBANK_ALLOWED_ORIGINS:https://tb.example.com}
+    # Contract §2.3. Comma-separated. No default (issue 027: a placeholder
+    # default here silently degrades into every real-browser request getting
+    # rejected with 403 "Request origin is not allowed" — curl-based checks
+    # never notice, since curl doesn't send an Origin header, so this failed
+    # silently for real users while looking fine to every script-based
+    # verification). Fails fast at startup instead, matching every other
+    # required env var above — set via TIMEBANK_ALLOWED_ORIGINS on the
+    # server (see the untracked test-server-credits.md).
+    allowed-origins: ${TIMEBANK_ALLOWED_ORIGINS:?TIMEBANK_ALLOWED_ORIGINS must be set}
   auth:
     lockout:
       max-failed-attempts: ${TIMEBANK_LOCKOUT_MAX_ATTEMPTS:5}

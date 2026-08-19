@@ -69,7 +69,13 @@ export const users: SeedUser[] = [
   { username: 'student002', displayName: 'Yun Li', email: 'yunli@example-school.cn', roleCodes: ['student'], linkedStudentNumber: '2024002' },
   { username: 'teacher001', displayName: 'Alex Lin', email: 'alex.lin@example-school.cn', roleCodes: ['teacher'], scopeGrades: ['grade_10'] },
   { username: 'admin001', displayName: 'Teacher Wei Chen', email: 'wei.chen@example-school.cn', roleCodes: ['admin'] },
-  { username: 'both001', displayName: 'Jordan', email: 'jordan@example-school.cn', roleCodes: ['student', 'teacher'], linkedStudentNumber: '2024003' },
+  // 07-RoleFinetune.md §2.5: every user holds exactly one role now — this
+  // was 'both001', roleCodes: ['student', 'teacher'], the dual-workspace
+  // test fixture for the now-retired `/workspace` picker. The live account
+  // was deleted 2026-08-19 (integration-test/STATUS.md); kept here as a
+  // single-role student so the service-record/case fixtures below that
+  // reference 'both001' as studentUsername still resolve on a fresh reseed.
+  { username: 'both001', displayName: 'Jordan', email: 'jordan@example-school.cn', roleCodes: ['student'], linkedStudentNumber: '2024003' },
 ];
 
 // ── Student roster ──────────────────────────────────────────────────────────

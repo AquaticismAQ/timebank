@@ -129,20 +129,27 @@ class CaseDecisionTransactionIT extends AbstractIntegrationTest {
         assertThat(transactions.getTotalElements()).isEqualTo(1);
     }
 
+    /**
+     * 07-RoleFinetune.md §2.1 made {@code teacher} a {@code
+     * hasFullDataScope()} role like {@code admin}/{@code sysadmin} — a
+     * {@code teacher_scope_assignment} row no longer restricts anything.
+     * This test used to assert the case was invisible to an out-of-scope
+     * teacher; that described the pre-07-RoleFinetune behavior §2.1
+     * deliberately changed, not a regression to guard against.
+     */
     @Test
-    void outOfScopeTeacherGetsAnInvisible404OnACase() {
+    void scopedTeacherSeesAnOutOfScopeCaseSinceScopeNoLongerRestrictsTeachers() {
         StudentDetailDto student = createStudent(); // grade_6/class_6A
         CaseDto submitted = createAndSubmitAppeal(student);
 
         var teacher = userService.create(new CreateUserRequest(
                 "case_scope_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Scope Teacher", null,
-                Set.of("teacher"), "zh-CN"), "usr_test_admin");
+                "teacher", "zh-CN"), "usr_test_admin");
         scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
                 "cases", TeacherScopeAssignment.ScopeType.GRADE, "grade_9", Instant.now()));
         Authentication teacherAuth = authFor(teacher.id(), null, Set.of("teacher"));
 
-        assertThatThrownBy(() -> caseService.getDetail(submitted.id(), teacherAuth, "zh-CN"))
-                .isInstanceOf(ApiException.class);
+        assertThat(caseService.getDetail(submitted.id(), teacherAuth, "zh-CN").id()).isEqualTo(submitted.id());
     }
 
     private CaseDto createAndSubmitManualCorrection(StudentDetailDto student, int amountCentiCoins) {

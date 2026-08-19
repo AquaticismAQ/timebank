@@ -14,23 +14,27 @@ import java.util.Set;
  * field here, just meaningful for an empty collection too. {@code
  * studentId}/{@code staffId} follow the same null-means-untouched
  * convention (issue 003) — see {@code CreateUserRequest} for what each means.
+ *
+ * {@code roleCode}: {@code null} means "don't touch the existing role,"
+ * a non-null value replaces it outright — 07-RoleFinetune.md §2.5, a single
+ * value since every user holds exactly one role.
  */
 public record UpdateUserRequest(
         @Size(max = 100) String displayName,
         @Email String email,
         String status,
-        Set<String> roleCodes,
+        String roleCode,
         @NotNull Long version,
         Set<String> scopeGradeIds,
         String studentId,
         String staffId) {
 
-    public UpdateUserRequest(String displayName, String email, String status, Set<String> roleCodes,
+    public UpdateUserRequest(String displayName, String email, String status, String roleCode,
                               Long version, Set<String> scopeGradeIds) {
-        this(displayName, email, status, roleCodes, version, scopeGradeIds, null, null);
+        this(displayName, email, status, roleCode, version, scopeGradeIds, null, null);
     }
 
-    public UpdateUserRequest(String displayName, String email, String status, Set<String> roleCodes, Long version) {
-        this(displayName, email, status, roleCodes, version, null, null, null);
+    public UpdateUserRequest(String displayName, String email, String status, String roleCode, Long version) {
+        this(displayName, email, status, roleCode, version, null, null, null);
     }
 }

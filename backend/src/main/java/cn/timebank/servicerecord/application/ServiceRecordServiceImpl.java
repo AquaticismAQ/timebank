@@ -670,7 +670,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
 
     private Specification<ServiceRecord> scopeSpecification(Authentication auth) {
         TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
-        boolean grantAll = principal.roleCodes().contains("admin") || principal.roleCodes().contains("sysadmin");
+        boolean grantAll = principal.hasFullDataScope(); // 07-RoleFinetune.md §2.1
         ScopeDescriptor scope = dataScopeResolver.resolve(principal, RESOURCE_TYPE, grantAll);
         return DataScopeSpecifications.apply(scope, scopeFields, principal.studentId());
     }

@@ -78,4 +78,12 @@ public interface UserService {
      * owner, so this must be checked before that id is ever trusted.
      */
     boolean hasActiveRole(String userId, String roleCode);
+
+    /**
+     * 07-RoleFinetune.md §2.2: same shape as {@link #hasActiveRole}, but
+     * keyed to a permission code instead of a role code — used where a
+     * literal role-code check would otherwise pin behavior to a role that
+     * can now be renamed or deleted (e.g. {@code teacher}).
+     */
+    boolean hasActivePermission(String userId, String permissionCode);
 }

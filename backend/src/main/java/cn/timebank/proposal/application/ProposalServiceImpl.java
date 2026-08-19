@@ -409,7 +409,7 @@ class ProposalServiceImpl implements ProposalService {
 
     private Specification<EventProposal> scopeSpecification(Authentication auth) {
         TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
-        boolean grantAll = principal.roleCodes().contains("admin") || principal.roleCodes().contains("sysadmin");
+        boolean grantAll = principal.hasFullDataScope(); // 07-RoleFinetune.md §2.1
         ScopeDescriptor scope = dataScopeResolver.resolve(principal, RESOURCE_TYPE, grantAll);
         return DataScopeSpecifications.apply(scope, scopeFields, principal.studentId());
     }
@@ -509,13 +509,18 @@ class ProposalServiceImpl implements ProposalService {
         }
     }
 
-    /** Must resolve to an active user holding the `teacher` role — contract §4.3's "designated teacher as project owner." */
+    /**
+     * Must resolve to an active user holding {@code eventProposals.review} — contract §4.3's "designated teacher
+     * as project owner." 07-RoleFinetune.md §2.2: permission-based rather than the literal {@code teacher} role
+     * code, since {@code teacher} is no longer a protected role and could be renamed or deleted. Today this is
+     * still exactly the {@code teacher}/{@code admin}/{@code sysadmin} population — no behavior change yet.
+     */
     private void validateSupervisor(String proposedSupervisorId, List<FieldErrorDetail> errors) {
         if (proposedSupervisorId == null || proposedSupervisorId.isBlank()) {
             return;
         }
-        if (!userService.hasActiveRole(proposedSupervisorId, "teacher")) {
-            errors.add(new FieldErrorDetail("proposedSupervisorId", "NOT_FOUND", "Unknown or non-teacher supervisor id."));
+        if (!userService.hasActivePermission(proposedSupervisorId, "eventProposals.review")) {
+            errors.add(new FieldErrorDetail("proposedSupervisorId", "NOT_FOUND", "Unknown or ineligible supervisor id."));
         }
     }
 }

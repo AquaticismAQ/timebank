@@ -30,4 +30,17 @@ public interface TimeBankPrincipal {
     default boolean hasPermission(String code) {
         return permissionCodes().contains(code);
     }
+
+    /**
+     * 07-RoleFinetune.md §2.1: every role except the protected {@code
+     * student} role gets unrestricted (school-wide) data-scope visibility —
+     * custom/manageable roles included, since they're staff-only by design
+     * (no student-submission permissions can ever be granted to them, see
+     * {@code RoleServiceImpl}). Replaces the old per-call-site {@code
+     * roleCodes().contains("admin") || roleCodes().contains("sysadmin")}
+     * checks scattered across every business module's scope resolution.
+     */
+    default boolean hasFullDataScope() {
+        return !roleCodes().contains("student");
+    }
 }

@@ -198,9 +198,16 @@ class AccountLedgerIT extends AbstractIntegrationTest {
         assertThat(filtered.getContent().get(0).studentId()).isEqualTo(studentId);
     }
 
-    /** `APIContract.md` §11 acceptance scenario 8, for the accounts resource — see the equivalent test on `ServiceRecordSubmissionIT`. */
+    /**
+     * `APIContract.md` §11 acceptance scenario 8 described {@code teacher}
+     * as grade-scoped — no longer true after 07-RoleFinetune.md §2.1 made
+     * {@code teacher} a {@code hasFullDataScope()} role like {@code admin}/
+     * {@code sysadmin}. This test used to assert the out-of-scope account
+     * was invisible; that described the pre-07-RoleFinetune behavior §2.1
+     * deliberately changed, not a regression to guard against.
+     */
     @Test
-    void outOfScopeTeacherGetsAnInvisible404OnAnAccount() {
+    void scopedTeacherSeesBothInScopeAndOutOfScopeAccountsSinceScopeNoLongerRestrictsTeachers() {
         String inScopeStudentId = createStudent(); // grade_6/class_6A
         String outOfScopeStudentId = createStudentInGrade9();
         accountService.credit(inScopeStudentId, "grade_6", "class_6A", 100, "test", "src_1", "SERVICE_APPROVED", "usr_test_admin");
@@ -208,8 +215,7 @@ class AccountLedgerIT extends AbstractIntegrationTest {
 
         Authentication teacherAuth = teacherScopedToGrade6();
 
-        assertThatThrownBy(() -> accountService.getByStudentId(outOfScopeStudentId, teacherAuth))
-                .isInstanceOf(ApiException.class);
+        assertThat(accountService.getByStudentId(outOfScopeStudentId, teacherAuth).studentId()).isEqualTo(outOfScopeStudentId);
         assertThat(accountService.getByStudentId(inScopeStudentId, teacherAuth).studentId()).isEqualTo(inScopeStudentId);
     }
 
@@ -234,7 +240,7 @@ class AccountLedgerIT extends AbstractIntegrationTest {
     private Authentication teacherScopedToGrade6() {
         var teacher = userService.create(new CreateUserRequest(
                 "acct_scope_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Scope Teacher", null,
-                Set.of("teacher"), "zh-CN"), "usr_test_admin");
+                "teacher", "zh-CN"), "usr_test_admin");
         scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
                 "accounts", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", java.time.Instant.now()));
         cn.timebank.iam.application.dto.AuthenticatedUserView view = new cn.timebank.iam.application.dto.AuthenticatedUserView(

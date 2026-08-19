@@ -29,7 +29,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Contract §9's exit criterion, proven against real MySQL: list rows never
@@ -84,30 +83,31 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
     }
 
     /**
-     * `APIContract.md` §11 acceptance scenario 8, applied to students for
-     * the first time (issue 001) — mirrors
-     * `ServiceRecordSubmissionIT.outOfScopeTeacherGetsAnInvisible404OnAServiceRecordAndTheListIsSilentlyNarrowed`.
-     * A teacher scoped to grade_6 must not see or fetch a grade_9 student —
-     * neither through the list (silently narrowed) nor directly by id (an
-     * invisible 404, B1.8) — while their in-scope student remains reachable
-     * both ways, proving scope narrows rather than blocking outright.
+     * `APIContract.md` §11 acceptance scenario 8 described {@code teacher}
+     * as grade-scoped — true when this test was written (issue 001), no
+     * longer true after 07-RoleFinetune.md §2.1 made {@code teacher} a
+     * {@code hasFullDataScope()} role like {@code admin}/{@code sysadmin}.
+     * A {@code teacher_scope_assignment} row is now purely organizational
+     * metadata; it doesn't narrow anything. This test used to assert the
+     * opposite (a 404 and a narrowed list) — that described the
+     * pre-07-RoleFinetune behavior §2.1 deliberately changed, not a
+     * regression to guard against.
      */
     @Test
-    void outOfScopeTeacherGetsAnInvisible404OnAStudentAndTheListIsSilentlyNarrowed() {
+    void scopedTeacherSeesBothInScopeAndOutOfScopeStudentsSinceScopeNoLongerRestrictsTeachers() {
         StudentDetailDto inScopeStudent = createStudent("stu_scope_6"); // grade_6/class_6A
         StudentDetailDto outOfScopeStudent = createStudentInGrade9("stu_scope_9");
 
         Authentication teacherAuth = teacherScopedToGrade6();
 
-        assertThatThrownBy(() -> studentService.getDetail(outOfScopeStudent.id(), teacherAuth, false, ACTOR, "zh-CN"))
-                .isInstanceOf(ApiException.class);
+        assertThat(studentService.getDetail(outOfScopeStudent.id(), teacherAuth, false, ACTOR, "zh-CN").id())
+                .isEqualTo(outOfScopeStudent.id());
         assertThat(studentService.getDetail(inScopeStudent.id(), teacherAuth, false, ACTOR, "zh-CN").id())
                 .isEqualTo(inScopeStudent.id());
 
         Page<StudentListItemDto> list = studentService.list(PageRequest.of(0, 20), teacherAuth, null, null, null, null, "zh-CN");
         assertThat(list.getContent()).extracting(StudentListItemDto::id)
-                .contains(inScopeStudent.id())
-                .doesNotContain(outOfScopeStudent.id());
+                .contains(inScopeStudent.id(), outOfScopeStudent.id());
     }
 
     private Authentication adminAuth() {
@@ -121,7 +121,7 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
     private Authentication teacherScopedToGrade6() {
         var teacher = userService.create(new CreateUserRequest(
                 "scope_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Scope Teacher", null,
-                Set.of("teacher"), "zh-CN"), "usr_test_admin");
+                "teacher", "zh-CN"), "usr_test_admin");
         scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
                 "students", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", Instant.now()));
         AuthenticatedUserView view = new AuthenticatedUserView(

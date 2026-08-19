@@ -91,7 +91,7 @@ class ReviewServiceImpl implements ReviewService {
 
     private ScopeDescriptor resolveScope(Authentication auth) {
         TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
-        boolean grantAll = principal.roleCodes().contains("admin") || principal.roleCodes().contains("sysadmin");
+        boolean grantAll = principal.hasFullDataScope(); // 07-RoleFinetune.md §2.1
         return dataScopeResolver.resolve(principal, RESOURCE_TYPE, grantAll);
     }
 

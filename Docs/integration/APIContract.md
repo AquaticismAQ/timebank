@@ -75,6 +75,8 @@ Login response must at least return:
 
 `studentId` (added 2026-08-06, `Docs/optimization/01-i3-partner-school-terminology.md`) is `null` for staff accounts (teacher/admin/sysadmin) — it's what lets the frontend exclude "myself" from a co-organizer search without a second round trip.
 
+`roles`/`workspaces` stay array-shaped here (unlike `/users`' `roleCode`, §4.15) but always carry exactly one element — every user holds exactly one role (07-RoleFinetune.md §2.5), so exactly one workspace; there is no multi-workspace account and no workspace picker.
+
 ### 2.3 CSRF & Origin Protection
 
 - Cookie session mutation requests must validate CSRF tokens.
@@ -683,44 +685,64 @@ Imports must validate before commit. Duplicate imports are prevented by source f
 | `POST` | `/users/{id}/reset-password` | `users.manage` | Admin-triggered reset |
 | `GET` | `/roles` | `roles.read` | Role list |
 | `POST` | `/roles` | `roles.manage` | Create role |
-| `PATCH` | `/roles/{id}` | `roles.manage` | Update role permissions |
+| `PATCH` | `/roles/{id}` | `roles.manage` | Update role name/session timeout/permissions |
+| `DELETE` | `/roles/{id}` | `roles.manage` | Delete a role (07-RoleFinetune.md §2.2/§2.4) |
 | `GET` | `/permissions` | `roles.read` | Permission code catalog |
-| `GET` | `/users/directory` | `users.read`/`directory.read` | Minimal `{id, displayName}` search by name and role, for picking a proposed supervisor (added 2026-08-06, `Docs/optimization/01-i3-partner-school-terminology.md`) — `role` query param required (e.g. `teacher`), no other user fields (username/email/studentId/roleCodes/status) are exposed |
+| `GET` | `/users/directory` | `users.read`/`directory.read` | Minimal `{id, displayName}` search by name and role, for picking a proposed supervisor (added 2026-08-06, `Docs/optimization/01-i3-partner-school-terminology.md`) — `role` query param required (e.g. `teacher`), no other user fields (username/email/studentId/roleCode/status) are exposed |
 | `GET` | `/audit-logs` | `auditLogs.read` | Operation audit |
 | `GET` | `/login-logs` | `securityLogs.read` | Login logs |
 | `GET` | `/system/settings` | `settings.read` | System parameters |
 | `PATCH` | `/system/settings` | `settings.manage` | Update allowed parameters |
+
+**Roles are configurable, not a fixed vocabulary** (07-RoleFinetune.md) —
+`student`, `admin`, and `sysadmin` are protected (undeletable; `sysadmin` is
+also not exposed in the admin UI, though it exists and functions normally)
+and `teacher` plus any school-defined custom role are ordinary, deletable
+rows. `DELETE /roles/{id}` returns `409` if the role is protected or still
+assigned to any user. `POST /roles` / `PATCH /roles/{id}` reject
+`permissionCodes` containing `eventProposals.create`, `applications.create`,
+or `serviceRecords.create` with a `422` — those three are reserved for the
+`student` role, since a manageable role is always staff-type, never a
+self-service submitter.
+
+**Every user holds exactly one role, always** (07-RoleFinetune.md §2.5) —
+`POST /users` / `PATCH /users/{id}` / the `GET /users` list response carry a
+single `roleCode: string`, not a set. (`GET /me`'s `roles`/`workspaces`
+arrays, by contrast, are unchanged — always one element in practice now, but
+still array-shaped on the wire; see §2.2's login-response example.)
 
 `POST /users` / `PATCH /users/{id}` / the `GET /users` list response also carry
 `scopeGradeIds: string[]` (added 2026-08-10, issue 002) — the grade ids a
 `teacher`-role account is bonded to (`teacher_scope_assignment` rows, one per
 grade per resource type §11 acceptance scenario 8 already scopes: `serviceRecords`,
 `eventProposals`, `students`, `accounts`, `cases`). Only meaningful when
-`roleCodes` includes `teacher`: ignored on create for any other role, and
-automatically cleared if a `PATCH` removes the `teacher` role from an account.
-Not required for `admin` — an admin account's unrestricted access is a
-permission-level bypass, not scope data, so `scopeGradeIds` is always empty
-for admin-only accounts and the UI shows no grade picker for them.
+`roleCode` is `teacher`: ignored on create for any other role, and
+automatically cleared if a `PATCH` changes `roleCode` away from `teacher`.
+Not required for `admin`/`sysadmin` — their unrestricted data-scope access is
+a permission-level bypass (`hasFullDataScope()`, granted to every non-`student`
+role), not scope data, so `scopeGradeIds` is always empty for non-`teacher`
+accounts and the UI shows no grade picker for them.
 
 `POST /users` / `PATCH /users/{id}` also carry `studentId: string | null` and
 `staffId: string | null` (added 2026-08-10, issue 003), both surfaced back in
 `GET /users` and the `PATCH` response:
 
-- `studentId` — only for `roleCodes` including `student`; required for that
+- `studentId` — only for `roleCode` of `student`; required for that
   role. Must be the id of an existing, not-already-linked
   `Student` row (contract §4.9) — creating a student-role account does **not**
   accept a free-typed grade/class/student-number; the client looks one up via
   `GET /students/directory` and submits its id, the same picker pattern used
   for a proposal's co-organizers/supervisor. Linking a `Student` already
   linked to another account, or an unknown id, is a `409`/`400` respectively.
-- `staffId` — only for `roleCodes` including `teacher` or `admin`; required
-  for those roles. A free-text, school-assigned identifier (no existing
-  "staff roster" module to link against, unlike `studentId`) — must be unique
-  across accounts; a duplicate is a `409`.
+- `staffId` — required for every non-`student` role (widened from
+  "teacher or admin only" — 07-RoleFinetune.md — since any staff-type role,
+  custom ones included, needs one). A free-text, school-assigned identifier
+  (no existing "staff roster" module to link against, unlike `studentId`) —
+  must be unique across accounts; a duplicate is a `409`.
 - Both follow the same partial-update convention as every other `PATCH`
   field: omitted/`null` means "don't touch," present means "replace."
 - These required-ness rules are enforced at request-validation time, not
-  bean-level `@NotBlank`, since each is conditional on `roleCodes`.
+  bean-level `@NotBlank`, since each is conditional on `roleCode`.
 
 ### 4.16 School Info
 

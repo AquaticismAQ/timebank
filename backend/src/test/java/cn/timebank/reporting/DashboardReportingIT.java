@@ -112,8 +112,18 @@ class DashboardReportingIT extends AbstractIntegrationTest {
         assertThat(grade11.completionRate()).isEqualTo(0.5);
     }
 
+    /**
+     * 07-RoleFinetune.md §2.1: {@code teacher} became a {@code
+     * hasFullDataScope()} role (like {@code admin}/{@code sysadmin}), so its
+     * {@code teacher_scope_assignment} grade bond no longer restricts
+     * dashboard visibility — two teachers with *different* grade scopes now
+     * see the *same* school-wide student count. This test used to assert the
+     * opposite (2 vs. 3, scoped per grade); that assertion described the
+     * pre-07-RoleFinetune behavior this doc's §2.1 deliberately changed, not
+     * a regression to guard against.
+     */
     @Test
-    void teacherDashboardsAreScopedPerPrincipalAndCarryGeneratedAt() {
+    void teacherDashboardsSeeTheSameSchoolWideCountRegardlessOfGradeScopeAndCarryGeneratedAt() {
         createStudent("grade_6", "class_6A");
         createStudent("grade_6", "class_6A");
         createStudent("grade_7", "class_7A");
@@ -121,9 +131,9 @@ class DashboardReportingIT extends AbstractIntegrationTest {
         createStudent("grade_7", "class_7A");
 
         var teacherA = userService.create(new CreateUserRequest(
-                "dash_teacher_a_" + SEQ.incrementAndGet(), "InitialPass123!", "Teacher A", null, Set.of("teacher"), "zh-CN"), "usr_test_admin");
+                "dash_teacher_a_" + SEQ.incrementAndGet(), "InitialPass123!", "Teacher A", null, "teacher", "zh-CN"), "usr_test_admin");
         var teacherB = userService.create(new CreateUserRequest(
-                "dash_teacher_b_" + SEQ.incrementAndGet(), "InitialPass123!", "Teacher B", null, Set.of("teacher"), "zh-CN"), "usr_test_admin");
+                "dash_teacher_b_" + SEQ.incrementAndGet(), "InitialPass123!", "Teacher B", null, "teacher", "zh-CN"), "usr_test_admin");
         scopeAssignmentRepository.save(new TeacherScopeAssignment(
                 "scope_a_" + SEQ.incrementAndGet(), teacherA.id(), "serviceRecords", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", Instant.now()));
         scopeAssignmentRepository.save(new TeacherScopeAssignment(
@@ -134,8 +144,11 @@ class DashboardReportingIT extends AbstractIntegrationTest {
 
         assertThat(dashboardA.generatedAt()).isNotNull();
         assertThat(dashboardB.generatedAt()).isNotNull();
-        assertThat(dashboardA.scopedStudentCount()).isEqualTo(2);
-        assertThat(dashboardB.scopedStudentCount()).isEqualTo(3);
+        // Equal to each other despite the different scope rows above, and at
+        // least the 5 students just created — not a hardcoded total, since
+        // it also includes whatever earlier tests in this class seeded.
+        assertThat(dashboardA.scopedStudentCount()).isEqualTo(dashboardB.scopedStudentCount());
+        assertThat(dashboardA.scopedStudentCount()).isGreaterThanOrEqualTo(5);
     }
 
     @Test

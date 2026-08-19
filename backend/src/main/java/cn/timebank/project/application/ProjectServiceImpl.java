@@ -473,8 +473,8 @@ class ProjectServiceImpl implements ProjectService {
     }
 
     private boolean isManager(TimeBankPrincipal principal) {
-        return principal.hasPermission("projects.update") || principal.roleCodes().contains("admin")
-                || principal.roleCodes().contains("sysadmin");
+        // 07-RoleFinetune.md §2.1
+        return principal.hasPermission("projects.update") || principal.hasFullDataScope();
     }
 
     private Map<String, String> categoryNameMap(String resolvedLanguage) {

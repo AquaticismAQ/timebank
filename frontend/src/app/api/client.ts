@@ -26,6 +26,9 @@ import type {
   AcademicYear,
   ServiceCategory,
   TimelineEntry,
+  Permission,
+  RoleSummary,
+  RoleTemplateSummary,
 } from './types';
 import { http, ApiError, buildListQuery, getWithEtag, withVersion, type PageResult } from './http';
 import { toBackendEnum, fromBackendEnum, type ListParams } from '../lib/pagination';
@@ -121,12 +124,13 @@ function fromStudentDto(dto: StudentListItemDtoWire): Student {
 }
 
 function meResponseToUser(me: MeResponse, username: string): User {
-  const roleMap: Record<string, Role> = { admin: 'admin', teacher: 'teacher', student: 'student', sysadmin: 'admin' };
   return {
     id: me.user.id,
     username,
     displayName: me.user.displayName,
-    roles: me.user.roles.map(r => roleMap[r.toLowerCase()] ?? 'admin') as Role[],
+    // 07-RoleFinetune.md: role codes pass through as-is now — Role is any
+    // server-defined code, not a fixed 4-value union to coerce into.
+    roles: me.user.roles.map(r => r.toLowerCase()) as Role[],
     workspaces: me.workspaces,
     studentId: me.user.studentId ?? undefined,
     scopeGradeIds: me.user.scopeGradeIds ?? [],
@@ -930,23 +934,31 @@ export const api = {
   },
 
   users: {
-    async list(params?: ListParams): Promise<PageResult<{ id: string; username: string; displayName: string; email: string; roles: string[]; status: string; lastLoginAt?: string; version: number; scopeGradeIds: string[]; studentId?: string; staffId?: string }>> {
-      type UserDtoWire = { id: string; username: string; displayName: string; email: string; roles: { code: string }[]; status: string; lastLoginAt?: string; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string };
+    /**
+     * 07-RoleFinetune.md: the real `UserDto` wire field is `roleCode` (a
+     * single string, not `roles`/`roleCodes`) — this used to assume a
+     * `roles: {code}[]` shape that matched neither the old nor the new
+     * backend response, so this list silently threw inside `.then()` and
+     * was swallowed by a stray `.catch(() => {})`, leaving SystemAdmin.tsx
+     * stuck on its hardcoded mock fallback. Confirm live in Phase 6.
+     */
+    async list(params?: ListParams): Promise<PageResult<{ id: string; username: string; displayName: string; email: string; roleCode: string; status: string; lastLoginAt?: string; version: number; scopeGradeIds: string[]; studentId?: string; staffId?: string }>> {
+      type UserDtoWire = { id: string; username: string; displayName: string; email: string; roleCode: string; status: string; lastLoginAt?: string; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string };
       const page = await http.getPage<UserDtoWire>('/users', buildListQuery(params));
       return {
         data: page.data.map(u => ({
           id: u.id, username: u.username, displayName: u.displayName, email: u.email,
-          roles: u.roles.map(r => r.code), status: fromBackendEnum(u.status),
+          roleCode: u.roleCode, status: fromBackendEnum(u.status),
           lastLoginAt: u.lastLoginAt, version: u.version, scopeGradeIds: u.scopeGradeIds ?? [],
           studentId: u.studentId, staffId: u.staffId,
         })),
         page: page.page,
       };
     },
-    async create(data: { username: string; initialPassword: string; displayName: string; email: string; roleCodes: string[]; preferredLanguage?: string; scopeGradeIds?: string[]; studentId?: string; staffId?: string }): Promise<{ id: string }> {
+    async create(data: { username: string; initialPassword: string; displayName: string; email: string; roleCode: string; preferredLanguage?: string; scopeGradeIds?: string[]; studentId?: string; staffId?: string }): Promise<{ id: string }> {
       return http.post<{ id: string }>('/users', data);
     },
-    async update(id: string, data: { displayName?: string; email?: string; status?: string; roleCodes?: string[]; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string }): Promise<void> {
+    async update(id: string, data: { displayName?: string; email?: string; status?: string; roleCode?: string; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string }): Promise<void> {
       const body = { ...data, status: data.status ? toBackendEnum(data.status) : undefined };
       await http.patch<void>(`/users/${id}`, body);
     },
@@ -964,6 +976,44 @@ export const api = {
     async directory(role: string, search: string): Promise<TeacherDirectoryEntry[]> {
       if (!search) return [];
       return http.get<TeacherDirectoryEntry[]>('/users/directory', { role, search });
+    },
+  },
+
+  /** 07-RoleFinetune.md §2.2-§2.4: role CRUD, `sysadmin` deliberately not filtered here — the UI layer hides it (§2.2), not the API client. */
+  roles: {
+    async list(): Promise<RoleSummary[]> {
+      return http.get<RoleSummary[]>('/roles');
+    },
+    async create(data: { code: string; name: string; sessionTimeoutMinutes: number; permissionCodes: string[] }): Promise<RoleSummary> {
+      return http.post<RoleSummary>('/roles', data);
+    },
+    async update(id: string, data: { name?: string; sessionTimeoutMinutes?: number; permissionCodes?: string[]; version: number }): Promise<RoleSummary> {
+      return http.patch<RoleSummary>(`/roles/${id}`, data);
+    },
+    async remove(id: string): Promise<void> {
+      await http.delete<void>(`/roles/${id}`);
+    },
+  },
+
+  /** 07-RoleFinetune.md §2.7: no code/sessionTimeoutMinutes — a template pre-fills a new role's permission set only. Write endpoints are admin/sysadmin-only server-side, not just `roles.manage`-gated. */
+  roleTemplates: {
+    async list(): Promise<RoleTemplateSummary[]> {
+      return http.get<RoleTemplateSummary[]>('/role-templates');
+    },
+    async create(data: { name: string; permissionCodes: string[] }): Promise<RoleTemplateSummary> {
+      return http.post<RoleTemplateSummary>('/role-templates', data);
+    },
+    async update(id: string, data: { name: string; permissionCodes: string[]; version: number }): Promise<RoleTemplateSummary> {
+      return http.patch<RoleTemplateSummary>(`/role-templates/${id}`, data);
+    },
+    async remove(id: string): Promise<void> {
+      await http.delete<void>(`/role-templates/${id}`);
+    },
+  },
+
+  permissions: {
+    async list(): Promise<Permission[]> {
+      return http.get<Permission[]>('/permissions');
     },
   },
 

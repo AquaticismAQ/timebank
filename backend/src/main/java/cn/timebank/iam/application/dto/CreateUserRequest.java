@@ -2,13 +2,12 @@ package cn.timebank.iam.application.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
 import java.util.Set;
 
 /**
- * {@code scopeGradeIds} is only meaningful when {@code roleCodes} contains
+ * {@code scopeGradeIds} is only meaningful when {@code roleCode} is
  * {@code teacher} — written as {@code teacher_scope_assignment} rows
  * (issue 002) when present, ignored for every other role.
  *
@@ -26,13 +25,17 @@ import java.util.Set;
  * {@code UserController}, not here or in {@code UserServiceImpl} — see
  * {@code UserController}'s class Javadoc for why real requests and
  * test-fixture service calls are deliberately held to different bars.
+ *
+ * {@code roleCode} is a single value, not a set — 07-RoleFinetune.md §2.5:
+ * every user holds exactly one role, always. The type itself is the
+ * cardinality enforcement; no separate "exactly one" check is needed.
  */
 public record CreateUserRequest(
         @NotBlank @Size(min = 3, max = 64) String username,
         @NotBlank @Size(min = 8, max = 128) String initialPassword,
         @NotBlank @Size(max = 100) String displayName,
         @Email String email,
-        @NotEmpty Set<String> roleCodes,
+        @NotBlank String roleCode,
         String preferredLanguage,
         Set<String> scopeGradeIds,
         String studentId,
@@ -40,13 +43,13 @@ public record CreateUserRequest(
 
     /** Convenience overload for existing callers that don't set an initial grade bond, studentId, or staffId. */
     public CreateUserRequest(String username, String initialPassword, String displayName, String email,
-                              Set<String> roleCodes, String preferredLanguage, Set<String> scopeGradeIds) {
-        this(username, initialPassword, displayName, email, roleCodes, preferredLanguage, scopeGradeIds, null, null);
+                              String roleCode, String preferredLanguage, Set<String> scopeGradeIds) {
+        this(username, initialPassword, displayName, email, roleCode, preferredLanguage, scopeGradeIds, null, null);
     }
 
     /** Convenience overload for the many existing callers that set none of the above. */
     public CreateUserRequest(String username, String initialPassword, String displayName, String email,
-                              Set<String> roleCodes, String preferredLanguage) {
-        this(username, initialPassword, displayName, email, roleCodes, preferredLanguage, Set.of(), null, null);
+                              String roleCode, String preferredLanguage) {
+        this(username, initialPassword, displayName, email, roleCode, preferredLanguage, Set.of(), null, null);
     }
 }

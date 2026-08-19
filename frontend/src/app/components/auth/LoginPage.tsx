@@ -11,7 +11,7 @@ import { LanguageSwitcher } from '../LanguageSwitcher';
 export function LoginPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { login, user, currentWorkspace } = useAuth();
+  const { login, user } = useAuth();
   const { theme, setTheme } = useTheme();
 
   const [username, setUsername] = useState('');
@@ -25,11 +25,9 @@ export function LoginPage() {
     api.school.getInfo().then(setSchoolInfo).catch(() => {});
   }, []);
 
-  // Redirect if already logged in
+  // Redirect if already logged in — 07-RoleFinetune.md §2.5: one role, one workspace, always.
   if (user) {
-    if (user.workspaces.length > 1 && !currentWorkspace) return <Navigate to="/workspace" replace />;
-    if (currentWorkspace === 'student') return <Navigate to="/student/home" replace />;
-    if (currentWorkspace === 'admin') return <Navigate to="/admin/dashboard" replace />;
+    return <Navigate to={user.workspaces[0] === 'student' ? '/student/home' : '/admin/dashboard'} replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -41,9 +39,7 @@ export function LoginPage() {
     if (ok) {
       toast.success(t('auth.login.loginSuccess'));
       const u = JSON.parse(localStorage.getItem('timebank-user') || '{}');
-      if (u.workspaces?.length > 1) navigate('/workspace');
-      else if (u.workspaces?.[0] === 'student') navigate('/student/home');
-      else navigate('/admin/dashboard');
+      navigate(u.workspaces?.[0] === 'student' ? '/student/home' : '/admin/dashboard');
     } else {
       setError(t('auth.login.loginError'));
     }

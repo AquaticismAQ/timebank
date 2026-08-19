@@ -45,7 +45,6 @@ function LogsProvider({ children }: { children: React.ReactNode }) {
   return <LogsContext.Provider value={{ logs, addLog }}>{children}</LogsContext.Provider>;
 }
 import { LoginPage } from './components/auth/LoginPage';
-import { WorkspaceSelect } from './components/auth/WorkspaceSelect';
 import { StudentLayout } from './components/layout/StudentLayout';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { StudentHome } from './components/student/StudentHome';
@@ -87,8 +86,6 @@ interface AuthContextValue {
   user: User | null;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
-  currentWorkspace: 'student' | 'admin' | null;
-  setWorkspace: (ws: 'student' | 'admin') => void;
   /** Merges a partial update (e.g. after `PATCH /me/profile`) into the current session's user, persisted to localStorage like login does. */
   updateUser: (patch: Partial<User>) => void;
 }
@@ -97,8 +94,6 @@ export const AuthContext = createContext<AuthContextValue>({
   user: null,
   login: () => Promise.resolve(false),
   logout: () => {},
-  currentWorkspace: null,
-  setWorkspace: () => {},
   updateUser: () => {},
 });
 
@@ -149,9 +144,6 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem('timebank-user');
     return stored ? JSON.parse(stored) : null;
   });
-  const [currentWorkspace, setCurrentWorkspaceState] = useState<'student' | 'admin' | null>(() => {
-    return (localStorage.getItem('timebank-workspace') as 'student' | 'admin') || null;
-  });
 
   const login = useCallback(async (username: string, password: string): Promise<boolean> => {
     try {
@@ -167,10 +159,6 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         i18n.changeLanguage(code);
         localStorage.setItem('timebank-lang', code);
       }
-      if (found.workspaces.length === 1) {
-        setCurrentWorkspaceState(found.workspaces[0]);
-        localStorage.setItem('timebank-workspace', found.workspaces[0]);
-      }
       resetUnauthorizedState();
       return true;
     } catch {
@@ -180,9 +168,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     setUser(null);
-    setCurrentWorkspaceState(null);
     localStorage.removeItem('timebank-user');
-    localStorage.removeItem('timebank-workspace');
   }, []);
 
   // Any API call anywhere can be the one that discovers the session expired
@@ -199,11 +185,6 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [logout]);
 
-  const setWorkspace = useCallback((ws: 'student' | 'admin') => {
-    setCurrentWorkspaceState(ws);
-    localStorage.setItem('timebank-workspace', ws);
-  }, []);
-
   const updateUser = useCallback((patch: Partial<User>) => {
     setUser(prev => {
       if (!prev) return prev;
@@ -214,17 +195,25 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, currentWorkspace, setWorkspace, updateUser }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
+/**
+ * 07-RoleFinetune.md §2.5: every user holds exactly one role, so exactly one
+ * workspace — no picker, no ambiguous-workspace state to redirect through.
+ * A mismatch (e.g. a student hitting an `/admin/*` route) sends them
+ * straight to their own single workspace's home, not to a chooser.
+ */
 function RequireAuth({ children, workspace }: { children: React.ReactNode; workspace?: 'student' | 'admin' }) {
-  const { user, currentWorkspace } = useAuth();
+  const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  if (user.workspaces.length > 1 && !currentWorkspace) return <Navigate to="/workspace" replace />;
-  if (workspace && currentWorkspace !== workspace) return <Navigate to="/workspace" replace />;
+  const ownWorkspace = user.workspaces[0];
+  if (workspace && ownWorkspace !== workspace) {
+    return <Navigate to={ownWorkspace === 'student' ? '/student/home' : '/admin/dashboard'} replace />;
+  }
   return <>{children}</>;
 }
 
@@ -236,7 +225,6 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/workspace" element={<WorkspaceSelect />} />
 
             {/* Student portal */}
             <Route path="/student" element={

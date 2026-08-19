@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router';
-import { Bell, Sun, Moon, Monitor, LogOut, Menu, X, Clock, ChevronRight } from 'lucide-react';
+import { Bell, Sun, Moon, Monitor, LogOut, Menu, X, Clock } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth, useTheme } from '../../App';
@@ -85,8 +85,6 @@ export interface AppShellProps {
   /** If set, the bell icon navigates to this path */
   notificationsPath?: string;
   unreadCount?: number;
-  /** If set and the user has that workspace, show a workspace-switch button */
-  switchTarget?: { workspace: 'student' | 'admin'; path: string; label: string };
 }
 
 export function AppShell({
@@ -97,9 +95,8 @@ export function AppShell({
   statsStrip,
   notificationsPath,
   unreadCount = 0,
-  switchTarget,
 }: AppShellProps) {
-  const { user, logout, setWorkspace } = useAuth();
+  const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -110,15 +107,6 @@ export function AppShell({
     { value: 'dark', icon: <Moon className="w-4 h-4" />, label: t('common.theme.dark') },
     { value: 'auto', icon: <Monitor className="w-4 h-4" />, label: t('common.theme.auto') },
   ];
-
-  const canSwitch = switchTarget != null && user?.workspaces.includes(switchTarget.workspace);
-
-  const handleSwitch = () => {
-    if (!switchTarget) return;
-    setWorkspace(switchTarget.workspace);
-    navigate(switchTarget.path);
-    setSidebarOpen(false);
-  };
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
@@ -165,12 +153,6 @@ export function AppShell({
               <Clock className="w-4 h-4 text-primary" />
               <span className="text-foreground text-sm font-medium">{t('common.appName')}</span>
             </div>
-            {canSwitch && (
-              <button onClick={handleSwitch}
-                className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 border border-border rounded-md px-2 py-1">
-                {switchTarget!.label} <ChevronRight className="w-3 h-3" />
-              </button>
-            )}
           </div>
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
@@ -209,12 +191,6 @@ export function AppShell({
                 </button>
               ))}
             </div>
-            {canSwitch && (
-              <button onClick={handleSwitch}
-                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 border border-border rounded-lg px-2 py-1.5 hover:bg-accent transition-colors">
-                {switchTarget!.label} <ChevronRight className="w-3 h-3" />
-              </button>
-            )}
             <button
               onClick={notificationsPath ? () => navigate(notificationsPath) : undefined}
               className="relative p-1.5 rounded-lg hover:bg-accent text-muted-foreground"

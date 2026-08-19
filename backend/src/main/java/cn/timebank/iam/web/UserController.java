@@ -42,9 +42,16 @@ import java.util.Set;
 public class UserController {
 
     private static final Set<String> SORTABLE = Set.of("id", "username", "displayName", "createdAt");
-    private static final String TEACHER_ROLE = "teacher";
-    private static final String ADMIN_ROLE = "admin";
     private static final String STUDENT_ROLE = "student";
+    /**
+     * 07-RoleFinetune.md §2.6.2: grade assignment is required for every role
+     * except these three — {@code admin} (and {@code sysadmin}) cover every
+     * grade by design, {@code student} gets their grade from the linked
+     * roster row, not a manual picker. This replaces the old literal-
+     * "teacher"-only gate so any custom staff-type role gets the same
+     * grade-assignment form field without needing a new per-role flag.
+     */
+    private static final Set<String> NO_GRADE_SCOPE_ROLES = Set.of(STUDENT_ROLE, "admin", "sysadmin");
 
     private final UserService userService;
     private final SessionRevocationService sessionRevocationService;
@@ -82,10 +89,10 @@ public class UserController {
     @PostMapping
     @PreAuthorize("hasAuthority('users.manage')")
     public ApiResponse<UserDto> create(@Valid @RequestBody CreateUserRequest request, Authentication auth) {
-        requireRoleFields(request.roleCodes(), request.scopeGradeIds(), request.studentId(), request.staffId());
+        requireRoleFields(request.roleCode(), request.scopeGradeIds(), request.studentId(), request.staffId());
         String actorId = principalId(auth);
         UserDto created = userService.create(request, actorId);
-        if (created.roleCodes().contains(TEACHER_ROLE)) {
+        if (needsGradeScope(created.roleCode())) {
             teacherScopeAssignmentService.replaceGradeScope(created.id(), request.scopeGradeIds());
         }
         return ApiResponse.of(withScopeGradeIds(created));
@@ -96,20 +103,20 @@ public class UserController {
     public ApiResponse<UserDto> update(@PathVariable String id, @Valid @RequestBody UpdateUserRequest request,
                                         Authentication auth) {
         UserDto before = withScopeGradeIds(userService.getById(id));
-        Set<String> effectiveRoles = request.roleCodes() != null ? request.roleCodes() : before.roleCodes();
+        String effectiveRole = request.roleCode() != null ? request.roleCode() : before.roleCode();
         Set<String> effectiveGrades = request.scopeGradeIds() != null ? request.scopeGradeIds() : before.scopeGradeIds();
         String effectiveStudentId = request.studentId() != null ? request.studentId() : before.studentId();
         String effectiveStaffId = request.staffId() != null ? request.staffId() : before.staffId();
-        requireRoleFields(effectiveRoles, effectiveGrades, effectiveStudentId, effectiveStaffId);
+        requireRoleFields(effectiveRole, effectiveGrades, effectiveStudentId, effectiveStaffId);
 
         UserDto updated = userService.update(id, request, principalId(auth));
         if ("INACTIVE".equals(request.status()) && !"INACTIVE".equals(before.status())) {
             sessionRevocationService.revokeAllSessionsForUser(updated.username());
         }
-        if (updated.roleCodes().contains(TEACHER_ROLE)) {
+        if (needsGradeScope(updated.roleCode())) {
             teacherScopeAssignmentService.replaceGradeScope(id, effectiveGrades);
         } else {
-            // Role changed away from teacher (or was never one) — clear any stale bond.
+            // Role changed to one that doesn't take grade scope — clear any stale bond.
             teacherScopeAssignmentService.replaceGradeScope(id, Set.of());
         }
         return ApiResponse.of(withScopeGradeIds(updated));
@@ -118,24 +125,38 @@ public class UserController {
     /**
      * Issue 003's required-ness rules — deliberately checked here, not in
      * {@code CreateUserRequest}'s bean validation or {@code UserServiceImpl}:
-     * each rule is conditional on {@code roleCodes}, which plain
-     * per-field annotations can't express, and enforcing it in the service
-     * would also apply to the many existing IT tests that call
-     * {@code UserService} directly as a fixture-setup shortcut without
-     * supplying every field a real UI submission would (see
-     * {@code CreateUserRequest}'s Javadoc). Real traffic always goes
-     * through this controller, so checking here is sufficient.
+     * each rule is conditional on {@code roleCode}, which plain per-field
+     * annotations can't express, and enforcing it in the service would also
+     * apply to the many existing IT tests that call {@code UserService}
+     * directly as a fixture-setup shortcut without supplying every field a
+     * real UI submission would (see {@code CreateUserRequest}'s Javadoc).
+     * Real traffic always goes through this controller, so checking here is
+     * sufficient. 07-RoleFinetune.md §2.5: {@code roleCode} is now a single
+     * value — {@code requireRoleFields} is only ever called with an
+     * already-resolved (non-null) one.
+     *
+     * The staffId requirement widened from "teacher or admin" to "any
+     * non-student role" (07-RoleFinetune.md's manageable-roles work) —
+     * every staff-type account needs one, not just the two roles that used
+     * to be the only staff roles this form could create. The grade-scope
+     * requirement widened the same way in §2.6.2, from literal "teacher" to
+     * {@link #needsGradeScope} — every role except admin/student/sysadmin.
      */
-    private void requireRoleFields(Set<String> roleCodes, Set<String> scopeGradeIds, String studentId, String staffId) {
-        if (roleCodes.contains(TEACHER_ROLE) && (scopeGradeIds == null || scopeGradeIds.isEmpty())) {
-            throw ApiException.invalidRequest("At least one grade is required for a teacher account.");
+    private void requireRoleFields(String roleCode, Set<String> scopeGradeIds, String studentId, String staffId) {
+        if (needsGradeScope(roleCode) && (scopeGradeIds == null || scopeGradeIds.isEmpty())) {
+            throw ApiException.invalidRequest("At least one grade is required for this role.");
         }
-        if (roleCodes.contains(STUDENT_ROLE) && (studentId == null || studentId.isBlank())) {
+        if (STUDENT_ROLE.equals(roleCode) && (studentId == null || studentId.isBlank())) {
             throw ApiException.invalidRequest("A linked student is required for a student account.");
         }
-        if ((roleCodes.contains(TEACHER_ROLE) || roleCodes.contains(ADMIN_ROLE)) && (staffId == null || staffId.isBlank())) {
-            throw ApiException.invalidRequest("A staff ID is required for teacher and admin accounts.");
+        if (!STUDENT_ROLE.equals(roleCode) && (staffId == null || staffId.isBlank())) {
+            throw ApiException.invalidRequest("A staff ID is required for non-student accounts.");
         }
+    }
+
+    /** 07-RoleFinetune.md §2.6.2. */
+    private static boolean needsGradeScope(String roleCode) {
+        return !NO_GRADE_SCOPE_ROLES.contains(roleCode);
     }
 
     @PostMapping("/{id}/unlock")
@@ -158,7 +179,7 @@ public class UserController {
     }
 
     private UserDto withScopeGradeIds(UserDto dto) {
-        Set<String> grades = dto.roleCodes().contains(TEACHER_ROLE)
+        Set<String> grades = needsGradeScope(dto.roleCode())
                 ? teacherScopeAssignmentService.gradesOf(dto.id())
                 : Set.of();
         return dto.withScopeGradeIds(grades);

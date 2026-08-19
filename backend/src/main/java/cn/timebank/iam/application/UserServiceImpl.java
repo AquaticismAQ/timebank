@@ -111,14 +111,14 @@ class UserServiceImpl implements UserService {
         if (request.staffId() != null && userRepository.existsByStaffId(request.staffId())) {
             throw ApiException.stateConflict("Staff ID is already in use.");
         }
-        Set<Role> roles = resolveRoles(request.roleCodes());
+        Role role = resolveRole(request.roleCode());
         Instant now = Instant.now();
         User user = new User(OpaqueIds.generate("usr"), request.username(),
                 passwordEncoder.encode(request.initialPassword()), request.displayName(), request.email(),
                 request.preferredLanguage() != null ? request.preferredLanguage() : "zh-CN", now);
         user.setStudentId(request.studentId());
         user.setStaffId(request.staffId());
-        roles.forEach(user::addRole);
+        user.addRole(role);
         userRepository.save(user);
 
         auditService.record(new AuditEntry(actorId, "users.manage", "user.create", "user", user.getId(),
@@ -142,9 +142,9 @@ class UserServiceImpl implements UserService {
         if (request.status() != null) {
             user.setStatus(parseStatus(request.status()));
         }
-        if (request.roleCodes() != null) {
+        if (request.roleCode() != null) {
             user.getRoles().clear();
-            resolveRoles(request.roleCodes()).forEach(user::addRole);
+            user.addRole(resolveRole(request.roleCode()));
         }
         if (request.studentId() != null) {
             requireUnlinkedStudent(request.studentId(), user.getId());
@@ -295,13 +295,12 @@ class UserServiceImpl implements UserService {
         }
     }
 
-    private Set<Role> resolveRoles(Set<String> roleCodes) {
-        Set<Role> roles = new LinkedHashSet<>();
-        for (String code : roleCodes) {
-            roles.add(roleRepository.findByCode(code)
-                    .orElseThrow(() -> ApiException.invalidRequest("Unknown role code: " + code)));
-        }
-        return roles;
+    private Role resolveRole(String roleCode) {
+        // 07-RoleFinetune.md §2.7: findByCodeAndIsTemplateFalse, not
+        // findByCode — a role template's code must never be assignable to a
+        // user, even if guessed, despite sharing the same table.
+        return roleRepository.findByCodeAndIsTemplateFalse(roleCode)
+                .orElseThrow(() -> ApiException.invalidRequest("Unknown role code: " + roleCode));
     }
 
     private UserStatus parseStatus(String raw) {
@@ -371,6 +370,12 @@ class UserServiceImpl implements UserService {
         return userRepository.existsActiveByIdAndRoleCode(userId, roleCode);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasActivePermission(String userId, String permissionCode) {
+        return userRepository.existsActiveByIdAndPermissionCode(userId, permissionCode);
+    }
+
     private AuthenticatedUserView toAuthView(User user) {
         Set<String> roleCodes = user.getRoles().stream().map(Role::getCode).collect(Collectors.toCollection(LinkedHashSet::new));
         return new AuthenticatedUserView(
@@ -383,10 +388,15 @@ class UserServiceImpl implements UserService {
     // scopeGradeIds is always empty here — this module can't reach security.application
     // (see UserDto.withScopeGradeIds); the web layer fills it in.
     private UserDto toDto(User user) {
-        Set<String> roleCodes = user.getRoles().stream().map(Role::getCode).collect(Collectors.toCollection(LinkedHashSet::new));
+        String roleCode = soleRoleCodeOf(user);
         return new UserDto(user.getId(), user.getUsername(), user.getDisplayName(), user.getEmail(),
-                user.getStudentId(), user.getStaffId(), user.getStatus().name(), user.getPreferredLanguage(), roleCodes,
+                user.getStudentId(), user.getStaffId(), user.getStatus().name(), user.getPreferredLanguage(), roleCode,
                 user.getVersion(), user.getCreatedAt(), user.getUpdatedAt(), Set.of());
+    }
+
+    /** 07-RoleFinetune.md §2.5: every user holds exactly one role — {@code null} only for a not-yet-migrated account. */
+    private String soleRoleCodeOf(User user) {
+        return user.getRoles().stream().map(Role::getCode).findFirst().orElse(null);
     }
 
     /** Compact before/after summary for audit rows — never the entity itself (Design.md §13). */

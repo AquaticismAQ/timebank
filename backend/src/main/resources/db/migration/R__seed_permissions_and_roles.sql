@@ -61,11 +61,19 @@ INSERT IGNORE INTO permission (id, code, description) VALUES
 
 -- Session timeout: 720 min (12h) for student, 480 min (8h) for staff roles,
 -- matching contract §2.2's default — configurable per role from here on.
-INSERT IGNORE INTO role (id, code, name, session_timeout_minutes, created_at, updated_at) VALUES
-    ('role_student', 'student', 'Student', 720, NOW(3), NOW(3)),
-    ('role_teacher', 'teacher', 'Teacher', 480, NOW(3), NOW(3)),
-    ('role_admin', 'admin', 'SDC Admin', 480, NOW(3), NOW(3)),
-    ('role_sysadmin', 'sysadmin', 'System Admin', 480, NOW(3), NOW(3));
+-- is_protected here (not left to V20__role_protected_flag.sql's UPDATE
+-- alone) matters for a from-scratch schema: this repeatable migration
+-- always runs *after* every versioned one (Flyway's fixed ordering), so on
+-- a fresh install V20's UPDATE fires against an empty role table and is a
+-- no-op — these rows wouldn't exist yet. V20's UPDATE still does the real
+-- work for the live schema, which already had these rows before is_protected
+-- existed; this INSERT is what makes a from-scratch install (every IT test
+-- schema, or a hypothetical future fresh deploy) correct too.
+INSERT IGNORE INTO role (id, code, name, session_timeout_minutes, is_protected, created_at, updated_at) VALUES
+    ('role_student', 'student', 'Student', 720, TRUE, NOW(3), NOW(3)),
+    ('role_teacher', 'teacher', 'Teacher', 480, FALSE, NOW(3), NOW(3)),
+    ('role_admin', 'admin', 'SDC Admin', 480, TRUE, NOW(3), NOW(3)),
+    ('role_sysadmin', 'sysadmin', 'System Admin', 480, TRUE, NOW(3), NOW(3));
 
 INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_student', 'perm_projects_read'),
@@ -102,6 +110,12 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_teacher', 'perm_accounts_read'),
     ('role_teacher', 'perm_rules_read'),
     ('role_teacher', 'perm_reports_read'),
+    -- 07-RoleFinetune.md §2.3: admin and sysadmin hold an identical,
+    -- unioned permission set — same reasoning as is_protected above, this
+    -- repeatable migration is what makes a from-scratch schema correct
+    -- immediately; V21__merge_admin_sysadmin_permissions.sql's INSERT
+    -- IGNORE ... SELECT is what backfills the live schema's existing rows
+    -- (which predate the merge decision).
     ('role_admin', 'perm_projects_read'),
     ('role_admin', 'perm_projects_create'),
     ('role_admin', 'perm_projects_update'),
@@ -142,23 +156,50 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_admin', 'perm_users_read'),
     ('role_admin', 'perm_users_manage'),
     ('role_admin', 'perm_roles_read'),
+    ('role_admin', 'perm_roles_manage'),
     ('role_admin', 'perm_auditLogs_read'),
+    ('role_admin', 'perm_securityLogs_read'),
     ('role_admin', 'perm_settings_read'),
+    ('role_admin', 'perm_settings_manage'),
     ('role_admin', 'perm_lifecycle_purge'),
     ('role_admin', 'perm_lifecycle_reconcile'),
     ('role_sysadmin', 'perm_projects_read'),
+    ('role_sysadmin', 'perm_projects_create'),
+    ('role_sysadmin', 'perm_projects_update'),
+    ('role_sysadmin', 'perm_projects_publish'),
+    ('role_sysadmin', 'perm_projects_archive'),
+    ('role_sysadmin', 'perm_projects_cancel'),
+    ('role_sysadmin', 'perm_projects_audit_read'),
     ('role_sysadmin', 'perm_eventProposals_read'),
+    ('role_sysadmin', 'perm_eventProposals_review'),
+    ('role_sysadmin', 'perm_eventProposals_assign'),
     ('role_sysadmin', 'perm_applications_read'),
+    ('role_sysadmin', 'perm_applications_manage'),
     ('role_sysadmin', 'perm_serviceRecords_read'),
     ('role_sysadmin', 'perm_reviews_read'),
+    ('role_sysadmin', 'perm_reviews_decide'),
+    ('role_sysadmin', 'perm_reviews_bulkDecide'),
+    ('role_sysadmin', 'perm_reviews_assign'),
+    ('role_sysadmin', 'perm_cases_create'),
     ('role_sysadmin', 'perm_cases_read'),
+    ('role_sysadmin', 'perm_cases_decide'),
     ('role_sysadmin', 'perm_students_read'),
+    ('role_sysadmin', 'perm_students_manage'),
     ('role_sysadmin', 'perm_progress_read'),
     ('role_sysadmin', 'perm_organizations_read'),
+    ('role_sysadmin', 'perm_organizations_manage'),
     ('role_sysadmin', 'perm_accounts_read'),
+    ('role_sysadmin', 'perm_accounts_adjust'),
+    ('role_sysadmin', 'perm_accounts_reverse'),
+    ('role_sysadmin', 'perm_accounts_freeze'),
     ('role_sysadmin', 'perm_rules_read'),
+    ('role_sysadmin', 'perm_rules_manage'),
+    ('role_sysadmin', 'perm_rules_publish'),
     ('role_sysadmin', 'perm_reports_read'),
+    ('role_sysadmin', 'perm_exports_create'),
+    ('role_sysadmin', 'perm_imports_create'),
     ('role_sysadmin', 'perm_imports_read'),
+    ('role_sysadmin', 'perm_imports_commit'),
     ('role_sysadmin', 'perm_users_read'),
     ('role_sysadmin', 'perm_users_manage'),
     ('role_sysadmin', 'perm_roles_read'),
@@ -169,3 +210,35 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_sysadmin', 'perm_settings_manage'),
     ('role_sysadmin', 'perm_lifecycle_purge'),
     ('role_sysadmin', 'perm_lifecycle_reconcile');
+
+-- 07-RoleFinetune.md §2.7 / V22__role_templates.sql: fresh-schema copy of
+-- the seeded 'Teacher' role template's grants — see V22's own comment for
+-- why this duplication exists (repeatable migrations always run after
+-- every versioned one, so V22's role_permission SELECT sees nothing yet
+-- here). The `role_template_teacher` row itself isn't re-inserted here —
+-- V22's own INSERT IGNORE already creates it unconditionally (it doesn't
+-- depend on role_teacher's grants existing yet), so duplicating it here
+-- would just be a same-row INSERT IGNORE no-op that logs a harmless but
+-- noisy "Duplicate entry" warning on every fresh install.
+INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
+    ('role_template_teacher', 'perm_projects_read'),
+    ('role_template_teacher', 'perm_projects_create'),
+    ('role_template_teacher', 'perm_projects_update'),
+    ('role_template_teacher', 'perm_projects_publish'),
+    ('role_template_teacher', 'perm_eventProposals_read'),
+    ('role_template_teacher', 'perm_eventProposals_review'),
+    ('role_template_teacher', 'perm_eventProposals_assign'),
+    ('role_template_teacher', 'perm_applications_read'),
+    ('role_template_teacher', 'perm_serviceRecords_read'),
+    ('role_template_teacher', 'perm_reviews_read'),
+    ('role_template_teacher', 'perm_reviews_decide'),
+    ('role_template_teacher', 'perm_reviews_assign'),
+    ('role_template_teacher', 'perm_cases_create'),
+    ('role_template_teacher', 'perm_cases_read'),
+    ('role_template_teacher', 'perm_students_read'),
+    ('role_template_teacher', 'perm_progress_read'),
+    ('role_template_teacher', 'perm_organizations_read'),
+    ('role_template_teacher', 'perm_organizations_manage'),
+    ('role_template_teacher', 'perm_accounts_read'),
+    ('role_template_teacher', 'perm_rules_read'),
+    ('role_template_teacher', 'perm_reports_read');

@@ -197,8 +197,8 @@ class EnrollmentServiceImpl implements EnrollmentService {
     }
 
     private boolean isManager(TimeBankPrincipal principal) {
-        return principal.hasPermission("applications.manage") || principal.roleCodes().contains("admin")
-                || principal.roleCodes().contains("sysadmin");
+        // 07-RoleFinetune.md §2.1
+        return principal.hasPermission("applications.manage") || principal.hasFullDataScope();
     }
 
     private Enrollment findOrThrow(String id) {

@@ -75,6 +75,8 @@ Web 推荐使用 Secure、HttpOnly、SameSite Cookie 管理会话；如采用访
 
 `studentId`（2026-08-06 新增，见 `Docs/optimization/01-i3-partner-school-terminology.md`）对教职工账号（教师/管理员/系统管理员）为 `null`——它使前端无需额外请求即可在共同组织者搜索中排除"我自己"。
 
+`roles`/`workspaces` 在此处仍为数组格式（不同于 `/users` 的 `roleCode`，见 §4.15），但始终只含一个元素——每个用户始终且仅持有一个角色（见 07-RoleFinetune.md §2.5），因此也只有一个工作区；不存在多工作区账号，也不再有工作区选择页面。
+
 ### 2.3 CSRF 与来源保护
 
 - Cookie 会话的变更请求必须验证 CSRF Token。
@@ -680,35 +682,51 @@ queued → running → succeeded
 | `POST` | `/users/{id}/reset-password` | `users.manage` | 管理员触发重置 |
 | `GET` | `/roles` | `roles.read` | 角色列表 |
 | `POST` | `/roles` | `roles.manage` | 创建角色 |
-| `PATCH` | `/roles/{id}` | `roles.manage` | 更新角色权限 |
+| `PATCH` | `/roles/{id}` | `roles.manage` | 更新角色名称/会话超时/权限 |
+| `DELETE` | `/roles/{id}` | `roles.manage` | 删除角色（见 07-RoleFinetune.md §2.2/§2.4） |
 | `GET` | `/permissions` | `roles.read` | 权限码目录 |
-| `GET` | `/users/directory` | `users.read`/`directory.read` | 按姓名与角色搜索，返回精简的 `{id, displayName}`，用于挑选拟邀请指导教师（2026-08-06 新增，见 `Docs/optimization/01-i3-partner-school-terminology.md`）——必须提供 `role` 查询参数（如 `teacher`），不暴露 username/email/studentId/roleCodes/status 等其他用户字段 |
+| `GET` | `/users/directory` | `users.read`/`directory.read` | 按姓名与角色搜索，返回精简的 `{id, displayName}`，用于挑选拟邀请指导教师（2026-08-06 新增，见 `Docs/optimization/01-i3-partner-school-terminology.md`）——必须提供 `role` 查询参数（如 `teacher`），不暴露 username/email/studentId/roleCode/status 等其他用户字段 |
 | `GET` | `/audit-logs` | `auditLogs.read` | 操作审计 |
 | `GET` | `/login-logs` | `securityLogs.read` | 登录日志 |
 | `GET` | `/system/settings` | `settings.read` | 系统参数 |
 | `PATCH` | `/system/settings` | `settings.manage` | 更新允许修改的参数 |
 
+**角色是可配置的，而非固定词表**（见 07-RoleFinetune.md）——`student`、`admin`、
+`sysadmin` 为受保护角色（不可删除；`sysadmin` 同时不在管理端界面中展示，但其本身
+仍正常存在并生效），`teacher` 及任何学校自定义角色均为普通、可删除的行。若角色为
+受保护角色，或仍被任一用户持有，`DELETE /roles/{id}` 返回 `409`。`POST /roles` /
+`PATCH /roles/{id}` 若 `permissionCodes` 中包含 `eventProposals.create`、
+`applications.create` 或 `serviceRecords.create`，返回 `422`——这三项权限仅保留给
+`student` 角色，因为可管理角色始终是教职工类型，而非自助提交者。
+
+**每个用户始终且仅持有一个角色**（见 07-RoleFinetune.md §2.5）——`POST /users` /
+`PATCH /users/{id}` / `GET /users` 列表响应携带单一的 `roleCode: string` 字段，
+而非集合。（相对地，`GET /me` 的 `roles`/`workspaces` 数组保持不变——实际上如今始终
+只有一个元素，但线上格式仍是数组，见 §2.2 登录响应示例。）
+
 `POST /users`、`PATCH /users/{id}` 以及 `GET /users` 列表响应均携带
 `scopeGradeIds: string[]`（2026-08-10 新增，issue 002）——`teacher` 角色账号所绑定的年级
 id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已启用数据范围的每个资源类型：
 `serviceRecords`、`eventProposals`、`students`、`accounts`、`cases`，每个年级每种资源类型各一条）。
-仅当 `roleCodes` 包含 `teacher` 时才有意义：创建时对其他角色一律忽略，且若 `PATCH` 将 `teacher`
-角色移除，该绑定会自动清空。`admin` 角色不需要此字段——管理员的全量访问是权限层面的绕过，而非数据范围
-记录，因此纯管理员账号的 `scopeGradeIds` 始终为空，界面上也不展示年级选择器。
+仅当 `roleCode` 为 `teacher` 时才有意义：创建时对其他角色一律忽略，且若 `PATCH` 将 `roleCode`
+改为非 `teacher`，该绑定会自动清空。`admin`/`sysadmin` 角色不需要此字段——其全量数据访问是权限层面
+的绕过（`hasFullDataScope()`，授予所有非 `student` 角色），而非数据范围记录，因此非 `teacher`
+账号的 `scopeGradeIds` 始终为空，界面上也不展示年级选择器。
 
 `POST /users`、`PATCH /users/{id}` 还携带 `studentId: string | null` 与
 `staffId: string | null`（2026-08-10 新增，issue 003），并在 `GET /users` 及
 `PATCH` 响应中一并返回：
 
-- `studentId`——仅当 `roleCodes` 包含 `student` 时使用，该角色下为必填。必须是一个真实存在、
+- `studentId`——仅当 `roleCode` 为 `student` 时使用，该角色下为必填。必须是一个真实存在、
   尚未被其他账号关联的 `Student` 记录 id（见 §4.9）——创建学生角色账号**不支持**直接填写新的
   年级/班级/学号；前端通过 `GET /students/directory` 搜索并提交其 id，与提案共同组织者/指导教师
   所用的选择器模式一致。关联一个已被其他账号占用的学生，或未知 id，将分别返回 `409`/`400`。
-- `staffId`——仅当 `roleCodes` 包含 `teacher` 或 `admin` 时使用，这两个角色下为必填。为自由文本、
+- `staffId`——每个非 `student` 角色均为必填（原为"仅 teacher 或 admin"，见
+  07-RoleFinetune.md——现已扩展为任何教职工类角色，含自定义角色，均需要该字段）。为自由文本、
   由学校分配的标识符（不同于 `studentId`，没有可关联的"教职工名册"模块）——必须在所有账号间唯一，
   重复将返回 `409`。
 - 二者遵循与其他 `PATCH` 字段相同的部分更新约定：省略/`null` 表示"不修改"，提供值表示"整体替换"。
-- 这些必填规则在请求校验阶段强制执行，而非 bean 级 `@NotBlank`，因为每条规则都依赖于 `roleCodes`。
+- 这些必填规则在请求校验阶段强制执行，而非 bean 级 `@NotBlank`，因为每条规则都依赖于 `roleCode`。
 
 ### 4.16 学校信息
 

@@ -54,14 +54,14 @@ class AuthFlowIT extends AbstractIntegrationTest {
      */
     @Test
     void meReturnsStudentIdForALinkedStudentAccountAndNullForStaff() {
-        UserDto student = createUser("auth_flow_student", "InitialPass123!", Set.of("student"));
+        UserDto student = createUser("auth_flow_student", "InitialPass123!", "student");
         User entity = userRepository.findById(student.id()).orElseThrow();
         entity.setStudentId("std_auth_flow_test");
         userRepository.save(entity);
         String studentSession = login("auth_flow_student", "InitialPass123!");
         assertThat(getWithSession("/api/v1/me", studentSession).getBody()).contains("\"studentId\":\"std_auth_flow_test\"");
 
-        createUser("auth_flow_teacher", "InitialPass123!", Set.of("teacher"));
+        createUser("auth_flow_teacher", "InitialPass123!", "teacher");
         String teacherSession = login("auth_flow_teacher", "InitialPass123!");
         ResponseEntity<String> teacherMe = getWithSession("/api/v1/me", teacherSession);
         // Global Jackson config omits null fields from the wire entirely
@@ -83,7 +83,7 @@ class AuthFlowIT extends AbstractIntegrationTest {
      */
     @Test
     void loginAndRefreshBothCarryTheTeachersScopeGradeIds() {
-        UserDto teacher = createUser("auth_flow_scoped_teacher", "InitialPass123!", Set.of("teacher"));
+        UserDto teacher = createUser("auth_flow_scoped_teacher", "InitialPass123!", "teacher");
         teacherScopeAssignmentService.replaceGradeScope(teacher.id(), Set.of("grade_10"));
 
         String csrfCookie = fetchCsrfCookie();
@@ -109,7 +109,7 @@ class AuthFlowIT extends AbstractIntegrationTest {
 
     @Test
     void loginSucceedsAndEstablishesAWorkingSession() {
-        createUser("auth_flow_1", "InitialPass123!", Set.of("student"));
+        createUser("auth_flow_1", "InitialPass123!", "student");
 
         String sessionCookie = login("auth_flow_1", "InitialPass123!");
 
@@ -120,7 +120,7 @@ class AuthFlowIT extends AbstractIntegrationTest {
 
     @Test
     void wrongPasswordIsRejectedAndLocksAfterThreshold() {
-        createUser("auth_flow_2", "InitialPass123!", Set.of("student"));
+        createUser("auth_flow_2", "InitialPass123!", "student");
 
         for (int i = 0; i < 5; i++) {
             ResponseEntity<String> attempt = loginRaw("auth_flow_2", "WrongPassword!");
@@ -133,7 +133,7 @@ class AuthFlowIT extends AbstractIntegrationTest {
 
     @Test
     void deactivatingAUserRevokesItsLiveSessionImmediately() {
-        UserDto user = createUser("auth_flow_3", "InitialPass123!", Set.of("student"));
+        UserDto user = createUser("auth_flow_3", "InitialPass123!", "student");
         String sessionCookie = login("auth_flow_3", "InitialPass123!");
 
         assertThat(getWithSession("/api/v1/me", sessionCookie).getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -150,7 +150,7 @@ class AuthFlowIT extends AbstractIntegrationTest {
 
     @Test
     void changingPasswordRevokesTheOldSessionImmediately() {
-        createUser("auth_flow_4", "InitialPass123!", Set.of("student"));
+        createUser("auth_flow_4", "InitialPass123!", "student");
         String sessionCookie = login("auth_flow_4", "InitialPass123!");
         assertThat(getWithSession("/api/v1/me", sessionCookie).getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -168,9 +168,9 @@ class AuthFlowIT extends AbstractIntegrationTest {
         assertThat(getWithSession("/api/v1/me", newSessionCookie).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
-    private UserDto createUser(String username, String password, Set<String> roleCodes) {
+    private UserDto createUser(String username, String password, String roleCode) {
         return userService.create(new CreateUserRequest(username, password, "Display " + username,
-                username + "@example.com", roleCodes, "zh-CN"), "system");
+                username + "@example.com", roleCode, "zh-CN"), "system");
     }
 
     private String login(String username, String password) {

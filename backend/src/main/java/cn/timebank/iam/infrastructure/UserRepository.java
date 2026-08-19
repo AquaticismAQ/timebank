@@ -28,6 +28,9 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     Page<User> findAll(Pageable pageable);
 
+    /** 07-RoleFinetune.md §2.4: how many users currently hold a role, to block deletion of an in-use role. */
+    long countByRolesId(String roleId);
+
     /** {@code GET /users/directory} — capped by the caller's {@link Pageable}. */
     @Query("SELECT DISTINCT u FROM User u JOIN u.roles r WHERE r.code = :roleCode AND u.status = 'ACTIVE' "
             + "AND LOWER(u.displayName) LIKE LOWER(CONCAT('%', :search, '%')) ORDER BY u.displayName")
@@ -37,4 +40,15 @@ public interface UserRepository extends JpaRepository<User, String> {
     /** Proposal-side {@code proposedSupervisorId} validation — must be an active holder of {@code roleCode}. */
     @Query("SELECT COUNT(u) > 0 FROM User u JOIN u.roles r WHERE u.id = :id AND r.code = :roleCode AND u.status = 'ACTIVE'")
     boolean existsActiveByIdAndRoleCode(@Param("id") String id, @Param("roleCode") String roleCode);
+
+    /**
+     * 07-RoleFinetune.md §2.2: permission-based version of {@link
+     * #existsActiveByIdAndRoleCode} — proposal-supervisor eligibility keyed
+     * to {@code eventProposals.review} instead of the literal {@code
+     * teacher} role code, so it keeps working if {@code teacher} is ever
+     * renamed or deleted in favor of a differently-named custom role.
+     */
+    @Query("SELECT COUNT(u) > 0 FROM User u JOIN u.roles r JOIN r.permissions p "
+            + "WHERE u.id = :id AND p.code = :permissionCode AND u.status = 'ACTIVE'")
+    boolean existsActiveByIdAndPermissionCode(@Param("id") String id, @Param("permissionCode") String permissionCode);
 }

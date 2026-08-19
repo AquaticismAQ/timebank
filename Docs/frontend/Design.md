@@ -62,11 +62,14 @@ The frontend must meet the following objectives:
 | Student Development Center Administrator | Manage school-wide projects, organizations, reviews, rules, accounts, and statistics |
 | System Administrator | Manage accounts, roles, permissions, system parameters, data import/export, and audit logs |
 
-A user may hold multiple roles. After login:
+The four rows above are the seeded defaults, not a closed set — Student, Student Development Center Administrator ("Admin"), and System Administrator are protected (undeletable) roles, while Teacher and any additional school-defined staff role are ordinary, manageable roles created and configured from the Admin Portal's Roles screen (`07-RoleFinetune.md`). System Administrator itself is intentionally not exposed in that screen this round — it exists and functions normally, just isn't yet manageable from the UI.
 
-- With only student permissions, directly enter the Student Portal.
-- With only admin permissions, directly enter the Admin Portal.
-- With both student and admin permissions, display a portal selection page, with workspace switching available in the avatar menu.
+Each user holds exactly one role (`07-RoleFinetune.md` §2.5, retired the earlier multi-role/portal-picker design below). After login:
+
+- A student-role account enters the Student Portal directly.
+- Any other role (teacher, Student Development Center Administrator, System Administrator, or a school-defined custom role) enters the Admin Portal directly.
+
+There is no portal-selection page and no workspace switching — a role determines exactly one portal, permanently, for the life of the account.
 
 ### 3.2 Login Portal
 
@@ -86,7 +89,6 @@ Phase 2 does not offer WeChat scan or other IM login. School unified identity au
 All roles share:
 
 - Current user, role, and data scope display.
-- Portal/workspace switching.
 - In-app notification center.
 - Personal profile and security settings.
 - Change password, logout.
@@ -526,7 +528,7 @@ Specific breakpoints use Tailwind CSS unified configuration; business pages must
 
 ### 11.2 Shared UI Patterns
 
-- App shell, page title, breadcrumb, and workspace switcher.
+- App shell, page title, and breadcrumb.
 - Status badges and status timelines.
 - Search, filter drawer, sort, and selected conditions display.
 - Data tables and mobile card lists.

@@ -77,14 +77,14 @@ useEffect(() => { api.projects.list().then(setProjects).catch(() => {}); }, []);
 
 ### Routing, auth, and workspaces
 
-`frontend/src/app/App.tsx` is the composition root: `ThemeProvider` (light/dark/auto, auto follows local hour 7–19) → `AuthProvider` (user + workspace persisted to `localStorage`) → `LogsProvider` (client-only operation log, seeded, not backed by an API yet) → `BrowserRouter`.
+`frontend/src/app/App.tsx` is the composition root: `ThemeProvider` (light/dark/auto, auto follows local hour 7–19) → `AuthProvider` (user persisted to `localStorage`) → `LogsProvider` (client-only operation log, seeded, not backed by an API yet) → `BrowserRouter`.
 
-A user can hold both `student` and `admin` workspace access; `RequireAuth` redirects to `/workspace` (portal picker) when workspace is ambiguous, and to `/login` when unauthenticated. Routes are nested under `/student/*` (`StudentLayout`) and `/admin/*` (`AdminLayout`), matching the Student Portal / Admin+Teacher Portal split in `Docs/frontend/Design.md` §3–7 — teachers use the same Admin Portal as school admins but with scoped permissions, not a separate portal.
+Every user holds exactly one role, so exactly one workspace (`07-RoleFinetune.md` §2.5 — the dual-workspace/multi-role architecture and its `/workspace` picker were retired 2026-08-19; `RequireAuth` now sends a workspace mismatch straight to the user's own portal home, and unauthenticated users to `/login`). Routes are nested under `/student/*` (`StudentLayout`) and `/admin/*` (`AdminLayout`), matching the Student Portal / Admin+Teacher Portal split in `Docs/frontend/Design.md` §3–7 — teachers use the same Admin Portal as school admins but with scoped permissions, not a separate portal.
 
 ### Component organization
 
 ```
-components/auth/       login, workspace picker
+components/auth/       login
 components/layout/     AppShell, StudentLayout, AdminLayout (shell/nav chrome)
 components/student/    one file per student-portal page (StudentHome, ProjectCenter, ServiceRecords, EventProposals, ...)
 components/admin/      one file per admin-portal page (AdminDashboard, AuditCenter, ProjectManagement,

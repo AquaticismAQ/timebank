@@ -77,12 +77,12 @@ Use accounts from `Docs/TestAccounts.md`. The shared server has realistic data s
 
 ### Architecture
 
-`frontend/src/app/App.tsx` composes `ThemeProvider` → `AuthProvider` → `LogsProvider` → `BrowserRouter`. `RequireAuth` sends unauthenticated users to `/login` and dual-workspace users to `/workspace`. Routes live under `/student/*` and `/admin/*`; teachers use the Admin Portal with scoped permissions, not a separate portal.
+`frontend/src/app/App.tsx` composes `ThemeProvider` → `AuthProvider` → `LogsProvider` → `BrowserRouter`. Every user holds exactly one role, so exactly one workspace (`07-RoleFinetune.md` §2.5 — the dual-workspace/multi-role architecture and its `/workspace` picker were retired 2026-08-19). `RequireAuth` sends unauthenticated users to `/login` and a workspace mismatch straight to the user's own portal home. Routes live under `/student/*` and `/admin/*`; teachers use the Admin Portal with scoped permissions, not a separate portal.
 
 Component organization:
 
 ```
-components/auth/       login and workspace picker
+components/auth/       login
 components/layout/     AppShell, StudentLayout, AdminLayout
 components/student/    StudentHome, ProjectCenter, ServiceRecords, EventProposals, ...
 components/admin/      dashboards, reviews, projects, registrants, organizations, accounts, ...

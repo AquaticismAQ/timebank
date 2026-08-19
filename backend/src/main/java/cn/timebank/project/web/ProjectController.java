@@ -121,8 +121,14 @@ public class ProjectController {
         return ((CookieSessionUserDetails) auth.getPrincipal()).id();
     }
 
-    /** Whether the caller may set `ownerId` to someone other than themselves (02-PorjectOrganization.md §3) — role-based, not `projects.*`-permission-based, since every teacher already holds `projects.create`/`.update`. */
+    /**
+     * Whether the caller may set `ownerId` to someone other than themselves (02-PorjectOrganization.md §3) —
+     * role-based, not `projects.*`-permission-based, since every teacher already holds `projects.create`/`.update`.
+     * 07-RoleFinetune.md §2.3: was literal `"admin"` only, so a `sysadmin` account couldn't reassign an owner
+     * despite (post role-merge) holding identical permissions — now any non-`student` (staff) role, consistent
+     * with {@code ProjectServiceImpl.isManager}.
+     */
     private boolean isAdmin(Authentication auth) {
-        return ((TimeBankPrincipal) auth.getPrincipal()).roleCodes().contains("admin");
+        return ((TimeBankPrincipal) auth.getPrincipal()).hasFullDataScope();
     }
 }

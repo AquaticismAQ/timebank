@@ -159,7 +159,7 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
 
     private UserDto createUser(String username) {
         return userService.create(new CreateUserRequest(username, "InitialPass123!", "Display " + username,
-                null, Set.of("student"), "zh-CN"), "system");
+                null, "student", "zh-CN"), "system");
     }
 
     private String login(String username, String password) {

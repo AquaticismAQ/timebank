@@ -20,4 +20,13 @@ public final class RoleRequests {
     public record UpdateRoleRequest(String name, Integer sessionTimeoutMinutes,
                                      Set<String> permissionCodes, @NotNull Long version) {
     }
+
+    /** 07-RoleFinetune.md §2.7: no code/sessionTimeoutMinutes — see {@code RoleTemplateDto}. */
+    public record CreateRoleTemplateRequest(@NotBlank String name, @NotEmpty Set<String> permissionCodes) {
+    }
+
+    /** Full-replace on edit (both fields always required) — simpler than {@link UpdateRoleRequest}'s partial-patch shape for a two-field resource. */
+    public record UpdateRoleTemplateRequest(@NotBlank String name, @NotEmpty Set<String> permissionCodes,
+                                             @NotNull Long version) {
+    }
 }

@@ -259,17 +259,19 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
     }
 
     /**
-     * `APIContract.md` §11 acceptance scenario 8: a teacher scoped to one
-     * grade must not be able to read a record belonging to a different
-     * grade — neither directly by id (an invisible {@code 404}, B1.8) nor
-     * through the list, which must silently narrow rather than 403 or leak
-     * a total count. Mirrors the same proof already written for Cases
-     * (`CaseDecisionTransactionIT.outOfScopeTeacherGetsAnInvisible404OnACase`)
-     * — this is the equivalent for the resource contract scenario 8 actually
-     * names, "records."
+     * `APIContract.md` §11 acceptance scenario 8 described {@code teacher}
+     * as grade-scoped — true when this test was written, no longer true
+     * after 07-RoleFinetune.md §2.1 made {@code teacher} a {@code
+     * hasFullDataScope()} role like {@code admin}/{@code sysadmin}. A
+     * {@code teacher_scope_assignment} row is now purely organizational
+     * metadata; it doesn't narrow anything. This test used to assert the
+     * opposite (a 404 and a narrowed list) — that described the
+     * pre-07-RoleFinetune behavior §2.1 deliberately changed, not a
+     * regression to guard against. Same for the mirrored proofs on Cases,
+     * Proposals, Students, and Accounts.
      */
     @Test
-    void outOfScopeTeacherGetsAnInvisible404OnAServiceRecordAndTheListIsSilentlyNarrowed() {
+    void scopedTeacherSeesBothInScopeAndOutOfScopeRecordsSinceScopeNoLongerRestrictsTeachers() {
         StudentDetailDto inScopeStudent = createStudent(); // grade_6/class_6A
         StudentDetailDto outOfScopeStudent = createStudentInGrade9();
         ServiceRecordDto inScopeRecord = submitRecord(inScopeStudent);
@@ -277,18 +279,15 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
 
         Authentication teacherAuth = teacherScopedToGrade6();
 
-        assertThatThrownBy(() -> serviceRecordService.getDetail(outOfScopeRecord.id(), teacherAuth, "zh-CN"))
-                .isInstanceOf(ApiException.class);
-        // The in-scope record is readable by the same teacher — proves the
-        // scope narrows rather than blocking the teacher outright.
+        assertThat(serviceRecordService.getDetail(outOfScopeRecord.id(), teacherAuth, "zh-CN").id())
+                .isEqualTo(outOfScopeRecord.id());
         assertThat(serviceRecordService.getDetail(inScopeRecord.id(), teacherAuth, "zh-CN").id())
                 .isEqualTo(inScopeRecord.id());
 
         Page<ServiceRecordDto> list = serviceRecordService.list(
                 PageRequest.of(0, 20), teacherAuth, null, null, null, null, null, "zh-CN");
         assertThat(list.getContent()).extracting(ServiceRecordDto::id)
-                .contains(inScopeRecord.id())
-                .doesNotContain(outOfScopeRecord.id());
+                .contains(inScopeRecord.id(), outOfScopeRecord.id());
     }
 
     private ServiceRecordDto submitRecord(StudentDetailDto student) {
@@ -299,7 +298,7 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
     private Authentication teacherScopedToGrade6() {
         var teacher = userService.create(new CreateUserRequest(
                 "scope_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Scope Teacher", null,
-                Set.of("teacher"), "zh-CN"), "usr_test_admin");
+                "teacher", "zh-CN"), "usr_test_admin");
         scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
                 "serviceRecords", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", Instant.now()));
         cn.timebank.iam.application.dto.AuthenticatedUserView view = new cn.timebank.iam.application.dto.AuthenticatedUserView(

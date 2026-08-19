@@ -8,6 +8,9 @@ import java.util.Set;
  * or password hash — MOCK_USERS' `password` field is exactly the shortcut
  * contract §13.3 says not to copy. {@code scopeGradeIds} is always present
  * (empty for a non-teacher, or a teacher with no grade bond yet).
+ *
+ * {@code roleCode} is a single value, not a set — 07-RoleFinetune.md §2.5,
+ * every user holds exactly one role.
  */
 public record UserDto(
         String id,
@@ -18,7 +21,7 @@ public record UserDto(
         String staffId,
         String status,
         String preferredLanguage,
-        Set<String> roleCodes,
+        String roleCode,
         Long version,
         Instant createdAt,
         Instant updatedAt,
@@ -34,7 +37,7 @@ public record UserDto(
      * reason (see {@code UserServiceImpl}'s class Javadoc).
      */
     public UserDto withScopeGradeIds(Set<String> scopeGradeIds) {
-        return new UserDto(id, username, displayName, email, studentId, staffId, status, preferredLanguage, roleCodes,
+        return new UserDto(id, username, displayName, email, studentId, staffId, status, preferredLanguage, roleCode,
                 version, createdAt, updatedAt, scopeGradeIds);
     }
 }
