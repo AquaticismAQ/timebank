@@ -12,6 +12,7 @@ import { usePagedApi } from '../../api/useApi';
 import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
+import { SearchPicker } from '../SearchPicker';
 
 export function AccountManagement() {
   const { t } = useTranslation();
@@ -135,7 +136,7 @@ export function AccountManagement() {
           <h1 className="text-foreground">{t('admin.accounts.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('admin.accounts.subtitle')}</p>
         </div>
-        <button onClick={() => setShowAdjust(true)}
+        <button onClick={() => { setAdjustStudentId(''); setAdjustStudent(''); setAdjustAmount(''); setAdjustReason(''); setAdjustNote(''); setShowAdjust(true); }}
           className="flex items-center gap-1.5 px-4 py-2 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90">
           <Plus className="w-4 h-4" />
           {t('admin.accounts.manualAdjust')}
@@ -283,9 +284,20 @@ export function AccountManagement() {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.accounts.student')}</label>
-                <input type="text" value={adjustStudent} onChange={e => setAdjustStudent(e.target.value)}
+                {/* A real picker resolving to a studentId, not free text — Docs/issues/037-*.md:
+                    the old plain <input> here never set adjustStudentId at all, so submitting
+                    silently adjusted whatever account api.accounts.get('') happened to fall
+                    back to, regardless of what name was typed. */}
+                <SearchPicker
+                  selected={adjustStudentId ? [{ id: adjustStudentId, label: adjustStudent }] : []}
+                  onChange={opts => { setAdjustStudentId(opts[0]?.id ?? ''); setAdjustStudent(opts[0]?.label ?? ''); }}
+                  fetchOptions={async search => (await api.students.directory(search))
+                    .map(s => ({ id: s.id, label: s.displayName, sublabel: formatGradeClass(s.gradeLevel, s.className) }))}
                   placeholder={t('admin.accounts.studentPlaceholder')}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none" />
+                  searchPlaceholder={t('admin.accounts.studentPlaceholder')}
+                  noResultsLabel={t('student.proposals.noResults')}
+                  loadingLabel={t('common.loading')}
+                />
               </div>
               <div>
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.accounts.amountLabel')}</label>
@@ -316,7 +328,7 @@ export function AccountManagement() {
               <button
                 disabled={adjustSaving}
                 onClick={async () => {
-                  if (!adjustStudent || !adjustAmount || !adjustReason || !adjustNote) {
+                  if (!adjustStudentId || !adjustAmount || !adjustReason || !adjustNote) {
                     toast.error(t('admin.accounts.fillAllFields'));
                     return;
                   }

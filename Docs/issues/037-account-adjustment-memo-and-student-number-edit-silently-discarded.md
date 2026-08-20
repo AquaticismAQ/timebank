@@ -1,6 +1,6 @@
 # 037 — Account adjustment memo and Student Management's student-number edit were silently discarded
 
-Status: **In progress (2026-08-20)**
+Status: **Fixed and live-verified (2026-08-20)**
 
 ## Symptom
 
@@ -28,4 +28,9 @@ Found (not reported by the user) while systematically auditing every frontend te
 
 ## Resolution
 
-*Not yet deployed/live-verified — write-up in progress alongside the fix.*
+Deployed to `https://tb.example.com/` as v0.1.6 (backend via rsync + remote `deploy.sh`, then frontend via `frontend/scripts/deploy.sh`). Live-verified via Playwright, both narrated and confirmed with the user first since each is a real ledger/profile write:
+
+- **Memo:** as `admin001`, performed a real +1 coin adjustment (Zhang Ming, reason "Compensatory issuance", a distinctive test note) via the (separately, also-fixed — see `Docs/issues/038-*.md`) header "Manual Adjust" picker. The transaction history's description now reads `COMPENSATION: <the typed note>`, confirming the memo round-trips through the new column, the DTO, and the frontend's combined display. Reversed immediately afterward via the ledger's own reverse endpoint, leaving no net balance change.
+- **Student number:** as `admin001`, changed Liu Yufei's student number from `2024005` to `2024005TEST`, saved, and confirmed the change survived a full page reload (proving it round-tripped through the backend, not just optimistic local state). Reverted back to `2024005` the same way, confirming updates in both directions persist and that reusing the original number isn't blocked as a false "already in use" conflict against the student's own prior value.
+
+Finding this required first fixing an unrelated, more serious bug it exposed — see `Docs/issues/038-*.md` for the "Manual Adjust" account-resolution defect discovered while performing the memo verification above.
