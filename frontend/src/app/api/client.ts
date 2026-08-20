@@ -606,7 +606,7 @@ export const api = {
       // for this list, shows the id rather than a blank).
       type AccountTransactionDtoWire = {
         id: string; accountId: string; type: string; amount: number; balanceAfter: number;
-        sourceId?: string; reasonCode: string; operatorId: string; createdAt: string;
+        sourceId?: string; reasonCode: string; memo?: string; operatorId: string; createdAt: string;
       };
       const page = await http.getPage<AccountTransactionDtoWire>(`/accounts/${accountId}/transactions`, buildListQuery(params));
       const data: AccountTransaction[] = page.data.map(dto => ({
@@ -617,7 +617,11 @@ export const api = {
         balanceBefore: dto.balanceAfter - dto.amount,
         balanceAfter: dto.balanceAfter,
         relatedRecordId: dto.sourceId,
-        description: dto.reasonCode,
+        // memo is the admin-typed free-text explanation, reasonCode a short
+        // selected category (e.g. "CORRECTION") — combine into the single
+        // description slot the UI renders (Docs/issues/037-*.md, memo used
+        // to be silently dropped by the backend and never reached here).
+        description: dto.memo ? `${dto.reasonCode}: ${dto.memo}` : dto.reasonCode,
         operatorName: dto.operatorId,
         createdAt: dto.createdAt,
       }));
@@ -636,7 +640,7 @@ export const api = {
       const dto = await http.get<StudentListItemDtoWire & { email?: string; guardianName?: string; guardianContact?: string; joinedAt: string }>(`/students/${id}`);
       return fromStudentDto(dto);
     },
-    async update(id: string, data: { displayName?: string; email?: string; gradeId?: string; classId?: string; guardianName?: string; guardianContact?: string; version: number }): Promise<Student> {
+    async update(id: string, data: { studentNumber?: string; displayName?: string; email?: string; gradeId?: string; classId?: string; guardianName?: string; guardianContact?: string; version: number }): Promise<Student> {
       const dto = await http.patch<StudentListItemDtoWire>(`/students/${id}`, data);
       return fromStudentDto(dto);
     },

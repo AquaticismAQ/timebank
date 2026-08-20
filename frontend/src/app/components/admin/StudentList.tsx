@@ -172,6 +172,8 @@ export function StudentList() {
     const newClassName = classes.find(c => c.id === editForm.classId)?.name ?? editForm.classId;
 
     const changes: string[] = [];
+    if (editForm.studentNumber !== editStudent.studentNumber)
+      changes.push(`Student number changed to "${editForm.studentNumber}"`);
     if (editForm.name !== editStudent.name) changes.push(`Name changed to "${editForm.name}"`);
     if (editForm.gradeId !== editStudent.gradeId || editForm.classId !== editStudent.classId)
       changes.push(`Class changed to ${newGradeName} ${newClassName}`);
@@ -181,7 +183,12 @@ export function StudentList() {
       changes.push(`Time coins ${priorTimeCoinBalance}→${editForm.timeCoinBalance} (use Account Management for balance adjustments)`);
 
     try {
-      const hasProfileChanges = editForm.name !== editStudent.name || editForm.email !== editStudent.email ||
+      // studentNumber is only ever actually different here when isAdmin (the
+      // input is disabled otherwise, bound straight to editStudent's own
+      // value) — Docs/issues/037-*.md, this field used to be silently
+      // dropped from the request entirely.
+      const hasProfileChanges = editForm.studentNumber !== editStudent.studentNumber ||
+        editForm.name !== editStudent.name || editForm.email !== editStudent.email ||
         editForm.gradeId !== editStudent.gradeId || editForm.classId !== editStudent.classId;
 
       if (hasProfileChanges) {
@@ -191,6 +198,7 @@ export function StudentList() {
         // this form was silently never sent to the backend even though the
         // list below optimistically showed it as changed.
         await api.students.update(editStudent.id, {
+          studentNumber: editForm.studentNumber,
           displayName: editForm.name,
           email: editForm.email,
           gradeId: editForm.gradeId || editStudent.gradeId || undefined,
@@ -201,6 +209,7 @@ export function StudentList() {
 
       setStudents(prev => prev.map(s => s.id === editStudent.id ? {
         ...s,
+        studentNumber: editForm.studentNumber,
         name: editForm.name,
         email: editForm.email,
         gradeId: editForm.gradeId,

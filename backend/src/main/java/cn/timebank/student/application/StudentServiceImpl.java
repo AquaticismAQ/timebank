@@ -151,6 +151,12 @@ class StudentServiceImpl implements StudentService {
         ConcurrencyControl.checkVersion(student.getVersion(), request.version());
 
         StudentSummaryForAudit before = new StudentSummaryForAudit(student);
+        if (request.studentNumber() != null && !request.studentNumber().equals(student.getStudentNumber())) {
+            if (studentRepository.existsByStudentNumber(request.studentNumber())) {
+                throw ApiException.stateConflict("Student number is already in use.");
+            }
+            student.setStudentNumber(request.studentNumber());
+        }
         if (request.displayName() != null) {
             student.setDisplayName(request.displayName());
         }

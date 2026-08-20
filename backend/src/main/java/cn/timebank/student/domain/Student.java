@@ -39,6 +39,7 @@ public class Student extends VersionedEntity {
     @Column(name = "id", length = 32, nullable = false, updatable = false)
     private String id;
 
+    @Setter
     @Column(name = "student_number", length = 32, nullable = false)
     private String studentNumber;
 

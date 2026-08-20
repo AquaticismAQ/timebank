@@ -13,7 +13,7 @@
 
     <groupId>cn.timebank</groupId>
     <artifactId>timebank-backend</artifactId>
-    <version>0.1.5</version>
+    <version>0.1.6</version>
     <packaging>jar</packaging>
     <name>timebank-backend</name>
     <description>TimeBank Phase 2 backend — single Spring Boot modular monolith (Docs/backend/Design.md)</description>

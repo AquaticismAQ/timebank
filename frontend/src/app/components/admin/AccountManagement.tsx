@@ -307,7 +307,7 @@ export function AccountManagement() {
               <div>
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.accounts.note')} *</label>
                 <textarea rows={10} value={adjustNote} onChange={e => setAdjustNote(e.target.value)}
-                  placeholder={t('admin.accounts.notePlaceholder')}
+                  placeholder={t('admin.accounts.notePlaceholder')} maxLength={1000}
                   className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none font-mono resize-none overflow-y-auto whitespace-pre-wrap" />
               </div>
             </div>

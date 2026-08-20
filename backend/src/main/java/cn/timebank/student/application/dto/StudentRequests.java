@@ -26,6 +26,7 @@ public final class StudentRequests {
 
     /** `PATCH /students/{id}` — the authoritative profile only (contract §4.9); never status (action endpoints own that). */
     public record UpdateStudentRequest(
+            String studentNumber,
             String displayName,
             String email,
             String gradeId,

@@ -54,6 +54,9 @@ public class AccountTransaction {
     @Column(name = "reason_code", length = 64, nullable = false, updatable = false)
     private String reasonCode;
 
+    @Column(name = "memo", length = 1000, updatable = false)
+    private String memo;
+
     @Column(name = "operator_id", length = 32, nullable = false, updatable = false)
     private String operatorId;
 
@@ -64,7 +67,7 @@ public class AccountTransaction {
     private Instant createdAt;
 
     public AccountTransaction(String id, String accountId, TransactionType type, int amount, int balanceAfter,
-                               String sourceType, String sourceId, String reasonCode, String operatorId,
+                               String sourceType, String sourceId, String reasonCode, String memo, String operatorId,
                                String reversalOfTransactionId, Instant now) {
         this.id = id;
         this.accountId = accountId;
@@ -74,6 +77,7 @@ public class AccountTransaction {
         this.sourceType = sourceType;
         this.sourceId = sourceId;
         this.reasonCode = reasonCode;
+        this.memo = memo;
         this.operatorId = operatorId;
         this.reversalOfTransactionId = reversalOfTransactionId;
         this.createdAt = now;

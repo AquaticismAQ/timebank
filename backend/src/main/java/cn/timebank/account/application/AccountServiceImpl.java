@@ -104,7 +104,7 @@ class AccountServiceImpl implements AccountService {
             throw ApiException.stateConflict("Account is frozen; cannot credit.");
         }
         return appendTransaction(account, TransactionType.SERVICE_CREDIT, amountCentiCoins, sourceType, sourceId,
-                reasonCode, operatorId, null);
+                reasonCode, null, operatorId, null);
     }
 
     @Override
@@ -120,7 +120,7 @@ class AccountServiceImpl implements AccountService {
             throw ApiException.stateConflict("Account is frozen; cannot adjust.");
         }
         return appendTransaction(account, TransactionType.CORRECTION, request.amount(), "adjustment", null,
-                request.reasonCode(), actorId, null);
+                request.reasonCode(), request.memo(), actorId, null);
     }
 
     @Override
@@ -132,7 +132,7 @@ class AccountServiceImpl implements AccountService {
             throw ApiException.stateConflict("Account is frozen; cannot adjust.");
         }
         return appendTransaction(account, TransactionType.CORRECTION, request.amount(), "adjustment", null,
-                request.reasonCode(), actorId, null);
+                request.reasonCode(), request.memo(), actorId, null);
     }
 
     @Override
@@ -151,7 +151,7 @@ class AccountServiceImpl implements AccountService {
         // deliberately allowed even on a frozen account (fixing a mistake is
         // not "new earning"), unlike credit/adjust above.
         return appendTransaction(account, TransactionType.CORRECTION, -original.getAmount(), "reversal",
-                original.getId(), request.reasonCode(), actorId, original.getId());
+                original.getId(), request.reasonCode(), request.memo(), actorId, original.getId());
     }
 
     @Override
@@ -164,7 +164,7 @@ class AccountServiceImpl implements AccountService {
         account.setFrozen(true);
         account.setFrozenReason(request.reasonCode());
         account.setFrozenAt(Instant.now());
-        appendTransaction(account, TransactionType.FREEZE, 0, "freeze", null, request.reasonCode(), actorId, null);
+        appendTransaction(account, TransactionType.FREEZE, 0, "freeze", null, request.reasonCode(), request.memo(), actorId, null);
         return toDto(account);
     }
 
@@ -178,7 +178,7 @@ class AccountServiceImpl implements AccountService {
         account.setFrozen(false);
         account.setFrozenReason(null);
         account.setFrozenAt(null);
-        appendTransaction(account, TransactionType.UNFREEZE, 0, "unfreeze", null, request.reasonCode(), actorId, null);
+        appendTransaction(account, TransactionType.UNFREEZE, 0, "unfreeze", null, request.reasonCode(), request.memo(), actorId, null);
         return toDto(account);
     }
 
@@ -209,10 +209,10 @@ class AccountServiceImpl implements AccountService {
 
     private AccountTransactionDto appendTransaction(Account account, TransactionType type, int amount,
                                                      String sourceType, String sourceId, String reasonCode,
-                                                     String operatorId, String reversalOfTransactionId) {
+                                                     String memo, String operatorId, String reversalOfTransactionId) {
         int newBalance = account.getBalance() + amount;
         AccountTransaction transaction = new AccountTransaction(OpaqueIds.generate("txn"), account.getId(), type,
-                amount, newBalance, sourceType, sourceId, reasonCode, operatorId, reversalOfTransactionId, Instant.now());
+                amount, newBalance, sourceType, sourceId, reasonCode, memo, operatorId, reversalOfTransactionId, Instant.now());
         transactionRepository.save(transaction);
         account.setBalance(newBalance);
         account.setUpdatedAt(Instant.now());
@@ -250,7 +250,7 @@ class AccountServiceImpl implements AccountService {
 
     private AccountTransactionDto toDto(AccountTransaction t) {
         return new AccountTransactionDto(t.getId(), t.getAccountId(), t.getType().name(), t.getAmount(),
-                t.getBalanceAfter(), t.getSourceType(), t.getSourceId(), t.getReasonCode(), t.getOperatorId(),
-                t.getReversalOfTransactionId(), t.getCreatedAt());
+                t.getBalanceAfter(), t.getSourceType(), t.getSourceId(), t.getReasonCode(), t.getMemo(),
+                t.getOperatorId(), t.getReversalOfTransactionId(), t.getCreatedAt());
     }
 }
