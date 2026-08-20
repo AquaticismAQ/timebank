@@ -173,7 +173,7 @@
     },
     "projects": {
       "title": "项目中心",
-      "count": "个项目",
+      "count": "{{count}} 个项目",
       "searchPlaceholder": "搜索项目、组织、地点...",
       "filter": "筛选",
       "all": "全部",

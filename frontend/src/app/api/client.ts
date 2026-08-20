@@ -635,17 +635,19 @@ export const api = {
     async progress(id: string): Promise<StudentProgress> {
       // Real ProgressDto (backend doc comment: "the `*Hours` convenience
       // fields... leave the wire") has no academicYear/grade/byCategory at
-      // all — grade is backfilled from the student record (one extra real
-      // call, already wired); academicYear and the per-category breakdown
-      // have no backing endpoint in this pass, defaulted honestly rather
+      // all — grade is backfilled from the student record, and academicYear
+      // from `/academic-years`' `current: true` entry (one extra real call
+      // each, already wired elsewhere); the per-category breakdown still
+      // has no backing endpoint in this pass, defaulted honestly rather
       // than invented.
       type ProgressDtoWire = Omit<StudentProgress, 'academicYear' | 'grade' | 'byCategory'>;
-      const [dto, student] = await Promise.all([
+      const [dto, student, academicYears] = await Promise.all([
         http.get<ProgressDtoWire>(`/students/${id}/progress`),
         this.get(id).catch(() => undefined),
+        api.dictionaries.academicYears().catch(() => []),
       ]);
       return {
-        ...dto, academicYear: '', byCategory: [],
+        ...dto, academicYear: academicYears.find(y => y.current)?.code ?? '', byCategory: [],
         grade: student ? formatGradeClass(student.gradeLevel, student.className) : '',
       };
     },
@@ -758,7 +760,7 @@ export const api = {
     // reads it) — the real DashboardStudentDto carries only
     // `unreadNotificationCount`, not the array, so this leaves it empty
     // rather than making an extra call for dead data.
-    async student(): Promise<{ progress: StudentProgress; account: Account; recentRecords: ServiceRecord[]; upcomingProjects: Project[]; notifications: Notification[] }> {
+    async student(studentId?: string): Promise<{ progress: StudentProgress; account: Account; recentRecords: ServiceRecord[]; upcomingProjects: Project[]; notifications: Notification[] }> {
       // `progress`/`account`/`recentRecords`/`upcomingProjects` here are
       // the exact same DTOs `/students/{id}/progress`, `/accounts`,
       // `/service-records`, and `/projects` return (backend
@@ -766,16 +768,26 @@ export const api = {
       // (evidenceFiles default, status/enum casing, the Phase-4 account
       // field approximation) as those standalone endpoints, not a raw
       // pass-through. `progress` still lacks academicYear/grade/byCategory
-      // (see `students.progress`'s branch) — defaulted the same way here.
+      // — backfilled the same way as `students.progress`'s branch (grade
+      // needs the caller's own studentId, since the dashboard DTO carries
+      // no id to look it up by).
       type DashboardStudentDtoWire = {
         progress: Omit<StudentProgress, 'academicYear' | 'grade' | 'byCategory'>;
         account: AccountDtoWire;
         recentRecords: (ServiceRecord & { evidenceFileIds?: string[] })[];
         upcomingProjects: Project[];
       };
-      const dto = await http.get<DashboardStudentDtoWire>('/dashboards/student');
+      const [dto, student, academicYears] = await Promise.all([
+        http.get<DashboardStudentDtoWire>('/dashboards/student'),
+        studentId ? api.students.get(studentId).catch(() => undefined) : Promise.resolve(undefined),
+        api.dictionaries.academicYears().catch(() => []),
+      ]);
       return {
-        progress: { ...dto.progress, academicYear: '', grade: '', byCategory: [] },
+        progress: {
+          ...dto.progress, byCategory: [],
+          academicYear: academicYears.find(y => y.current)?.code ?? '',
+          grade: student ? formatGradeClass(student.gradeLevel, student.className) : '',
+        },
         account: fromAccountDto(dto.account),
         recentRecords: dto.recentRecords.map(fromServiceRecordDto),
         upcomingProjects: dto.upcomingProjects.map(p => mapEnumFields(p, ['status', 'myApplicationStatus'])),

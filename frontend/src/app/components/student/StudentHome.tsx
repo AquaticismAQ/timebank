@@ -43,13 +43,13 @@ export function StudentHome() {
   const [upcomingProjects, setUpcomingProjects] = useState<Project[]>([]);
 
   useEffect(() => {
-    api.dashboards.student().then(d => {
+    api.dashboards.student(user?.studentId).then(d => {
       setProgress(d.progress);
       setAccount(d.account);
       setRecentRecords(d.recentRecords);
       setUpcomingProjects(d.upcomingProjects);
     }).catch(() => {});
-  }, []);
+  }, [user?.studentId]);
 
   if (!progress || !account) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
 
