@@ -13,7 +13,7 @@
 
     <groupId>cn.timebank</groupId>
     <artifactId>timebank-backend</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.1</version>
     <packaging>jar</packaging>
     <name>timebank-backend</name>
     <description>TimeBank Phase 2 backend — single Spring Boot modular monolith (Docs/backend/Design.md)</description>
@@ -175,6 +175,22 @@
                         </exclude>
                     </excludes>
                 </configuration>
+                <executions>
+                    <!--
+                        Stamps pom.xml's <version> (plus artifact/name/build
+                        time) into target/classes/META-INF/build-info.properties
+                        at build time, which Spring Boot auto-detects as a
+                        BuildProperties bean — the real source of `GET
+                        /api/v1/system/version` (Contract §4.17). Keeps the
+                        version in exactly one place (this <version> tag)
+                        rather than duplicating it into application.yml.
+                    -->
+                    <execution>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

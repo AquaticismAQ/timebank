@@ -1,9 +1,10 @@
 import { Outlet, NavLink, useNavigate } from 'react-router';
 import { Bell, Sun, Moon, Monitor, LogOut, Menu, X, Clock } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth, useTheme } from '../../App';
 import { LanguageSwitcher } from '../LanguageSwitcher';
+import { api } from '../../api/client';
 
 export interface ShellNavItem {
   to: string;
@@ -17,9 +18,11 @@ interface SidebarContentProps {
   navItems: ShellNavItem[];
   statsStrip?: React.ReactNode;
   onNavClick?: () => void;
+  /** Only passed by the persistent desktop sidebar — the mobile drawer has no room for it. */
+  version?: string;
 }
 
-function SidebarContent({ navItems, statsStrip, onNavClick }: SidebarContentProps) {
+function SidebarContent({ navItems, statsStrip, onNavClick, version }: SidebarContentProps) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col h-full">
@@ -27,7 +30,10 @@ function SidebarContent({ navItems, statsStrip, onNavClick }: SidebarContentProp
         <div className="w-7 h-7 bg-sidebar-primary rounded-lg flex items-center justify-center shrink-0">
           <Clock className="w-4 h-4 text-sidebar-primary-foreground" />
         </div>
-        <div className="text-sidebar-foreground font-semibold text-sm">{t('common.appName')}</div>
+        <div className="flex items-baseline gap-1.5 min-w-0">
+          <span className="text-sidebar-foreground font-semibold text-sm truncate">{t('common.appName')}</span>
+          {version && <span className="text-sidebar-foreground/50 text-xs shrink-0">v{version}</span>}
+        </div>
       </div>
 
       {statsStrip && (
@@ -97,6 +103,11 @@ export function AppShell({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [version, setVersion] = useState<string>();
+
+  useEffect(() => {
+    api.system.version().then(v => setVersion(v.version)).catch(() => {});
+  }, []);
 
   const themeOptions: { value: 'light' | 'dark' | 'auto'; icon: React.ReactNode; label: string }[] = [
     { value: 'light', icon: <Sun className="w-4 h-4" />, label: t('common.theme.light') },
@@ -116,7 +127,7 @@ export function AppShell({
 
       {/* ── Desktop sidebar ──────────────────────────────────────────── */}
       <aside className="hidden lg:flex flex-col w-56 xl:w-64 bg-sidebar border-r border-sidebar-border shrink-0 sticky top-0 h-screen">
-        <SidebarContent {...sidebarProps} />
+        <SidebarContent {...sidebarProps} version={version} />
       </aside>
 
       {/* ── Mobile sidebar overlay ────────────────────────────────────── */}

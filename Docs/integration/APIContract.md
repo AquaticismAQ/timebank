@@ -765,6 +765,24 @@ Example response:
 
 This endpoint returns low-frequency school-level configuration info; the frontend can fetch and cache it during app initialization. The difference from `/system/settings`: `/school/info` is available to all authenticated users and returns school display-level info; `/system/settings` is for administrators and returns configurable system parameters.
 
+### 4.17 System Version
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/system/version` | Authenticated | Deployed product version |
+
+Example response:
+
+```json
+{
+  "data": {
+    "version": "0.1.1"
+  }
+}
+```
+
+`version` is a semver string (`MAJOR.MINOR.PATCH`, optionally `-SNAPSHOT`) sourced from the backend build itself (Maven's `spring-boot-maven-plugin` `build-info` goal, which stamps `pom.xml`'s `<version>` into the jar at build time) — never hand-maintained in application code. See `Docs/operations/VersionManagement.md` for the full versioning/release scheme, including how the frontend's own `package.json` version is kept in lockstep even though this endpoint (not the frontend bundle) is the runtime source of truth for anything displayed in the UI. Prefix with `v` for display (`v0.1.1`) — the API returns the bare number.
+
 ---
 
 ## 5. Permission Matrix

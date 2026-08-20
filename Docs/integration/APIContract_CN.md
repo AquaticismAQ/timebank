@@ -749,6 +749,24 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
 
 该端点返回低频变化的学校级配置信息，前端可在应用初始化时获取并缓存。与 `/system/settings` 的区别在于：`/school/info` 面向所有已登录用户，返回学校展示层信息；`/system/settings` 面向管理员，返回可配置的系统参数。
 
+### 4.17 系统版本
+
+| Method | Path | 权限 | 说明 |
+| --- | --- | --- | --- |
+| `GET` | `/system/version` | 已登录 | 已部署的产品版本号 |
+
+响应示例：
+
+```json
+{
+  "data": {
+    "version": "0.1.1"
+  }
+}
+```
+
+`version` 是一个语义化版本号字符串（`MAJOR.MINOR.PATCH`，可带 `-SNAPSHOT` 后缀），来源于后端构建本身（Maven 的 `spring-boot-maven-plugin` `build-info` 目标，在构建时将 `pom.xml` 的 `<version>` 写入 jar 包），从不在应用代码中手动维护。完整的版本/发布管理方案见 `Docs/operations/VersionManagement.md`，其中也说明了前端自己的 `package.json` 版本号如何与后端保持同步——尽管该端点（而非前端打包时的版本号）才是界面上任何版本展示的运行时真相来源。展示时前缀 `v`（如 `v0.1.1`）——接口本身返回不带前缀的原始版本号。
+
 ---
 
 ## 5. 权限矩阵

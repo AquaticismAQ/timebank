@@ -13,6 +13,11 @@ export interface SchoolInfo {
   academicYear?: string;
 }
 
+/** `GET /system/version` (contract §4.17) — bare semver, no `v` prefix; display call sites add it. */
+export interface SystemVersion {
+  version: string;
+}
+
 /**
  * 07-RoleFinetune.md: was a fixed 4-value union before roles became
  * data-driven/manageable — now any role code the backend returns, custom

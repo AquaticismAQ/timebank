@@ -18,6 +18,7 @@ import type {
   ReportData,
   EventProposal,
   SchoolInfo,
+  SystemVersion,
   MeResponse,
   EvidenceFile,
   FileMetadata,
@@ -179,6 +180,13 @@ export const api = {
   school: {
     async getInfo(): Promise<SchoolInfo> {
       return http.get<SchoolInfo>('/school/info');
+    },
+  },
+
+  system: {
+    /** `GET /system/version` (contract §4.17) — the real deployed backend version, never hardcoded client-side. */
+    async version(): Promise<SystemVersion> {
+      return http.get<SystemVersion>('/system/version');
     },
   },
 

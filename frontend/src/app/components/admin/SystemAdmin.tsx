@@ -546,9 +546,11 @@ export function SystemAdmin() {
   const canManageTemplates = canManageRoles && (user?.roles.includes('admin') || user?.roles.includes('sysadmin')) === true;
   const { logs, addLog } = useLogs();
   const [schoolName, setSchoolName] = useState('');
+  const [systemVersion, setSystemVersion] = useState('');
 
   useEffect(() => {
     api.school.getInfo().then(info => setSchoolName(info.name)).catch(() => {});
+    api.system.version().then(v => setSystemVersion(v.version)).catch(() => {});
   }, []);
   const [activeTab, setActiveTab] = useState<Tab>('users');
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -1082,7 +1084,7 @@ export function SystemAdmin() {
             </div>
             {[
               { label: t('admin.system.sysName'), value: `TimeBank · ${schoolName}` },
-              { label: t('admin.system.sysVersion'), value: 'v2.0.0-beta (Phase 2)' },
+              { label: t('admin.system.sysVersion'), value: systemVersion ? `v${systemVersion}` : '—' },
               { label: t('admin.system.adminContact'), value: 'Wei Chen / Mei Zhao' },
               { label: t('admin.system.officeLocation'), value: 'H300 / H504' },
               { label: t('admin.system.apiVersion'), value: '/api/v1' },
