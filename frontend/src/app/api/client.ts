@@ -380,7 +380,7 @@ export const api = {
       return mapEnumFields(dto, ['status']);
     },
     async review(id: string, decision: string, comment?: string, reasonCode?: string, proposalVersion?: number, idempotencyKey?: string): Promise<EventProposal> {
-      const decisionMap: Record<string, string> = { approve: 'APPROVE', reject: 'REJECT', requestChanges: 'REQUEST_CHANGES', recommendApproval: 'RECOMMEND_APPROVAL' };
+      const decisionMap: Record<string, string> = { approve: 'APPROVE', reject: 'REJECT', requestChanges: 'REQUEST_CHANGES' };
       const body = {
         decision: decisionMap[decision] ?? toBackendEnum(decision),
         reasonCode: reasonCode || decision.toUpperCase(),

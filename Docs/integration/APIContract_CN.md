@@ -300,11 +300,12 @@ draft/submitted → withdrawn
 审批决定：
 
 - `requestChanges`
-- `recommendApproval`
 - `approve`
 - `reject`
 
-教师可否直接批准由权限和审批规则决定；需要学生发展中心终审时，教师使用 `recommendApproval`。批准操作在同一事务中生成正式项目草稿并回填 `approvedProjectId`，因此 `approved` 必须同时具有有效的关联项目。正式项目仍须由具有发布权限的教师或管理员发布。
+（`recommendApproval`——一个"保持在 `underReview`、仅记录内部背书"的无实际状态变化的决定，用于两级审批——已于 2026-08-20 移除：批准本身已经是两步流程（提案批准，再由另一步单独发布项目），再加一层"先建议、再由他人批准"的中间层，使审批流程比这个两步拆分本身需要的更复杂。移除前从未有实际数据记录过这一决定。）
+
+任何持有 `eventProposals.review` 权限的已登录用户（目前由 `teacher`/`admin`/`sysadmin` 持有）均可对提案 `approve`/`reject`/`requestChanges`——某个账号是否应持有 `eventProposals.review` 是角色配置问题（见 `Docs/optimization/07-RoleFinetune.md` §2.9），本合约不做进一步限制。批准操作在同一事务中生成正式项目草稿并回填 `approvedProjectId`，因此 `approved` 必须同时具有有效的关联项目。正式项目仍须由具有发布权限的教师或管理员发布——批准本身从不自动发布。
 
 ### 3.3 报名 `Application`
 
@@ -451,18 +452,21 @@ queued → running → succeeded
 
 | Method | Path | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/event-proposals` | 本人/`eventProposals.read` | 学生查询本人提案；教师/管理员查询权限范围审批队列 |
+| `GET` | `/event-proposals` | 已登录 | 学生只能看到本人提案（`Self` 数据范围）；任何非学生角色都能看到完整队列（`All` 范围）——查看权限按角色区分，不再由 `eventProposals.read` 把关（2026-08-20，见 `Docs/optimization/07-RoleFinetune.md` §2.9） |
 | `POST` | `/event-proposals` | `eventProposals.create` | 学生创建提案草稿 |
-| `GET` | `/event-proposals/{id}` | 本人/`eventProposals.read` | 提案详情 |
+| `GET` | `/event-proposals/{id}` | 已登录 | 提案详情——查看权限规则同上 |
 | `PATCH` | `/event-proposals/{id}` | 提案人且可编辑 | 编辑草稿或需修改的提案 |
 | `DELETE` | `/event-proposals/{id}` | 提案人且为草稿 | 删除草稿 |
 | `POST` | `/event-proposals/{id}/submit` | 提案人 | 提交审批 |
 | `POST` | `/event-proposals/{id}/withdraw` | 提案人/管理权限 | 撤回或申请撤回 |
-| `GET` | `/event-proposals/{id}/revisions` | 本人/`eventProposals.read` | 修订历史 |
-| `GET` | `/event-proposals/{id}/timeline` | 本人/`eventProposals.read` | 审批时间线 |
-| `POST` | `/event-proposals/{id}/reviews` | `eventProposals.review` | 要求修改、推荐批准、批准或驳回 |
+| `GET` | `/event-proposals/{id}/revisions` | 已登录 | 修订历史——查看权限规则同上 |
+| `GET` | `/event-proposals/{id}/timeline` | 已登录 | 审批时间线——查看权限规则同上 |
+| `POST` | `/event-proposals/{id}/reviews` | `eventProposals.review` | 要求修改、批准或驳回 |
+| `GET` | `/event-proposals/{id}/reviews` | 已登录 | 提案的审批决定历史——查看权限规则同上 |
 | `POST` | `/event-proposals/{id}/assign` | `eventProposals.assign` | 分配或转交评审人 |
 | `GET` | `/event-proposal-queue/summary` | `eventProposals.review` | 待办数量与审批 SLA |
+
+**查看与决定的区分（2026-08-20）：** 以上每个读取端点都改为仅要求 `isAuthenticated()`，不再要求 `eventProposals.read`——任何已登录用户都能查看提案队列并打开提案详情（前端只是不渲染决定按钮而已），由 `DataScopeResolver` 将学生限定在本人提案、将任何非学生角色扩展到完整队列（`Docs/optimization/07-RoleFinetune.md` §2.1 的 `grantAll` 规则）。只有*决定*（`POST .../reviews`）与*分配*（`POST .../assign`、`GET /event-proposal-queue/summary`）仍按权限把关，分别是 `eventProposals.review`/`.assign`——真正决定一个账号能否看到决定按钮的是这个区分，而不是 `eventProposals.read`。`eventProposals.read` 仍保留在权限目录中（`07-RoleFinetune.md` §6，为保持接口文档完整性），但已不再把关本节的任何端点。
 
 审批请求：
 

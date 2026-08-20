@@ -33,7 +33,17 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Set;
 
-/** Contract §4.3. Owner-gated endpoints use `isAuthenticated()`; the real ownership check happens in the service (404-not-403, B1.8). Full paths on each mapping (no class-level prefix), matching `ServiceCategoryController`'s precedent — this controller also owns `/event-proposal-queue/summary`, which doesn't share the `/event-proposals` prefix. */
+/**
+ * Contract §4.3. Owner-gated endpoints use `isAuthenticated()`; the real ownership check happens in the service (404-not-403, B1.8). Full paths on each mapping (no class-level prefix), matching `ServiceCategoryController`'s precedent — this controller also owns `/event-proposal-queue/summary`, which doesn't share the `/event-proposals` prefix.
+ *
+ * <p>Every read endpoint ({@code list}/{@code get}/{@code revisions}/{@code timeline}/{@code reviews}) is
+ * {@code isAuthenticated()} rather than {@code eventProposals.read}-gated (07-RoleFinetune.md follow-up,
+ * 2026-08-20): viewing is role-based, not permission-based — any authenticated user can open the queue and a
+ * proposal's detail in view mode, with {@code DataScopeResolver} naturally narrowing a student to their own
+ * proposals (`Self` scope) and any non-student role to the full queue (`All` scope, §2.1). Only <em>deciding</em>
+ * ({@code decide}/{@code assign}/{@code queueSummary}) stays permission-gated on {@code eventProposals.review}/
+ * {@code .assign} — that split is what actually determines whether a staff account sees decision buttons.
+ */
 @RestController
 public class ProposalController {
 
@@ -48,7 +58,7 @@ public class ProposalController {
     }
 
     @GetMapping("/api/v1/event-proposals")
-    @PreAuthorize("hasAuthority('eventProposals.read')")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<List<ProposalDto>> list(
             PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
@@ -59,7 +69,7 @@ public class ProposalController {
     }
 
     @GetMapping("/api/v1/event-proposals/{id}")
-    @PreAuthorize("hasAuthority('eventProposals.read')")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<ProposalDto> get(
             @PathVariable String id, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
@@ -108,13 +118,13 @@ public class ProposalController {
     }
 
     @GetMapping("/api/v1/event-proposals/{id}/revisions")
-    @PreAuthorize("hasAuthority('eventProposals.read')")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<List<RevisionDto>> revisions(@PathVariable String id, Authentication auth) {
         return ApiResponse.of(proposalService.revisions(id, auth));
     }
 
     @GetMapping("/api/v1/event-proposals/{id}/timeline")
-    @PreAuthorize("hasAuthority('eventProposals.read')")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<List<TimelineEntryDto>> timeline(@PathVariable String id, Authentication auth) {
         return ApiResponse.of(proposalService.timeline(id, auth));
     }
@@ -129,7 +139,7 @@ public class ProposalController {
     }
 
     @GetMapping("/api/v1/event-proposals/{id}/reviews")
-    @PreAuthorize("hasAuthority('eventProposals.read')")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<List<ProposalReviewDto>> reviews(@PathVariable String id, Authentication auth) {
         proposalService.getDetail(id, auth, "zh-CN");
         return ApiResponse.of(proposalService.decisionsForProposal(id));

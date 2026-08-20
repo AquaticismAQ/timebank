@@ -71,7 +71,6 @@ class ProposalApprovalTransaction {
             case APPROVE -> ProposalStatus.APPROVED;
             case REQUEST_CHANGES -> ProposalStatus.CHANGES_REQUESTED;
             case REJECT -> ProposalStatus.REJECTED;
-            case RECOMMEND_APPROVAL -> ProposalStatus.UNDER_REVIEW;
         };
 
         // Effect: the implicit SUBMITTED -> UNDER_REVIEW step (first decision), then the real target.
@@ -118,11 +117,7 @@ class ProposalApprovalTransaction {
             case APPROVE -> "eventProposal.approved";
             case REQUEST_CHANGES -> "eventProposal.changesRequested";
             case REJECT -> "eventProposal.rejected";
-            case RECOMMEND_APPROVAL -> null; // internal reviewer action, no student-facing notification
         };
-        if (templateCode == null) {
-            return;
-        }
         userService.findUserIdByStudentId(proposal.getProposerStudentId())
                 .ifPresent(recipientUserId -> notificationService.notify(recipientUserId, templateCode, "eventProposal", proposal.getId()));
     }

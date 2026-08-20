@@ -303,11 +303,12 @@ draft/submitted → withdrawn
 Approval decisions:
 
 - `requestChanges`
-- `recommendApproval`
 - `approve`
 - `reject`
 
-Whether a teacher can directly approve is determined by permissions and approval rules; when Student Development Center final review is required, the teacher uses `recommendApproval`. The approval action generates an official project draft and backfills `approvedProjectId` in the same transaction, so `approved` must always have a valid linked project. The official project must still be published by a teacher or administrator with publish permission.
+(`recommendApproval` — a no-op "keep at `underReview`, log an internal-only endorsement" decision for a two-tier review — was removed 2026-08-20: approval was already a two-step process (proposal approval, then a separate project publish, below), and a third "recommend, then someone else approves" tier made the workflow more complex than that two-step split needed. No live data ever recorded this decision before removal.)
+
+Any authenticated user (`eventProposals.review`, held by `teacher`/`admin`/`sysadmin` today) can `approve`/`reject`/`requestChanges` a proposal — whether a given account should hold `eventProposals.review` is a role-configuration question (`Docs/optimization/07-RoleFinetune.md` §2.9), not something this contract enforces further. The approval action generates an official project draft and backfills `approvedProjectId` in the same transaction, so `approved` must always have a valid linked project. The official project must still be published by a teacher or administrator with publish permission — approval never publishes automatically.
 
 ### 3.3 Application `Application`
 
@@ -454,18 +455,21 @@ The admin "Registrants" screen (`GET /applications?filter[projectId]=`, §4.4) i
 
 | Method | Path | Permission | Description |
 | --- | --- | --- | --- |
-| `GET` | `/event-proposals` | Owner/`eventProposals.read` | Students query own proposals; teachers/admins query approval queue within scope |
+| `GET` | `/event-proposals` | Authenticated | Students see own proposals only (`Self` data scope); any non-student role sees the full queue (`All` scope) — view access is role-based, not `eventProposals.read`-gated (2026-08-20, `Docs/optimization/07-RoleFinetune.md` §2.9) |
 | `POST` | `/event-proposals` | `eventProposals.create` | Student creates proposal draft |
-| `GET` | `/event-proposals/{id}` | Owner/`eventProposals.read` | Proposal detail |
+| `GET` | `/event-proposals/{id}` | Authenticated | Proposal detail — same view-access rule as the list above |
 | `PATCH` | `/event-proposals/{id}` | Proposer & editable | Edit draft or changes-requested proposal |
 | `DELETE` | `/event-proposals/{id}` | Proposer & draft only | Delete draft |
 | `POST` | `/event-proposals/{id}/submit` | Proposer | Submit for approval |
 | `POST` | `/event-proposals/{id}/withdraw` | Proposer/admin permission | Withdraw or request withdrawal |
-| `GET` | `/event-proposals/{id}/revisions` | Owner/`eventProposals.read` | Revision history |
-| `GET` | `/event-proposals/{id}/timeline` | Owner/`eventProposals.read` | Approval timeline |
-| `POST` | `/event-proposals/{id}/reviews` | `eventProposals.review` | Request changes, recommend approval, approve, or reject |
+| `GET` | `/event-proposals/{id}/revisions` | Authenticated | Revision history — same view-access rule |
+| `GET` | `/event-proposals/{id}/timeline` | Authenticated | Approval timeline — same view-access rule |
+| `POST` | `/event-proposals/{id}/reviews` | `eventProposals.review` | Request changes, approve, or reject |
+| `GET` | `/event-proposals/{id}/reviews` | Authenticated | Decision history for a proposal — same view-access rule |
 | `POST` | `/event-proposals/{id}/assign` | `eventProposals.assign` | Assign or transfer reviewer |
 | `GET` | `/event-proposal-queue/summary` | `eventProposals.review` | Pending counts and approval SLA |
+
+**View vs. decide (2026-08-20):** every read endpoint above is `isAuthenticated()`-gated rather than `eventProposals.read`-gated — any authenticated user can view the proposal queue and open a proposal's detail (in the frontend, decision buttons simply don't render), with `DataScopeResolver` narrowing a student to their own proposals and any non-student role to the full queue (`Docs/optimization/07-RoleFinetune.md` §2.1's `grantAll` rule). Only *deciding* (`POST .../reviews`) and *assigning* (`POST .../assign`, `GET /event-proposal-queue/summary`) stay permission-gated on `eventProposals.review`/`.assign` — that split is what actually determines whether an account sees decision buttons, not `eventProposals.read`. `eventProposals.read` still exists in the permission catalog (§6 of `07-RoleFinetune.md`) for API-contract completeness but no longer gates any endpoint in this section.
 
 Approval request:
 

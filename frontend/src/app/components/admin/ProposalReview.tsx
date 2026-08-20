@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, XCircle, RotateCcw, ThumbsUp, Search, MoreHorizontal } from 'lucide-react';
+import { CheckCircle, XCircle, RotateCcw, Search, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
@@ -18,7 +18,7 @@ const STATUSES: (EventProposal['status'])[] = ['submitted', 'underReview', 'chan
 type SortKey = 'plannedStartAt' | 'createdAt' | 'status';
 const SORT_KEYS: SortKey[] = ['plannedStartAt', 'createdAt', 'status'];
 
-type Decision = 'approve' | 'reject' | 'requestChanges' | 'recommendApproval';
+type Decision = 'approve' | 'reject' | 'requestChanges';
 
 /** Small label/value pair for the detail workbench's tabs — same local pattern as AuditCenter/CaseReview's own `Field`. */
 function Field({ label, value }: { label: string; value?: string | number | null }) {
@@ -114,13 +114,8 @@ export function ProposalReview() {
 
   const decisionLabel = (d: Decision) => t(
     d === 'approve' ? 'admin.proposals.approve' :
-    d === 'reject' ? 'admin.proposals.rejectProposal' :
-    d === 'requestChanges' ? 'admin.proposals.requestChanges' : 'admin.proposals.recommendApproval'
+    d === 'reject' ? 'admin.proposals.rejectProposal' : 'admin.proposals.requestChanges'
   );
-
-  if (!hasPermission('eventProposals.read')) {
-    return <div className="p-4 lg:p-6 text-sm text-muted-foreground">{t('common.noPermission', { defaultValue: 'You do not have permission to view this page.' })}</div>;
-  }
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
@@ -287,59 +282,33 @@ export function ProposalReview() {
             tabs={tabs}
             activeTab={detailTab}
             onTabChange={setDetailTab}
-            // 4 decision buttons leave no room to also fit Cancel in a clean 2x2 grid on mobile, so mobile
-            // keeps the header X as its close affordance instead; desktop has room, so it drops the X and
-            // gets Cancel added to the row (5-across) like the other two review pages.
-            closeButton="mobileOnly"
+            // 3 decision buttons now fit alongside Cancel in a clean 2x2 grid on mobile
+            // (was 4 + a separate mobile-only header X before recommendApproval's removal) —
+            // same unified footer pattern CaseReview.tsx already uses.
+            closeButton="none"
             footer={
-              <>
+              <div className={`grid gap-3 ${showDecisions ? 'grid-cols-2 sm:flex' : ''}`}>
+                <button onClick={() => setDetailId(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent transition-colors">
+                  {t('common.cancel')}
+                </button>
                 {showDecisions && (
-                  <div className="grid grid-cols-2 gap-2 sm:hidden">
+                  <>
                     <button onClick={() => openDecision(detailProposal, 'approve')}
-                      className="py-2.5 rounded-xl bg-green-600 text-white text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5">
+                      className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5">
                       <CheckCircle className="w-4 h-4" /> {decisionLabel('approve')}
                     </button>
                     <button onClick={() => openDecision(detailProposal, 'requestChanges')}
-                      className="py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center justify-center gap-1.5">
+                      className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center justify-center gap-1.5">
                       <RotateCcw className="w-4 h-4" /> {decisionLabel('requestChanges')}
                     </button>
-                    <button onClick={() => openDecision(detailProposal, 'recommendApproval')}
-                      className="py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-1.5">
-                      <ThumbsUp className="w-4 h-4" /> {decisionLabel('recommendApproval')}
-                    </button>
                     <button onClick={() => openDecision(detailProposal, 'reject')}
-                      className="py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1.5">
+                      className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1.5">
                       <XCircle className="w-4 h-4" /> {decisionLabel('reject')}
                     </button>
-                  </div>
+                  </>
                 )}
-                <div className="hidden sm:flex gap-2">
-                  <button onClick={() => setDetailId(null)}
-                    className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent transition-colors">
-                    {t('common.cancel')}
-                  </button>
-                  {showDecisions && (
-                    <>
-                      <button onClick={() => openDecision(detailProposal, 'approve')}
-                        className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5">
-                        <CheckCircle className="w-4 h-4" /> {decisionLabel('approve')}
-                      </button>
-                      <button onClick={() => openDecision(detailProposal, 'requestChanges')}
-                        className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-orange-900/20 transition-colors flex items-center justify-center gap-1.5">
-                        <RotateCcw className="w-4 h-4" /> {decisionLabel('requestChanges')}
-                      </button>
-                      <button onClick={() => openDecision(detailProposal, 'recommendApproval')}
-                        className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-1.5">
-                        <ThumbsUp className="w-4 h-4" /> {decisionLabel('recommendApproval')}
-                      </button>
-                      <button onClick={() => openDecision(detailProposal, 'reject')}
-                        className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1.5">
-                        <XCircle className="w-4 h-4" /> {decisionLabel('reject')}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </>
+              </div>
             }
           />
         );
