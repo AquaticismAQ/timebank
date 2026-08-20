@@ -1,6 +1,6 @@
 # 036 — `event_proposal.format` column too short, and no frontend maxLength anywhere in the app
 
-Status: **In progress (2026-08-20)**
+Status: **Fixed and live-verified (2026-08-20)**
 
 ## Symptom
 
@@ -41,4 +41,4 @@ A repo-wide audit (`grep` across every JPA entity's `@Column(..., length = N)` o
 
 ## Resolution
 
-*Not yet deployed/live-verified — the fix and its test suite are complete; deploy and live click-through are the next step.*
+Deployed to `https://tb.example.com/` as v0.1.5 (backend via rsync + remote `deploy.sh`, then frontend via `frontend/scripts/deploy.sh`, sidebar confirmed showing `v0.1.5`). Live-verified via Playwright as `student001`: copied the "Winter Coat Drive for Rural School Partnership" proposal and set its Activity Format back to the exact 45-character value that previously 500'd ("Classroom donation drive plus delivery visit") — submission now succeeds and the proposal shows "Pending Review". Confirmed via `document.querySelector(...).maxLength` in the live page that the deployed Activity Format input now enforces `maxLength=64`. The other newly-`maxLength`-bounded fields across the rest of the app were not each individually click-verified this session (60+ individual field edits) — covered by the frontend build passing and the field-by-column mapping documented above, but noted here as a gap rather than assumed fully click-proven.
