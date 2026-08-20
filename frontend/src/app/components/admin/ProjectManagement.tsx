@@ -144,21 +144,21 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
 
             <div>
               <label className={LABEL}>{t('admin.projects.projectName')}</label>
-              <input type="text" value={form.title} onChange={e => edit('title', { title: e.target.value })} className={INPUT} />
+              <input type="text" value={form.title} onChange={e => edit('title', { title: e.target.value })} maxLength={255} className={INPUT} />
               <FieldError message={fe('title')} />
             </div>
 
             <div>
               <label className={LABEL}>{t('admin.projects.projectSummary')}</label>
               <textarea rows={2} value={form.summary} onChange={e => edit('summary', { summary: e.target.value })}
-                className={INPUT + ' resize-none'} />
+                maxLength={255} className={INPUT + ' resize-none'} />
               <FieldError message={fe('summary')} />
             </div>
 
             <div>
               <label className={LABEL}>{t('admin.projects.projectDescription')}</label>
               <textarea rows={3} value={form.description} onChange={e => edit('description', { description: e.target.value })}
-                className={INPUT + ' resize-none'} />
+                maxLength={4000} className={INPUT + ' resize-none'} />
               <FieldError message={fe('description')} />
             </div>
 
@@ -195,7 +195,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={LABEL}>{t('admin.projects.location')}</label>
-                <input type="text" value={form.location} onChange={e => edit('location', { location: e.target.value })} className={INPUT} />
+                <input type="text" value={form.location} onChange={e => edit('location', { location: e.target.value })} maxLength={255} className={INPUT} />
                 <FieldError message={fe('location')} />
               </div>
               <div>
@@ -276,7 +276,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
             <div>
               <label className={LABEL}>{t('admin.projects.evidenceReq')}</label>
               <textarea rows={2} value={form.evidenceRequirements} onChange={e => set({ evidenceRequirements: e.target.value })}
-                className={INPUT + ' resize-none'} />
+                maxLength={1000} className={INPUT + ' resize-none'} />
             </div>
 
             <div>
@@ -695,17 +695,17 @@ export function ProjectManagement() {
             <div className="space-y-3">
               <div>
                 <label className={LABEL}>{t('admin.projects.projectName')}</label>
-                <input type="text" value={newForm.title} onChange={e => { fieldErrors.clearField('title'); setNewForm(f => ({ ...f, title: e.target.value })); }} placeholder={t('admin.projects.newProjectPlaceholder', { school: schoolName })} className={INPUT} />
+                <input type="text" value={newForm.title} onChange={e => { fieldErrors.clearField('title'); setNewForm(f => ({ ...f, title: e.target.value })); }} placeholder={t('admin.projects.newProjectPlaceholder', { school: schoolName })} maxLength={255} className={INPUT} />
                 <FieldError message={fieldErrors.getError('title')} />
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.projectSummary')}</label>
-                <textarea rows={3} value={newForm.summary} onChange={e => { fieldErrors.clearField('summary'); setNewForm(f => ({ ...f, summary: e.target.value })); }} placeholder={t('admin.projects.summaryPlaceholder')} className={INPUT + ' resize-none'} />
+                <textarea rows={3} value={newForm.summary} onChange={e => { fieldErrors.clearField('summary'); setNewForm(f => ({ ...f, summary: e.target.value })); }} placeholder={t('admin.projects.summaryPlaceholder')} maxLength={255} className={INPUT + ' resize-none'} />
                 <FieldError message={fieldErrors.getError('summary')} />
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.projectDescription')}</label>
-                <textarea rows={3} value={newForm.description} onChange={e => { fieldErrors.clearField('description'); setNewForm(f => ({ ...f, description: e.target.value })); }} className={INPUT + ' resize-none'} />
+                <textarea rows={3} value={newForm.description} onChange={e => { fieldErrors.clearField('description'); setNewForm(f => ({ ...f, description: e.target.value })); }} maxLength={4000} className={INPUT + ' resize-none'} />
                 <FieldError message={fieldErrors.getError('description')} />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -742,7 +742,7 @@ export function ProjectManagement() {
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.location')}</label>
-                <input type="text" value={newForm.location} onChange={e => setNewForm(f => ({ ...f, location: e.target.value }))} placeholder={t('admin.projects.locationPlaceholder')} className={INPUT} />
+                <input type="text" value={newForm.location} onChange={e => setNewForm(f => ({ ...f, location: e.target.value }))} placeholder={t('admin.projects.locationPlaceholder')} maxLength={255} className={INPUT} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -786,7 +786,7 @@ export function ProjectManagement() {
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.evidenceReq')}</label>
-                <textarea rows={2} value={newForm.evidenceRequirements} onChange={e => setNewForm(f => ({ ...f, evidenceRequirements: e.target.value }))} className={INPUT + ' resize-none'} />
+                <textarea rows={2} value={newForm.evidenceRequirements} onChange={e => setNewForm(f => ({ ...f, evidenceRequirements: e.target.value }))} maxLength={1000} className={INPUT + ' resize-none'} />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
@@ -844,8 +844,9 @@ export function ProjectManagement() {
             <p className="text-sm text-muted-foreground">{t('admin.projects.cancelWarning')}</p>
             <div>
               <label className={LABEL}>{t('admin.projects.cancelReasonLabel')}</label>
+              {/* Lands in audit_log.reason_code (VARCHAR(64)), not a project column — Docs/issues/036-*.md. */}
               <textarea rows={3} value={cancelReason} onChange={e => setCancelReason(e.target.value)}
-                placeholder={t('admin.projects.cancelReasonPlaceholder')} className={INPUT + ' resize-none'} />
+                placeholder={t('admin.projects.cancelReasonPlaceholder')} maxLength={64} className={INPUT + ' resize-none'} />
             </div>
             <div className="flex gap-2">
               <button onClick={() => setCancelProject(null)} disabled={cancelSaving}

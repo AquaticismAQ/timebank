@@ -85,7 +85,8 @@ export function SearchPicker({
 
   const resultsList = (
     <Command shouldFilter={false}>
-      <CommandInput value={search} onValueChange={setSearch} placeholder={searchPlaceholder} />
+      {/* maxLength only matters when allowCreateNew turns this search text into a persisted name (Docs/issues/036-*.md); Organization.name has no explicit column length, so 255 is Hibernate's implicit default. */}
+      <CommandInput value={search} onValueChange={setSearch} placeholder={searchPlaceholder} maxLength={allowCreateNew ? 255 : undefined} />
       <CommandList>
         {loading && <div className="py-6 text-center text-sm text-muted-foreground">{loadingLabel}</div>}
         {!loading && search && options.length === 0 && !showCreateNew && <CommandEmpty>{noResultsLabel}</CommandEmpty>}

@@ -102,7 +102,7 @@ export function CaseFilingModal({
         )}
 
         <textarea rows={4} value={reason} onChange={e => setReason(e.target.value)}
-          placeholder={t(reasonPlaceholderKey)}
+          placeholder={t(reasonPlaceholderKey)} maxLength={4000}
           className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none" />
 
         <div className="flex gap-3 mt-4">

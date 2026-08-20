@@ -463,6 +463,7 @@ export function StudentList() {
                   <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.students.name')}</label>
                   <input type="text" value={editForm.name}
                     onChange={e => setEditForm(f => f && ({ ...f, name: e.target.value }))}
+                    maxLength={100}
                     className="w-full px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
                 </div>
                 <div>
@@ -474,6 +475,7 @@ export function StudentList() {
                     value={isAdmin ? editForm.studentNumber : editStudent.studentNumber}
                     disabled={!isAdmin}
                     onChange={e => isAdmin && setEditForm(f => f && ({ ...f, studentNumber: e.target.value }))}
+                    maxLength={32}
                     className={`w-full px-3 py-2.5 rounded-xl border border-border text-sm ${
                       isAdmin
                         ? 'bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40'
@@ -487,6 +489,7 @@ export function StudentList() {
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.students.email')}</label>
                 <input type="email" value={editForm.email}
                   onChange={e => setEditForm(f => f && ({ ...f, email: e.target.value }))}
+                  maxLength={255}
                   className="w-full px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
               </div>
 

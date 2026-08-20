@@ -322,7 +322,7 @@ export function ProposalReview() {
             </div>
             <p className="text-xs text-muted-foreground mb-3">{decisionModal.item.title}</p>
             <textarea rows={3} value={comment} onChange={e => setComment(e.target.value)}
-              placeholder={t('admin.proposals.commentPlaceholder')}
+              placeholder={t('admin.proposals.commentPlaceholder')} maxLength={1000}
               className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none" />
             <div className="flex gap-3 mt-4">
               <button onClick={() => setDecisionModal(null)} disabled={saving}

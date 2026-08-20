@@ -235,7 +235,7 @@ export function EventProposals() {
   const field = (
     label: string,
     key: keyof typeof formData,
-    opts?: { placeholder?: string; type?: string; rows?: number; required?: boolean }
+    opts?: { placeholder?: string; type?: string; rows?: number; required?: boolean; maxLength?: number }
   ) => {
     const apiField = apiFieldForFormKey[key] ?? String(key);
     const errMsg = fieldErrors.getError(apiField, String(key));
@@ -250,6 +250,7 @@ export function EventProposals() {
           value={String(formData[key])}
           onChange={e => { fieldErrors.clearField(apiField); setFormData(f => ({ ...f, [key]: e.target.value })); }}
           placeholder={opts.placeholder}
+          maxLength={opts.maxLength}
           className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none overflow-y-auto"
         />
       ) : (
@@ -258,6 +259,7 @@ export function EventProposals() {
           value={String(formData[key])}
           onChange={e => { fieldErrors.clearField(apiField); setFormData(f => ({ ...f, [key]: opts?.type === 'number' ? Number(e.target.value) : e.target.value })); }}
           placeholder={opts?.placeholder}
+          maxLength={opts?.type === 'number' ? undefined : opts?.maxLength}
           className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
         />
       )}
@@ -307,7 +309,7 @@ export function EventProposals() {
 
           {step === 0 && (
             <>
-              {field(t('student.proposals.eventName'), 'title', { placeholder: t('student.proposals.eventNamePlaceholder') })}
+              {field(t('student.proposals.eventName'), 'title', { placeholder: t('student.proposals.eventNamePlaceholder'), maxLength: 255 })}
               <div>
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('student.proposals.serviceCategory')}<span className="text-destructive ml-0.5">*</span></label>
                 <select value={formData.categoryId} onChange={e => setFormData(f => ({ ...f, categoryId: e.target.value }))}
@@ -315,9 +317,9 @@ export function EventProposals() {
                   {serviceCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-              {field(t('student.proposals.publicGoal'), 'goal', { placeholder: t('student.proposals.publicGoalPlaceholder'), rows: 3 })}
-              {field(t('student.proposals.eventDescription'), 'description', { placeholder: t('student.proposals.eventDescPlaceholder'), rows: 6 })}
-              {field(t('student.proposals.expectedOutcomes'), 'expectedOutcomes', { placeholder: t('student.proposals.outcomesPlaceholder'), rows: 3 })}
+              {field(t('student.proposals.publicGoal'), 'goal', { placeholder: t('student.proposals.publicGoalPlaceholder'), rows: 3, maxLength: 1000 })}
+              {field(t('student.proposals.eventDescription'), 'description', { placeholder: t('student.proposals.eventDescPlaceholder'), rows: 6, maxLength: 4000 })}
+              {field(t('student.proposals.expectedOutcomes'), 'expectedOutcomes', { placeholder: t('student.proposals.outcomesPlaceholder'), rows: 3, maxLength: 1000 })}
             </>
           )}
 
@@ -325,15 +327,15 @@ export function EventProposals() {
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {field(t('student.proposals.plannedDate'), 'plannedDate', { type: 'date' })}
-                {field(t('student.proposals.location'), 'location', { placeholder: t('student.proposals.locationPlaceholder') })}
+                {field(t('student.proposals.location'), 'location', { placeholder: t('student.proposals.locationPlaceholder'), maxLength: 255 })}
               </div>
-              {field(t('student.proposals.activityFormat'), 'activityFormat', { placeholder: t('student.proposals.formatPlaceholder') })}
+              {field(t('student.proposals.activityFormat'), 'activityFormat', { placeholder: t('student.proposals.formatPlaceholder'), maxLength: 64 })}
               <div className="grid grid-cols-2 gap-4">
                 {field(t('student.proposals.estimatedDuration'), 'estimatedDurationHours', { type: 'number' })}
                 {field(t('student.proposals.estimatedVolunteers'), 'estimatedCapacity', { type: 'number' })}
               </div>
-              {field(t('student.proposals.targetParticipants'), 'targetParticipants', { placeholder: t('student.proposals.participantsPlaceholder') })}
-              {field(t('student.proposals.volunteerTasks'), 'volunteerTasks', { placeholder: t('student.proposals.tasksPlaceholder'), rows: 4 })}
+              {field(t('student.proposals.targetParticipants'), 'targetParticipants', { placeholder: t('student.proposals.participantsPlaceholder'), maxLength: 500 })}
+              {field(t('student.proposals.volunteerTasks'), 'volunteerTasks', { placeholder: t('student.proposals.tasksPlaceholder'), rows: 4, maxLength: 1000 })}
             </>
           )}
 
@@ -395,23 +397,24 @@ export function EventProposals() {
                 />
                 <FieldError message={fieldErrors.getError('organizationId', 'partnerOrgOption')} />
               </div>
-              {field(t('student.proposals.contactInfo'), 'contactInfo', { placeholder: t('student.proposals.contactPlaceholder') })}
+              {field(t('student.proposals.contactInfo'), 'contactInfo', { placeholder: t('student.proposals.contactPlaceholder'), maxLength: 255 })}
             </>
           )}
 
           {step === 3 && (
             <>
-              {field(t('student.proposals.riskMeasures'), 'riskMeasures', { placeholder: t('student.proposals.riskPlaceholder'), rows: 5 })}
-              {field(t('student.proposals.materialNeeds'), 'materialNeeds', { placeholder: t('student.proposals.materialPlaceholder'), rows: 3 })}
-              {field(t('student.proposals.budgetNeeds'), 'budgetNeeds', { placeholder: t('student.proposals.budgetPlaceholder'), rows: 3 })}
+              {field(t('student.proposals.riskMeasures'), 'riskMeasures', { placeholder: t('student.proposals.riskPlaceholder'), rows: 5, maxLength: 2000 })}
+              {/* materialNeeds+budgetNeeds are joined with '\n' into the single backend resourceNeeds field (length 1000) — split the budget evenly, leaving room for the join separator. */}
+              {field(t('student.proposals.materialNeeds'), 'materialNeeds', { placeholder: t('student.proposals.materialPlaceholder'), rows: 3, maxLength: 500 })}
+              {field(t('student.proposals.budgetNeeds'), 'budgetNeeds', { placeholder: t('student.proposals.budgetPlaceholder'), rows: 3, maxLength: 499 })}
             </>
           )}
 
           {step === 4 && (
             <>
-              {field(t('student.proposals.recruitmentMethod'), 'recruitmentMethod', { placeholder: t('student.proposals.recruitmentPlaceholder') })}
+              {field(t('student.proposals.recruitmentMethod'), 'recruitmentMethod', { placeholder: t('student.proposals.recruitmentPlaceholder'), maxLength: 1000 })}
               {field(t('student.proposals.eligibility'), 'eligibility', { placeholder: t('student.proposals.eligibilityPlaceholder') })}
-              {field(t('student.proposals.verificationMethod'), 'proofMethod', { placeholder: t('student.proposals.verificationPlaceholder') })}
+              {field(t('student.proposals.verificationMethod'), 'proofMethod', { placeholder: t('student.proposals.verificationPlaceholder'), maxLength: 1000 })}
               {field(t('student.proposals.suggestedHours'), 'suggestedHours', { type: 'number' })}
             </>
           )}

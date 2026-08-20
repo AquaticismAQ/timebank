@@ -520,6 +520,7 @@ export function AuditCenter() {
                 value={decisionComment}
                 onChange={e => setDecisionComment(e.target.value)}
                 rows={10}
+                maxLength={1000}
                 placeholder={decisionModal.action === 'approve' ? t('admin.audit.placeholderApprove') : t('admin.audit.placeholderReject')}
                 className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono resize-none overflow-y-auto whitespace-pre-wrap"
               />

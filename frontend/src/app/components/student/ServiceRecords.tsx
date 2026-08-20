@@ -479,12 +479,14 @@ export function ServiceRecords() {
                   <div>
                     <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.serviceLocation')} *</label>
                     <input type="text" required placeholder={t('student.records.locationPlaceholder')} value={formData.location} onChange={e => { fieldErrors.clearField('location'); setFormData(f => ({ ...f, location: e.target.value })); }}
+                      maxLength={255}
                       className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
                     <FieldError message={fieldErrors.getError('location')} />
                   </div>
                   <div>
                     <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.orgName')}</label>
                     <input type="text" placeholder={t('student.records.locationPlaceholder')} value={formData.organizationName} onChange={e => { fieldErrors.clearField('organizationName'); setFormData(f => ({ ...f, organizationName: e.target.value })); }}
+                      maxLength={255}
                       className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
                     <FieldError message={fieldErrors.getError('organizationName')} />
                   </div>
@@ -513,6 +515,7 @@ export function ServiceRecords() {
                   <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.travelTimeReason')} *</label>
                   <textarea rows={2} value={formData.travelTimeReason}
                     onChange={e => { fieldErrors.clearField('travelTimeReason'); setFormData(f => ({ ...f, travelTimeReason: e.target.value })); }}
+                    maxLength={500}
                     className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm resize-none" />
                   <FieldError message={fieldErrors.getError('travelTimeReason')} />
                 </div>
@@ -525,6 +528,7 @@ export function ServiceRecords() {
                   placeholder={t('student.records.descPlaceholder')}
                   value={formData.description}
                   onChange={e => { fieldErrors.clearField('description'); setFormData(f => ({ ...f, description: e.target.value })); }}
+                  maxLength={2000}
                   className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm font-mono resize-none overflow-y-auto whitespace-pre-wrap"
                 />
                 <FieldError message={fieldErrors.getError('description')} />
@@ -585,6 +589,7 @@ export function ServiceRecords() {
                         <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.supervisorName')} *</label>
                         <input type="text" required placeholder={t('student.records.supervisorPlaceholder')} value={formData.supervisorName}
                           onChange={e => { fieldErrors.clearField('supervisorName'); setFormData(f => ({ ...f, supervisorName: e.target.value })); }}
+                          maxLength={255}
                           className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
                         <FieldError message={fieldErrors.getError('supervisorName')} />
                       </div>
@@ -592,6 +597,7 @@ export function ServiceRecords() {
                         <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.contactInfo')} *</label>
                         <input type="text" required placeholder={t('student.records.contactPlaceholder')} value={formData.supervisorContact}
                           onChange={e => { fieldErrors.clearField('supervisorContact'); setFormData(f => ({ ...f, supervisorContact: e.target.value })); }}
+                          maxLength={255}
                           className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
                         <FieldError message={fieldErrors.getError('supervisorContact')} />
                       </div>
@@ -604,12 +610,14 @@ export function ServiceRecords() {
                   <div>
                     <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.supervisorName')} *</label>
                     <input type="text" required placeholder={t('student.records.supervisorPlaceholder')} value={formData.supervisorName} onChange={e => { fieldErrors.clearField('supervisorName'); setFormData(f => ({ ...f, supervisorName: e.target.value })); }}
+                      maxLength={255}
                       className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
                     <FieldError message={fieldErrors.getError('supervisorName')} />
                   </div>
                   <div>
                     <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.contactInfo')}</label>
                     <input type="text" placeholder={t('student.records.contactPlaceholder')} value={formData.supervisorContact} onChange={e => { fieldErrors.clearField('supervisorContact'); setFormData(f => ({ ...f, supervisorContact: e.target.value })); }}
+                      maxLength={255}
                       className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
                     <FieldError message={fieldErrors.getError('supervisorContact')} />
                   </div>

@@ -282,7 +282,7 @@ function OrgFormFields({ form, onChange, getFieldError, onFieldEdit }: {
     <>
       <div>
         <label className={LABEL}>{t('admin.organizations.name')}</label>
-        <input type="text" value={form.name} onChange={e => edit('name', { name: e.target.value })} className={INPUT} />
+        <input type="text" value={form.name} onChange={e => edit('name', { name: e.target.value })} maxLength={255} className={INPUT} />
         <FieldError message={getFieldError('name')} />
       </div>
       <div>
@@ -300,23 +300,23 @@ function OrgFormFields({ form, onChange, getFieldError, onFieldEdit }: {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={LABEL}>{t('admin.organizations.contactName')}</label>
-          <input type="text" value={form.contactName} onChange={e => edit('contactName', { contactName: e.target.value })} className={INPUT} />
+          <input type="text" value={form.contactName} onChange={e => edit('contactName', { contactName: e.target.value })} maxLength={255} className={INPUT} />
           <FieldError message={getFieldError('contactName')} />
         </div>
         <div>
           <label className={LABEL}>{t('admin.organizations.contactPhone')}</label>
-          <input type="text" value={form.contactPhone} onChange={e => edit('contactPhone', { contactPhone: e.target.value })} className={INPUT} />
+          <input type="text" value={form.contactPhone} onChange={e => edit('contactPhone', { contactPhone: e.target.value })} maxLength={255} className={INPUT} />
           <FieldError message={getFieldError('contactPhone')} />
         </div>
       </div>
       <div>
         <label className={LABEL}>{t('admin.organizations.contactEmail')}</label>
-        <input type="email" value={form.contactEmail} onChange={e => edit('contactEmail', { contactEmail: e.target.value })} className={INPUT} />
+        <input type="email" value={form.contactEmail} onChange={e => edit('contactEmail', { contactEmail: e.target.value })} maxLength={255} className={INPUT} />
         <FieldError message={getFieldError('contactEmail')} />
       </div>
       <div>
         <label className={LABEL}>{t('admin.organizations.address')}</label>
-        <input type="text" value={form.address} onChange={e => edit('address', { address: e.target.value })} className={INPUT} />
+        <input type="text" value={form.address} onChange={e => edit('address', { address: e.target.value })} maxLength={255} className={INPUT} />
         <FieldError message={getFieldError('address')} />
       </div>
     </>

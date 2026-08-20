@@ -297,7 +297,7 @@ function RoleFormModal({ mode, role, permissions, templates, onClose, onSave }: 
             <div>
               <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.roles.codeLabel')} *</label>
               <input type="text" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.trim() }))}
-                placeholder={t('admin.roles.codePlaceholder')}
+                placeholder={t('admin.roles.codePlaceholder')} maxLength={32}
                 className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
               <p className="text-xs text-muted-foreground mt-1">{t('admin.roles.codeHint')}</p>
             </div>
@@ -306,6 +306,7 @@ function RoleFormModal({ mode, role, permissions, templates, onClose, onSave }: 
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.roles.nameLabel')} *</label>
             <input type="text" value={form.name} disabled={isProtected} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              maxLength={100}
               className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40 disabled:opacity-60 disabled:cursor-not-allowed" />
           </div>
 
@@ -426,6 +427,7 @@ function RoleTemplateFormModal({ mode, template, permissions, onClose, onSave }:
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.roles.nameLabel')} *</label>
             <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              maxLength={100}
               className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
           </div>
 

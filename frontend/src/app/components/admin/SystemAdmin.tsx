@@ -335,7 +335,7 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.nameLabel')} *</label>
             <input type="text" value={form.name} onChange={e => set({ name: e.target.value })}
-              placeholder={t('admin.system.namePlaceholder')}
+              placeholder={t('admin.system.namePlaceholder')} maxLength={100}
               className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
           </div>
 
@@ -343,7 +343,7 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.emailLabel')} *</label>
             <input type="email" value={form.email} onChange={e => set({ email: e.target.value })}
-              placeholder={t('admin.system.emailPlaceholder')}
+              placeholder={t('admin.system.emailPlaceholder')} maxLength={255}
               className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
           </div>
 
@@ -408,7 +408,7 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
             <div>
               <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.staffIdLabel')} *</label>
               <input type="text" value={form.staffId} onChange={e => set({ staffId: e.target.value })}
-                placeholder={t('admin.system.staffIdPlaceholder')}
+                placeholder={t('admin.system.staffIdPlaceholder')} maxLength={64}
                 className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
             </div>
           )}

@@ -83,7 +83,7 @@ public class EventProposal extends VersionedEntity {
     private String location;
 
     @Setter
-    @Column(name = "format", length = 32)
+    @Column(name = "format", length = 64)
     private String format;
 
     @Setter
