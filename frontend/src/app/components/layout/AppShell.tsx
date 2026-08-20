@@ -15,23 +15,19 @@ export interface ShellNavItem {
 // Module-level component — stable identity across AppShell re-renders
 interface SidebarContentProps {
   navItems: ShellNavItem[];
-  brandSubtitle: string;
   statsStrip?: React.ReactNode;
   onNavClick?: () => void;
 }
 
-function SidebarContent({ navItems, brandSubtitle, statsStrip, onNavClick }: SidebarContentProps) {
+function SidebarContent({ navItems, statsStrip, onNavClick }: SidebarContentProps) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-5 border-b border-sidebar-border flex items-center gap-3 shrink-0">
-        <div className="w-9 h-9 bg-sidebar-primary rounded-xl flex items-center justify-center shrink-0">
-          <Clock className="w-5 h-5 text-sidebar-primary-foreground" />
+      <div className="h-12 px-4 border-b border-sidebar-border flex items-center gap-3 shrink-0">
+        <div className="w-7 h-7 bg-sidebar-primary rounded-lg flex items-center justify-center shrink-0">
+          <Clock className="w-4 h-4 text-sidebar-primary-foreground" />
         </div>
-        <div>
-          <div className="text-sidebar-foreground font-semibold text-sm">{t('common.appName')}</div>
-          <div className="text-sidebar-foreground/60 text-xs">{brandSubtitle}</div>
-        </div>
+        <div className="text-sidebar-foreground font-semibold text-sm">{t('common.appName')}</div>
       </div>
 
       {statsStrip && (
@@ -112,7 +108,6 @@ export function AppShell({
 
   const sidebarProps: SidebarContentProps = {
     navItems,
-    brandSubtitle,
     statsStrip,
   };
 
