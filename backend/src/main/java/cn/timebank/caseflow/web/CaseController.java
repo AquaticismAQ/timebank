@@ -50,8 +50,8 @@ public class CaseController {
             PageQuery query, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<CaseDto> page = caseService.list(pageable, auth, query.filter("status"), query.filter("type"), query.search(),
-                resolveLanguage(acceptLanguage, auth));
+        Page<CaseDto> page = caseService.list(pageable, auth, query.filter("status"), query.filter("type"),
+                query.filter("gradeId"), query.search(), resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

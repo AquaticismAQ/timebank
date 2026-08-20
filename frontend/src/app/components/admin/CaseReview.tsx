@@ -4,14 +4,16 @@ import { CheckCircle, XCircle, HelpCircle, X, Search, MoreHorizontal } from 'luc
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
-import { usePermissions } from '../../App';
+import { usePermissions, useAuth } from '../../App';
 import { useUrlSyncedPagedApi } from '../../api/useApi';
+import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { EvidenceLink } from '../EvidenceLink';
 import { DetailWorkbench, type DetailWorkbenchTab } from '../shared/DetailWorkbench';
 import { type Case, type EvidenceFile, type TimelineEntry } from '../../api/types';
 import { CASE_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
+import { formatGradeClass } from '../../lib/format';
 
 const STATUSES: (Case['status'])[] = ['submitted', 'inReview', 'needsInformation', 'resolved', 'rejected'];
 const TYPES: (Case['type'])[] = ['appeal', 'supplement', 'manualCorrection'];
@@ -37,6 +39,14 @@ function Field({ label, value }: { label: string; value?: string | number | null
 export function CaseReview() {
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
+  const { user } = useAuth();
+  const { grades } = useDictionaries();
+  // Same scoping AuditCenter.tsx applies to its own grade dropdown — a
+  // teacher only ever has rows in their own grades, so the picker shouldn't
+  // offer dead options even though the server would just return zero rows either way.
+  const availableGrades = user && user.roles.includes('teacher') && !user.roles.includes('admin') && user.scopeGradeIds.length > 0
+    ? grades.filter(g => user.scopeGradeIds.includes(g.id))
+    : grades;
   const canDecide = hasPermission('cases.decide');
   const [decisionModal, setDecisionModal] = useState<{ item: Case; decision: 'resolve' | 'requestInformation' | 'reject' } | null>(null);
   const [comment, setComment] = useState('');
@@ -88,8 +98,8 @@ export function CaseReview() {
     const nextDesc = sortKey === key ? !sortDesc : true;
     setSort(nextDesc ? `-${key}` : key);
   };
-  const hasActiveFilters = !!(params.search || params.filter?.status || params.filter?.type);
-  const clearFilters = () => { setSearch(''); setFilter('status', undefined); setFilter('type', undefined); };
+  const hasActiveFilters = !!(params.search || params.filter?.status || params.filter?.type || params.filter?.gradeId);
+  const clearFilters = () => { setSearch(''); setFilter('status', undefined); setFilter('type', undefined); setFilter('gradeId', undefined); };
 
   const openDecision = (item: Case, decision: 'resolve' | 'requestInformation' | 'reject') => {
     setDecisionModal({ item, decision });
@@ -135,7 +145,7 @@ export function CaseReview() {
           <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)} placeholder={t('admin.cases.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
-        <div className="grid grid-cols-2 gap-2 lg:contents">
+        <div className="grid grid-cols-3 gap-2 lg:contents">
           <select value={params.filter?.type ?? 'all'} onChange={e => setFilter('type', e.target.value === 'all' ? undefined : e.target.value)}
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.cases.allTypes')}</option>
@@ -145,6 +155,11 @@ export function CaseReview() {
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.cases.allStatuses')}</option>
             {STATUSES.map(s => <option key={s} value={s}>{t(CASE_STATUS_LABELS[s].label)}</option>)}
+          </select>
+          <select value={params.filter?.gradeId ?? 'all'} onChange={e => setFilter('gradeId', e.target.value === 'all' ? undefined : e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.cases.allGrades')}</option>
+            {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </div>
       </div>
@@ -181,7 +196,7 @@ export function CaseReview() {
                   <span className="text-xs text-muted-foreground">{t(TYPE_LABEL[c.type])}</span>
                 </div>
                 <div className="text-sm text-foreground font-medium truncate">{c.title}</div>
-                <div className="text-xs text-muted-foreground">{c.studentName}{c.submittedAt ? ` · ${c.submittedAt.slice(0, 10)}` : ''}</div>
+                <div className="text-xs text-muted-foreground">{c.studentName} · {formatGradeClass(c.gradeLevel, c.className)}{c.submittedAt ? ` · ${c.submittedAt.slice(0, 10)}` : ''}</div>
                 {c.description && <p className="text-xs text-muted-foreground mt-2">{c.description}</p>}
               </div>
               {/* Decision actions live in the detail modal's footer only — this just opens it. */}
@@ -208,7 +223,7 @@ export function CaseReview() {
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 <Field label={t('admin.cases.fieldType')} value={t(TYPE_LABEL[detailCase.type])} />
                 <Field label={t('admin.cases.fieldStatus')} value={t(CASE_STATUS_LABELS[detailCase.status].label)} />
-                <Field label={t('admin.cases.fieldStudent')} value={detailCase.studentName} />
+                <Field label={t('admin.cases.fieldStudent')} value={`${detailCase.studentName} · ${formatGradeClass(detailCase.gradeLevel, detailCase.className)}`} />
                 <Field label={t('admin.cases.fieldReasonCode')} value={detailCase.reasonCode} />
                 {detailCase.subjectLabel && <Field label={t('admin.cases.fieldSubject')} value={detailCase.subjectLabel} />}
                 {detailCase.requestedAmountCentiCoins != null && <Field label={t('admin.cases.fieldAmount')} value={detailCase.requestedAmountCentiCoins} />}

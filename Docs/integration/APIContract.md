@@ -269,6 +269,7 @@ An event proposal is created by a student to apply for organizing a volunteer ac
 Core fields:
 
 - `id`, `proposerStudentId`, `coOrganizerStudentIds`, `coOrganizerNames`
+- `gradeId`, `gradeLevel`, `className`
 - `title`, `objective`, `description`, `expectedOutcome`
 - `categoryId`, `plannedStartAt`, `plannedEndAt`, `location`, `format`
 - `targetParticipants`, `capacity`, `volunteerTasks`
@@ -279,6 +280,8 @@ Core fields:
 - `approvedProjectId`, `version`, `createdAt`, `submittedAt`, `updatedAt`
 
 `coOrganizerNames` (added 2026-08-06 alongside the write-side fields below, `Docs/optimization/01-i3-partner-school-terminology.md`) is server-resolved, read-only, positionally matched to `coOrganizerStudentIds` — the same pattern `proposedSupervisorName`/`organizationName` already use for `proposedSupervisorId`/`organizationId`.
+
+`gradeId`/`gradeLevel`/`className` (added alongside `Docs/operations/VersionManagement.md`'s session, so admin/teacher list screens can filter and display by grade) are the proposal's own snapshotted grade/class from the proposer at creation time — never a live re-lookup of the proposer's *current* grade, matching `ServiceRecord`'s existing `gradeId`/`className` denormalization. `GET /event-proposals`'s `filter[gradeId]` matches against this snapshotted value, exact-equals (a proposal has exactly one grade, unlike `Project`'s multi-grade `eligibleGradeIds` in §4.2).
 
 **Creating/updating a proposal** (`POST /event-proposals`, `PATCH /event-proposals/{id}`) accepts `organizationId` **or** `newOrganizationName`, never both:
 
@@ -378,6 +381,8 @@ draft → submitted → inReview → resolved
                          ↘ rejected
 ```
 
+`CaseDto` also carries `gradeId`/`gradeLevel`/`className` — the case's own snapshotted grade/class (set at creation from the filing student's grade at that time, never a live re-lookup), same convention as `EventProposal`'s (§3.2) and `ServiceRecord`'s. `GET /cases`'s `filter[gradeId]` (§4.8) matches against this snapshotted value.
+
 ### 3.7 Account & Transactions
 
 `Account` is a balance view; `AccountTransaction` is an immutable ledger entry.
@@ -442,6 +447,8 @@ Project status changes use action endpoints to avoid bypassing business validati
 **No-registrants auto-archive (added 2026-08-08):** the `registrationOpen`→`closed` time-derived transition first checks the project's confirmed-enrollment count — zero confirmed registrants archives the project directly (`registrationOpen`→`archived`, also system-driven) instead of proceeding to `closed`/`inProgress`/`completed`, since there's nothing left for those statuses to mean. A dedicated audit entry (`action: "project.autoArchiveNoRegistrants"`, `reasonCode: "NO_REGISTRANTS_AT_REGISTRATION_CLOSE"`, `actorId`/`permissionUsed` both null — there is no human actor) records why, distinguishable from every other status change. A project with at least one confirmed registrant is unaffected and proceeds through `closed` normally.
 
 The admin "Registrants" screen (`GET /applications?filter[projectId]=`, §4.4) is only meaningful once a project has been published — the frontend hides that menu action for `draft` projects, since registration can never have opened yet.
+
+`GET /projects`'s `filter[gradeId]` matches if the given grade appears **anywhere** in the project's `eligibleGradeIds` (§3.1) — "contains", not "equals", since a project can be eligible for more than one grade at once (unlike `EventProposal`/`Case`'s single-grade `filter[gradeId]`, §3.2/§3.6). Backed by a native `JSON_CONTAINS` query against `eligible_grade_ids` (a MySQL JSON column, not a normalized join table) rather than a JPA Criteria predicate, since Hibernate's `@Convert`-mapped collection columns can't express "array contains" as a Specification.
 
 ### 4.3 Student Event Proposals
 
@@ -576,6 +583,8 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 | `GET` | `/cases/{id}/decisions` | `cases.read` | Decision history |
 
 `type` is `appeal` \| `supplement` \| `manualCorrection`. `subjectType`/`subjectId` are optional and free-form at the API layer, but only `subjectType: "serviceRecord"` resolves to a human-readable `subjectLabel` today (`CaseServiceImpl.subjectLabel()`) — any other value, or an omitted subject entirely (a standalone request not tied to a specific record), is valid and simply carries no `subjectLabel`. `manualCorrection` is the one type whose `resolve` decision directly adjusts the student's time-coin ledger via `requestedAmountCentiCoins` (§3.6) — `cases.create` is granted to `role_student` as well as staff roles, but student-facing UI only offers `appeal`/`supplement`; `manualCorrection` is staff-initiated-only by convention, not by a permission restriction (`06-StudentCaseFiling.md` §2.1).
+
+`GET /cases` also accepts `filter[gradeId]`, exact-equals against the case's own snapshotted grade (§3.6).
 
 ### 4.9 Students, Classes, Grades & Academic Years
 

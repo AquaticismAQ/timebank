@@ -19,13 +19,13 @@ import java.util.List;
 public interface ProposalService {
 
     /**
-     * {@code status}/{@code categoryId} and {@code search} (matches {@code
+     * {@code status}/{@code categoryId}/{@code gradeId} and {@code search} (matches {@code
      * title}) are contract §2.7's {@code filter[...]}/{@code search} —
      * null/blank means unfiltered, an unrecognized {@code status} matches
-     * nothing rather than throwing.
+     * nothing rather than throwing. {@code gradeId} matches the proposal's own snapshotted grade.
      */
-    Page<ProposalDto> list(Pageable pageable, Authentication auth, String status, String categoryId, String search,
-                            String resolvedLanguage);
+    Page<ProposalDto> list(Pageable pageable, Authentication auth, String status, String categoryId, String gradeId,
+                            String search, String resolvedLanguage);
 
     ProposalDto getDetail(String id, Authentication auth, String resolvedLanguage);
 

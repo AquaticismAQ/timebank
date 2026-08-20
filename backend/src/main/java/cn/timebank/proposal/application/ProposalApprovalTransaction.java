@@ -17,6 +17,9 @@ import cn.timebank.proposal.infrastructure.EventProposalRepository;
 import cn.timebank.proposal.infrastructure.ProposalReviewEventRepository;
 import cn.timebank.project.application.ProjectService;
 import cn.timebank.project.application.dto.ProjectGenerationRequest;
+import cn.timebank.student.application.AcademicStructureService;
+import cn.timebank.student.application.dto.ClassDto;
+import cn.timebank.student.application.dto.GradeDto;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,15 +47,17 @@ class ProposalApprovalTransaction {
     private final ProjectService projectService;
     private final NotificationService notificationService;
     private final UserService userService;
+    private final AcademicStructureService academicStructureService;
 
     ProposalApprovalTransaction(EventProposalRepository repository, ProposalReviewEventRepository reviewEventRepository,
                                 ProjectService projectService, NotificationService notificationService,
-                                UserService userService) {
+                                UserService userService, AcademicStructureService academicStructureService) {
         this.repository = repository;
         this.reviewEventRepository = reviewEventRepository;
         this.projectService = projectService;
         this.notificationService = notificationService;
         this.userService = userService;
+        this.academicStructureService = academicStructureService;
     }
 
     @Transactional
@@ -137,7 +142,12 @@ class ProposalApprovalTransaction {
     private ProposalDto toDto(EventProposal p, String resolvedLanguage) {
         // Re-fetching via a lightweight inline mapper avoids a circular
         // dependency on ProposalService (which depends on this bean).
-        return new ProposalDto(p.getId(), p.getProposerStudentId(), null, p.getCoOrganizerStudentIds(), null,
+        int gradeLevel = academicStructureService.listGrades(resolvedLanguage).stream()
+                .filter(g -> g.id().equals(p.getGradeId())).findFirst().map(GradeDto::sequence).orElse(0);
+        String className = academicStructureService.listClasses().stream()
+                .filter(c -> c.id().equals(p.getClassId())).findFirst().map(ClassDto::name).orElse("");
+        return new ProposalDto(p.getId(), p.getProposerStudentId(), null, p.getGradeId(), gradeLevel, className,
+                p.getCoOrganizerStudentIds(), null,
                 p.getTitle(), p.getObjective(), p.getDescription(), p.getExpectedOutcome(),
                 p.getCategoryId(), null, p.getPlannedStartAt(), p.getPlannedEndAt(), p.getLocation(), p.getFormat(),
                 p.getTargetParticipants(), p.getCapacity(), p.getVolunteerTasks(),

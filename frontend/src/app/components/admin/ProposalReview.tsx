@@ -4,14 +4,14 @@ import { CheckCircle, XCircle, RotateCcw, ThumbsUp, Search, MoreHorizontal } fro
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
-import { usePermissions } from '../../App';
+import { usePermissions, useAuth } from '../../App';
 import { useUrlSyncedPagedApi } from '../../api/useApi';
 import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { DetailWorkbench, type DetailWorkbenchTab } from '../shared/DetailWorkbench';
 import { type EventProposal, type TimelineEntry } from '../../api/types';
-import { minutesToHours } from '../../lib/format';
+import { minutesToHours, formatGradeClass } from '../../lib/format';
 import { PROPOSAL_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 
 const STATUSES: (EventProposal['status'])[] = ['submitted', 'underReview', 'changesRequested', 'approved', 'rejected'];
@@ -45,7 +45,14 @@ export function ProposalReview() {
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const decisionKeyRef = useRef(newIdempotencyKey());
-  const { serviceCategories } = useDictionaries();
+  const { serviceCategories, grades } = useDictionaries();
+  const { user } = useAuth();
+  // Same scoping AuditCenter.tsx applies to its own grade dropdown — a
+  // teacher only ever has rows in their own grades, so the picker shouldn't
+  // offer dead options even though the server would just return zero rows either way.
+  const availableGrades = user && user.roles.includes('teacher') && !user.roles.includes('admin') && user.scopeGradeIds.length > 0
+    ? grades.filter(g => user.scopeGradeIds.includes(g.id))
+    : grades;
 
   // 04-DataViewOptimization.md §5.2: unified detail workbench.
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -64,8 +71,8 @@ export function ProposalReview() {
     const nextDesc = sortKey === key ? !sortDesc : true;
     setSort(nextDesc ? `-${key}` : key);
   };
-  const hasActiveFilters = !!(params.search || params.filter?.categoryId);
-  const clearFilters = () => { setSearch(''); setFilter('categoryId', undefined); };
+  const hasActiveFilters = !!(params.search || params.filter?.categoryId || params.filter?.gradeId);
+  const clearFilters = () => { setSearch(''); setFilter('categoryId', undefined); setFilter('gradeId', undefined); };
 
   const openDetail = (id: string) => { setDetailId(id); setDetailTab('content'); };
 
@@ -130,7 +137,7 @@ export function ProposalReview() {
           <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)} placeholder={t('admin.proposals.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
-        <div className="grid grid-cols-2 gap-2 lg:contents">
+        <div className="grid grid-cols-3 gap-2 lg:contents">
           <select value={params.filter?.categoryId ?? 'all'} onChange={e => setFilter('categoryId', e.target.value === 'all' ? undefined : e.target.value)}
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.proposals.allCategories')}</option>
@@ -140,6 +147,11 @@ export function ProposalReview() {
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.proposals.allStatuses')}</option>
             {STATUSES.map(s => <option key={s} value={s}>{t(PROPOSAL_STATUS_LABELS[s].label)}</option>)}
+          </select>
+          <select value={params.filter?.gradeId ?? 'all'} onChange={e => setFilter('gradeId', e.target.value === 'all' ? undefined : e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.proposals.allGrades')}</option>
+            {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </div>
       </div>
@@ -176,7 +188,7 @@ export function ProposalReview() {
                   <span className="text-xs text-muted-foreground">{p.categoryName}</span>
                 </div>
                 <div className="text-sm text-foreground font-medium truncate">{p.title}</div>
-                <div className="text-xs text-muted-foreground">{p.initiatorName}{p.plannedDate ? ` · ${p.plannedDate}` : ''}{p.location ? ` · ${p.location}` : ''}</div>
+                <div className="text-xs text-muted-foreground">{p.initiatorName}{typeof p.gradeLevel === 'number' ? ` · ${formatGradeClass(p.gradeLevel, p.className ?? '')}` : ''}{p.plannedDate ? ` · ${p.plannedDate}` : ''}{p.location ? ` · ${p.location}` : ''}</div>
                 {p.goal && <p className="text-xs text-muted-foreground mt-2">{p.goal}</p>}
               </div>
               {/* Decision actions live in the detail modal's footer only — this just opens it. */}
@@ -226,7 +238,10 @@ export function ProposalReview() {
             label: t('admin.proposals.tabOrganization'),
             content: (
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                <Field label={t('student.proposals.detailLabels.initiator')} value={detailProposal.initiatorName} />
+                <Field label={t('student.proposals.detailLabels.initiator')}
+                  value={typeof detailProposal.gradeLevel === 'number'
+                    ? `${detailProposal.initiatorName} · ${formatGradeClass(detailProposal.gradeLevel, detailProposal.className ?? '')}`
+                    : detailProposal.initiatorName} />
                 <Field label={t('student.proposals.detailLabels.coOrganizers')} value={detailProposal.coOrganizers} />
                 <Field label={t('student.proposals.detailLabels.mentorTeacher')} value={detailProposal.mentorTeacher} />
                 <Field label={t('student.proposals.detailLabels.partnerOrg')} value={detailProposal.partnerOrg} />

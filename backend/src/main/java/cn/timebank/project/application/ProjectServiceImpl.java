@@ -89,7 +89,7 @@ class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     // Not readOnly: syncTimeBasedStatus conditionally writes (the B2 lesson).
-    public Page<ProjectDto> list(Pageable pageable, String status, String categoryId, String search,
+    public Page<ProjectDto> list(Pageable pageable, String status, String categoryId, String gradeId, String search,
                                   Authentication auth, String resolvedLanguage) {
         // search only matches title: Project stores organizationId as a plain
         // string FK (no JPA relationship — cross-module joins aren't allowed
@@ -98,6 +98,7 @@ class ProjectServiceImpl implements ProjectService {
         Specification<Project> filterSpec = FilterSpecifications.and(
                 FilterSpecifications.equalToEnum("status", ProjectStatus.class, status),
                 FilterSpecifications.equalTo("categoryId", categoryId),
+                eligibleGradeSpecification(gradeId),
                 FilterSpecifications.searchAnyContains(search, "title"));
         Page<Project> page = repository.findAll(FilterSpecifications.and(visibilitySpec(auth), filterSpec), pageable);
         page.getContent().forEach(this::syncTimeBasedStatus);
@@ -475,6 +476,25 @@ class ProjectServiceImpl implements ProjectService {
     private boolean isManager(TimeBankPrincipal principal) {
         // 07-RoleFinetune.md §2.1
         return principal.hasPermission("projects.update") || principal.hasFullDataScope();
+    }
+
+    /**
+     * "Contains", not "equals" — {@code eligibleGradeIds} is a JSON array
+     * (a project can list more than one grade), so this can't be a plain
+     * {@code FilterSpecifications.equalTo}. Resolves the matching id set via
+     * {@code ProjectRepository.findIdsByEligibleGrade}'s native {@code
+     * JSON_CONTAINS} query first, then folds it into the same
+     * Specification pipeline as every other filter via a normal {@code id
+     * in (...)} predicate — keeps pagination/sorting/scope all going
+     * through one query instead of a second, parallel filtering path.
+     */
+    private Specification<Project> eligibleGradeSpecification(String gradeId) {
+        if (gradeId == null || gradeId.isBlank()) {
+            return null;
+        }
+        List<String> matchingIds = repository.findIdsByEligibleGrade(gradeId);
+        Set<String> idSet = matchingIds.isEmpty() ? Set.of("__none__") : Set.copyOf(matchingIds);
+        return (root, query, cb) -> root.get("id").in(idSet);
     }
 
     private Map<String, String> categoryNameMap(String resolvedLanguage) {

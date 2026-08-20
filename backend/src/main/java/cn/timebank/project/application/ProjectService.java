@@ -18,14 +18,16 @@ import java.util.Map;
 public interface ProjectService {
 
     /**
-     * {@code status} and {@code categoryId} are contract §2.7's
+     * {@code status}, {@code categoryId}, and {@code gradeId} are contract §2.7's
      * {@code filter[...]}, {@code search} matches {@code title} only
      * (organization name is resolved separately, post-query, from another
      * module — see {@code ProjectServiceImpl}); null/blank means
      * unfiltered, an unrecognized {@code status} matches nothing rather
-     * than throwing.
+     * than throwing. {@code gradeId} matches if it appears anywhere in the
+     * project's {@code eligibleGradeIds} — a project can be eligible for
+     * more than one grade, so this is "contains", not "equals".
      */
-    Page<ProjectDto> list(Pageable pageable, String status, String categoryId, String search,
+    Page<ProjectDto> list(Pageable pageable, String status, String categoryId, String gradeId, String search,
                            Authentication auth, String resolvedLanguage);
 
     ProjectDto getDetail(String id, Authentication auth, String resolvedLanguage);

@@ -295,6 +295,10 @@ export interface Case {
   type: 'appeal' | 'supplement' | 'manualCorrection';
   studentId: string;
   studentName: string;
+  /** The case's own snapshotted grade/class (set at creation, not the student's current grade) — for the grade filter/display Case Review shares with Audit Center. */
+  gradeId: string;
+  gradeLevel: number;
+  className: string;
   subjectType?: string;
   subjectId?: string;
   /** Server-resolved display name for `subjectType`/`subjectId` (e.g. a service record's `recordNumber`) — 04-DataViewOptimization.md §4.2 (D8). Undefined when there's no subject or it isn't resolvable. */
@@ -464,6 +468,10 @@ export interface EventProposal {
   targetParticipants: string;
   volunteerTasks: string;
   initiatorName: string;
+  /** The proposal's own snapshotted grade/class (set at creation, not the proposer's current grade) — for the grade filter/display Proposal Review shares with Audit Center. */
+  gradeId?: string;
+  gradeLevel?: number;
+  className?: string;
   /** Display-only, comma-joined from `coOrganizerNames`. */
   coOrganizers: string;
   /** Display-only resolved name — `proposedSupervisorName` on the real DTO. */

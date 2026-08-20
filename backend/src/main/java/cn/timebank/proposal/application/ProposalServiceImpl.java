@@ -35,7 +35,10 @@ import cn.timebank.security.application.DataScopeResolver;
 import cn.timebank.security.application.DataScopeSpecifications;
 import cn.timebank.security.application.ScopeDescriptor;
 import cn.timebank.security.application.TimeBankPrincipal;
+import cn.timebank.student.application.AcademicStructureService;
 import cn.timebank.student.application.StudentService;
+import cn.timebank.student.application.dto.ClassDto;
+import cn.timebank.student.application.dto.GradeDto;
 import cn.timebank.student.application.dto.StudentDetailDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Page;
@@ -63,6 +66,7 @@ class ProposalServiceImpl implements ProposalService {
     private final StudentService studentService;
     private final ServiceCategoryService serviceCategoryService;
     private final OrganizationService organizationService;
+    private final AcademicStructureService academicStructureService;
     private final UserService userService;
     private final AuditService auditService;
     private final DataScopeResolver dataScopeResolver;
@@ -74,6 +78,7 @@ class ProposalServiceImpl implements ProposalService {
     ProposalServiceImpl(EventProposalRepository repository, EventProposalRevisionRepository revisionRepository,
                         ProposalReviewEventRepository reviewEventRepository, StudentService studentService,
                         ServiceCategoryService serviceCategoryService, OrganizationService organizationService,
+                        AcademicStructureService academicStructureService,
                         UserService userService, AuditService auditService, DataScopeResolver dataScopeResolver,
                         IdempotencyService idempotencyService, ObjectMapper objectMapper,
                         ProposalApprovalTransaction approvalTransaction) {
@@ -83,6 +88,7 @@ class ProposalServiceImpl implements ProposalService {
         this.studentService = studentService;
         this.serviceCategoryService = serviceCategoryService;
         this.organizationService = organizationService;
+        this.academicStructureService = academicStructureService;
         this.userService = userService;
         this.auditService = auditService;
         this.dataScopeResolver = dataScopeResolver;
@@ -94,10 +100,11 @@ class ProposalServiceImpl implements ProposalService {
     @Override
     @Transactional(readOnly = true)
     public Page<ProposalDto> list(Pageable pageable, Authentication auth, String status, String categoryId,
-                                   String search, String resolvedLanguage) {
+                                   String gradeId, String search, String resolvedLanguage) {
         Specification<EventProposal> filterSpec = FilterSpecifications.and(
                 FilterSpecifications.equalToEnum("status", ProposalStatus.class, status),
                 FilterSpecifications.equalTo("categoryId", categoryId),
+                FilterSpecifications.equalTo("gradeId", gradeId),
                 FilterSpecifications.searchAnyContains(search, "title"));
         Specification<EventProposal> spec = FilterSpecifications.and(scopeSpecification(auth), filterSpec);
         Page<EventProposal> page = repository.findAll(spec, pageable);
@@ -427,9 +434,13 @@ class ProposalServiceImpl implements ProposalService {
         String organizationName = p.getOrganizationId() != null
                 ? tryOrganizationName(p.getOrganizationId()) : null;
         List<String> coOrganizerNames = coOrganizerNamesOf(p.getCoOrganizerStudentIds());
+        int gradeLevel = academicStructureService.listGrades(resolvedLanguage).stream()
+                .filter(g -> g.id().equals(p.getGradeId())).findFirst().map(GradeDto::sequence).orElse(0);
+        String className = academicStructureService.listClasses().stream()
+                .filter(c -> c.id().equals(p.getClassId())).findFirst().map(ClassDto::name).orElse("");
 
-        return new ProposalDto(p.getId(), p.getProposerStudentId(), proposerName, p.getCoOrganizerStudentIds(),
-                coOrganizerNames,
+        return new ProposalDto(p.getId(), p.getProposerStudentId(), proposerName, p.getGradeId(), gradeLevel, className,
+                p.getCoOrganizerStudentIds(), coOrganizerNames,
                 p.getTitle(), p.getObjective(), p.getDescription(), p.getExpectedOutcome(),
                 p.getCategoryId(), categoryName, p.getPlannedStartAt(), p.getPlannedEndAt(), p.getLocation(), p.getFormat(),
                 p.getTargetParticipants(), p.getCapacity(), p.getVolunteerTasks(),

@@ -19,7 +19,10 @@ import cn.timebank.common.error.ApiException;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.notification.application.NotificationService;
 import cn.timebank.servicerecord.application.ServiceRecordService;
+import cn.timebank.student.application.AcademicStructureService;
 import cn.timebank.student.application.StudentService;
+import cn.timebank.student.application.dto.ClassDto;
+import cn.timebank.student.application.dto.GradeDto;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,11 +45,12 @@ class CaseDecisionTransaction {
     private final UserService userService;
     private final StudentService studentService;
     private final ServiceRecordService serviceRecordService;
+    private final AcademicStructureService academicStructureService;
 
     CaseDecisionTransaction(CaseRepository repository, CaseDecisionEventRepository decisionEventRepository,
                              AccountService accountService, NotificationService notificationService,
                              UserService userService, StudentService studentService,
-                             ServiceRecordService serviceRecordService) {
+                             ServiceRecordService serviceRecordService, AcademicStructureService academicStructureService) {
         this.repository = repository;
         this.decisionEventRepository = decisionEventRepository;
         this.accountService = accountService;
@@ -54,6 +58,7 @@ class CaseDecisionTransaction {
         this.userService = userService;
         this.studentService = studentService;
         this.serviceRecordService = serviceRecordService;
+        this.academicStructureService = academicStructureService;
     }
 
     @Transactional
@@ -126,9 +131,13 @@ class CaseDecisionTransaction {
         String studentName = studentService.getDetail(c.getStudentId(), false, "system", resolvedLanguage).displayName();
         String subjectLabel = c.getSubjectId() != null && "serviceRecord".equals(c.getSubjectType())
                 ? serviceRecordService.recordLabel(c.getSubjectId()).orElse(null) : null;
-        return new CaseDto(c.getId(), c.getType().name(), c.getStudentId(), studentName, c.getSubjectType(),
-                c.getSubjectId(), subjectLabel, c.getTitle(), c.getDescription(), c.getRequestedAmountCentiCoins(),
-                c.getReasonCode(), c.getStatus().name(), c.getAssignedReviewerId(), c.getVersion(), c.getCreatedAt(),
-                c.getSubmittedAt(), c.getUpdatedAt());
+        int gradeLevel = academicStructureService.listGrades(resolvedLanguage).stream()
+                .filter(g -> g.id().equals(c.getGradeId())).findFirst().map(GradeDto::sequence).orElse(0);
+        String className = academicStructureService.listClasses().stream()
+                .filter(cl -> cl.id().equals(c.getClassId())).findFirst().map(ClassDto::name).orElse("");
+        return new CaseDto(c.getId(), c.getType().name(), c.getStudentId(), studentName, c.getGradeId(), gradeLevel,
+                className, c.getSubjectType(), c.getSubjectId(), subjectLabel, c.getTitle(), c.getDescription(),
+                c.getRequestedAmountCentiCoins(), c.getReasonCode(), c.getStatus().name(), c.getAssignedReviewerId(),
+                c.getVersion(), c.getCreatedAt(), c.getSubmittedAt(), c.getUpdatedAt());
     }
 }

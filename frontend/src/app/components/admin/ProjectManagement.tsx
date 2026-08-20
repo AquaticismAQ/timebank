@@ -343,6 +343,7 @@ export function ProjectManagement() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<ProjectStatus | 'all'>('all');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [filterGrade, setFilterGrade] = useState('all');
   const [sortKey, setSortKey] = useState<SortKey>('createdAt');
   const [sortDesc, setSortDesc] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -374,6 +375,16 @@ export function ProjectManagement() {
   const handleCategoryChange = (value: string) => {
     setFilterCategory(value);
     setFilter('categoryId', value === 'all' ? undefined : value);
+  };
+
+  // Unlike Audit Center/Case Review/Proposal Review, projects have no
+  // teacher-grade data scope at all (visibilitySpec on the backend is
+  // draft-ownership only) — so unlike those pages, this dropdown is never
+  // narrowed to the teacher's own grades; any teacher can filter to any
+  // grade's projects.
+  const handleGradeChange = (value: string) => {
+    setFilterGrade(value);
+    setFilter('gradeId', value === 'all' ? undefined : value);
   };
 
   const handleSortClick = (key: SortKey) => {
@@ -519,7 +530,7 @@ export function ProjectManagement() {
           <input type="text" value={search} onChange={e => handleSearchChange(e.target.value)}          placeholder={t('admin.projects.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
         </div>
-        <div className="grid grid-cols-2 gap-2 lg:contents">
+        <div className="grid grid-cols-3 gap-2 lg:contents">
           <select value={filterStatus} onChange={e => handleStatusChange(e.target.value as ProjectStatus | 'all')}
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.projects.allStatuses')}</option>
@@ -529,6 +540,11 @@ export function ProjectManagement() {
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.projects.allCategories')}</option>
             {serviceCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={filterGrade} onChange={e => handleGradeChange(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.projects.allGrades')}</option>
+            {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </div>
       </div>
@@ -583,6 +599,12 @@ export function ProjectManagement() {
                     </div>
                     <div>{proj.startAt.slice(0, 10)} → {proj.endAt.slice(0, 10)}</div>
                   </div>
+
+                  {proj.eligibleGrades.length > 0 && (
+                    <div className="text-xs text-muted-foreground mb-3">
+                      <span className="font-medium">{t('admin.projects.eligibleGrades')}:</span> {proj.eligibleGrades.join(', ')}
+                    </div>
+                  )}
 
                   <div className="mb-3">
                     <div className="flex justify-between text-xs text-muted-foreground mb-1">

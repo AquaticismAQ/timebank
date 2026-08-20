@@ -266,6 +266,7 @@ draft → published → registrationOpen → inProgress → completed → archiv
 核心字段：
 
 - `id`, `proposerStudentId`, `coOrganizerStudentIds`, `coOrganizerNames`
+- `gradeId`, `gradeLevel`, `className`
 - `title`, `objective`, `description`, `expectedOutcome`
 - `categoryId`, `plannedStartAt`, `plannedEndAt`, `location`, `format`
 - `targetParticipants`, `capacity`, `volunteerTasks`
@@ -276,6 +277,8 @@ draft → published → registrationOpen → inProgress → completed → archiv
 - `approvedProjectId`, `version`, `createdAt`, `submittedAt`, `updatedAt`
 
 `coOrganizerNames`（2026-08-06 随下方写入字段一并新增，见 `Docs/optimization/01-i3-partner-school-terminology.md`）由服务端解析、只读，与 `coOrganizerStudentIds` 按位置一一对应——与 `proposedSupervisorId`/`organizationId` 已有的 `proposedSupervisorName`/`organizationName` 是同一种模式。
+
+`gradeId`/`gradeLevel`/`className`（随 `Docs/operations/VersionManagement.md` 所在会话新增，使管理员/教师端列表页可按年级筛选与展示）是提案在创建时从发起人快照下来的年级/班级——从不实时重新查询发起人的*当前*年级，与 `ServiceRecord` 已有的 `gradeId`/`className` 冗余方式一致。`GET /event-proposals` 的 `filter[gradeId]` 按此快照值精确匹配（与 §4.2 中 `Project` 的多年级 `eligibleGradeIds` 不同，一个提案只对应一个年级）。
 
 **创建/更新提案**（`POST /event-proposals`、`PATCH /event-proposals/{id}`）接受 `organizationId` **或** `newOrganizationName`，二者不可同时提供：
 
@@ -375,6 +378,8 @@ draft → submitted → inReview → resolved
                          ↘ rejected
 ```
 
+`CaseDto` 还携带 `gradeId`/`gradeLevel`/`className`——案件在创建时从提交学生快照下来的年级/班级（从不实时重新查询），与 `EventProposal`（§3.2）、`ServiceRecord` 已有的方式一致。`GET /cases` 的 `filter[gradeId]`（§4.8）按此快照值匹配。
+
 ### 3.7 账户与流水
 
 `Account` 是余额视图；`AccountTransaction` 是不可变流水。
@@ -439,6 +444,8 @@ queued → running → succeeded
 **无人报名自动归档（2026-08-08 新增）：** `registrationOpen`→`closed` 的按时间自动流转在执行前会先检查该项目已确认的报名人数——若确认报名人数为零，项目会直接归档（新增 `registrationOpen`→`archived`，同样由系统触发），而不再进入 `closed`/`inProgress`/`completed`，因为这些状态对一个零报名的项目已没有实际意义。系统会写入一条专门的审计记录（`action: "project.autoArchiveNoRegistrants"`，`reasonCode: "NO_REGISTRANTS_AT_REGISTRATION_CLOSE"`，`actorId`/`permissionUsed` 均为空——因为没有人工操作者）说明原因，与其他状态变更的审计记录区分开来。只要该项目有至少一名已确认的报名学生，就不受影响，仍按原有流程进入 `closed`。
 
 管理后台的"报名名单"入口（`GET /applications?filter[projectId]=`，见 §4.4）只有在项目发布之后才有意义——前端现已对 `draft`（草稿）状态的项目隐藏该操作菜单项，因为草稿阶段报名从未开放过。
+
+`GET /projects` 的 `filter[gradeId]` 只要该年级出现在项目的 `eligibleGradeIds`（见 §3.1）**任意位置**即匹配——是"包含"而非"等于"，因为一个项目可以同时适用于多个年级（与 `EventProposal`/`Case` 单一年级的 `filter[gradeId]` 不同，见 §3.2/§3.6）。该过滤基于对 `eligible_grade_ids`（一个 MySQL JSON 列，而非规范化的关联表）的原生 `JSON_CONTAINS` 查询实现，而非 JPA Criteria 谓词——因为 Hibernate 中 `@Convert` 映射的集合列无法在 Specification 里表达"数组包含"语义。
 
 ### 4.3 学生活动提案
 
@@ -573,6 +580,8 @@ queued → running → succeeded
 | `GET` | `/cases/{id}/decisions` | `cases.read` | 处理历史 |
 
 `type` 取值为 `appeal`（复核）\| `supplement`（补录）\| `manualCorrection`（人工调整）。`subjectType`/`subjectId` 在接口层是可选、自由文本的，但目前只有 `subjectType: "serviceRecord"` 才会解析出可读的 `subjectLabel`（`CaseServiceImpl.subjectLabel()`）——其它取值，或完全不带 subject（不关联具体记录的一般性申请），同样合法，只是没有 `subjectLabel`。`manualCorrection` 是唯一一种"通过"决定会直接调整学生时间币账户的类型，通过 `requestedAmountCentiCoins`（见 §3.6）——`cases.create` 权限本身对 `role_student` 和教职工角色都有授予，但学生端 UI 只提供 `appeal`/`supplement` 两种入口；`manualCorrection` 按约定仅由教职工发起，不是权限层面的限制（详见 `06-StudentCaseFiling.md` §2.1）。
+
+`GET /cases` 同样支持 `filter[gradeId]`，按案件自身快照下来的年级精确匹配（见 §3.6）。
 
 ### 4.9 学生、班级、年级与学年
 

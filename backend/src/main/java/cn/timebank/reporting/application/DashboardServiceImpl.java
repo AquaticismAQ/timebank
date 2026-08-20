@@ -89,7 +89,7 @@ class DashboardServiceImpl implements DashboardService {
                 .list(PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "createdAt")), auth, null, null, null, null, null, resolvedLanguage)
                 .getContent();
         List<ProjectDto> upcomingProjects = projectService
-                .list(PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "startAt")), null, null, null, auth, resolvedLanguage)
+                .list(PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "startAt")), null, null, null, null, auth, resolvedLanguage)
                 .getContent().stream()
                 .filter(p -> "REGISTRATION_OPEN".equals(p.status()))
                 .limit(3)
@@ -124,7 +124,7 @@ class DashboardServiceImpl implements DashboardService {
 
         List<ReviewQueueItemDto> pendingReviewItems = reviewService.queue(PageRequest.of(0, 5), null, null, null, auth, resolvedLanguage).getContent();
         List<ProjectDto> activeProjects = projectService
-                .list(PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "startAt")), null, null, null, auth, resolvedLanguage)
+                .list(PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "startAt")), null, null, null, null, auth, resolvedLanguage)
                 .getContent().stream()
                 .filter(p -> Set.of("REGISTRATION_OPEN", "IN_PROGRESS").contains(p.status()))
                 .limit(3)

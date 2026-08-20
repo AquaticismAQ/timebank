@@ -159,22 +159,22 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
 
         // status filter narrows results to the submitted proposal's status
         Page<ProposalDto> byStatus = proposalService.list(PageRequest.of(0, 50), staffAuth("admin"),
-                "SUBMITTED", null, null, "zh-CN");
+                "SUBMITTED", null, null, null, "zh-CN");
         assertThat(byStatus.getContent()).extracting(ProposalDto::id).contains(submitted.id());
         assertThat(byStatus.getContent()).allMatch(p -> p.status().equals("SUBMITTED"));
 
         Page<ProposalDto> byOtherStatus = proposalService.list(PageRequest.of(0, 50), staffAuth("admin"),
-                "APPROVED", null, null, "zh-CN");
+                "APPROVED", null, null, null, "zh-CN");
         assertThat(byOtherStatus.getContent()).extracting(ProposalDto::id).doesNotContain(submitted.id());
 
         // search matches the title
         Page<ProposalDto> bySearch = proposalService.list(PageRequest.of(0, 50), staffAuth("admin"),
-                null, null, "Canary", "zh-CN");
+                null, null, null, "Canary", "zh-CN");
         assertThat(bySearch.getContent()).extracting(ProposalDto::id).contains(submitted.id());
 
         // an unmatched search returns empty
         Page<ProposalDto> byUnmatchedSearch = proposalService.list(PageRequest.of(0, 50), staffAuth("admin"),
-                null, null, "NoSuchProposalTitleZZZ", "zh-CN");
+                null, null, null, "NoSuchProposalTitleZZZ", "zh-CN");
         assertThat(byUnmatchedSearch.getContent()).isEmpty();
     }
 
