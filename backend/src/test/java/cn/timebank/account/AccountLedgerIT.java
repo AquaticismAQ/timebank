@@ -207,7 +207,9 @@ class AccountLedgerIT extends AbstractIntegrationTest {
      * deliberately changed, not a regression to guard against.
      */
     @Test
-    void scopedTeacherSeesBothInScopeAndOutOfScopeAccountsSinceScopeNoLongerRestrictsTeachers() {
+    // 07-RoleFinetune.md §2.10 (2026-08-20): reverted from §2.1's "any non-student sees
+    // everything" back to grade-scoped visibility for teacher — see hasSchoolWideVisibility().
+    void scopedTeacherSeesOnlyInScopeAccounts() {
         String inScopeStudentId = createStudent(); // grade_6/class_6A
         String outOfScopeStudentId = createStudentInGrade9();
         accountService.credit(inScopeStudentId, "grade_6", "class_6A", 100, "test", "src_1", "SERVICE_APPROVED", "usr_test_admin");
@@ -215,8 +217,9 @@ class AccountLedgerIT extends AbstractIntegrationTest {
 
         Authentication teacherAuth = teacherScopedToGrade6();
 
-        assertThat(accountService.getByStudentId(outOfScopeStudentId, teacherAuth).studentId()).isEqualTo(outOfScopeStudentId);
         assertThat(accountService.getByStudentId(inScopeStudentId, teacherAuth).studentId()).isEqualTo(inScopeStudentId);
+        assertThatThrownBy(() -> accountService.getByStudentId(outOfScopeStudentId, teacherAuth))
+                .isInstanceOf(ApiException.class);
     }
 
     private String createStudent() {

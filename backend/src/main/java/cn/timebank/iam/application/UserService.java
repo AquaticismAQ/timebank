@@ -86,4 +86,17 @@ public interface UserService {
      * can now be renamed or deleted (e.g. {@code teacher}).
      */
     boolean hasActivePermission(String userId, String permissionCode);
+
+    /**
+     * 07-RoleFinetune.md §2.10: every active user holding {@code
+     * permissionCode}, each paired with their single role code — e.g.
+     * proposal-approval publish notifications need every {@code
+     * projects.publish} holder plus enough information to tell whether a
+     * given holder is school-wide (admin/sysadmin) or needs matching
+     * against their assigned grades (everyone else).
+     */
+    List<UserPermissionHolder> activeUsersWithPermission(String permissionCode);
+
+    record UserPermissionHolder(String userId, String roleCode) {
+    }
 }

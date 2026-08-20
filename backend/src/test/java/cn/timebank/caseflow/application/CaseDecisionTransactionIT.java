@@ -138,7 +138,9 @@ class CaseDecisionTransactionIT extends AbstractIntegrationTest {
      * deliberately changed, not a regression to guard against.
      */
     @Test
-    void scopedTeacherSeesAnOutOfScopeCaseSinceScopeNoLongerRestrictsTeachers() {
+    // 07-RoleFinetune.md §2.10 (2026-08-20): reverted from §2.1's "any non-student sees
+    // everything" back to grade-scoped visibility for teacher — see hasSchoolWideVisibility().
+    void scopedTeacherCannotSeeAnOutOfScopeCase() {
         StudentDetailDto student = createStudent(); // grade_6/class_6A
         CaseDto submitted = createAndSubmitAppeal(student);
 
@@ -149,7 +151,8 @@ class CaseDecisionTransactionIT extends AbstractIntegrationTest {
                 "cases", TeacherScopeAssignment.ScopeType.GRADE, "grade_9", Instant.now()));
         Authentication teacherAuth = authFor(teacher.id(), null, Set.of("teacher"));
 
-        assertThat(caseService.getDetail(submitted.id(), teacherAuth, "zh-CN").id()).isEqualTo(submitted.id());
+        assertThatThrownBy(() -> caseService.getDetail(submitted.id(), teacherAuth, "zh-CN"))
+                .isInstanceOf(ApiException.class);
     }
 
     private CaseDto createAndSubmitManualCorrection(StudentDetailDto student, int amountCentiCoins) {

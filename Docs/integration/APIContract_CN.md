@@ -452,7 +452,7 @@ queued → running → succeeded
 
 | Method | Path | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/event-proposals` | 已登录 | 学生只能看到本人提案（`Self` 数据范围）；任何非学生角色都能看到完整队列（`All` 范围）——查看权限按角色区分，不再由 `eventProposals.read` 把关（2026-08-20，见 `Docs/optimization/07-RoleFinetune.md` §2.9） |
+| `GET` | `/event-proposals` | 已登录 | 学生只能看到本人提案（`Self` 范围）；`admin`/`sysadmin` 能看到完整队列（`All` 范围）；其余每个非学生角色（`teacher`，以及未来任何按年级限定的自定义角色）只能看到其被分配年级的提案（`Grades` 范围）——查看权限按角色区分，不再由 `eventProposals.read` 把关（2026-08-20，见 `Docs/optimization/07-RoleFinetune.md` §2.9/§2.10） |
 | `POST` | `/event-proposals` | `eventProposals.create` | 学生创建提案草稿 |
 | `GET` | `/event-proposals/{id}` | 已登录 | 提案详情——查看权限规则同上 |
 | `PATCH` | `/event-proposals/{id}` | 提案人且可编辑 | 编辑草稿或需修改的提案 |
@@ -466,7 +466,9 @@ queued → running → succeeded
 | `POST` | `/event-proposals/{id}/assign` | `eventProposals.assign` | 分配或转交评审人 |
 | `GET` | `/event-proposal-queue/summary` | `eventProposals.review` | 待办数量与审批 SLA |
 
-**查看与决定的区分（2026-08-20）：** 以上每个读取端点都改为仅要求 `isAuthenticated()`，不再要求 `eventProposals.read`——任何已登录用户都能查看提案队列并打开提案详情（前端只是不渲染决定按钮而已），由 `DataScopeResolver` 将学生限定在本人提案、将任何非学生角色扩展到完整队列（`Docs/optimization/07-RoleFinetune.md` §2.1 的 `grantAll` 规则）。只有*决定*（`POST .../reviews`）与*分配*（`POST .../assign`、`GET /event-proposal-queue/summary`）仍按权限把关，分别是 `eventProposals.review`/`.assign`——真正决定一个账号能否看到决定按钮的是这个区分，而不是 `eventProposals.read`。`eventProposals.read` 仍保留在权限目录中（`07-RoleFinetune.md` §6，为保持接口文档完整性），但已不再把关本节的任何端点。
+**查看与决定的区分（2026-08-20）：** 以上每个读取端点都改为仅要求 `isAuthenticated()`，不再要求 `eventProposals.read`——任何已登录用户都能查看其数据范围所覆盖的提案并打开提案详情（前端只是不渲染决定按钮而已），由 `DataScopeResolver` 将学生限定在本人提案、将 `admin`/`sysadmin` 扩展到完整队列、将其余每个非学生角色限定在其被分配的年级（`Docs/optimization/07-RoleFinetune.md` §2.10 的 `hasSchoolWideVisibility()` 规则，修订了 §2.1 最初"任何非学生角色都能看到一切"的决定）。只有*决定*（`POST .../reviews`）与*分配*（`POST .../assign`、`GET /event-proposal-queue/summary`）仍按权限把关，分别是 `eventProposals.review`/`.assign`——真正决定一个账号能否看到决定按钮的是这个区分，而不是 `eventProposals.read`。`eventProposals.read` 仍保留在权限目录中（`07-RoleFinetune.md` §6，为保持接口文档完整性），但已不再把关本节的任何端点。
+
+**批准通知（2026-08-20，见 `Docs/optimization/07-RoleFinetune.md` §2.10.2）：** `reject`/`requestChanges` 仍只通知提案人，不变。`approve` 会**同时**通知提案人（`eventProposal.approved`，不变）**和**每一位覆盖该提案年级的、持有 `projects.publish` 权限的在职用户（`eventProposal.approvedNeedsPublish`，关联资源为 `project`/新生成项目的 id）——因为批准只会生成一个*草稿*项目（见上文，从不自动发布），需要有具体的人知道有一个项目待发布。"覆盖该提案年级"复用与该账号自身提案队列可见性完全相同的年级范围分配；`admin`/`sysadmin` 始终视为覆盖所有年级。
 
 审批请求：
 

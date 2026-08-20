@@ -123,7 +123,12 @@ class DashboardReportingIT extends AbstractIntegrationTest {
      * a regression to guard against.
      */
     @Test
-    void teacherDashboardsSeeTheSameSchoolWideCountRegardlessOfGradeScopeAndCarryGeneratedAt() {
+    // 07-RoleFinetune.md §2.10 (2026-08-20): reverted from §2.1's "any non-student sees
+    // everything" back to grade-scoped visibility for teacher — see hasSchoolWideVisibility().
+    // Was teacherDashboardsSeeTheSameSchoolWideCountRegardlessOfGradeScopeAndCarryGeneratedAt,
+    // asserting the two teachers' counts were equal (both school-wide); now their scopes
+    // genuinely differ, so each is asserted against only its own grade's fresh students.
+    void teacherDashboardsAreScopedToTheirOwnGradeAndCarryGeneratedAt() {
         createStudent("grade_6", "class_6A");
         createStudent("grade_6", "class_6A");
         createStudent("grade_7", "class_7A");
@@ -144,11 +149,12 @@ class DashboardReportingIT extends AbstractIntegrationTest {
 
         assertThat(dashboardA.generatedAt()).isNotNull();
         assertThat(dashboardB.generatedAt()).isNotNull();
-        // Equal to each other despite the different scope rows above, and at
-        // least the 5 students just created — not a hardcoded total, since
-        // it also includes whatever earlier tests in this class seeded.
-        assertThat(dashboardA.scopedStudentCount()).isEqualTo(dashboardB.scopedStudentCount());
-        assertThat(dashboardA.scopedStudentCount()).isGreaterThanOrEqualTo(5);
+        // Not hardcoded totals, since each grade may also carry students seeded by
+        // earlier tests in this class — just at least the fresh students just created,
+        // and grade_7's teacher sees strictly more than grade_6's (3 vs. 2 fresh students).
+        assertThat(dashboardA.scopedStudentCount()).isGreaterThanOrEqualTo(2);
+        assertThat(dashboardB.scopedStudentCount()).isGreaterThanOrEqualTo(3);
+        assertThat(dashboardB.scopedStudentCount()).isGreaterThan(dashboardA.scopedStudentCount());
     }
 
     @Test

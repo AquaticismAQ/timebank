@@ -51,4 +51,19 @@ public interface UserRepository extends JpaRepository<User, String> {
     @Query("SELECT COUNT(u) > 0 FROM User u JOIN u.roles r JOIN r.permissions p "
             + "WHERE u.id = :id AND p.code = :permissionCode AND u.status = 'ACTIVE'")
     boolean existsActiveByIdAndPermissionCode(@Param("id") String id, @Param("permissionCode") String permissionCode);
+
+    /**
+     * 07-RoleFinetune.md §2.10: every active user holding {@code permissionCode}, paired with
+     * their single role code (§2.5's one-role invariant) — for callers that need to further
+     * narrow the result by role (e.g. proposal-approval publish notifications: admin/sysadmin
+     * included unconditionally, everyone else matched against their assigned grades).
+     */
+    @Query("SELECT u.id AS userId, r.code AS roleCode FROM User u JOIN u.roles r JOIN r.permissions p "
+            + "WHERE p.code = :permissionCode AND u.status = 'ACTIVE'")
+    List<ActiveUserRole> findActiveWithPermission(@Param("permissionCode") String permissionCode);
+
+    interface ActiveUserRole {
+        String getUserId();
+        String getRoleCode();
+    }
 }

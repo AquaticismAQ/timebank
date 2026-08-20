@@ -187,7 +187,9 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
      * deliberately changed, not a regression to guard against.
      */
     @Test
-    void scopedTeacherSeesBothInScopeAndOutOfScopeProposalsSinceScopeNoLongerRestrictsTeachers() {
+    // 07-RoleFinetune.md §2.10 (2026-08-20): reverted from §2.1's "any non-student sees
+    // everything" back to grade-scoped visibility for teacher — see hasSchoolWideVisibility().
+    void scopedTeacherSeesOnlyInScopeProposals() {
         StudentDetailDto inScopeStudent = createStudent(); // grade_6/class_6A
         StudentDetailDto outOfScopeStudent = createStudentInGrade9();
         ProposalDto inScopeProposal = createAndSubmitProposal(inScopeStudent, "In-Scope Cleanup");
@@ -200,10 +202,10 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
                 "eventProposals", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", Instant.now()));
         Authentication teacherAuth = authFor(teacher.id(), null, Set.of("teacher"));
 
-        assertThat(proposalService.getDetail(outOfScopeProposal.id(), teacherAuth, "zh-CN").id())
-                .isEqualTo(outOfScopeProposal.id());
         assertThat(proposalService.getDetail(inScopeProposal.id(), teacherAuth, "zh-CN").id())
                 .isEqualTo(inScopeProposal.id());
+        assertThatThrownBy(() -> proposalService.getDetail(outOfScopeProposal.id(), teacherAuth, "zh-CN"))
+                .isInstanceOf(ApiException.class);
     }
 
     /**

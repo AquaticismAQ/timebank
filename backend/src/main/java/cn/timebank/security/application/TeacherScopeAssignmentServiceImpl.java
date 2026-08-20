@@ -34,6 +34,15 @@ class TeacherScopeAssignmentServiceImpl implements TeacherScopeAssignmentService
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Set<String> userIdsAssignedToGrade(String resourceType, String gradeId) {
+        return repository.findByResourceTypeAndScopeTypeAndScopeValue(
+                        resourceType, TeacherScopeAssignment.ScopeType.GRADE, gradeId).stream()
+                .map(TeacherScopeAssignment::getUserId)
+                .collect(Collectors.toSet());
+    }
+
+    @Override
     @Transactional
     public void replaceGradeScope(String userId, Set<String> gradeIds) {
         repository.deleteByUserId(userId);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, ClipboardCheck, FolderOpen, Users, Wallet, BarChart2, Settings, User, FileQuestion, Lightbulb } from 'lucide-react';
+import { LayoutDashboard, ClipboardCheck, FolderOpen, Users, Wallet, BarChart2, Settings, User, FileQuestion, Lightbulb, Bell } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../App';
 import { api } from '../../api/client';
@@ -26,14 +26,16 @@ export function AdminLayout() {
     { to: '/admin/accounts', icon: Wallet, label: t('layout.admin.timeCoinAccounts') },
     { to: '/admin/reports', icon: BarChart2, label: t('layout.admin.reports') },
     { to: '/admin/system', icon: Settings, label: t('layout.admin.systemAdmin') },
+    { to: '/admin/notifications', icon: Bell, label: t('layout.admin.notifications'), badge: unreadCount || undefined },
     { to: '/admin/profile', icon: User, label: t('layout.admin.profile') },
-  ], [t, pendingReviews]);
+  ], [t, pendingReviews, unreadCount]);
 
   return (
     <AppShell
       navItems={navItems}
       brandSubtitle={t('layout.admin.brandSubtitle')}
       unreadCount={unreadCount}
+      notificationsPath="/admin/notifications"
     />
   );
 }

@@ -376,6 +376,14 @@ class UserServiceImpl implements UserService {
         return userRepository.existsActiveByIdAndPermissionCode(userId, permissionCode);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserPermissionHolder> activeUsersWithPermission(String permissionCode) {
+        return userRepository.findActiveWithPermission(permissionCode).stream()
+                .map(p -> new UserPermissionHolder(p.getUserId(), p.getRoleCode()))
+                .toList();
+    }
+
     private AuthenticatedUserView toAuthView(User user) {
         Set<String> roleCodes = user.getRoles().stream().map(Role::getCode).collect(Collectors.toCollection(LinkedHashSet::new));
         return new AuthenticatedUserView(

@@ -271,7 +271,9 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
      * Proposals, Students, and Accounts.
      */
     @Test
-    void scopedTeacherSeesBothInScopeAndOutOfScopeRecordsSinceScopeNoLongerRestrictsTeachers() {
+    // 07-RoleFinetune.md §2.10 (2026-08-20): reverted from §2.1's "any non-student sees
+    // everything" back to grade-scoped visibility for teacher — see hasSchoolWideVisibility().
+    void scopedTeacherSeesOnlyInScopeRecords() {
         StudentDetailDto inScopeStudent = createStudent(); // grade_6/class_6A
         StudentDetailDto outOfScopeStudent = createStudentInGrade9();
         ServiceRecordDto inScopeRecord = submitRecord(inScopeStudent);
@@ -279,15 +281,16 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
 
         Authentication teacherAuth = teacherScopedToGrade6();
 
-        assertThat(serviceRecordService.getDetail(outOfScopeRecord.id(), teacherAuth, "zh-CN").id())
-                .isEqualTo(outOfScopeRecord.id());
         assertThat(serviceRecordService.getDetail(inScopeRecord.id(), teacherAuth, "zh-CN").id())
                 .isEqualTo(inScopeRecord.id());
+        assertThatThrownBy(() -> serviceRecordService.getDetail(outOfScopeRecord.id(), teacherAuth, "zh-CN"))
+                .isInstanceOf(ApiException.class);
 
         Page<ServiceRecordDto> list = serviceRecordService.list(
                 PageRequest.of(0, 20), teacherAuth, null, null, null, null, null, "zh-CN");
         assertThat(list.getContent()).extracting(ServiceRecordDto::id)
-                .contains(inScopeRecord.id(), outOfScopeRecord.id());
+                .contains(inScopeRecord.id())
+                .doesNotContain(outOfScopeRecord.id());
     }
 
     private ServiceRecordDto submitRecord(StudentDetailDto student) {

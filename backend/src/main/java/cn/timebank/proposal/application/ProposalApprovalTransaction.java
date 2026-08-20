@@ -17,6 +17,7 @@ import cn.timebank.proposal.infrastructure.EventProposalRepository;
 import cn.timebank.proposal.infrastructure.ProposalReviewEventRepository;
 import cn.timebank.project.application.ProjectService;
 import cn.timebank.project.application.dto.ProjectGenerationRequest;
+import cn.timebank.security.application.TeacherScopeAssignmentService;
 import cn.timebank.student.application.AcademicStructureService;
 import cn.timebank.student.application.dto.ClassDto;
 import cn.timebank.student.application.dto.GradeDto;
@@ -28,6 +29,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * B4.11's atomic project-generation transaction — a separate bean for the
@@ -42,22 +44,30 @@ import java.util.List;
 @Component
 class ProposalApprovalTransaction {
 
+    /** 07-RoleFinetune.md §2.10: who gets told a freshly-approved proposal's draft project needs publishing. */
+    private static final String PROJECT_PUBLISH_PERMISSION = "projects.publish";
+    /** The two roles §2.6.2 exempts from needing a grade assignment — always covered, never grade-matched. */
+    private static final Set<String> SCHOOL_WIDE_ROLE_CODES = Set.of("admin", "sysadmin");
+
     private final EventProposalRepository repository;
     private final ProposalReviewEventRepository reviewEventRepository;
     private final ProjectService projectService;
     private final NotificationService notificationService;
     private final UserService userService;
     private final AcademicStructureService academicStructureService;
+    private final TeacherScopeAssignmentService teacherScopeAssignmentService;
 
     ProposalApprovalTransaction(EventProposalRepository repository, ProposalReviewEventRepository reviewEventRepository,
                                 ProjectService projectService, NotificationService notificationService,
-                                UserService userService, AcademicStructureService academicStructureService) {
+                                UserService userService, AcademicStructureService academicStructureService,
+                                TeacherScopeAssignmentService teacherScopeAssignmentService) {
         this.repository = repository;
         this.reviewEventRepository = reviewEventRepository;
         this.projectService = projectService;
         this.notificationService = notificationService;
         this.userService = userService;
         this.academicStructureService = academicStructureService;
+        this.teacherScopeAssignmentService = teacherScopeAssignmentService;
     }
 
     @Transactional
@@ -103,6 +113,9 @@ class ProposalApprovalTransaction {
 
             // Effect: backfill approvedProjectId — an approved proposal without a linked project cannot exist (invariant 6).
             proposal.setApprovedProjectId(projectId);
+
+            // Effect: notify whoever needs to actually publish the draft this just generated.
+            notifyPublishHolders(proposal, projectId);
         }
 
         // Effect: the notification, to the proposer.
@@ -120,6 +133,28 @@ class ProposalApprovalTransaction {
         };
         userService.findUserIdByStudentId(proposal.getProposerStudentId())
                 .ifPresent(recipientUserId -> notificationService.notify(recipientUserId, templateCode, "eventProposal", proposal.getId()));
+    }
+
+    /**
+     * 07-RoleFinetune.md §2.10: on approval, the draft project this transaction just generated
+     * needs a human to publish it — notify every active {@code projects.publish} holder who
+     * actually covers the proposal's grade. {@code admin}/{@code sysadmin} (§2.6.2's two roles
+     * exempt from needing a grade assignment) always count as covering it; every other holder
+     * (teacher, and any future grade-scoped custom role) only counts if their {@code
+     * eventProposals} scope assignment includes this specific grade — the same assignment that
+     * already gates their proposal-queue visibility (§2.9), reused here rather than introducing
+     * a second, parallel notion of "which grades does this account cover."
+     */
+    private void notifyPublishHolders(EventProposal proposal, String projectId) {
+        Set<String> gradeScopedHolderIds = teacherScopeAssignmentService
+                .userIdsAssignedToGrade("eventProposals", proposal.getGradeId());
+        for (UserService.UserPermissionHolder holder : userService.activeUsersWithPermission(PROJECT_PUBLISH_PERMISSION)) {
+            boolean coversThisGrade = SCHOOL_WIDE_ROLE_CODES.contains(holder.roleCode())
+                    || gradeScopedHolderIds.contains(holder.userId());
+            if (coversThisGrade) {
+                notificationService.notify(holder.userId(), "eventProposal.approvedNeedsPublish", "project", projectId);
+            }
+        }
     }
 
     private ProposalDecision parseDecision(String raw) {

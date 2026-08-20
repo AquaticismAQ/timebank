@@ -220,7 +220,7 @@ class FileServiceImpl implements FileService {
      * on why this would create a module cycle).
      */
     private boolean isInScope(Reference ref, TimeBankPrincipal principal) {
-        boolean grantAll = principal.hasFullDataScope(); // 07-RoleFinetune.md §2.1
+        boolean grantAll = principal.hasSchoolWideVisibility(); // 07-RoleFinetune.md §2.10
         ScopeDescriptor scope = dataScopeResolver.resolve(principal, "serviceRecords", grantAll);
         return switch (scope) {
             case ScopeDescriptor.All ignored -> true;

@@ -128,6 +128,8 @@ INSERT IGNORE INTO notification_template (id, code, title_zh, title_en, body_zh,
     ('tmpl_proposal_approved', 'eventProposal.approved', '活动提案已通过', 'Event Proposal Approved', '你的活动提案已通过审核，正式项目已生成。', 'Your event proposal has been approved and an official project has been generated.', NOW(3), NOW(3)),
     ('tmpl_proposal_changes_requested', 'eventProposal.changesRequested', '活动提案需要修改', 'Event Proposal Needs Changes', '你的活动提案需要修改，请查看审核意见并重新提交。', 'Your event proposal needs changes - please review the feedback and resubmit.', NOW(3), NOW(3)),
     ('tmpl_proposal_rejected', 'eventProposal.rejected', '活动提案未通过', 'Event Proposal Rejected', '你的活动提案未通过审核，请查看审核意见。', 'Your event proposal was not approved - please review the feedback.', NOW(3), NOW(3)),
+    -- 07-RoleFinetune.md §2.10: goes to projects.publish holders covering the proposal's grade, not the proposer.
+    ('tmpl_proposal_approved_needs_publish', 'eventProposal.approvedNeedsPublish', '活动提案已批准，草稿项目待发布', 'Event Proposal Approved — Draft Project Needs Publishing', '一个活动提案已批准并生成了草稿项目，需要你发布后学生才能报名。', 'An event proposal was approved and a draft project was generated - it needs to be published before students can register.', NOW(3), NOW(3)),
     -- B5's caseflow decisions are the third real writer of a notification row.
     ('tmpl_case_resolved', 'case.resolved', '申诉/补交已处理', 'Case Resolved', '你提交的申诉/补交材料已处理完毕。', 'Your appeal/supplement has been resolved.', NOW(3), NOW(3)),
     ('tmpl_case_needs_information', 'case.needsInformation', '申诉/补交需要补充信息', 'Case Needs More Information', '你提交的申诉/补交材料需要补充信息，请查看审核意见并重新提交。', 'Your appeal/supplement needs more information - please review the feedback and resubmit.', NOW(3), NOW(3)),

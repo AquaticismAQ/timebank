@@ -259,6 +259,7 @@ export default function App() {
               <Route path="accounts" element={<AccountManagement />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="system" element={<SystemAdmin />} />
+              <Route path="notifications" element={<NotificationsPage />} />
               <Route path="profile" element={<AdminProfilePage />} />
             </Route>
 

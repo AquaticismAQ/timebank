@@ -29,6 +29,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Contract §9's exit criterion, proven against real MySQL: list rows never
@@ -94,20 +95,23 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
      * regression to guard against.
      */
     @Test
-    void scopedTeacherSeesBothInScopeAndOutOfScopeStudentsSinceScopeNoLongerRestrictsTeachers() {
+    // 07-RoleFinetune.md §2.10 (2026-08-20): reverted from §2.1's "any non-student sees
+    // everything" back to grade-scoped visibility for teacher — see hasSchoolWideVisibility().
+    void scopedTeacherSeesOnlyInScopeStudents() {
         StudentDetailDto inScopeStudent = createStudent("stu_scope_6"); // grade_6/class_6A
         StudentDetailDto outOfScopeStudent = createStudentInGrade9("stu_scope_9");
 
         Authentication teacherAuth = teacherScopedToGrade6();
 
-        assertThat(studentService.getDetail(outOfScopeStudent.id(), teacherAuth, false, ACTOR, "zh-CN").id())
-                .isEqualTo(outOfScopeStudent.id());
         assertThat(studentService.getDetail(inScopeStudent.id(), teacherAuth, false, ACTOR, "zh-CN").id())
                 .isEqualTo(inScopeStudent.id());
+        assertThatThrownBy(() -> studentService.getDetail(outOfScopeStudent.id(), teacherAuth, false, ACTOR, "zh-CN"))
+                .isInstanceOf(ApiException.class);
 
         Page<StudentListItemDto> list = studentService.list(PageRequest.of(0, 20), teacherAuth, null, null, null, null, "zh-CN");
         assertThat(list.getContent()).extracting(StudentListItemDto::id)
-                .contains(inScopeStudent.id(), outOfScopeStudent.id());
+                .contains(inScopeStudent.id())
+                .doesNotContain(outOfScopeStudent.id());
     }
 
     private Authentication adminAuth() {
