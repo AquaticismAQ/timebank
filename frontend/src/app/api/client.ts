@@ -20,6 +20,9 @@ import type {
   SchoolInfo,
   SystemVersion,
   AuditLogEntry,
+  RuleVersion,
+  RuleDraftFields,
+  RuleValidationResult,
   MeResponse,
   EvidenceFile,
   FileMetadata,
@@ -68,6 +71,12 @@ function fromServiceRecordDto(dto: ServiceRecord & { evidenceFileIds?: string[] 
 /** `/review-queue` and `/dashboards/admin`'s embedded `pendingReviews` both return the same real `ReviewQueueItemDto`, including the raw SUBMITTED status name — one mapper, both call sites. */
 function fromReviewQueueItemDto(item: Omit<ReviewQueueItem, 'status'> & { status: string }): ReviewQueueItem {
   return { ...item, status: (item.status === 'SUBMITTED' ? 'pending' : fromBackendEnum(item.status)) as ReviewQueueItem['status'] };
+}
+
+type RuleVersionDtoWire = Omit<RuleVersion, 'status'> & { status: string };
+
+function fromRuleVersionDto(dto: RuleVersionDtoWire): RuleVersion {
+  return { ...dto, status: fromBackendEnum(dto.status) as RuleVersion['status'] };
 }
 
 type AccountDtoWire = { id: string; studentId: string; balance: number; frozen: boolean; updatedAt: string };
@@ -196,6 +205,32 @@ export const api = {
     async list(params?: ListParams): Promise<PageResult<AuditLogEntry>> {
       const page = await http.getPage<AuditLogEntry>('/audit-logs', buildListQuery(params));
       return { data: page.data, page: page.page };
+    },
+  },
+
+  /** `GET/POST /rules` (contract §4.12) — versioned, immutable-once-published rule sets; a draft can only be edited/published/archived, never overwritten in place. */
+  rules: {
+    async list(params?: ListParams): Promise<PageResult<RuleVersion>> {
+      const page = await http.getPage<RuleVersionDtoWire>('/rules', buildListQuery(params));
+      return { data: page.data.map(fromRuleVersionDto), page: page.page };
+    },
+    async get(id: string): Promise<RuleVersion> {
+      return fromRuleVersionDto(await http.get<RuleVersionDtoWire>(`/rules/${id}`));
+    },
+    async createDraft(fields: RuleDraftFields): Promise<RuleVersion> {
+      return fromRuleVersionDto(await http.post<RuleVersionDtoWire>('/rules', fields));
+    },
+    async updateDraft(id: string, fields: Partial<RuleDraftFields>, version: number): Promise<RuleVersion> {
+      return fromRuleVersionDto(await http.patch<RuleVersionDtoWire>(`/rules/${id}`, { ...fields, version }));
+    },
+    async validate(id: string): Promise<RuleValidationResult> {
+      return http.post<RuleValidationResult>(`/rules/${id}/validate`);
+    },
+    async publish(id: string, effectiveFrom: string, version: number): Promise<RuleVersion> {
+      return fromRuleVersionDto(await http.post<RuleVersionDtoWire>(`/rules/${id}/publish`, { effectiveFrom, version }));
+    },
+    async archive(id: string): Promise<void> {
+      await http.post<void>(`/rules/${id}/archive`);
     },
   },
 
@@ -1047,25 +1082,6 @@ export const api = {
   permissions: {
     async list(): Promise<Permission[]> {
       return http.get<Permission[]>('/permissions');
-    },
-  },
-
-  rules: {
-    async list(params?: ListParams): Promise<PageResult<{ id: string; status: string; effectiveFrom?: string; coinConversionRate: number; minimumRoundingMinutes: number; version: number; createdAt: string }>> {
-      const page = await http.getPage<{ id: string; status: string; effectiveFrom?: string; coinConversionRate: number; minimumRoundingMinutes: number; version: number; createdAt: string }>('/rules', buildListQuery(params));
-      return { data: page.data.map(r => mapEnumFields(r, ['status'])), page: page.page };
-    },
-    async create(data: Record<string, unknown>): Promise<{ id: string }> {
-      return http.post<{ id: string }>('/rules', data);
-    },
-    async update(id: string, data: Record<string, unknown>): Promise<void> {
-      await http.patch<void>(`/rules/${id}`, data);
-    },
-    async validate(id: string): Promise<{ valid: boolean; issues: string[]; affectedRecordCount: number }> {
-      return http.post<{ valid: boolean; issues: string[]; affectedRecordCount: number }>(`/rules/${id}/validate`);
-    },
-    async publish(id: string, effectiveFrom: string, version: number): Promise<void> {
-      await http.post<void>(`/rules/${id}/publish`, { effectiveFrom, version });
     },
   },
 

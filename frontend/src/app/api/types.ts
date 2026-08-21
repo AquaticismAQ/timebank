@@ -33,6 +33,60 @@ export interface AuditLogEntry {
 }
 
 /**
+ * `GET/POST /rules` (contract §4.12) — one published rule version is one
+ * consistent whole (rounding, coin conversion, hour requirements, honour
+ * tiers), never edited in place once published; a new draft supersedes it.
+ * All durations are integer minutes (no floats, per the project-wide
+ * duration convention) — display helpers convert to hours for readability.
+ * Middle school (grades 6-8) and high school (grades 9-11) have separate
+ * annual/stage requirements — Design/chinese/01-TimeBankDesign.md §6 —
+ * exactly two bands, not a per-grade table.
+ */
+export interface RuleVersion {
+  id: string;
+  status: 'draft' | 'published' | 'archived';
+  roundingMinutes: number;
+  minutesPerCoinUnit: number;
+  centiCoinsPerUnit: number;
+  middleAnnualRequiredMinutes: number;
+  middleStageRequiredMinutes: number;
+  highAnnualRequiredMinutes: number;
+  highStageRequiredMinutes: number;
+  honourBronzeMinutes: number;
+  honourSilverMinutes: number;
+  honourGoldMinutes: number;
+  honourExcellentMinutes: number;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt?: string;
+}
+
+/** The 11 numeric fields a rule draft is created/edited with — shared by create and update requests. */
+export interface RuleDraftFields {
+  roundingMinutes: number;
+  minutesPerCoinUnit: number;
+  centiCoinsPerUnit: number;
+  middleAnnualRequiredMinutes: number;
+  middleStageRequiredMinutes: number;
+  highAnnualRequiredMinutes: number;
+  highStageRequiredMinutes: number;
+  honourBronzeMinutes: number;
+  honourSilverMinutes: number;
+  honourGoldMinutes: number;
+  honourExcellentMinutes: number;
+}
+
+/** `POST /rules/{id}/validate` — `affectedRecordCount` is always 0 until a real usage exists to count against (backend-documented honest placeholder, not a broken query). */
+export interface RuleValidationResult {
+  valid: boolean;
+  issues: string[];
+  affectedRecordCount: number;
+}
+
+/**
  * 07-RoleFinetune.md: was a fixed 4-value union before roles became
  * data-driven/manageable — now any role code the backend returns, custom
  * roles included. Kept as an alias (rather than inlining `string`) so call

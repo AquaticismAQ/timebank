@@ -10,8 +10,9 @@ import { RoleManagement } from './RoleManagement';
 import { GradePicker } from '../GradePicker';
 import { useDictionaries } from '../../api/useDictionaries';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
-import { formatGradeClass } from '../../lib/format';
-import type { RoleSummary, AuditLogEntry, SchoolInfo } from '../../api/types';
+import { formatGradeClass, minutesToHours } from '../../lib/format';
+import { localDateTimeToISO } from '../../lib/datetime';
+import type { RoleSummary, AuditLogEntry, SchoolInfo, RuleVersion, RuleDraftFields, RuleValidationResult } from '../../api/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
@@ -24,151 +25,260 @@ import { ListStateBanner } from '../ListStateBanner';
  */
 const ACTION_BTN_BLUE = 'inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors';
 
-// ── Rule config types ──────────────────────────────────────────────────────
+// ── Rule versions (contract §4.12) — real, versioned, immutable-once-published ──
 
-interface RuleItem {
-  label: string;
-  value: string;
-  field: string;
-  unit?: string;
-}
+/** `hourBased` fields are "required duration"/"threshold" fields — Design/chinese/01-TimeBankDesign.md's numbers are all specified in hours, so both the read-only display and the create/edit input work in hours (with the stored/submitted integer-minutes value shown as a conversion hint), unlike the rounding/conversion group which is genuinely minute-denominated. */
+type RuleFieldMeta = { key: keyof RuleDraftFields; labelKey: string; unitKey: string; hourBased?: boolean };
 
-interface RuleSection {
-  id: string;
-  title: string;
-  items: RuleItem[];
-}
-
-const INITIAL_RULES: RuleSection[] = [
+const RULE_FIELD_GROUPS: { titleKey: string; fields: RuleFieldMeta[] }[] = [
   {
-    id: 'high',
-    title: 'admin.system.rules.highSection',
-    items: [
-      { label: 'admin.system.rules.highAnnual', value: '75', field: 'highAnnual', unit: 'admin.system.rules.highAnnualUnit' },
-      { label: 'admin.system.rules.highTotal', value: '300', field: 'highTotal', unit: 'admin.system.rules.highTotalUnit' },
-      { label: 'admin.system.rules.highMin', value: '0.5', field: 'highMin', unit: 'admin.system.rules.highMinUnit' },
+    titleKey: 'admin.system.rules.groupConversion',
+    fields: [
+      { key: 'roundingMinutes', labelKey: 'admin.system.rules.fieldRounding', unitKey: 'admin.system.rules.unitMinutes' },
+      { key: 'minutesPerCoinUnit', labelKey: 'admin.system.rules.fieldMinutesPerCoinUnit', unitKey: 'admin.system.rules.unitMinutes' },
+      { key: 'centiCoinsPerUnit', labelKey: 'admin.system.rules.fieldCentiCoinsPerUnit', unitKey: 'admin.system.rules.unitCentiCoins' },
     ],
   },
   {
-    id: 'middle',
-    title: 'admin.system.rules.middleSection',
-    items: [
-      { label: 'admin.system.rules.middleAnnual', value: '25', field: 'middleAnnual', unit: 'admin.system.rules.middleAnnualUnit' },
-      { label: 'admin.system.rules.middleTotal', value: '75', field: 'middleTotal', unit: 'admin.system.rules.middleTotalUnit' },
+    // Design/chinese/01-TimeBankDesign.md §6: grades 6-8 (middle school) and 9-11 (high school) have separate requirements — exactly two bands.
+    titleKey: 'admin.system.rules.groupRequirementsMiddle',
+    fields: [
+      { key: 'middleAnnualRequiredMinutes', labelKey: 'admin.system.rules.fieldAnnualRequired', unitKey: 'admin.system.rules.unitMinutes', hourBased: true },
+      { key: 'middleStageRequiredMinutes', labelKey: 'admin.system.rules.fieldStageRequired', unitKey: 'admin.system.rules.unitMinutes', hourBased: true },
     ],
   },
   {
-    id: 'coin',
-    title: 'admin.system.rules.coinSection',
-    items: [
-      { label: 'admin.system.rules.coinRate', value: '1', field: 'coinRate', unit: 'admin.system.rules.coinRateUnit' },
-      { label: 'admin.system.rules.coinMin', value: '0.5', field: 'coinMin', unit: 'admin.system.rules.coinMinUnit' },
+    titleKey: 'admin.system.rules.groupRequirementsHigh',
+    fields: [
+      { key: 'highAnnualRequiredMinutes', labelKey: 'admin.system.rules.fieldAnnualRequired', unitKey: 'admin.system.rules.unitMinutes', hourBased: true },
+      { key: 'highStageRequiredMinutes', labelKey: 'admin.system.rules.fieldStageRequired', unitKey: 'admin.system.rules.unitMinutes', hourBased: true },
+    ],
+  },
+  {
+    titleKey: 'admin.system.rules.groupHonour',
+    fields: [
+      { key: 'honourBronzeMinutes', labelKey: 'admin.system.rules.fieldHonourBronze', unitKey: 'admin.system.rules.unitMinutes', hourBased: true },
+      { key: 'honourSilverMinutes', labelKey: 'admin.system.rules.fieldHonourSilver', unitKey: 'admin.system.rules.unitMinutes', hourBased: true },
+      { key: 'honourGoldMinutes', labelKey: 'admin.system.rules.fieldHonourGold', unitKey: 'admin.system.rules.unitMinutes', hourBased: true },
+      { key: 'honourExcellentMinutes', labelKey: 'admin.system.rules.fieldHonourExcellent', unitKey: 'admin.system.rules.unitMinutes', hourBased: true },
     ],
   },
 ];
 
-interface RuleModalProps {
-  section: RuleSection;
-  onClose: () => void;
-  onSave: (updated: RuleSection) => void;
+const DEFAULT_DRAFT_FIELDS: RuleDraftFields = {
+  roundingMinutes: 30, minutesPerCoinUnit: 60, centiCoinsPerUnit: 100,
+  middleAnnualRequiredMinutes: 1500, middleStageRequiredMinutes: 4500,
+  highAnnualRequiredMinutes: 4500, highStageRequiredMinutes: 18000,
+  honourBronzeMinutes: 1500, honourSilverMinutes: 4500, honourGoldMinutes: 9000, honourExcellentMinutes: 18000,
+};
+
+/** Hours value for a minutes-based input — rounded to 2dp to avoid float noise from non-exact-hour minute values. */
+function minutesToHourInputValue(minutes: number): number {
+  return Math.round((minutes / 60) * 100) / 100;
 }
 
-function RuleModal({ section, onClose, onSave }: RuleModalProps) {
+function ruleStatusBadgeClass(status: RuleVersion['status']): string {
+  if (status === 'published') return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300';
+  if (status === 'draft') return 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300';
+  return 'bg-muted text-muted-foreground';
+}
+
+interface RuleFormModalProps {
+  mode: 'create' | 'edit';
+  initial: RuleVersion | null;
+  onClose: () => void;
+  onSaved: (rule: RuleVersion) => void;
+}
+
+function RuleFormModal({ mode, initial, onClose, onSaved }: RuleFormModalProps) {
   const { t } = useTranslation();
-  const [items, setItems] = useState<RuleItem[]>(section.items.map(i => ({ ...i })));
-  const [confirmed, setConfirmed] = useState(false);
+  const [fields, setFields] = useState<RuleDraftFields>(initial ? {
+    roundingMinutes: initial.roundingMinutes, minutesPerCoinUnit: initial.minutesPerCoinUnit, centiCoinsPerUnit: initial.centiCoinsPerUnit,
+    middleAnnualRequiredMinutes: initial.middleAnnualRequiredMinutes, middleStageRequiredMinutes: initial.middleStageRequiredMinutes,
+    highAnnualRequiredMinutes: initial.highAnnualRequiredMinutes, highStageRequiredMinutes: initial.highStageRequiredMinutes,
+    honourBronzeMinutes: initial.honourBronzeMinutes, honourSilverMinutes: initial.honourSilverMinutes,
+    honourGoldMinutes: initial.honourGoldMinutes, honourExcellentMinutes: initial.honourExcellentMinutes,
+  } : DEFAULT_DRAFT_FIELDS);
+  const [saving, setSaving] = useState(false);
 
-  const updateValue = (field: string, val: string) => {
-    setItems(prev => prev.map(i => i.field === field ? { ...i, value: val } : i));
+  const setField = (key: keyof RuleDraftFields, raw: string) => {
+    const n = Number(raw);
+    setFields(prev => ({ ...prev, [key]: Number.isFinite(n) ? n : prev[key] }));
   };
 
-  const handleSave = () => {
-    for (const item of items) {
-      if (item.value.trim() === '' || isNaN(Number(item.value))) {
-        toast.error(t('admin.system.ruleRequiresNumber', { label: t(item.label) }));
-        return;
-      }
-      if (Number(item.value) <= 0) {
-        toast.error(t('admin.system.ruleMustBePositive', { label: t(item.label) }));
-        return;
-      }
-    }
-    if (!confirmed) {
-      toast.error(t('admin.system.checkConfirmationBox'));
-      return;
-    }
-    onSave({ ...section, items });
+  /** Hour-based fields are typed in hours; the stored/submitted value is always the converted integer minutes. */
+  const setHourField = (key: keyof RuleDraftFields, rawHours: string) => {
+    const hours = Number(rawHours);
+    setFields(prev => ({ ...prev, [key]: Number.isFinite(hours) ? Math.round(hours * 60) : prev[key] }));
   };
 
-  const hasChanges = items.some((item, i) => item.value !== section.items[i].value);
+  const handleSave = async () => {
+    for (const group of RULE_FIELD_GROUPS) {
+      for (const f of group.fields) {
+        if (!(fields[f.key] > 0)) {
+          toast.error(t('admin.system.rules.fieldMustBePositive', { label: t(f.labelKey) }));
+          return;
+        }
+      }
+    }
+    setSaving(true);
+    try {
+      const saved = mode === 'create'
+        ? await api.rules.createDraft(fields)
+        : await api.rules.updateDraft(initial!.id, fields, initial!.version);
+      toast.success(t(mode === 'create' ? 'admin.system.rules.ruleCreated' : 'admin.system.rules.ruleUpdatedToast'));
+      onSaved(saved);
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
+      <div className="relative bg-card w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
 
-        {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
           <Shield className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
-          <h3 className="flex-1 text-foreground text-sm">{t('admin.system.editRule')}: {t(section.title)}</h3>
+          <h3 className="flex-1 text-foreground text-sm">{t(mode === 'create' ? 'admin.system.rules.createDraft' : 'admin.system.rules.editDraft')}</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Warning banner */}
         <div className="mx-5 mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 flex gap-2.5">
           <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: t('admin.system.ruleWarning') }} />
+          <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">{t('admin.system.rules.draftWarning')}</p>
         </div>
 
-        {/* Fields */}
-        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
-          {items.map(item => (
-            <div key={item.field}>
-              <label className="block text-xs text-muted-foreground mb-1.5">{t(item.label)}</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={item.value}
-                  onChange={e => updateValue(item.field, e.target.value)}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40"
-                />
-                {item.unit && (
-                  <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{t(item.unit)}</span>
-                )}
+        <div className="overflow-y-auto px-5 py-4 space-y-5 text-sm">
+          {RULE_FIELD_GROUPS.map(group => (
+            <div key={group.titleKey}>
+              <h4 className="text-xs text-muted-foreground uppercase tracking-wide mb-2">{t(group.titleKey)}</h4>
+              <div className="space-y-3">
+                {group.fields.map(f => (
+                  <div key={f.key}>
+                    <label className="block text-xs text-muted-foreground mb-1.5">{t(f.labelKey)}</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={f.hourBased ? '0.5' : '1'}
+                        step={f.hourBased ? '0.5' : '1'}
+                        value={f.hourBased ? minutesToHourInputValue(fields[f.key]) : fields[f.key]}
+                        onChange={e => f.hourBased ? setHourField(f.key, e.target.value) : setField(f.key, e.target.value)}
+                        className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40"
+                      />
+                      <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{t(f.hourBased ? 'admin.system.rules.unitHours' : f.unitKey)}</span>
+                    </div>
+                    {f.hourBased && (
+                      <p className="text-xs text-muted-foreground/70 mt-1">= {fields[f.key]} {t('admin.system.rules.unitMinutes')}</p>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           ))}
-
-          {/* Confirm checkbox */}
-          {hasChanges && (
-            <label className="flex items-start gap-2.5 pt-1 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={confirmed}
-                onChange={e => setConfirmed(e.target.checked)}
-                className="mt-0.5 accent-[oklch(0.488_0.243_264.376)]"
-              />
-              <span className="text-xs text-muted-foreground leading-relaxed">
-                {t('admin.system.ruleConfirmText')}
-              </span>
-            </label>
-          )}
         </div>
 
-        {/* Footer */}
         <div className="px-5 py-4 border-t border-border shrink-0 flex gap-3">
           <button type="button" onClick={onClose}
             className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent">
             {t('common.cancel')}
           </button>
-          <button type="button" onClick={handleSave}
-            disabled={!hasChanges}
+          <button type="button" onClick={handleSave} disabled={saving}
             className="flex-1 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">
-            {t('admin.system.saveRule')}
+            {t('admin.system.rules.saveDraft')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface PublishRuleModalProps {
+  rule: RuleVersion;
+  onClose: () => void;
+  onPublished: (rule: RuleVersion) => void;
+}
+
+function PublishRuleModal({ rule, onClose, onPublished }: PublishRuleModalProps) {
+  const { t } = useTranslation();
+  const [effectiveFrom, setEffectiveFrom] = useState('');
+  const [validation, setValidation] = useState<RuleValidationResult | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [publishing, setPublishing] = useState(false);
+
+  useEffect(() => {
+    api.rules.validate(rule.id).then(setValidation).catch(() => setValidation(null)).finally(() => setChecking(false));
+  }, [rule.id]);
+
+  const handlePublish = async () => {
+    if (!effectiveFrom) {
+      toast.error(t('admin.system.rules.effectiveFromRequired'));
+      return;
+    }
+    setPublishing(true);
+    try {
+      const published = await api.rules.publish(rule.id, localDateTimeToISO(effectiveFrom), rule.version);
+      toast.success(t('admin.system.rules.rulePublished'));
+      onPublished(published);
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(String(err));
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
+          <Shield className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
+          <h3 className="flex-1 text-foreground text-sm">{t('admin.system.rules.publishTitle')}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 flex gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">{t('admin.system.rules.publishWarning')}</p>
+          </div>
+
+          {checking ? (
+            <p className="text-xs text-muted-foreground">{t('admin.system.rules.checkingValidity')}</p>
+          ) : validation && !validation.valid ? (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 space-y-1">
+              <p className="text-xs text-destructive font-medium">{t('admin.system.rules.validateInvalid')}</p>
+              <ul className="text-xs text-destructive/90 list-disc list-inside space-y-0.5">
+                {validation.issues.map((issue, i) => <li key={i}>{issue}</li>)}
+              </ul>
+            </div>
+          ) : validation ? (
+            <p className="text-xs text-green-600 dark:text-green-400">{t('admin.system.rules.validateValid')}</p>
+          ) : null}
+
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.rules.effectiveFromLabel')}</label>
+            <input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+          </div>
+        </div>
+
+        <div className="px-5 py-4 border-t border-border shrink-0 flex gap-3">
+          <button type="button" onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent">
+            {t('common.cancel')}
+          </button>
+          <button type="button" onClick={handlePublish} disabled={publishing || checking || (validation ? !validation.valid : false)}
+            className="flex-1 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">
+            {t('admin.system.rules.confirmPublish')}
           </button>
         </div>
       </div>
@@ -558,6 +668,7 @@ export function SystemAdmin() {
   // still couldn't edit rules from here — permission-based now, matching
   // the backend's `ProjectController.isAdmin` fix.
   const canManageRules = hasPermission('rules.manage');
+  const canPublishRules = hasPermission('rules.publish');
   const canReadRoles = hasPermission('roles.read');
   const canManageRoles = hasPermission('roles.manage');
   // 07-RoleFinetune.md §2.7: template management is admin/sysadmin-only by
@@ -578,8 +689,13 @@ export function SystemAdmin() {
   const [roles, setRoles] = useState<RoleSummary[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
-  const [rules, setRules] = useState<RuleSection[]>(INITIAL_RULES);
-  const [editingRule, setEditingRule] = useState<RuleSection | null>(null);
+  const rulesApi = usePagedApi<RuleVersion>(api.rules.list, { sort: '-createdAt', pageSize: 20 });
+  const [ruleFormMode, setRuleFormMode] = useState<'create' | 'edit' | null>(null);
+  const [ruleFormTarget, setRuleFormTarget] = useState<RuleVersion | null>(null);
+  const [publishingRule, setPublishingRule] = useState<RuleVersion | null>(null);
+  const [validatingRuleId, setValidatingRuleId] = useState<string | null>(null);
+  const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
+  const [archivingRuleId, setArchivingRuleId] = useState<string | null>(null);
   const features = user?.featureFlags ?? { pov: false, redemption: false, borrowing: false, appreciation: false };
   const [saving, setSaving] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -618,10 +734,47 @@ export function SystemAdmin() {
     toast.info(t('admin.system.featureToggleNotAvailable') || 'Feature flag management is not yet available');
   };
 
-  const handleRuleSave = (updated: RuleSection) => {
-    setRules(prev => prev.map(r => r.id === updated.id ? updated : r));
-    setEditingRule(null);
-    toast.success(t('admin.system.ruleUpdated', { title: t(updated.title) }));
+  const handleRuleSaved = (_saved: RuleVersion) => {
+    setRuleFormMode(null);
+    setRuleFormTarget(null);
+    rulesApi.refetch();
+  };
+
+  const handleRulePublished = (_published: RuleVersion) => {
+    setPublishingRule(null);
+    rulesApi.refetch();
+  };
+
+  const handleValidateRule = async (rule: RuleVersion) => {
+    setValidatingRuleId(rule.id);
+    try {
+      const result: RuleValidationResult = await api.rules.validate(rule.id);
+      if (result.valid) {
+        toast.success(t('admin.system.rules.validateValid'));
+      } else {
+        toast.error(`${t('admin.system.rules.validateInvalid')}: ${result.issues.join('; ')}`);
+      }
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(String(err));
+    } finally {
+      setValidatingRuleId(null);
+    }
+  };
+
+  const handleArchiveRule = async (rule: RuleVersion) => {
+    setArchivingRuleId(rule.id);
+    try {
+      await api.rules.archive(rule.id);
+      toast.success(t('admin.system.rules.ruleArchived'));
+      setArchiveConfirmId(null);
+      rulesApi.refetch();
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(String(err));
+    } finally {
+      setArchivingRuleId(null);
+    }
   };
 
   const handleCreate = async (form: UserFormState) => {
@@ -932,30 +1085,85 @@ export function SystemAdmin() {
               </div>
             </div>
           )}
-          {rules.map(section => (
-            <div key={section.id} className="bg-card border border-border rounded-2xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                <h3 className="text-sm text-foreground">{t(section.title)}</h3>
-                {canManageRules ? (
-                  <button onClick={() => setEditingRule(section)} className={ACTION_BTN_BLUE}>
-                    <Pencil className="w-3 h-3" /> {t('admin.system.edit')}
-                  </button>
-                ) : (
-                  <Lock className="w-3.5 h-3.5 text-muted-foreground/50" />
-                )}
+          {canManageRules && (
+            <div className="flex justify-end">
+              <button onClick={() => { setRuleFormTarget(rulesApi.items[0] ?? null); setRuleFormMode('create'); }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-xs hover:opacity-90">
+                <Plus className="w-3.5 h-3.5" /> {t('admin.system.rules.newDraft')}
+              </button>
+            </div>
+          )}
+          {rulesApi.items.map(rule => (
+            <div key={rule.id} className="bg-card border border-border rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${ruleStatusBadgeClass(rule.status)}`}>
+                    {t(`admin.system.rules.status.${rule.status}`)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {rule.status === 'published' && rule.effectiveFrom
+                      ? `${t('admin.system.rules.effectiveFromLabel')} ${new Date(rule.effectiveFrom).toLocaleDateString()}${rule.effectiveTo ? ` – ${new Date(rule.effectiveTo).toLocaleDateString()}` : ''}`
+                      : new Date(rule.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {rule.status === 'draft' && canManageRules && (
+                    <>
+                      <button onClick={() => { setRuleFormTarget(rule); setRuleFormMode('edit'); }} className={ACTION_BTN_BLUE}>
+                        <Pencil className="w-3 h-3" /> {t('admin.system.edit')}
+                      </button>
+                      <button onClick={() => handleValidateRule(rule)} disabled={validatingRuleId === rule.id} className={ACTION_BTN_BLUE}>
+                        {t('admin.system.rules.validate')}
+                      </button>
+                    </>
+                  )}
+                  {rule.status === 'draft' && canPublishRules && (
+                    <button onClick={() => setPublishingRule(rule)}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">
+                      {t('admin.system.rules.publish')}
+                    </button>
+                  )}
+                  {rule.status === 'published' && canManageRules && archiveConfirmId !== rule.id && (
+                    <button onClick={() => setArchiveConfirmId(rule.id)}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                      <Trash2 className="w-3 h-3" /> {t('admin.system.rules.archive')}
+                    </button>
+                  )}
+                  {archiveConfirmId === rule.id && (
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setArchiveConfirmId(null)} className="text-xs px-2 py-1 rounded-lg border border-border text-muted-foreground hover:bg-accent">
+                        {t('common.cancel')}
+                      </button>
+                      <button onClick={() => handleArchiveRule(rule)} disabled={archivingRuleId === rule.id}
+                        className="text-xs px-2 py-1 rounded-lg bg-destructive text-destructive-foreground hover:opacity-90">
+                        {t('admin.system.rules.confirmArchive')}
+                      </button>
+                    </div>
+                  )}
+                  {!canManageRules && !canPublishRules && <Lock className="w-3.5 h-3.5 text-muted-foreground/50" />}
+                </div>
               </div>
               <div className="divide-y divide-border">
-                {section.items.map(item => (
-                  <div key={item.field} className="flex items-center justify-between px-4 py-3">
-                    <span className="text-xs text-muted-foreground">{t(item.label)}</span>
-                    <span className="text-xs text-foreground font-medium tabular-nums">
-                      {item.value} {item.unit ? t(item.unit) : ''}
-                    </span>
+                {RULE_FIELD_GROUPS.map(group => (
+                  <div key={group.titleKey}>
+                    <div className="px-4 pt-2.5 pb-1 text-[10px] text-muted-foreground/70 uppercase tracking-wide bg-muted/30">{t(group.titleKey)}</div>
+                    {group.fields.map(f => (
+                      <div key={f.key} className="flex items-center justify-between px-4 py-3">
+                        <span className="text-xs text-muted-foreground">{t(f.labelKey)}</span>
+                        <span className="text-xs text-foreground font-medium tabular-nums">
+                          {f.hourBased
+                            ? `${minutesToHours(rule[f.key])} ${t('admin.system.rules.unitHours')} (${rule[f.key]} ${t('admin.system.rules.unitMinutes')})`
+                            : `${rule[f.key]} ${t(f.unitKey)}`}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
             </div>
           ))}
+          <ListStateBanner error={rulesApi.error} empty={!rulesApi.loading && rulesApi.items.length === 0} emptyLabel={t('admin.system.rules.noRules')} />
+          <PageControls page={rulesApi.page} onPageChange={rulesApi.setPage} pageSize={rulesApi.params.pageSize} onPageSizeChange={rulesApi.setPageSize} />
         </div>
       )}
 
@@ -1140,12 +1348,22 @@ export function SystemAdmin() {
         />
       )}
 
-      {/* Edit rule modal */}
-      {editingRule && (
-        <RuleModal
-          section={editingRule}
-          onClose={() => setEditingRule(null)}
-          onSave={handleRuleSave}
+      {/* Rule create/edit draft modal */}
+      {ruleFormMode && (
+        <RuleFormModal
+          mode={ruleFormMode}
+          initial={ruleFormTarget}
+          onClose={() => { setRuleFormMode(null); setRuleFormTarget(null); }}
+          onSaved={handleRuleSaved}
+        />
+      )}
+
+      {/* Rule publish modal */}
+      {publishingRule && (
+        <PublishRuleModal
+          rule={publishingRule}
+          onClose={() => setPublishingRule(null)}
+          onPublished={handleRulePublished}
         />
       )}
     </div>
