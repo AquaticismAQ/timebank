@@ -248,7 +248,7 @@ Web 前端提供中文与英文两种界面（默认 `zh-CN`）。本地化的�
 - `registrationOpenAt`, `registrationCloseAt`
 - `status`, `version`, `createdAt`, `updatedAt`
 
-**`hostOrganizationId`/`hostOrganizationName`/`deliveryScope`**（新增，见 `Docs/optimization/03-ServiceRecordFormOptimization.md` §4.2/§10）：每个项目恰有一个本校组织——全系统唯一一条单例（`GET /organizations` 中 `isSchoolOrganization: true` 的那条），由服务端解析，客户端不可写。`organizationId`/`organizationName` 保持原义：项目的**合作**组织（如有）——绝不会是本校组织本身（`POST`/`PATCH /projects` 会拒绝与本校组织相同的 `organizationId`，返回 `400`，因为本校组织已经自动关联，无需再指定）。`deliveryScope` 取值 `onCampus`/`offCampus`/`hybrid`，`POST /projects` 时**必填**（绝不从组织类型推断），`PATCH` 时可选；早于此字段的历史项目一律回填为 `hybrid`（"未知，待人工复核"，不是对校内/校外的猜测）。
+**`hostOrganizationId`/`hostOrganizationName`/`deliveryScope`**（新增，见 `Docs/optimization/03-ServiceRecordFormOptimization.md` §4.2/§10）：每个项目恰有一个本校组织——全系统唯一一条单例（`isSchoolOrganization: true` 的组织记录，`GET /organizations` 永不返回它，读/改请见 §4.16 的专用端点），由服务端解析，客户端不可写。`organizationId`/`organizationName` 保持原义：项目的**合作**组织（如有）——绝不会是本校组织本身（`POST`/`PATCH /projects` 会拒绝与本校组织相同的 `organizationId`，返回 `400`，因为本校组织已经自动关联，无需再指定）。`deliveryScope` 取值 `onCampus`/`offCampus`/`hybrid`，`POST /projects` 时**必填**（绝不从组织类型推断），`PATCH` 时可选；早于此字段的历史项目一律回填为 `hybrid`（"未知，待人工复核"，不是对校内/校外的猜测）。
 
 状态：
 
@@ -612,7 +612,7 @@ queued → running → succeeded
 
 | Method | Path | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/organizations` | `organizations.read` | 组织列表——支持 `filter[type]`、`filter[status]`、`search`（仅按名称）（2026-08-08 新增，见 `02-PorjectOrganization.md` §4；此前这些参数虽然接受但会被静默忽略） |
+| `GET` | `/organizations` | `organizations.read` | 组织列表——支持 `filter[type]`、`filter[status]`、`search`（仅按名称）（2026-08-08 新增，见 `02-PorjectOrganization.md` §4；此前这些参数虽然接受但会被静默忽略）。永不包含本校组织（`isSchoolOrganization: true`）——该条是学校自身的档案记录，不是合作方；请改用 §4.16 的 `GET`/`PATCH /school/info` 读取或编辑 |
 | `POST` | `/organizations` | `organizations.manage` | 创建 |
 | `GET` | `/organizations/{id}` | `organizations.read` | 详情 |
 | `PATCH` | `/organizations/{id}` | `organizations.manage` | 更新 |
@@ -623,7 +623,7 @@ queued → running → succeeded
 
 `organizations.manage` 现由 `role_admin` 和 `role_teacher` 共同持有（2026-08-08 变更——此前仅管理员持有）。同一变更中，`Organization` 新增了 `description`（自由文本简介）字段，与既有的结构化字段 `type`/`contactName`/`contactEmail`/`contactPhone`/`address` 并列；`CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` 均已携带该字段。
 
-`OrganizationDto` 还携带只读的 `isSchoolOrganization` 布尔字段（见 `Docs/optimization/03-ServiceRecordFormOptimization.md` §4.1）——全系统恰有一条记录为 `true`，仅通过一次性种子创建，永远不经由 `POST /organizations`。`PATCH /organizations/{id}` 与 `POST /organizations/{id}/archive` 对该行均返回 `409`——其名称/地址/联系方式只能通过学校设置流程修改，不能走普通的组织管理流程，也永远不可被归档。每个项目的本校组织（见 §3.1）都解析自这一条记录。
+`OrganizationDto` 还携带只读的 `isSchoolOrganization` 布尔字段（见 `Docs/optimization/03-ServiceRecordFormOptimization.md` §4.1）——全系统恰有一条记录为 `true`，仅通过一次性种子创建，永远不经由 `POST /organizations`。`PATCH /organizations/{id}` 与 `POST /organizations/{id}/archive` 对该行均返回 `409`——其名称/地址/联系方式只能通过 `PATCH /school/info`（§4.16，仅 `sysadmin`）修改，不能走普通的组织管理流程，也永远不可被归档。每个项目的本校组织（见 §3.1）都解析自这一条记录。
 
 ### 4.11 账户与流水
 
@@ -747,7 +747,8 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
 
 | Method | Path | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/school/info` | 已登录 | 学校基本信息（名称、学生发展中心、联系方式等） |
+| `GET` | `/school/info` | 已登录 | 学校基本信息（名称、全称、学生发展中心、联系方式等） |
+| `PATCH` | `/school/info` | 仅 `sysadmin` 角色 | 编辑学校信息——按角色代码判断，而非按权限：`admin` 与 `sysadmin` 在角色合并后持有完全相同的权限集合（见 §4.15 角色表），此端点必须比 `admin` 更窄 |
 
 响应示例：
 
@@ -755,12 +756,15 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
 {
   "data": {
     "name": "示例中学",
+    "fullName": "示例中学（法定全称）",
     "studentDevCenter": "学生发展中心",
     "contact": "dev-center@example.edu.cn",
     "academicYear": "2025-2026"
   }
 }
 ```
+
+`PATCH` 接受部分字段（`name`/`fullName`/`studentDevCenter`/`contact`，均可选——只更新提供的字段）；不带 `version`/乐观锁字段，因为这是一条极少被修改、只有一类编辑者的单例记录。非 `sysadmin`（包括 `admin`）调用会返回 `403`。
 
 该端点返回低频变化的学校级配置信息，前端可在应用初始化时获取并缓存。与 `/system/settings` 的区别在于：`/school/info` 面向所有已登录用户，返回学校展示层信息；`/system/settings` 面向管理员，返回可配置的系统参数。
 
@@ -1007,6 +1011,7 @@ TypeScript 类型（如 `Project`、`ServiceRecord`、`Account`）目前从 `../
 | `auth.me` | `GET /me` | 否 |
 | `auth.logout` | `POST /auth/logout` | 否 |
 | `school.getInfo` | `GET /school/info` | 是 |
+| `school.updateInfo` | `PATCH /school/info` | 是 |
 | `projects.list` | `GET /projects` | 是 |
 | `projects.get` | `GET /projects/{id}` | 否 |
 | `projects.create` / `update` | `POST /projects` / `PATCH /projects/{id}` | 否 |

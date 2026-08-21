@@ -69,6 +69,13 @@ export const users: SeedUser[] = [
   { username: 'student002', displayName: 'Yun Li', email: 'yunli@example-school.cn', roleCodes: ['student'], linkedStudentNumber: '2024002' },
   { username: 'teacher001', displayName: 'Alex Lin', email: 'alex.lin@example-school.cn', roleCodes: ['teacher'], scopeGrades: ['grade_10'] },
   { username: 'admin001', displayName: 'Teacher Wei Chen', email: 'wei.chen@example-school.cn', roleCodes: ['admin'] },
+  // `sysadmin` holds identical permission grants to `admin` post-`V21`'s
+  // merge, but a handful of surfaces are deliberately gated by role code
+  // rather than permission (e.g. school info editing, `Docs/optimization/
+  // 03-ServiceRecordFormOptimization.md` §4.1) — this account exists so
+  // that distinction is actually exercisable against the seeded dataset,
+  // not just provable in an integration test.
+  { username: 'sysadmin001', displayName: 'System Administrator', email: 'sysadmin@example-school.cn', roleCodes: ['sysadmin'] },
   // 07-RoleFinetune.md §2.5: every user holds exactly one role now — this
   // was 'both001', roleCodes: ['student', 'teacher'], the dual-workspace
   // test fixture for the now-retired `/workspace` picker. The live account

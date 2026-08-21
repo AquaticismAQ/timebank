@@ -251,7 +251,7 @@ Core fields:
 - `registrationOpenAt`, `registrationCloseAt`
 - `status`, `version`, `createdAt`, `updatedAt`
 
-**`hostOrganizationId`/`hostOrganizationName`/`deliveryScope`** (added, `Docs/optimization/03-ServiceRecordFormOptimization.md` §4.2/§10): every project has exactly one host organization — the school itself, a single system-wide singleton (`GET /organizations`' `isSchoolOrganization: true` row) — resolved server-side and never client-writable. `organizationId`/`organizationName` keep their pre-existing meaning: the project's **partner** organization, if any (never the school organization itself — `POST`/`PATCH /projects` reject an `organizationId` equal to the host as a `400`, since that's automatic already). `deliveryScope` is `onCampus`/`offCampus`/`hybrid`, **required** on `POST /projects` (never inferred from organization type), optional on `PATCH`; projects that pre-date this field were backfilled to `hybrid` ("unknown, needs manual review"), not guessed either way.
+**`hostOrganizationId`/`hostOrganizationName`/`deliveryScope`** (added, `Docs/optimization/03-ServiceRecordFormOptimization.md` §4.2/§10): every project has exactly one host organization — the school itself, a single system-wide singleton (the `isSchoolOrganization: true` organization row — never returned by `GET /organizations`, see §4.16 for its own read/edit endpoints) — resolved server-side and never client-writable. `organizationId`/`organizationName` keep their pre-existing meaning: the project's **partner** organization, if any (never the school organization itself — `POST`/`PATCH /projects` reject an `organizationId` equal to the host as a `400`, since that's automatic already). `deliveryScope` is `onCampus`/`offCampus`/`hybrid`, **required** on `POST /projects` (never inferred from organization type), optional on `PATCH`; projects that pre-date this field were backfilled to `hybrid` ("unknown, needs manual review"), not guessed either way.
 
 Status:
 
@@ -615,7 +615,7 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 
 | Method | Path | Permission | Description |
 | --- | --- | --- | --- |
-| `GET` | `/organizations` | `organizations.read` | Organization list — `filter[type]`, `filter[status]`, `search` (name only) all supported (added 2026-08-08, `02-PorjectOrganization.md` §4; previously accepted but silently ignored these params) |
+| `GET` | `/organizations` | `organizations.read` | Organization list — `filter[type]`, `filter[status]`, `search` (name only) all supported (added 2026-08-08, `02-PorjectOrganization.md` §4; previously accepted but silently ignored these params). Never includes the school organization (`isSchoolOrganization: true`) — that row is the school's own archive record, not a partner; read/edit it via `GET`/`PATCH /school/info` (§4.16) instead |
 | `POST` | `/organizations` | `organizations.manage` | Create |
 | `GET` | `/organizations/{id}` | `organizations.read` | Detail |
 | `PATCH` | `/organizations/{id}` | `organizations.manage` | Update |
@@ -626,7 +626,7 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 
 `organizations.manage` is granted to `role_admin` and `role_teacher` (changed 2026-08-08 — previously admin-only). `Organization` gained a `description` field (free text, alongside the existing structured `type`/`contactName`/`contactEmail`/`contactPhone`/`address`) in the same change; `CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` all carry it.
 
-`OrganizationDto` also carries a read-only `isSchoolOrganization` boolean (`Docs/optimization/03-ServiceRecordFormOptimization.md` §4.1) — exactly one row in the whole system has this `true`, seeded once and never through `POST /organizations`. `PATCH /organizations/{id}` and `POST /organizations/{id}/archive` both `409` on that row — its name/address/contact can only change through school settings, not the normal organization-management flow, and it can never be archived. Every project's host organization (§3.1) resolves to this row.
+`OrganizationDto` also carries a read-only `isSchoolOrganization` boolean (`Docs/optimization/03-ServiceRecordFormOptimization.md` §4.1) — exactly one row in the whole system has this `true`, seeded once and never through `POST /organizations`. `PATCH /organizations/{id}` and `POST /organizations/{id}/archive` both `409` on that row — its name/address/contact can only change through `PATCH /school/info` (§4.16, `sysadmin` only), not the normal organization-management flow, and it can never be archived. Every project's host organization (§3.1) resolves to this row.
 
 ### 4.11 Accounts & Transactions
 
@@ -763,7 +763,8 @@ accounts and the UI shows no grade picker for them.
 
 | Method | Path | Permission | Description |
 | --- | --- | --- | --- |
-| `GET` | `/school/info` | Authenticated | School basic info (name, Student Development Center, contact, etc.) |
+| `GET` | `/school/info` | Authenticated | School basic info (name, full name, Student Development Center, contact, etc.) |
+| `PATCH` | `/school/info` | `sysadmin` role only | Edit school info — role-code check, not a permission, since `admin` and `sysadmin` hold identical permission grants post-role-merge (see §4.15's Roles table) and this must stay narrower than `admin` |
 
 Example response:
 
@@ -771,12 +772,15 @@ Example response:
 {
   "data": {
     "name": "Example Middle School",
+    "fullName": "Example Middle School (Full Legal Name)",
     "studentDevCenter": "Student Development Center",
     "contact": "dev-center@example.edu.cn",
     "academicYear": "2025-2026"
   }
 }
 ```
+
+`PATCH` accepts a partial body (`name`/`fullName`/`studentDevCenter`/`contact`, all optional — only provided fields change); no `version`/optimistic-locking field, since this is a single, rarely-edited row with exactly one class of editor. A non-`sysadmin` caller (including `admin`) gets `403`.
 
 This endpoint returns low-frequency school-level configuration info; the frontend can fetch and cache it during app initialization. The difference from `/system/settings`: `/school/info` is available to all authenticated users and returns school display-level info; `/system/settings` is for administrators and returns configurable system parameters.
 
@@ -1023,6 +1027,7 @@ This section exists so the backend can be built against what the frontend actual
 | `auth.me` | `GET /me` | No |
 | `auth.logout` | `POST /auth/logout` | No |
 | `school.getInfo` | `GET /school/info` | Yes |
+| `school.updateInfo` | `PATCH /school/info` | Yes |
 | `projects.list` | `GET /projects` | Yes |
 | `projects.get` | `GET /projects/{id}` | No |
 | `projects.create` / `update` | `POST /projects` / `PATCH /projects/{id}` | No |

@@ -9,6 +9,7 @@ import cn.timebank.project.application.dto.ProjectRequests.CreateProjectRequest;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -39,5 +40,24 @@ class OrganizationProjectCountIT extends AbstractIntegrationTest {
 
         OrganizationDto reread = organizationService.get(org.id());
         assertThat(reread.projectCount()).isEqualTo(1);
+    }
+
+    /**
+     * The school organization is the school's own archive record, not a
+     * partner — `list()` (which backs the "Partner Organizations" admin
+     * screen and every partner-org picker built on the same endpoint) must
+     * never include it, even though `get(id)` and `getSchoolOrganization()`
+     * both still resolve it directly by id.
+     */
+    @Test
+    void listNeverIncludesTheSchoolOrganization() {
+        OrganizationDto schoolOrg = organizationService.getSchoolOrganization();
+
+        boolean foundInList = organizationService.list(PageRequest.of(0, 100), null, null, null)
+                .getContent().stream().anyMatch(o -> o.id().equals(schoolOrg.id()));
+        assertThat(foundInList).isFalse();
+
+        // Still directly resolvable by id — only the list is filtered.
+        assertThat(organizationService.get(schoolOrg.id()).id()).isEqualTo(schoolOrg.id());
     }
 }

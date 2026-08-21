@@ -4,13 +4,21 @@
 // changesRequested, coin amounts as centi-coins, minutes-only durations,
 // dictionary names, list envelope) — see APIContract.md §13.5.
 
-/** `fullName` is unused by any screen and not part of the real `SchoolInfoDto` — always undefined. */
+/** `GET /school/info` (contract §4.16). `fullName` is real as of the School Info edit card (issue 045) — no longer always undefined. */
 export interface SchoolInfo {
   name: string;
   fullName?: string;
   studentDevCenter: string;
   contact: string;
   academicYear?: string;
+}
+
+/** `PATCH /school/info` (contract §4.16) — partial body, `sysadmin` role only (not merely `admin`); no version field, see the backend doc comment for why. */
+export interface UpdateSchoolInfoRequest {
+  name?: string;
+  fullName?: string;
+  studentDevCenter?: string;
+  contact?: string;
 }
 
 /** `GET /system/version` (contract §4.17) — bare semver, no `v` prefix; display call sites add it. */

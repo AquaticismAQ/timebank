@@ -18,6 +18,7 @@ import type {
   ReportData,
   EventProposal,
   SchoolInfo,
+  UpdateSchoolInfoRequest,
   SystemVersion,
   AuditLogEntry,
   RuleVersion,
@@ -191,6 +192,10 @@ export const api = {
   school: {
     async getInfo(): Promise<SchoolInfo> {
       return http.get<SchoolInfo>('/school/info');
+    },
+    /** `sysadmin` role only (not `admin`) — the backend checks the role code, not a permission, since the two share identical grants post-role-merge. A non-sysadmin caller gets a real 403 from the server; this isn't just a hidden button. */
+    async updateInfo(data: UpdateSchoolInfoRequest): Promise<SchoolInfo> {
+      return http.patch<SchoolInfo>('/school/info', data);
     },
   },
 

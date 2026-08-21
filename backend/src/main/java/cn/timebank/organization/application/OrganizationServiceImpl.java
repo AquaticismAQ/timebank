@@ -38,7 +38,12 @@ class OrganizationServiceImpl implements OrganizationService {
     @Override
     @Transactional(readOnly = true)
     public Page<OrganizationDto> list(Pageable pageable, String type, String status, String search) {
+        // The school organization is the school's own archive record, not a
+        // partner — never shown in the "Partner Organizations" list (or any
+        // partner-org picker built on this same endpoint); it has its own
+        // read/edit surface via GET/PATCH /school/info.
         Specification<Organization> spec = FilterSpecifications.and(
+                (root, query, cb) -> cb.isFalse(root.get("schoolOrganization")),
                 FilterSpecifications.equalToEnum("type", Organization.Type.class, type == null ? null : type.toUpperCase()),
                 FilterSpecifications.equalToEnum("status", OrganizationStatus.class, status == null ? null : status.toUpperCase()),
                 FilterSpecifications.searchAnyContains(search, "name"));

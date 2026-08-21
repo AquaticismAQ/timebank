@@ -283,6 +283,88 @@ function PublishRuleModal({ rule, onClose, onPublished }: PublishRuleModalProps)
   );
 }
 
+interface SchoolInfoEditModalProps {
+  initial: SchoolInfo;
+  onClose: () => void;
+  onSaved: (info: SchoolInfo) => void;
+}
+
+function SchoolInfoEditModal({ initial, onClose, onSaved }: SchoolInfoEditModalProps) {
+  const { t } = useTranslation();
+  const [form, setForm] = useState({
+    name: initial.name ?? '', fullName: initial.fullName ?? '',
+    studentDevCenter: initial.studentDevCenter ?? '', contact: initial.contact ?? '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!form.name.trim()) {
+      toast.error(t('admin.system.schoolNameRequired'));
+      return;
+    }
+    setSaving(true);
+    try {
+      const saved = await api.school.updateInfo(form);
+      toast.success(t('admin.system.schoolInfoUpdated'));
+      onSaved(saved);
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(t('common.unknownError'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
+          <Building2 className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
+          <h3 className="flex-1 text-foreground text-sm">{t('admin.system.editSchoolInfo')}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.schoolName')}</label>
+            <input type="text" value={form.name} maxLength={255} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.schoolFullName')}</label>
+            <input type="text" value={form.fullName} maxLength={255} onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.officeLocation')}</label>
+            <input type="text" value={form.studentDevCenter} maxLength={255} onChange={e => setForm(f => ({ ...f, studentDevCenter: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.adminContact')}</label>
+            <input type="text" value={form.contact} maxLength={255} onChange={e => setForm(f => ({ ...f, contact: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+          </div>
+        </div>
+
+        <div className="px-5 py-4 border-t border-border shrink-0 flex gap-3">
+          <button type="button" onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent">
+            {t('common.cancel')}
+          </button>
+          <button type="button" onClick={handleSave} disabled={saving}
+            className="flex-1 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">
+            {t('common.save')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type Tab = 'users' | 'roles' | 'rules' | 'import' | 'logs' | 'organizations' | 'settings';
 type UserStatus = 'active' | 'inactive';
 
@@ -673,9 +755,15 @@ export function SystemAdmin() {
   // management (enforced server-side too; this only hides the buttons
   // that would otherwise 403).
   const canManageTemplates = canManageRoles && (user?.roles.includes('admin') || user?.roles.includes('sysadmin')) === true;
+  // Deliberately narrower than the admin/sysadmin pattern above: school info
+  // is editable by sysadmin only, not admin, even though the two hold
+  // identical permission grants post-role-merge — hardcoded role-code check
+  // rather than a new permission, matching the backend's identical gate.
+  const isSysadmin = user?.roles.includes('sysadmin') ?? false;
   const auditLogs = usePagedApi<AuditLogEntry>(api.auditLogs.list, { sort: '-createdAt', pageSize: 20 });
   const [schoolInfo, setSchoolInfo] = useState<SchoolInfo | null>(null);
   const [systemVersion, setSystemVersion] = useState('');
+  const [editingSchoolInfo, setEditingSchoolInfo] = useState(false);
 
   useEffect(() => {
     api.school.getInfo().then(setSchoolInfo).catch(() => {});
@@ -1309,10 +1397,8 @@ export function SystemAdmin() {
               <h3 className="text-foreground">{t('admin.system.systemInfo')}</h3>
             </div>
             {[
-              { label: t('admin.system.sysName'), value: `TimeBank · ${schoolInfo?.name ?? ''}` },
+              { label: t('admin.system.sysName'), value: 'TimeBank' },
               { label: t('admin.system.sysVersion'), value: systemVersion ? `v${systemVersion}` : '—' },
-              { label: t('admin.system.adminContact'), value: schoolInfo?.contact ?? '—' },
-              { label: t('admin.system.officeLocation'), value: schoolInfo?.studentDevCenter ?? '—' },
               { label: t('admin.system.apiVersion'), value: '/api/v1' },
             ].map(item => (
               <div key={item.label} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0">
@@ -1320,6 +1406,36 @@ export function SystemAdmin() {
                 <span className="text-xs text-foreground">{item.value}</span>
               </div>
             ))}
+          </div>
+
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <div>
+                <h3 className="text-foreground">{t('admin.system.schoolInfo')}</h3>
+                <p className="text-xs text-muted-foreground">{t('admin.system.schoolInfoDesc')}</p>
+              </div>
+              {isSysadmin ? (
+                <button onClick={() => setEditingSchoolInfo(true)} className={ACTION_BTN_BLUE}>
+                  <Pencil className="w-3 h-3" /> {t('admin.system.edit')}
+                </button>
+              ) : (
+                <Lock className="w-3.5 h-3.5 text-muted-foreground/50" />
+              )}
+            </div>
+            {[
+              { label: t('admin.system.schoolName'), value: schoolInfo?.name ?? '—' },
+              { label: t('admin.system.schoolFullName'), value: schoolInfo?.fullName || '—' },
+              { label: t('admin.system.officeLocation'), value: schoolInfo?.studentDevCenter ?? '—' },
+              { label: t('admin.system.adminContact'), value: schoolInfo?.contact ?? '—' },
+            ].map(item => (
+              <div key={item.label} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0">
+                <span className="text-xs text-muted-foreground">{item.label}</span>
+                <span className="text-xs text-foreground">{item.value}</span>
+              </div>
+            ))}
+            {!isSysadmin && (
+              <p className="px-4 py-3 text-xs text-muted-foreground/70">{t('admin.system.schoolInfoSysadminOnly')}</p>
+            )}
           </div>
         </div>
       )}
@@ -1363,6 +1479,15 @@ export function SystemAdmin() {
           rule={publishingRule}
           onClose={() => setPublishingRule(null)}
           onPublished={handleRulePublished}
+        />
+      )}
+
+      {/* School info edit modal */}
+      {editingSchoolInfo && schoolInfo && (
+        <SchoolInfoEditModal
+          initial={schoolInfo}
+          onClose={() => setEditingSchoolInfo(false)}
+          onSaved={saved => { setSchoolInfo(saved); setEditingSchoolInfo(false); }}
         />
       )}
     </div>
