@@ -11,7 +11,7 @@ import { GradePicker } from '../GradePicker';
 import { useDictionaries } from '../../api/useDictionaries';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { formatGradeClass } from '../../lib/format';
-import type { RoleSummary, AuditLogEntry } from '../../api/types';
+import type { RoleSummary, AuditLogEntry, SchoolInfo } from '../../api/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
@@ -566,11 +566,11 @@ export function SystemAdmin() {
   // that would otherwise 403).
   const canManageTemplates = canManageRoles && (user?.roles.includes('admin') || user?.roles.includes('sysadmin')) === true;
   const auditLogs = usePagedApi<AuditLogEntry>(api.auditLogs.list, { sort: '-createdAt', pageSize: 20 });
-  const [schoolName, setSchoolName] = useState('');
+  const [schoolInfo, setSchoolInfo] = useState<SchoolInfo | null>(null);
   const [systemVersion, setSystemVersion] = useState('');
 
   useEffect(() => {
-    api.school.getInfo().then(info => setSchoolName(info.name)).catch(() => {});
+    api.school.getInfo().then(setSchoolInfo).catch(() => {});
     api.system.version().then(v => setSystemVersion(v.version)).catch(() => {});
   }, []);
   const [activeTab, setActiveTab] = useState<Tab>('users');
@@ -580,7 +580,7 @@ export function SystemAdmin() {
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
   const [rules, setRules] = useState<RuleSection[]>(INITIAL_RULES);
   const [editingRule, setEditingRule] = useState<RuleSection | null>(null);
-  const [features, setFeatures] = useState({ pov: false, redemption: false, borrowing: false, appreciation: false });
+  const features = user?.featureFlags ?? { pov: false, redemption: false, borrowing: false, appreciation: false };
   const [saving, setSaving] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const studentImportFileRef = useRef<HTMLInputElement>(null);
@@ -1102,10 +1102,10 @@ export function SystemAdmin() {
               <h3 className="text-foreground">{t('admin.system.systemInfo')}</h3>
             </div>
             {[
-              { label: t('admin.system.sysName'), value: `TimeBank · ${schoolName}` },
+              { label: t('admin.system.sysName'), value: `TimeBank · ${schoolInfo?.name ?? ''}` },
               { label: t('admin.system.sysVersion'), value: systemVersion ? `v${systemVersion}` : '—' },
-              { label: t('admin.system.adminContact'), value: 'Wei Chen / Mei Zhao' },
-              { label: t('admin.system.officeLocation'), value: 'H300 / H504' },
+              { label: t('admin.system.adminContact'), value: schoolInfo?.contact ?? '—' },
+              { label: t('admin.system.officeLocation'), value: schoolInfo?.studentDevCenter ?? '—' },
               { label: t('admin.system.apiVersion'), value: '/api/v1' },
             ].map(item => (
               <div key={item.label} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0">
