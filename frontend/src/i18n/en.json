@@ -113,7 +113,7 @@
   "auth": {
     "login": {
       "title": "Time Bank",
-      "subtitle": "Example City HD Student Volunteer Service Management Platform",
+      "subtitle": "Student Volunteer Service Management Platform",
       "accountPlaceholder": "Student ID / Staff ID / Email",
       "accountRequired": "Please enter your account",
       "password": "Password",

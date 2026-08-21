@@ -113,7 +113,7 @@
   "auth": {
     "login": {
       "title": "时间银行",
-      "subtitle": "示例中学学生志愿服务管理平台",
+      "subtitle": "学生志愿服务管理平台",
       "accountPlaceholder": "学号 / 工号 / 邮箱",
       "accountRequired": "请输入账号",
       "password": "密码",
