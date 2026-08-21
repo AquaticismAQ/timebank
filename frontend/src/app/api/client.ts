@@ -455,6 +455,11 @@ export const api = {
     async timeline(id: string): Promise<TimelineEntry[]> {
       return http.get(`/event-proposals/${id}/timeline`);
     },
+    /** `GET /event-proposal-queue/summary` (`eventProposals.review`-gated) — awaiting-decision count for the dashboard card / sidebar badge. */
+    async pendingCount(): Promise<number> {
+      const summary = await http.get<{ pendingCount: number; overdueCount: number }>('/event-proposal-queue/summary');
+      return summary.pendingCount;
+    },
   },
 
   applications: {
@@ -950,6 +955,14 @@ export const api = {
     },
     async timeline(id: string): Promise<{ type: string; description: string; actorId: string; occurredAt: string }[]> {
       return http.get(`/cases/${id}/timeline`);
+    },
+    /** No dedicated summary endpoint exists for cases (unlike review-queue/event-proposal-queue) — sums `page.totalItems` across the three non-terminal statuses via `pageSize: 1` requests, so this stays cheap regardless of how many cases exist. */
+    async pendingCount(): Promise<number> {
+      const statuses = ['submitted', 'inReview', 'needsInformation'];
+      const totals = await Promise.all(statuses.map(status =>
+        this.list({ filter: { status }, pageSize: 1 }).then(r => r.page.totalItems)
+      ));
+      return totals.reduce((sum, n) => sum + n, 0);
     },
   },
 

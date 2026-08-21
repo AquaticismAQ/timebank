@@ -724,6 +724,8 @@
       "welcome": "欢迎回来，{{name}} · 今日 {{date}}",
       "pendingReviews": "待审核记录",
       "clickToReview": "点击进入审核",
+      "pendingCases": "待处理个案",
+      "pendingProposals": "待审核提案",
       "activeStudents": "在校学生",
       "totalStudents": "共 {{count}} 人",
       "approvedThisMonth": "本月已审通过",

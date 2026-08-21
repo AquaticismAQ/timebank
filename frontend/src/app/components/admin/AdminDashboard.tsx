@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { ClipboardCheck, Users, AlertTriangle, Clock, CheckCircle, ArrowRight } from 'lucide-react';
+import { ClipboardCheck, Users, AlertTriangle, Clock, CheckCircle, ArrowRight, FileQuestion, Lightbulb } from 'lucide-react';
 import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
 import { formatGradeClass, minutesToHours } from '../../lib/format';
 import { type AdminStats, type ReviewQueueItem, type Project } from '../../api/types';
@@ -37,6 +37,8 @@ export function AdminDashboard() {
   const [activeProjects, setActiveProjects] = useState<Project[]>([]);
   const [allReviews, setAllReviews] = useState<ReviewQueueItem[]>([]);
   const [dashboardLoaded, setDashboardLoaded] = useState(false);
+  const [pendingCases, setPendingCases] = useState(0);
+  const [pendingProposals, setPendingProposals] = useState(0);
 
   useEffect(() => {
     api.dashboards.admin().then(d => {
@@ -45,6 +47,8 @@ export function AdminDashboard() {
       setActiveProjects(d.activeProjects);
     }).catch(() => {}).finally(() => setDashboardLoaded(true));
     api.reviewQueue.list({ pageSize: 100 }).then(result => setAllReviews(result.data)).catch(() => {});
+    api.cases.pendingCount().then(setPendingCases).catch(() => {});
+    api.eventProposals.pendingCount().then(setPendingProposals).catch(() => {});
   }, []);
 
   if (!dashboardLoaded) return <div className="p-4 lg:p-6">{t('common.loading')}</div>;
@@ -63,10 +67,18 @@ export function AdminDashboard() {
 
       {stats && (<>
       {/* Key stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <StatCard label={t('admin.dashboard.pendingReviews')} value={stats.pendingReviews} sub={t('admin.dashboard.clickToReview')} icon={ClipboardCheck}
           color="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
           onClick={() => navigate('/admin/audit')}
+        />
+        <StatCard label={t('admin.dashboard.pendingCases')} value={pendingCases} sub={t('admin.dashboard.clickToReview')} icon={FileQuestion}
+          color="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+          onClick={() => navigate('/admin/cases')}
+        />
+        <StatCard label={t('admin.dashboard.pendingProposals')} value={pendingProposals} sub={t('admin.dashboard.clickToReview')} icon={Lightbulb}
+          color="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400"
+          onClick={() => navigate('/admin/proposals')}
         />
         <StatCard label={t('admin.dashboard.activeStudents')} value={stats.activeStudents} sub={t('admin.dashboard.totalStudents', { count: stats.totalStudents })} icon={Users}
           color="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"

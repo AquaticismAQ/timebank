@@ -10,17 +10,21 @@ export function AdminLayout() {
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [pendingReviews, setPendingReviews] = useState(0);
+  const [pendingCases, setPendingCases] = useState(0);
+  const [pendingProposals, setPendingProposals] = useState(0);
 
   useEffect(() => {
     api.notifications.unreadCount().then(setUnreadCount).catch(() => {});
     api.reviewQueue.summary().then(s => setPendingReviews(s.pending)).catch(() => {});
+    api.cases.pendingCount().then(setPendingCases).catch(() => {});
+    api.eventProposals.pendingCount().then(setPendingProposals).catch(() => {});
   }, []);
 
   const navItems = useMemo((): ShellNavItem[] => [
     { to: '/admin/dashboard', icon: LayoutDashboard, label: t('layout.admin.dashboard') },
     { to: '/admin/audit', icon: ClipboardCheck, label: t('layout.admin.auditCenter'), badge: pendingReviews || undefined },
-    { to: '/admin/cases', icon: FileQuestion, label: t('layout.admin.caseReview') },
-    { to: '/admin/proposals', icon: Lightbulb, label: t('layout.admin.proposalReview') },
+    { to: '/admin/cases', icon: FileQuestion, label: t('layout.admin.caseReview'), badge: pendingCases || undefined },
+    { to: '/admin/proposals', icon: Lightbulb, label: t('layout.admin.proposalReview'), badge: pendingProposals || undefined },
     { to: '/admin/projects', icon: FolderOpen, label: t('layout.admin.projectManagement') },
     { to: '/admin/students', icon: Users, label: t('layout.admin.studentManagement') },
     { to: '/admin/accounts', icon: Wallet, label: t('layout.admin.timeCoinAccounts') },
@@ -28,7 +32,7 @@ export function AdminLayout() {
     { to: '/admin/system', icon: Settings, label: t('layout.admin.systemAdmin') },
     { to: '/admin/notifications', icon: Bell, label: t('layout.admin.notifications'), badge: unreadCount || undefined },
     { to: '/admin/profile', icon: User, label: t('layout.admin.profile') },
-  ], [t, pendingReviews, unreadCount]);
+  ], [t, pendingReviews, pendingCases, pendingProposals, unreadCount]);
 
   return (
     <AppShell

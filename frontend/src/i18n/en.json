@@ -724,6 +724,8 @@
       "welcome": "Welcome back, {{name}} · Today {{date}}",
       "pendingReviews": "Pending Reviews",
       "clickToReview": "Click to review",
+      "pendingCases": "Pending Cases",
+      "pendingProposals": "Pending Proposals",
       "activeStudents": "Active Students",
       "totalStudents": "of {{count}} total",
       "approvedThisMonth": "Approved This Month",
