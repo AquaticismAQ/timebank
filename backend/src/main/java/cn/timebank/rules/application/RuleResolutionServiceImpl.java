@@ -34,7 +34,8 @@ class RuleResolutionServiceImpl implements RuleResolutionService {
 
     private EffectiveRule toEffectiveRule(RuleVersion r) {
         return new EffectiveRule(r.getId(), r.getRoundingMinutes(), r.getMinutesPerCoinUnit(), r.getCentiCoinsPerUnit(),
-                r.getAnnualRequiredMinutes(), r.getStageRequiredMinutes(),
+                r.getMiddleAnnualRequiredMinutes(), r.getMiddleStageRequiredMinutes(),
+                r.getHighAnnualRequiredMinutes(), r.getHighStageRequiredMinutes(),
                 r.getHonourBronzeMinutes(), r.getHonourSilverMinutes(), r.getHonourGoldMinutes(), r.getHonourExcellentMinutes());
     }
 }

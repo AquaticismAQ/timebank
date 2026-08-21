@@ -76,38 +76,46 @@ class ReportServiceImpl implements ReportService {
 
         List<SummaryRepository.ComplianceSummaryRow> materialized = summaryRepository.complianceForYear(year.id());
         Instant generatedAt;
-        int requiredMinutes;
         Map<String, int[]> figuresByGrade; // [total, completed]
+        Map<String, Integer> requiredMinutesByGrade;
         if (!materialized.isEmpty()) {
             generatedAt = materialized.get(0).generatedAt();
-            requiredMinutes = materialized.get(0).requiredMinutes();
             figuresByGrade = new LinkedHashMap<>();
-            materialized.forEach(r -> figuresByGrade.put(r.gradeId(), new int[]{r.totalStudents(), r.completedStudents()}));
+            requiredMinutesByGrade = new LinkedHashMap<>();
+            materialized.forEach(r -> {
+                figuresByGrade.put(r.gradeId(), new int[]{r.totalStudents(), r.completedStudents()});
+                requiredMinutesByGrade.put(r.gradeId(), r.requiredMinutes());
+            });
         } else {
             generatedAt = Instant.now();
             EffectiveRule rule = ruleResolutionService.resolveEffectiveAt(Instant.now())
                     .orElseThrow(() -> new IllegalStateException("No rule is currently in effect"));
-            requiredMinutes = rule.annualRequiredMinutes();
-            figuresByGrade = computeCompletionFigures(year, requiredMinutes);
+            requiredMinutesByGrade = new LinkedHashMap<>();
+            grades.values().forEach(g -> requiredMinutesByGrade.put(g.id(), rule.annualRequiredMinutesForGradeLevel(g.sequence())));
+            figuresByGrade = computeCompletionFigures(year, rule, grades);
         }
 
-        int finalRequiredMinutes = requiredMinutes;
         List<CompletionReportDto.GradeFigure> byGrade = grades.values().stream()
                 .map(g -> {
                     int[] f = figuresByGrade.getOrDefault(g.id(), new int[]{0, 0});
                     double rate = f[0] == 0 ? 0.0 : (double) f[1] / f[0];
-                    return new CompletionReportDto.GradeFigure(g.id(), g.name(), f[0], f[1], rate);
+                    int required = requiredMinutesByGrade.getOrDefault(g.id(), 0);
+                    return new CompletionReportDto.GradeFigure(g.id(), g.name(), f[0], f[1], rate, required);
                 }).toList();
-        return new CompletionReportDto(generatedAt, year.id(), finalRequiredMinutes, byGrade);
+        return new CompletionReportDto(generatedAt, year.id(), byGrade);
     }
 
     /** Bounded by active-student count (≤5,000), aggregated once in SQL — the threshold comparison below is arithmetic over an already-grouped result set, not a query per student. */
-    Map<String, int[]> computeCompletionFigures(AcademicYearDto year, int requiredMinutes) {
+    Map<String, int[]> computeCompletionFigures(AcademicYearDto year, EffectiveRule rule, Map<String, GradeDto> gradesById) {
         Map<String, int[]> figuresByGrade = new LinkedHashMap<>();
         for (ReportQueryRepository.StudentCompletionRow row : queryRepository.completedMinutesByStudent(year.startDate(), year.endDate())) {
             int[] f = figuresByGrade.computeIfAbsent(row.gradeId(), k -> new int[]{0, 0});
             f[0]++;
-            if (row.completedMinutes() >= requiredMinutes) {
+            GradeDto grade = gradesById.get(row.gradeId());
+            // A row whose grade isn't in the current dictionary (shouldn't happen
+            // in practice) is treated as high-school rather than silently miscounted.
+            int required = grade == null ? rule.highAnnualRequiredMinutes() : rule.annualRequiredMinutesForGradeLevel(grade.sequence());
+            if (row.completedMinutes() >= required) {
                 f[1]++;
             }
         }

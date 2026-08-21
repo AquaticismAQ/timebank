@@ -11,7 +11,8 @@ package cn.timebank.rules.application.dto;
 public record EffectiveRule(
         String ruleVersionId,
         int roundingMinutes, int minutesPerCoinUnit, int centiCoinsPerUnit,
-        int annualRequiredMinutes, int stageRequiredMinutes,
+        int middleAnnualRequiredMinutes, int middleStageRequiredMinutes,
+        int highAnnualRequiredMinutes, int highStageRequiredMinutes,
         int honourBronzeMinutes, int honourSilverMinutes, int honourGoldMinutes, int honourExcellentMinutes) {
 
     public int roundToNearestGranularity(int durationMinutes) {
@@ -21,5 +22,22 @@ public record EffectiveRule(
 
     public int convertMinutesToCentiCoins(int roundedMinutes) {
         return Math.toIntExact((long) roundedMinutes * centiCoinsPerUnit / minutesPerCoinUnit);
+    }
+
+    /**
+     * Design/chinese/01-TimeBankDesign.md §6: grades 6-8 are middle school,
+     * 9-11 high school — exactly two bands. Duplicates {@code
+     * RuleVersion.MIDDLE_SCHOOL_MAX_GRADE_LEVEL} rather than referencing it —
+     * this DTO deliberately doesn't depend on {@code rules.domain} (see the
+     * class-level note above).
+     */
+    private static final int MIDDLE_SCHOOL_MAX_GRADE_LEVEL = 8;
+
+    public int annualRequiredMinutesForGradeLevel(int gradeLevel) {
+        return gradeLevel <= MIDDLE_SCHOOL_MAX_GRADE_LEVEL ? middleAnnualRequiredMinutes : highAnnualRequiredMinutes;
+    }
+
+    public int stageRequiredMinutesForGradeLevel(int gradeLevel) {
+        return gradeLevel <= MIDDLE_SCHOOL_MAX_GRADE_LEVEL ? middleStageRequiredMinutes : highStageRequiredMinutes;
     }
 }

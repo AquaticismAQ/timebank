@@ -101,15 +101,18 @@ INSERT IGNORE INTO feature_flag (code, enabled, updated_at) VALUES
     ('appreciation', 0, NOW(3));
 
 -- Default rule version, published and effective from the current academic
--- year's start (§22.1: 0.5h rounding, 1h->1 coin, honour tiers 25/75/150/300h,
--- annual 75h / stage 300h — matching Design/chinese/01-TimeBankDesign.md §4.2/§8.1).
+-- year's start (§22.1: 0.5h rounding, 1h->1 coin, honour tiers 25/75/150/300h;
+-- middle school 25h/year+75h cumulative, high school 75h/year+300h cumulative
+-- — matching Design/chinese/01-TimeBankDesign.md §4.2/§6/§8.1).
 INSERT IGNORE INTO rule_version (
     id, status, rounding_minutes, minutes_per_coin_unit, centi_coins_per_unit,
-    annual_required_minutes, stage_required_minutes,
+    middle_annual_required_minutes, middle_stage_required_minutes,
+    high_annual_required_minutes, high_stage_required_minutes,
     honour_bronze_minutes, honour_silver_minutes, honour_gold_minutes, honour_excellent_minutes,
     effective_from, effective_to, created_at, updated_at, published_at, created_by
 ) VALUES (
     'rule_default_2025', 'PUBLISHED', 30, 60, 100,
+    1500, 4500,
     4500, 18000,
     1500, 4500, 9000, 18000,
     '2025-09-01T00:00:00', NULL, NOW(3), NOW(3), NOW(3), NULL

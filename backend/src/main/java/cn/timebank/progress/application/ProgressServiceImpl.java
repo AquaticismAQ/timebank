@@ -12,6 +12,7 @@ import cn.timebank.security.application.TimeBankPrincipal;
 import cn.timebank.servicerecord.application.ServiceRecordService;
 import cn.timebank.servicerecord.application.dto.AnnualProgressSummary;
 import cn.timebank.student.application.AcademicStructureService;
+import cn.timebank.student.application.StudentService;
 import cn.timebank.student.application.dto.AcademicYearDto;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -25,15 +26,17 @@ class ProgressServiceImpl implements ProgressService {
     private final StudentProgressRepository repository;
     private final RuleResolutionService ruleResolutionService;
     private final AcademicStructureService academicStructureService;
+    private final StudentService studentService;
     private final ServiceRecordService serviceRecordService;
     private final AccountService accountService;
 
     ProgressServiceImpl(StudentProgressRepository repository, RuleResolutionService ruleResolutionService,
-                         AcademicStructureService academicStructureService, ServiceRecordService serviceRecordService,
-                         AccountService accountService) {
+                         AcademicStructureService academicStructureService, StudentService studentService,
+                         ServiceRecordService serviceRecordService, AccountService accountService) {
         this.repository = repository;
         this.ruleResolutionService = ruleResolutionService;
         this.academicStructureService = academicStructureService;
+        this.studentService = studentService;
         this.serviceRecordService = serviceRecordService;
         this.accountService = accountService;
     }
@@ -55,16 +58,22 @@ class ProgressServiceImpl implements ProgressService {
         AcademicYearDto currentYear = academicStructureService.listAcademicYears().stream()
                 .filter(AcademicYearDto::current).findFirst()
                 .orElseThrow(() -> new IllegalStateException("No academic year is marked current"));
+        // includeSensitiveFields=false: only gradeLevel is needed here, so this
+        // neither exposes guardian data nor fires the student.viewSensitive audit
+        // entry; resolvedLanguage is unused for a raw gradeLevel int (issue 010).
+        int gradeLevel = studentService.getDetail(studentId, false, null, "en").gradeLevel();
+        int annualRequiredMinutes = currentRule.annualRequiredMinutesForGradeLevel(gradeLevel);
+        int stageRequiredMinutes = currentRule.stageRequiredMinutesForGradeLevel(gradeLevel);
 
         AnnualProgressSummary annual = serviceRecordService.summarizeForProgress(
                 studentId, currentYear.startDate(), currentYear.endDate());
         int gapMinutes = Math.max(0,
-                currentRule.annualRequiredMinutes() - annual.approvedMinutes() - annual.pendingMinutes());
+                annualRequiredMinutes - annual.approvedMinutes() - annual.pendingMinutes());
         int timeCoinBalance = accountService.getBalanceForStudent(studentId);
         String recognitionLevel = repository.findById(studentId)
                 .map(p -> p.getHonourLevel().toLowerCase()).orElse("none");
 
-        return new ProgressDto(studentId, currentRule.annualRequiredMinutes(), currentRule.stageRequiredMinutes(),
+        return new ProgressDto(studentId, annualRequiredMinutes, stageRequiredMinutes,
                 annual.approvedMinutes(), annual.pendingMinutes(), gapMinutes, timeCoinBalance, recognitionLevel);
     }
 

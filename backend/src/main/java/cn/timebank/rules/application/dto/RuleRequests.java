@@ -10,7 +10,8 @@ public final class RuleRequests {
 
     public record CreateRuleRequest(
             @Positive int roundingMinutes, @Positive int minutesPerCoinUnit, @Positive int centiCoinsPerUnit,
-            @Positive int annualRequiredMinutes, @Positive int stageRequiredMinutes,
+            @Positive int middleAnnualRequiredMinutes, @Positive int middleStageRequiredMinutes,
+            @Positive int highAnnualRequiredMinutes, @Positive int highStageRequiredMinutes,
             @Positive int honourBronzeMinutes, @Positive int honourSilverMinutes,
             @Positive int honourGoldMinutes, @Positive int honourExcellentMinutes) {
     }
@@ -18,7 +19,8 @@ public final class RuleRequests {
     /** `PATCH /rules/{id}` — draft only; a published rule rejects this (invariant 7). */
     public record UpdateRuleRequest(
             Integer roundingMinutes, Integer minutesPerCoinUnit, Integer centiCoinsPerUnit,
-            Integer annualRequiredMinutes, Integer stageRequiredMinutes,
+            Integer middleAnnualRequiredMinutes, Integer middleStageRequiredMinutes,
+            Integer highAnnualRequiredMinutes, Integer highStageRequiredMinutes,
             Integer honourBronzeMinutes, Integer honourSilverMinutes,
             Integer honourGoldMinutes, Integer honourExcellentMinutes,
             @NotNull Long version) {

@@ -50,11 +50,17 @@ public class RuleVersion extends VersionedEntity {
     @Column(name = "centi_coins_per_unit", nullable = false)
     private int centiCoinsPerUnit;
 
-    @Column(name = "annual_required_minutes", nullable = false)
-    private int annualRequiredMinutes;
+    @Column(name = "middle_annual_required_minutes", nullable = false)
+    private int middleAnnualRequiredMinutes;
 
-    @Column(name = "stage_required_minutes", nullable = false)
-    private int stageRequiredMinutes;
+    @Column(name = "middle_stage_required_minutes", nullable = false)
+    private int middleStageRequiredMinutes;
+
+    @Column(name = "high_annual_required_minutes", nullable = false)
+    private int highAnnualRequiredMinutes;
+
+    @Column(name = "high_stage_required_minutes", nullable = false)
+    private int highStageRequiredMinutes;
 
     @Column(name = "honour_bronze_minutes", nullable = false)
     private int honourBronzeMinutes;
@@ -90,8 +96,12 @@ public class RuleVersion extends VersionedEntity {
     @Column(name = "created_by", length = 32)
     private String createdBy;
 
+    /** Design/chinese/01-TimeBankDesign.md §6: grades 6-8 are the middle-school band, 9-11 the high-school band — exactly two bands, not per-grade. */
+    public static final int MIDDLE_SCHOOL_MAX_GRADE_LEVEL = 8;
+
     public RuleVersion(String id, int roundingMinutes, int minutesPerCoinUnit, int centiCoinsPerUnit,
-                        int annualRequiredMinutes, int stageRequiredMinutes,
+                        int middleAnnualRequiredMinutes, int middleStageRequiredMinutes,
+                        int highAnnualRequiredMinutes, int highStageRequiredMinutes,
                         int honourBronzeMinutes, int honourSilverMinutes, int honourGoldMinutes, int honourExcellentMinutes,
                         String createdBy, Instant now) {
         this.id = id;
@@ -99,8 +109,10 @@ public class RuleVersion extends VersionedEntity {
         this.roundingMinutes = roundingMinutes;
         this.minutesPerCoinUnit = minutesPerCoinUnit;
         this.centiCoinsPerUnit = centiCoinsPerUnit;
-        this.annualRequiredMinutes = annualRequiredMinutes;
-        this.stageRequiredMinutes = stageRequiredMinutes;
+        this.middleAnnualRequiredMinutes = middleAnnualRequiredMinutes;
+        this.middleStageRequiredMinutes = middleStageRequiredMinutes;
+        this.highAnnualRequiredMinutes = highAnnualRequiredMinutes;
+        this.highStageRequiredMinutes = highStageRequiredMinutes;
         this.honourBronzeMinutes = honourBronzeMinutes;
         this.honourSilverMinutes = honourSilverMinutes;
         this.honourGoldMinutes = honourGoldMinutes;
@@ -108,6 +120,14 @@ public class RuleVersion extends VersionedEntity {
         this.createdBy = createdBy;
         this.createdAt = now;
         this.updatedAt = now;
+    }
+
+    public int annualRequiredMinutesForGradeLevel(int gradeLevel) {
+        return gradeLevel <= MIDDLE_SCHOOL_MAX_GRADE_LEVEL ? middleAnnualRequiredMinutes : highAnnualRequiredMinutes;
+    }
+
+    public int stageRequiredMinutesForGradeLevel(int gradeLevel) {
+        return gradeLevel <= MIDDLE_SCHOOL_MAX_GRADE_LEVEL ? middleStageRequiredMinutes : highStageRequiredMinutes;
     }
 
     public boolean isEffectiveAt(Instant when) {
@@ -137,7 +157,8 @@ public class RuleVersion extends VersionedEntity {
      * trusts its application-layer caller for business-rule sequencing.
      */
     public void applyDraftUpdate(Integer roundingMinutes, Integer minutesPerCoinUnit, Integer centiCoinsPerUnit,
-                                  Integer annualRequiredMinutes, Integer stageRequiredMinutes,
+                                  Integer middleAnnualRequiredMinutes, Integer middleStageRequiredMinutes,
+                                  Integer highAnnualRequiredMinutes, Integer highStageRequiredMinutes,
                                   Integer honourBronzeMinutes, Integer honourSilverMinutes,
                                   Integer honourGoldMinutes, Integer honourExcellentMinutes) {
         if (roundingMinutes != null) {
@@ -149,11 +170,17 @@ public class RuleVersion extends VersionedEntity {
         if (centiCoinsPerUnit != null) {
             this.centiCoinsPerUnit = centiCoinsPerUnit;
         }
-        if (annualRequiredMinutes != null) {
-            this.annualRequiredMinutes = annualRequiredMinutes;
+        if (middleAnnualRequiredMinutes != null) {
+            this.middleAnnualRequiredMinutes = middleAnnualRequiredMinutes;
         }
-        if (stageRequiredMinutes != null) {
-            this.stageRequiredMinutes = stageRequiredMinutes;
+        if (middleStageRequiredMinutes != null) {
+            this.middleStageRequiredMinutes = middleStageRequiredMinutes;
+        }
+        if (highAnnualRequiredMinutes != null) {
+            this.highAnnualRequiredMinutes = highAnnualRequiredMinutes;
+        }
+        if (highStageRequiredMinutes != null) {
+            this.highStageRequiredMinutes = highStageRequiredMinutes;
         }
         if (honourBronzeMinutes != null) {
             this.honourBronzeMinutes = honourBronzeMinutes;

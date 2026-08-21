@@ -74,10 +74,13 @@ class SummaryMaterializationJob {
         if (rule == null) {
             log.warn("Skipping compliance summary materialization: no rule is currently in effect");
         } else {
-            Map<String, int[]> compliance = reportService.computeCompletionFigures(year, rule.annualRequiredMinutes());
+            Map<String, GradeDto> gradesById = new HashMap<>();
+            grades.forEach(g -> gradesById.put(g.id(), g));
+            Map<String, int[]> compliance = reportService.computeCompletionFigures(year, rule, gradesById);
             for (GradeDto grade : grades) {
                 int[] f = compliance.getOrDefault(grade.id(), new int[]{0, 0});
-                summaryRepository.upsertCompliance(grade.id(), year.id(), f[0], f[1], rule.annualRequiredMinutes(), generatedAt);
+                int required = rule.annualRequiredMinutesForGradeLevel(grade.sequence());
+                summaryRepository.upsertCompliance(grade.id(), year.id(), f[0], f[1], required, generatedAt);
             }
         }
 

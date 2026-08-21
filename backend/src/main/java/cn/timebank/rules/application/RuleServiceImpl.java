@@ -53,7 +53,8 @@ class RuleServiceImpl implements RuleService {
     public RuleVersionDto createDraft(CreateRuleRequest request, String actorId) {
         RuleVersion rule = new RuleVersion(OpaqueIds.generate("rule"),
                 request.roundingMinutes(), request.minutesPerCoinUnit(), request.centiCoinsPerUnit(),
-                request.annualRequiredMinutes(), request.stageRequiredMinutes(),
+                request.middleAnnualRequiredMinutes(), request.middleStageRequiredMinutes(),
+                request.highAnnualRequiredMinutes(), request.highStageRequiredMinutes(),
                 request.honourBronzeMinutes(), request.honourSilverMinutes(),
                 request.honourGoldMinutes(), request.honourExcellentMinutes(), actorId, Instant.now());
         repository.save(rule);
@@ -93,8 +94,11 @@ class RuleServiceImpl implements RuleService {
         if (rule.getRoundingMinutes() <= 0 || rule.getMinutesPerCoinUnit() <= 0 || rule.getCentiCoinsPerUnit() <= 0) {
             issues.add("Rounding and conversion parameters must be positive.");
         }
-        if (rule.getStageRequiredMinutes() < rule.getAnnualRequiredMinutes()) {
-            issues.add("Stage requirement should not be less than a single year's annual requirement.");
+        if (rule.getMiddleStageRequiredMinutes() < rule.getMiddleAnnualRequiredMinutes()) {
+            issues.add("Middle school's stage requirement should not be less than a single year's annual requirement.");
+        }
+        if (rule.getHighStageRequiredMinutes() < rule.getHighAnnualRequiredMinutes()) {
+            issues.add("High school's stage requirement should not be less than a single year's annual requirement.");
         }
         // affectedRecordCount: always 0 until B3's service_record table exists to
         // count against — an honest placeholder, not a broken query (Docs/implementation/00-Status.md).
@@ -150,11 +154,13 @@ class RuleServiceImpl implements RuleService {
         // draft edits go through a dedicated setter block here since drafts are
         // the one state where field-level replacement is legitimate.
         if (request.roundingMinutes() != null || request.minutesPerCoinUnit() != null || request.centiCoinsPerUnit() != null
-                || request.annualRequiredMinutes() != null || request.stageRequiredMinutes() != null
+                || request.middleAnnualRequiredMinutes() != null || request.middleStageRequiredMinutes() != null
+                || request.highAnnualRequiredMinutes() != null || request.highStageRequiredMinutes() != null
                 || request.honourBronzeMinutes() != null || request.honourSilverMinutes() != null
                 || request.honourGoldMinutes() != null || request.honourExcellentMinutes() != null) {
             rule.applyDraftUpdate(request.roundingMinutes(), request.minutesPerCoinUnit(), request.centiCoinsPerUnit(),
-                    request.annualRequiredMinutes(), request.stageRequiredMinutes(),
+                    request.middleAnnualRequiredMinutes(), request.middleStageRequiredMinutes(),
+                    request.highAnnualRequiredMinutes(), request.highStageRequiredMinutes(),
                     request.honourBronzeMinutes(), request.honourSilverMinutes(),
                     request.honourGoldMinutes(), request.honourExcellentMinutes());
         }
@@ -167,7 +173,8 @@ class RuleServiceImpl implements RuleService {
     private RuleVersionDto toDto(RuleVersion r) {
         return new RuleVersionDto(r.getId(), r.getStatus().name(),
                 r.getRoundingMinutes(), r.getMinutesPerCoinUnit(), r.getCentiCoinsPerUnit(),
-                r.getAnnualRequiredMinutes(), r.getStageRequiredMinutes(),
+                r.getMiddleAnnualRequiredMinutes(), r.getMiddleStageRequiredMinutes(),
+                r.getHighAnnualRequiredMinutes(), r.getHighStageRequiredMinutes(),
                 r.getHonourBronzeMinutes(), r.getHonourSilverMinutes(), r.getHonourGoldMinutes(), r.getHonourExcellentMinutes(),
                 r.getEffectiveFrom(), r.getEffectiveTo(), r.getVersion(), r.getCreatedAt(), r.getUpdatedAt(), r.getPublishedAt());
     }

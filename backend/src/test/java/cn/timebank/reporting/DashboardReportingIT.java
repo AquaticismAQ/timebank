@@ -92,24 +92,39 @@ class DashboardReportingIT extends AbstractIntegrationTest {
         assertThat(grade10.participationRate()).isEqualTo(0.75);
     }
 
+    /**
+     * Design/chinese/01-TimeBankDesign.md §6: middle school (grade_7) and
+     * high school (grade_11) have different annual requirements — 1,500
+     * minutes (25h) vs. 4,500 minutes (75h), per the default seeded rule
+     * (R__seed_base_data.sql). A student with a duration between the two
+     * thresholds must be compliant for their own grade's band but not the
+     * other's, proving the completion report picks the right one per grade
+     * rather than applying one flat number school-wide.
+     */
     @Test
-    void completionReportMatchesHandComputedFiguresForASeededGrade() {
-        // grade_11, likewise untouched elsewhere. Default seeded rule requires
-        // 4,500 annual minutes (75h) — see R__seed_base_data.sql.
-        StudentDetailDto compliant = createStudent("grade_11", "class_11A");
-        StudentDetailDto shortfall = createStudent("grade_11", "class_11A");
-        submitAndApproveRecord(compliant, 5000);
-        submitAndApproveRecord(shortfall, 1000);
+    void completionReportUsesTheRightGradeBandsRequirement() {
+        StudentDetailDto highCompliant = createStudent("grade_11", "class_11A");
+        StudentDetailDto highShortfall = createStudent("grade_11", "class_11A");
+        submitAndApproveRecord(highCompliant, 5000);
+        submitAndApproveRecord(highShortfall, 1000);
+
+        StudentDetailDto middleCompliant = createStudent("grade_7", "class_7A");
+        submitAndApproveRecord(middleCompliant, 2000); // above middle school's 1,500 but below high school's 4,500
 
         CompletionReportDto report = reportService.completion("zh-CN");
 
         assertThat(report.generatedAt()).isNotNull();
-        assertThat(report.requiredMinutes()).isEqualTo(4500);
         CompletionReportDto.GradeFigure grade11 = report.byGrade().stream()
                 .filter(g -> g.gradeId().equals("grade_11")).findFirst().orElseThrow();
+        assertThat(grade11.requiredMinutes()).isEqualTo(4500);
         assertThat(grade11.totalStudents()).isEqualTo(2);
         assertThat(grade11.completedStudents()).isEqualTo(1);
         assertThat(grade11.completionRate()).isEqualTo(0.5);
+
+        CompletionReportDto.GradeFigure grade7 = report.byGrade().stream()
+                .filter(g -> g.gradeId().equals("grade_7")).findFirst().orElseThrow();
+        assertThat(grade7.requiredMinutes()).isEqualTo(1500);
+        assertThat(grade7.completedStudents()).isGreaterThanOrEqualTo(1);
     }
 
     /**

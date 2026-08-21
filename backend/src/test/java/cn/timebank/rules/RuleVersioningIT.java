@@ -43,7 +43,7 @@ class RuleVersioningIT extends AbstractIntegrationTest {
         assertThat(published.status()).isEqualTo("PUBLISHED");
 
         assertThatThrownBy(() -> ruleService.updateDraft(draft.id(),
-                new UpdateRuleRequest(45, null, null, null, null, null, null, null, null, published.version()), ACTOR))
+                new UpdateRuleRequest(45, null, null, null, null, null, null, null, null, null, null, published.version()), ACTOR))
                 .isInstanceOf(cn.timebank.common.error.ApiException.class)
                 .hasMessageContaining("draft");
     }
@@ -81,7 +81,7 @@ class RuleVersioningIT extends AbstractIntegrationTest {
 
     @Test
     void roundingAndConversionArePureIntegerArithmetic() {
-        EffectiveRule rule = new EffectiveRule("rule_x", 30, 60, 100, 4500, 18000, 1500, 4500, 9000, 18000);
+        EffectiveRule rule = new EffectiveRule("rule_x", 30, 60, 100, 1500, 4500, 4500, 18000, 1500, 4500, 9000, 18000);
         // 95 minutes rounds to 90 (nearest 30, round-half-up); 150 minutes converts to 250 centi-coins.
         assertThat(rule.roundToNearestGranularity(95)).isEqualTo(90);
         assertThat(rule.roundToNearestGranularity(100)).isEqualTo(90);
@@ -95,6 +95,6 @@ class RuleVersioningIT extends AbstractIntegrationTest {
 
     private RuleVersionDto createDraftWithRounding(int roundingMinutes) {
         return ruleService.createDraft(new CreateRuleRequest(
-                roundingMinutes, 60, 100, 4500, 18000, 1500, 4500, 9000, 18000), ACTOR);
+                roundingMinutes, 60, 100, 1500, 4500, 4500, 18000, 1500, 4500, 9000, 18000), ACTOR);
     }
 }
