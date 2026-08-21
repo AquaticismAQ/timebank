@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { ClipboardCheck, Users, AlertTriangle, Clock, CheckCircle, ArrowRight, FileQuestion, Lightbulb } from 'lucide-react';
+import { ClipboardCheck, AlertTriangle, Clock, ArrowRight, FileQuestion, Lightbulb } from 'lucide-react';
 import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
 import { formatGradeClass, minutesToHours } from '../../lib/format';
 import { type AdminStats, type ReviewQueueItem, type Project } from '../../api/types';
@@ -25,6 +25,19 @@ function StatCard({ label, value, sub, icon: Icon, color, onClick }: {
       <div className="text-sm text-foreground mt-0.5">{label}</div>
       {sub && <div className="text-xs text-muted-foreground mt-0.5">{sub}</div>}
     </button>
+  );
+}
+
+function SummaryCard({ label, value, onClick }: { label: string; value: string | number; onClick?: () => void }) {
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag
+      onClick={onClick}
+      className={`bg-card border border-border rounded-xl p-4 text-center ${onClick ? 'cursor-pointer hover:bg-accent/50 transition-colors' : ''}`}
+    >
+      <div className="text-2xl font-semibold text-foreground">{value}</div>
+      <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+    </Tag>
   );
 }
 
@@ -67,7 +80,7 @@ export function AdminDashboard() {
 
       {stats && (<>
       {/* Key stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <StatCard label={t('admin.dashboard.pendingReviews')} value={stats.pendingReviews} sub={t('admin.dashboard.clickToReview')} icon={ClipboardCheck}
           color="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
           onClick={() => navigate('/admin/audit')}
@@ -80,32 +93,16 @@ export function AdminDashboard() {
           color="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400"
           onClick={() => navigate('/admin/proposals')}
         />
-        <StatCard label={t('admin.dashboard.activeStudents')} value={stats.activeStudents} sub={t('admin.dashboard.totalStudents', { count: stats.totalStudents })} icon={Users}
-          color="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-          onClick={() => navigate('/admin/students')}
-        />
-        <StatCard label={t('admin.dashboard.approvedThisMonth')} value={stats.approvedThisMonth} sub={t('admin.dashboard.july')} icon={CheckCircle}
-          color="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
-        />
-        <StatCard label={t('admin.dashboard.avgReviewDays')} value={`${stats.reviewAvgDays} ${t('admin.dashboard.tableDays', { days: '' }).trim()}`} sub={t('admin.dashboard.avgReviewSub')} icon={Clock}
-          color="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
-        />
       </div>
 
       {/* Summary row */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-card border border-border rounded-xl p-4 text-center">
-          <div className="text-2xl font-semibold text-foreground">{stats.totalServiceHours.toLocaleString()}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">{t('admin.dashboard.totalHours')}</div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4 text-center">
-          <div className="text-2xl font-semibold text-foreground">{stats.avgCompletionRate != null ? `${Math.round(stats.avgCompletionRate * 100)}%` : '—'}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">{t('admin.dashboard.completionRate')}</div>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4 text-center">
-          <div className="text-2xl font-semibold text-foreground">{stats.activeProjects}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">{t('admin.dashboard.activeProjects')}</div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <SummaryCard label={t('admin.dashboard.activeStudents')} value={stats.activeStudents} onClick={() => navigate('/admin/students')} />
+        <SummaryCard label={t('admin.dashboard.approvedThisMonth')} value={stats.approvedThisMonth} />
+        <SummaryCard label={t('admin.dashboard.avgReviewDays')} value={`${stats.reviewAvgDays} ${t('admin.dashboard.tableDays', { days: '' }).trim()}`} />
+        <SummaryCard label={t('admin.dashboard.totalHours')} value={stats.totalServiceHours.toLocaleString()} />
+        <SummaryCard label={t('admin.dashboard.completionRate')} value={stats.avgCompletionRate != null ? `${Math.round(stats.avgCompletionRate * 100)}%` : '—'} />
+        <SummaryCard label={t('admin.dashboard.activeProjects')} value={stats.activeProjects} />
       </div>
       </>)}
 
