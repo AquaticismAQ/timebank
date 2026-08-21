@@ -162,8 +162,8 @@ export function StudentList() {
 
   const saveEdit = async () => {
     if (!editStudent || !editForm) return;
-    if (editForm.completedHours < 0) { toast.error('Completed hours cannot be negative'); return; }
-    if (editForm.timeCoinBalance < 0) { toast.error('Time coins cannot be negative'); return; }
+    if (editForm.completedHours < 0) { toast.error(t('admin.students.completedHoursNegative')); return; }
+    if (editForm.timeCoinBalance < 0) { toast.error(t('admin.students.timeCoinsNegative')); return; }
 
     const newGradeName = grades.find(g => g.id === editForm.gradeId)?.name ?? editForm.gradeId;
     const newClassName = classes.find(c => c.id === editForm.classId)?.name ?? editForm.classId;

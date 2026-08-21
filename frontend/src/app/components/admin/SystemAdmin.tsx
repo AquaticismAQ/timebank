@@ -905,7 +905,9 @@ export function SystemAdmin() {
       const invalidRows = totalRows - validRows;
       if (invalidRows > 0) {
         const errResult = await api.imports.errors(job.id);
-        toast.error(`${invalidRows} invalid rows: ${errResult.errors.slice(0, 3).map(e => `Row ${e.rowNumber}: ${e.message}`).join('; ')}`);
+        const details = errResult.errors.slice(0, 3)
+          .map(e => t('admin.system.importRowError', { row: e.rowNumber, message: e.message })).join('; ');
+        toast.error(t('admin.system.importInvalidRowsSummary', { count: invalidRows, details }));
       }
       if (validRows > 0) {
         await api.imports.commit(job.id, newIdempotencyKey());
@@ -914,11 +916,11 @@ export function SystemAdmin() {
           toast.error(t('common.unknownError'));
         } else {
           // `validRows` doubles as "rows committed" once status is COMMITTED (JobProgressWriter.succeed) — same field, different meaning post-commit.
-          toast.success(`Import complete: ${committed.validRows ?? 0} rows committed`);
+          toast.success(t('admin.system.importCommitComplete', { count: committed.validRows ?? 0 }));
         }
       } else {
         await api.imports.cancel(job.id);
-        toast.error('No valid rows to import');
+        toast.error(t('admin.system.importNoValidRows'));
       }
     } catch (err) {
       if (err instanceof ApiError) toast.error(mapApiError(err).message);

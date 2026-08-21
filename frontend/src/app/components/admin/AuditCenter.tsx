@@ -128,7 +128,7 @@ export function AuditCenter() {
       );
       decisionKeyRef.current = newIdempotencyKey();
       if (action === 'approve' && record.creditedUnits != null) {
-        toast.success(`Approved — credited ${record.creditedUnits} units`);
+        toast.success(t('admin.audit.approvedWithCredit', { units: record.creditedUnits }));
       } else {
         const actionLabels: Record<string, string> = { approve: t('admin.audit.approved'), return: t('admin.audit.returned'), reject: t('admin.audit.rejected') };
         toast.success(t('admin.audit.recordDecision', { action: actionLabels[action] }));
@@ -159,7 +159,7 @@ export function AuditCenter() {
     if (failures.length === 0) {
       toast.success(t('admin.audit.batchApproved', { count: succeeded }));
     } else {
-      toast.warning(`${succeeded} approved, ${failures.length} failed`);
+      toast.warning(t('admin.audit.batchApprovedWithFailures', { succeeded, failed: failures.length }));
     }
     setSelected(new Set());
     refetch();

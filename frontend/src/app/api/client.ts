@@ -40,6 +40,7 @@ import { toBackendEnum, fromBackendEnum, type ListParams } from '../lib/paginati
 import { localDateTimeToISO, isoToLocalDateTime } from '../lib/datetime';
 import { formatGradeClass } from '../lib/format';
 import { toast } from 'sonner';
+import i18n from '../../i18n';
 
 // Real StudentListItemDto/StudentDetailDto field names/casing genuinely
 // differ from the frontend Student shape (displayName not name, gradeLevel
@@ -440,7 +441,7 @@ export const api = {
       if (decision === 'approve') {
         const projectId = dto.approvedProjectId ?? mapped.linkedProjectId;
         if (projectId) {
-          toast.success(`Approved — project draft ${projectId} created`);
+          toast.success(i18n.t('admin.proposals.approvedProjectCreated', { projectId }));
         }
       }
       return mapped;
