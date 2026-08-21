@@ -173,9 +173,6 @@ function RuleFormModal({ mode, initial, onClose, onSaved }: RuleFormModalProps) 
                       />
                       <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{t(f.hourBased ? 'admin.system.rules.unitHours' : f.unitKey)}</span>
                     </div>
-                    {f.hourBased && (
-                      <p className="text-xs text-muted-foreground/70 mt-1">= {fields[f.key]} {t('admin.system.rules.unitMinutes')}</p>
-                    )}
                   </div>
                 ))}
               </div>
