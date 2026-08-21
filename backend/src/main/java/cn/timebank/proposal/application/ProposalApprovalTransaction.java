@@ -1,5 +1,7 @@
 package cn.timebank.proposal.application;
 
+import cn.timebank.audit.application.AuditEntry;
+import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
@@ -56,11 +58,12 @@ class ProposalApprovalTransaction {
     private final UserService userService;
     private final AcademicStructureService academicStructureService;
     private final TeacherScopeAssignmentService teacherScopeAssignmentService;
+    private final AuditService auditService;
 
     ProposalApprovalTransaction(EventProposalRepository repository, ProposalReviewEventRepository reviewEventRepository,
                                 ProjectService projectService, NotificationService notificationService,
                                 UserService userService, AcademicStructureService academicStructureService,
-                                TeacherScopeAssignmentService teacherScopeAssignmentService) {
+                                TeacherScopeAssignmentService teacherScopeAssignmentService, AuditService auditService) {
         this.repository = repository;
         this.reviewEventRepository = reviewEventRepository;
         this.projectService = projectService;
@@ -68,6 +71,7 @@ class ProposalApprovalTransaction {
         this.userService = userService;
         this.academicStructureService = academicStructureService;
         this.teacherScopeAssignmentService = teacherScopeAssignmentService;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -84,6 +88,7 @@ class ProposalApprovalTransaction {
         };
 
         // Effect: the implicit SUBMITTED -> UNDER_REVIEW step (first decision), then the real target.
+        ProposalStatus before = proposal.getStatus();
         if (proposal.getStatus() == ProposalStatus.SUBMITTED) {
             ProposalStateMachine.transition(proposal, ProposalStatus.UNDER_REVIEW, ActorRole.REVIEWER);
         }
@@ -96,6 +101,10 @@ class ProposalApprovalTransaction {
         ProposalReviewEvent event = new ProposalReviewEvent(OpaqueIds.generate("eprw"), proposalId, actorId,
                 decision, request.reasonCode(), request.comment(), request.proposalVersion(), Instant.now());
         reviewEventRepository.save(event);
+
+        // Effect: the audit trail entry for the review decision itself (approve/reject/request-changes).
+        auditService.record(new AuditEntry(actorId, "eventProposals.review", "eventProposal.reviewDecision",
+                "eventProposal", proposalId, before.name(), proposal.getStatus().name(), request.reasonCode()));
 
         if (decision == ProposalDecision.APPROVE) {
             // Effect: the generated official project draft.

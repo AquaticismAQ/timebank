@@ -1,5 +1,6 @@
 package cn.timebank.proposal.application;
 
+import cn.timebank.audit.infrastructure.AuditLogRepository;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.iam.application.RoleService;
@@ -80,6 +81,8 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
     private OrganizationService organizationService;
     @Autowired
     private TeacherScopeAssignmentRepository scopeAssignmentRepository;
+    @Autowired
+    private AuditLogRepository auditLogRepository;
 
     private static final AtomicInteger SEQ = new AtomicInteger();
 
@@ -98,6 +101,9 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
         assertThat(reviewEventRepository.findByEventProposalIdOrderByCreatedAtAsc(submitted.id())).hasSize(1);
         assertThat(notificationRepository.countByRelatedResourceTypeAndRelatedResourceId("eventProposal", submitted.id()))
                 .isEqualTo(1);
+        assertThat(auditLogRepository.findByResourceTypeAndResourceId("eventProposal", submitted.id(), PageRequest.of(0, 50))
+                .getContent())
+                .anyMatch(a -> a.getAction().equals("eventProposal.reviewDecision") && a.getAfterSummary().contains("APPROVED"));
     }
 
     @Test
@@ -150,6 +156,9 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
 
         assertThat(rejected.status()).isEqualTo("REJECTED");
         assertThat(rejected.approvedProjectId()).isNull();
+        assertThat(auditLogRepository.findByResourceTypeAndResourceId("eventProposal", submitted.id(), PageRequest.of(0, 50))
+                .getContent())
+                .anyMatch(a -> a.getAction().equals("eventProposal.reviewDecision") && a.getAfterSummary().contains("REJECTED"));
     }
 
     @Test
