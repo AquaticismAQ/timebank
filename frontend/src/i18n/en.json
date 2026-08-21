@@ -1384,6 +1384,8 @@
       "auditLogs": "Audit Logs",
       "logsDesc": "Logs cannot be modified or deleted · {{count}} entries",
       "memoLabel": "Memo",
+      "logSystemActor": "System",
+      "logsEmpty": "No audit log entries found.",
       "featureToggles": "Feature Toggles",
       "featureTogglesDesc": "Phase 3 & 4 feature switches",
       "featPov": "POV On-site Witness (Phase 3)",

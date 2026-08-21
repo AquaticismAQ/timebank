@@ -4,7 +4,7 @@ import { Search, ChevronDown, ChevronUp, AlertCircle, Pencil, Bell, FileText, X,
 import { type Student } from '../../api/types';
 import { formatCoins, minutesToHours, formatGradeClass, formatClassName } from '../../lib/format';
 import { toast } from 'sonner';
-import { useAuth, useLogs } from '../../App';
+import { useAuth } from '../../App';
 import { api } from '../../api/client';
 import { handleMutationError } from '../../api/useFieldErrors';
 import { usePagedApi } from '../../api/useApi';
@@ -54,7 +54,6 @@ export function StudentList() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const isAdmin = user?.roles?.includes('admin') ?? false;
-  const { addLog } = useLogs();
   const { grades, classes } = useDictionaries();
 
   const [search, setSearch] = useState('');
@@ -166,21 +165,8 @@ export function StudentList() {
     if (editForm.completedHours < 0) { toast.error('Completed hours cannot be negative'); return; }
     if (editForm.timeCoinBalance < 0) { toast.error('Time coins cannot be negative'); return; }
 
-    const priorCompletedHours = Math.round(((editStudent.completedMinutes ?? 0) / 60) * 100) / 100;
-    const priorTimeCoinBalance = (editStudent.timeCoinBalance ?? 0) / 100;
     const newGradeName = grades.find(g => g.id === editForm.gradeId)?.name ?? editForm.gradeId;
     const newClassName = classes.find(c => c.id === editForm.classId)?.name ?? editForm.classId;
-
-    const changes: string[] = [];
-    if (editForm.studentNumber !== editStudent.studentNumber)
-      changes.push(`Student number changed to "${editForm.studentNumber}"`);
-    if (editForm.name !== editStudent.name) changes.push(`Name changed to "${editForm.name}"`);
-    if (editForm.gradeId !== editStudent.gradeId || editForm.classId !== editStudent.classId)
-      changes.push(`Class changed to ${newGradeName} ${newClassName}`);
-    if (editForm.completedHours !== priorCompletedHours)
-      changes.push(`Completed hours ${priorCompletedHours}h→${editForm.completedHours}h (display only — hours are record-derived)`);
-    if (editForm.timeCoinBalance !== priorTimeCoinBalance)
-      changes.push(`Time coins ${priorTimeCoinBalance}→${editForm.timeCoinBalance} (use Account Management for balance adjustments)`);
 
     try {
       // studentNumber is only ever actually different here when isAdmin (the
@@ -217,14 +203,6 @@ export function StudentList() {
         classId: editForm.classId,
         className: newClassName,
       } : s));
-
-      addLog({
-        operator: user?.displayName ?? 'Admin',
-        action: `Edit student profile${changes.length ? ': ' + changes.join(', ') : ''}`,
-        target: `${editStudent.name} (${editStudent.studentNumber})`,
-        category: 'student',
-        memo: editForm.memo.trim() || undefined,
-      });
 
       toast.success(t('admin.students.toastUpdated', { name: editForm.name }));
       setEditStudent(null);

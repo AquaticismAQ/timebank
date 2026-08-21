@@ -1384,6 +1384,8 @@
       "auditLogs": "审计日志",
       "logsDesc": "日志不可修改或删除 · {{count}} 条记录",
       "memoLabel": "备注",
+      "logSystemActor": "系统",
+      "logsEmpty": "暂无审计日志记录。",
       "featureToggles": "功能开关",
       "featureTogglesDesc": "第三、四期功能开关",
       "featPov": "POV 现场见证（第三期）",

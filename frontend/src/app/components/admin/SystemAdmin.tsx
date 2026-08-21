@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Pencil, Trash2, Lock, Building2, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth, useLogs, usePermissions } from '../../App';
+import { useAuth, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { OrganizationManagement } from './OrganizationManagement';
@@ -11,8 +11,11 @@ import { GradePicker } from '../GradePicker';
 import { useDictionaries } from '../../api/useDictionaries';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { formatGradeClass } from '../../lib/format';
-import type { RoleSummary } from '../../api/types';
+import type { RoleSummary, AuditLogEntry } from '../../api/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { usePagedApi } from '../../api/useApi';
+import { PageControls } from '../PageControls';
+import { ListStateBanner } from '../ListStateBanner';
 
 /**
  * Row-action button shape shared by every list/table in the admin portal
@@ -220,6 +223,24 @@ function roleColor(roleCode: string) {
   if (roleCode === 'admin' || roleCode === 'sysadmin') return 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300';
   if (roleCode === 'teacher') return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300';
   return 'bg-muted text-muted-foreground';
+}
+
+/** `AuditLogEntry.action` is a real backend action code like `eventProposal.reviewDecision` — split into words for display rather than translated, since new action codes are added over time and a per-key i18n table would drift out of sync with the backend. */
+function humanizeAuditAction(action: string): string {
+  return action
+    .split('.')
+    .map(part => part.replace(/([a-z0-9])([A-Z])/g, '$1 $2'))
+    .join(' — ')
+    .replace(/^./, c => c.toUpperCase());
+}
+
+/** Dot color per resource type, same visual language as the old client-only log's `category` field. */
+function auditLogDotColor(resourceType: string): string {
+  if (resourceType === 'eventProposal' || resourceType === 'serviceRecord' || resourceType === 'case') return 'bg-blue-500';
+  if (resourceType === 'project') return 'bg-green-500';
+  if (resourceType === 'import' || resourceType === 'export') return 'bg-purple-500';
+  if (resourceType === 'student') return 'bg-orange-400';
+  return 'bg-gray-400';
 }
 
 interface UserFormState {
@@ -544,7 +565,7 @@ export function SystemAdmin() {
   // management (enforced server-side too; this only hides the buttons
   // that would otherwise 403).
   const canManageTemplates = canManageRoles && (user?.roles.includes('admin') || user?.roles.includes('sysadmin')) === true;
-  const { logs, addLog } = useLogs();
+  const auditLogs = usePagedApi<AuditLogEntry>(api.auditLogs.list, { sort: '-createdAt', pageSize: 20 });
   const [schoolName, setSchoolName] = useState('');
   const [systemVersion, setSystemVersion] = useState('');
 
@@ -599,7 +620,6 @@ export function SystemAdmin() {
 
   const handleRuleSave = (updated: RuleSection) => {
     setRules(prev => prev.map(r => r.id === updated.id ? updated : r));
-    addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.rules.logModifyRule', { title: t(updated.title) }), target: t('admin.system.rules.logRuleTarget'), category: 'system' });
     setEditingRule(null);
     toast.success(t('admin.system.ruleUpdated', { title: t(updated.title) }));
   };
@@ -627,7 +647,6 @@ export function SystemAdmin() {
         studentId: isStudent ? form.studentId : undefined,
         staffId: needsStaffId ? form.staffId.trim() : undefined,
       }]);
-      addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logCreateUser'), target: `${form.name.trim()} (${form.email.trim()})`, category: 'system' });
       setCreateOpen(false);
       toast.success(t('admin.system.userCreated', { name: form.name.trim() }));
     } catch (err) {
@@ -666,7 +685,6 @@ export function SystemAdmin() {
             staffId: needsStaffId ? form.staffId.trim() : undefined }
         : u
       ));
-      addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logEditUser'), target: `${form.name.trim()} (${form.email.trim()})`, category: 'system' });
       setEditTarget(null);
       toast.success(t('admin.system.userUpdated'));
     } catch (err) {
@@ -682,7 +700,6 @@ export function SystemAdmin() {
     setSaving(true);
     try {
       await api.users.update(editTarget.id, { status: 'inactive', version: editTarget.version });
-      addLog({ operator: user?.displayName ?? 'Admin', action: t('admin.system.users.logDeleteUser'), target: `${editTarget.name} (${editTarget.email})`, category: 'system' });
       setUsers(prev => prev.map(u => u.id === editTarget.id ? { ...u, status: 'inactive' as UserStatus, version: u.version + 1 } : u));
       setEditTarget(null);
       toast.success(t('admin.system.userDeleted', { name: editTarget.name }));
@@ -1018,32 +1035,34 @@ export function SystemAdmin() {
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="px-4 py-3 border-b border-border">
             <h3 className="text-foreground">{t('admin.system.auditLogs')}</h3>
-            <p className="text-xs text-muted-foreground">{t('admin.system.logsDesc', { count: logs.length })}</p>
+            <p className="text-xs text-muted-foreground">{t('admin.system.logsDesc', { count: auditLogs.page?.totalItems ?? auditLogs.items.length })}</p>
           </div>
           <div className="divide-y divide-border">
-            {logs.map(log => (
-              <div key={log.id} className="px-4 py-3 flex items-start gap-3">
-                <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                  log.category === 'review'  ? 'bg-blue-500'   :
-                  log.category === 'project' ? 'bg-green-500'  :
-                  log.category === 'import'  ? 'bg-purple-500' :
-                  log.category === 'student' ? 'bg-orange-400' : 'bg-gray-400'
-                }`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-foreground">{log.action}</div>
-                  <div className="text-xs text-muted-foreground">{log.target}</div>
-                  {log.memo && (
-                    <div className="mt-1 text-xs text-muted-foreground/70 bg-muted/50 rounded-md px-2 py-1 italic">
-                      {t('admin.system.memoLabel')}: {log.memo}
-                    </div>
-                  )}
+            {auditLogs.items.map(log => {
+              const operator = log.actorId ? (users.find(u => u.id === log.actorId)?.name ?? log.actorId) : t('admin.system.logSystemActor');
+              return (
+                <div key={log.id} className="px-4 py-3 flex items-start gap-3">
+                  <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${auditLogDotColor(log.resourceType)}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-foreground">{humanizeAuditAction(log.action)}</div>
+                    <div className="text-xs text-muted-foreground">{log.resourceType}{log.resourceId ? ` · ${log.resourceId}` : ''}</div>
+                    {log.reasonCode && (
+                      <div className="mt-1 text-xs text-muted-foreground/70 bg-muted/50 rounded-md px-2 py-1 italic">
+                        {t('admin.system.memoLabel')}: {log.reasonCode}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-xs text-foreground">{operator}</div>
+                    <div className="text-xs text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</div>
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <div className="text-xs text-foreground">{log.operator}</div>
-                  <div className="text-xs text-muted-foreground">{log.time}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
+            <ListStateBanner error={auditLogs.error} empty={!auditLogs.loading && auditLogs.items.length === 0} emptyLabel={t('admin.system.logsEmpty')} />
+          </div>
+          <div className="px-4 py-3 border-t border-border">
+            <PageControls page={auditLogs.page} onPageChange={auditLogs.setPage} pageSize={auditLogs.params.pageSize} onPageSizeChange={auditLogs.setPageSize} />
           </div>
         </div>
       )}

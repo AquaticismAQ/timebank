@@ -19,6 +19,7 @@ import type {
   EventProposal,
   SchoolInfo,
   SystemVersion,
+  AuditLogEntry,
   MeResponse,
   EvidenceFile,
   FileMetadata,
@@ -187,6 +188,14 @@ export const api = {
     /** `GET /system/version` (contract §4.17) — the real deployed backend version, never hardcoded client-side. */
     async version(): Promise<SystemVersion> {
       return http.get<SystemVersion>('/system/version');
+    },
+  },
+
+  /** `GET /audit-logs` (contract §4.15) — the real, backend-owned, append-only trail. Only sortable field is `createdAt`. */
+  auditLogs: {
+    async list(params?: ListParams): Promise<PageResult<AuditLogEntry>> {
+      const page = await http.getPage<AuditLogEntry>('/audit-logs', buildListQuery(params));
+      return { data: page.data, page: page.page };
     },
   },
 

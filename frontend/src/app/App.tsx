@@ -6,44 +6,6 @@ import { api } from './api/client';
 import { setUnauthorizedHandler, resetUnauthorizedState } from './api/http';
 import i18n from '../i18n';
 
-// ── Shared operation log ───────────────────────────────────────────────────
-
-export interface LogEntry {
-  id: string;
-  operator: string;
-  action: string;
-  target: string;
-  time: string;
-  category: 'review' | 'project' | 'import' | 'system' | 'student';
-  memo?: string;
-}
-
-const SEED_LOGS: LogEntry[] = [
-  { id: 'l1', operator: 'Teacher Wei Chen', action: 'Approved service record', target: 'Jia Ming - Library Organization', time: '2026-07-18 10:30', category: 'review' },
-  { id: 'l2', operator: 'Alex Lin', action: 'Returned service record', target: 'Jia Ming - Community Drowning Prevention Campaign', time: '2026-07-14 14:30', category: 'review' },
-  { id: 'l3', operator: 'Teacher Wei Chen', action: 'Published project', target: 'Rural Teaching Support Team (Summer)', time: '2026-07-10 10:00', category: 'project' },
-  { id: 'l4', operator: 'Teacher Wei Chen', action: 'Imported student data', target: 'Bulk import of 186 records', time: '2026-07-01 09:15', category: 'import' },
-  { id: 'l5', operator: 'Teacher Mei Zhao', action: 'Created user account', target: 'New teacher account Jordan', time: '2026-06-20 11:00', category: 'system' },
-];
-
-interface LogsContextValue {
-  logs: LogEntry[];
-  addLog: (entry: Omit<LogEntry, 'id' | 'time'>) => void;
-}
-
-export const LogsContext = createContext<LogsContextValue>({ logs: SEED_LOGS, addLog: () => {} });
-export const useLogs = () => useContext(LogsContext);
-
-function LogsProvider({ children }: { children: React.ReactNode }) {
-  const [logs, setLogs] = useState<LogEntry[]>(SEED_LOGS);
-  const addLog = useCallback((entry: Omit<LogEntry, 'id' | 'time'>) => {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const time = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-    setLogs(prev => [{ ...entry, id: `l${Date.now()}`, time }, ...prev]);
-  }, []);
-  return <LogsContext.Provider value={{ logs, addLog }}>{children}</LogsContext.Provider>;
-}
 import { LoginPage } from './components/auth/LoginPage';
 import { StudentLayout } from './components/layout/StudentLayout';
 import { AdminLayout } from './components/layout/AdminLayout';
@@ -221,7 +183,6 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <LogsProvider>
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
@@ -268,7 +229,6 @@ export default function App() {
           </Routes>
         </BrowserRouter>
         <Toaster position="top-center" richColors />
-        </LogsProvider>
       </AuthProvider>
     </ThemeProvider>
   );

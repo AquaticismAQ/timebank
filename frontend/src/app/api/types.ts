@@ -18,6 +18,20 @@ export interface SystemVersion {
   version: string;
 }
 
+/** `GET /audit-logs` (contract §4.15) — real, append-only, backend-owned. `actorId` is null for system-generated entries (e.g. auto-archive); resolve to a display name client-side via a loaded user directory, never invent one. */
+export interface AuditLogEntry {
+  id: string;
+  actorId: string | null;
+  permissionUsed: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  beforeSummary: string | null;
+  afterSummary: string | null;
+  reasonCode: string | null;
+  createdAt: string;
+}
+
 /**
  * 07-RoleFinetune.md: was a fixed 4-value union before roles became
  * data-driven/manageable — now any role code the backend returns, custom
