@@ -1,5 +1,5 @@
 ---
-description: Frontend architecture patterns and the mock-to-real integration path
+description: Frontend architecture patterns and data flow
 globs: frontend/**/*.{ts,tsx}
 alwaysApply: false
 ---
@@ -8,82 +8,82 @@ alwaysApply: false
 
 React 18 + Vite 6 + Tailwind CSS v4 + shadcn/Radix UI. Path alias `@` → `frontend/src`.
 
-## Deployment
+## Commands
 
-Frontend deployed to `https://tb.example.com/` via `frontend/scripts/deploy.sh`:
-- Builds locally (`pnpm build`) → rsyncs `dist/` → nginx serves SPA + proxies `/api/*`
-- `.env.production` (committed) sets all 19 domains to real
-- Before any live test, check if source changed since last deploy and re-run `deploy.sh` if so
+```bash
+pnpm install
+pnpm dev            # requires VITE_DEV_PROXY_TARGET in .env.local
+pnpm build
+pnpm preview
+npx -y -p typescript tsc --noEmit -p tsconfig.json   # explicit typecheck
+```
 
-## Data Flow
+No `pnpm lint`, `pnpm test`, or `pnpm typecheck` scripts exist. TypeScript is `strict: true`; `noUnusedLocals`/`noUnusedParameters` are off.
 
-All data goes through `frontend/src/app/api/client.ts` which exports a single `api` object with dual-branch methods (mock/real per domain toggle in `config.ts`).
+## Data Flow — Real Backend Only
 
-### File layout (post-I2)
+Mock mode was removed 2026-08-07. There is no in-memory mock data, no `mock/` directory, no `api/config.ts`, no `isRealDomain`, no `VITE_API_REAL_DOMAINS`. Every `api.*` method calls the real backend through `api/http.ts`.
+
+`pnpm dev` requires `VITE_DEV_PROXY_TARGET` in `frontend/.env.local` (copied from `.env.example`). Vite fails fast at startup without it. Production is same-origin: nginx serves the static bundle and proxies `/api/*`.
+
+### File layout
 
 ```
-api/client.ts      — api.* facade, mock/real branches, DTO mappers
-api/config.ts      — isRealDomain() toggle via VITE_API_REAL_DOMAINS
-api/http.ts        — fetch transport, ApiError, mapApiError, idempotency/version helpers
-api/types.ts       — authoritative payload types (lifted from mock/data.ts)
-api/useApi.ts      — usePagedApi hook (primary), unused useApi
+api/client.ts      — api.* facade, real HTTP calls only
+api/http.ts        — fetch transport, ApiError, CSRF, Accept-Language, idempotency, session-expiry redirects
+api/types.ts       — authoritative payload types
+api/useApi.ts      — usePagedApi hook (primary), useApi (simple)
 lib/pagination.ts  — ListParams, toBackendEnum/fromBackendEnum, paginateMock
 lib/format.ts      — formatCoins, minutesToHours
 lib/language.ts    — consolidated language switching (i18n + PATCH /me/profile + localStorage)
-lib/datetime.ts    — localDateTimeToISO, isoToLocalDateTime (timezone-safe conversions)
+lib/datetime.ts    — localDateTimeToISO, isoToLocalDateTime (timezone-safe)
 ```
-
-### Integration Status (2026-08-08)
-
-- **I0 `✅`:** types lifted, HTTP transport, envelope/error handling, per-domain toggle
-- **I1 `▶`:** all 8 read domains swapped (18 methods), shared `usePagedApi`/`PageControls`/`ListStateBanner`
-- **I2 `✅`:** all mutations wired with real branches, E2E verified against real backend
-- **I3 `▶`:** I3.1-I3.6 done, acceptance scenarios 8/12
 
 ### Key patterns
 
 - **Enum mapping:** `toBackendEnum('underReview')` → `'UNDER_REVIEW'` (outbound), `fromBackendEnum` (inbound)
-- **DTO mappers:** `fromServiceRecordDto`, `fromReviewQueueItemDto`, `fromAccountDto`, etc.
 - **Version control:** `withVersion(body, ver)` — merges into body, NOT `If-Match` header
 - **Idempotency:** `newIdempotencyKey()` — `crypto.randomUUID()`, generate once per intent
-- **Edit vs copy mode:** `openForm(item, 'edit'|'copy')` pattern — distinguishes update from duplicate
+- **Edit vs copy mode:** `openForm(item, 'edit'|'copy')` — distinguishes update from duplicate
 - **Async pre-fill:** `openResubmit(rec)` fetches full record via `.get(id)` before pre-filling form
 - **Directory search:** `api.students.directory(search, excludeId)` / `api.users.directory(role, search)` for pickers
+
+## Routing & Auth
+
+`App.tsx` composition: `ThemeProvider` → `AuthProvider` → `LogsProvider` → `BrowserRouter`.
+
+Every user holds exactly one role → exactly one workspace. The dual-workspace/multi-role architecture and `/workspace` picker were retired 2026-08-19. `RequireAuth` sends unauthenticated users to `/login` and workspace mismatches straight to the user's own portal home.
+
+Routes: `/student/*` (`StudentLayout`) and `/admin/*` (`AdminLayout`). Teachers use the Admin Portal with scoped permissions, not a separate portal.
 
 ## Component Organization
 
 ```
-components/auth/       LoginPage, WorkspaceSelect
-components/layout/     StudentLayout, AdminLayout (shell/nav)
-components/student/    StudentHome, ProjectCenter, ServiceRecords, EventProposals, ...
-components/admin/      AdminDashboard, AuditCenter, ProjectManagement, ProjectRegistrants,
-                       ProposalReview, CaseReview, AccountManagement, UserManagement, ...
+components/auth/       LoginPage
+components/layout/     AppShell, StudentLayout, AdminLayout (shell/nav)
+components/student/    one file per student-portal page
+components/admin/      one file per admin-portal page (dashboards, reviews, projects,
+                       registrants, organizations, accounts, roles, ...)
 components/shared/     EvidenceLink (short-lived URL viewer), SearchPicker (Command+Popover)
-components/ui/         shadcn/Radix primitives — treat as vendored
+components/ui/         shadcn/Radix primitives — treat as vendored, compose don't edit
+components/figma/      ImageWithFallback
 ```
 
-## Routing
+## Write Path Rules (I2, still authoritative)
 
-`/student/*` → `RequireAuth(workspace=student)` → `StudentLayout`
-`/admin/*` → `RequireAuth(workspace=admin)` → `AdminLayout`
-
-Auth: real session cookies (Spring Session JDBC), CSRF double-submit. `AuthProvider.login()` syncs `preferredLanguage` from server on login.
-
-## Write Path Rules (established in I2, still authoritative)
-
-1. **Dual-branch in `client.ts`** — mock fallback always works alongside real
-2. **Action endpoints**, never `PATCH {status}` — `POST .../submit`, `POST .../publish`
-3. **`Idempotency-Key` via `newIdempotencyKey()`** — generate once per intent (useRef), reuse on retry
-4. **`withVersion(body, version)`** on all updates — backend reads version from body, not `If-Match`
-5. **`toBackendEnum()`** on enum fields in outbound request bodies
-6. **No optimistic UI on ledger operations** — show server response, not local prediction
-7. **`mapApiError(err)`** to classify errors → wire `fieldErrors` to form fields, `conflict` to refresh prompt
-8. **Request bodies: writable fields only** — never send status, computed values, display names
-9. **Never render raw error objects** — student-facing phrasing in both languages
-10. **Timezone-safe date conversions** — use `localDateTimeToISO()` / `isoToLocalDateTime()`, never raw string concat
+1. **Action endpoints**, never `PATCH {status}` — `POST .../submit`, `POST .../publish`
+2. **`Idempotency-Key` via `newIdempotencyKey()`** — generate once per intent (useRef), reuse on retry
+3. **`withVersion(body, version)`** on all updates — backend reads version from body
+4. **`toBackendEnum()`** on enum fields in outbound request bodies
+5. **No optimistic UI on ledger operations** — show server response, not local prediction
+6. **`mapApiError(err)`** to classify errors → wire `fieldErrors` to form fields, `conflict` to refresh prompt
+7. **Request bodies: writable fields only** — never send status, computed values, display names
+8. **Never render raw error objects** — student-facing phrasing in both languages
+9. **Timezone-safe date conversions** — use `localDateTimeToISO()` / `isoToLocalDateTime()`
 
 ## Styling
 
 - **Mobile-first** — build mobile layout first, enhance for tablet/desktop
 - Tailwind v4 config in CSS (no `tailwind.config.js`)
 - Theme tokens in `frontend/src/styles/theme.css` / `globals.css`
+- Don't invent breakpoints outside Tailwind's defaults

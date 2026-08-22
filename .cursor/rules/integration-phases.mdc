@@ -9,7 +9,7 @@ I0 `✅`. I1 `▶` (5/7, functionality complete). **I2 `✅` (all 10 exit criter
 
 ## I0 · Contract Prep — `✅` done (2026-08-04, §21)
 
-Built: `api/types.ts` (lifted), `api/http.ts` (transport), `api/config.ts` (toggle), enum mapping, dev-proxy recipe. Gate G1 met.
+Built: `api/types.ts` (lifted), `api/http.ts` (transport), enum mapping, dev-proxy recipe. Gate G1 met. (`api/config.ts` toggle removed 2026-08-07 — mock mode fully deleted.)
 
 ## I1 · Read Path — `▶` mostly done (2026-08-05, §22)
 

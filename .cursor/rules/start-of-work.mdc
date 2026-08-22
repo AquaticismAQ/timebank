@@ -1,0 +1,28 @@
+---
+description: Pre-work checklist — read before changing code
+alwaysApply: true
+---
+
+# Start-of-Work Checklist
+
+Use this order before changing code:
+
+1. Read the summary, phase table, acceptance table, and latest findings in `Docs/implementation/00-Status.md`
+2. Read `integration-test/STATUS.md` for the deployed dataset and latest live-verification findings
+3. Check `git status` and recent `git log`; inspect actual code and scripts. Historical status paragraphs describe what was true when written and may be superseded later
+4. Read applicable clarification documents:
+   - `Docs/optimization/02-PorjectOrganization.md` for project/organization behavior
+   - `Docs/optimization/03-ServiceRecordFormOptimization.md` for service-record sources
+   - `Docs/optimization/07-RoleFinetune.md` for users, roles, permissions, and data scope
+5. After a deployed-app test finds or verifies a defect, update `integration-test/STATUS.md`. Update `00-Status.md` when phase or acceptance evidence changes
+
+## Deploy Before Verifying
+
+The shared test deployment is not a production school deployment. Before any live frontend test or browser verification:
+- Check whether frontend source has changed since the last deploy (`git log` against the deploy commit)
+- Re-run `frontend/scripts/deploy.sh` if so — testing stale static output produces false results
+- This mirrors the backend's existing rsync-then-`verify.sh` workflow
+
+## Live Database Safety
+
+A live database write against the shared `timebank` schema is shared, hard-to-reverse state. State the exact intended change and obtain user confirmation before performing it. Never run integration tests against that schema.

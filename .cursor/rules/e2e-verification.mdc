@@ -46,7 +46,8 @@ curl https://tb.example.com/api/v1/ping
 
 # For local dev-proxy testing (alternative to deployed version):
 cd frontend
-echo 'VITE_API_REAL_DOMAINS=auth,school,students,accounts,serviceRecords,reviewQueue,projects,eventProposals,applications,notifications,dashboards,reports,files,users,rules,imports,exports,cases' > .env.local
+# Copy .env.example to .env.local and set VITE_DEV_PROXY_TARGET
+# (mock mode was fully removed 2026-08-07 — all calls go to real backend)
 pnpm dev
 ```
 

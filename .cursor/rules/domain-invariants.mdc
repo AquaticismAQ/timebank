@@ -37,10 +37,43 @@ Review approval must produce exactly these in ONE transaction, or none:
 - Approval must **atomically** generate the project draft AND backfill `approvedProjectId`
 - Never create the project first and link separately
 
+## Proposal Organization Input
+
+- Choose an existing partner organization by opaque `organizationId`, OR provide `newOrganizationName`
+- The backend atomically resolves/creates the organization during proposal creation
+- Students do not need `organizations.manage` merely to propose a new organization
+
+## Project Lifecycle
+
+- `CLOSED` is time-derived — means the registration window elapsed
+- Managers use `POST /projects/{id}/cancel` with a required reason to cancel/archive unwanted projects (including drafts)
+- Normal archive from `COMPLETED` is gated until every confirmed student's service record is reviewed
+- A registration-open project with zero confirmed registrants auto-archives when registration closes (system audit reason)
+- Read `Docs/optimization/02-PorjectOrganization.md` before changing this state machine
+
+## Service-Record Sources
+
+- New records are `PROJECT` or `SELF`
+- `PROJECT` requires the student's confirmed registration; snapshots project-derived org/category/location plus project owner as supervisor; those fields remain immutable on update
+- `SELF` needs an explicit supervisor kind; external-manual supervisors require name and contact
+- Legacy `EXTERNAL` source is resubmit-only for historical records
+- Respect record-number sequencing and explicit overnight (`endsNextDay`) behavior
+- See `Docs/optimization/03-ServiceRecordFormOptimization.md` before changing this flow
+
 ## Reviews & Decisions
 
 - **Non-overwritable** — changing a decision appends a new event, never mutates the old one
 - Review history is complete and readable
+
+## Roles, Users, and Scope
+
+- Each user has exactly one `roleCode` → exactly one workspace
+- Roles and permissions are data-driven; do NOT restore fixed frontend role lists, `roleCodes`, or the retired `/workspace` picker
+- Every non-`student` role has school-wide data scope; grade assignments are organizational metadata, not a visibility boundary
+- `student`, `admin`, and `sysadmin` are fully protected roles; `sysadmin` is hidden from standard Roles/Users UI
+- Custom roles cannot receive student-submission permissions (`eventProposals.create`, `applications.create`, `serviceRecords.create`)
+- Role templates are permission presets; only `admin`/`sysadmin` may manage them
+- See `Docs/optimization/07-RoleFinetune.md` before changing any role logic
 
 ## Data Privacy
 
