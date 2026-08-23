@@ -620,6 +620,7 @@
         "copyProposal": "Copy Proposal"
       },
       "timeline": "Timeline",
+      "noHistory": "No history yet",
       "filterAll": "All",
       "filterDraft": "Draft",
       "filterSubmitted": "Pending Review",

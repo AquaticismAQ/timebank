@@ -620,6 +620,7 @@
         "copyProposal": "复制提案"
       },
       "timeline": "时间线",
+      "noHistory": "暂无记录",
       "filterAll": "全部",
       "filterDraft": "草稿",
       "filterSubmitted": "待审核",

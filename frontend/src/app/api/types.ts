@@ -518,13 +518,6 @@ export interface ReportData {
 
 export type ProposalStatus = 'draft' | 'submitted' | 'underReview' | 'changesRequested' | 'approved' | 'rejected' | 'withdrawn';
 
-export interface ProposalTimeline {
-  action: string;
-  actor: string;
-  time: string;
-  note?: string;
-}
-
 /** `estimatedDurationMinutes`/`suggestedMinutes` are minutes-only on the wire; derive hours via `minutesToHours`. */
 export interface EventProposal {
   id: string;
@@ -585,8 +578,6 @@ export interface EventProposal {
   createdAt: string;
   updatedAt: string;
   submittedAt?: string;
-  /** Never actually populated — the real backend `ProposalDto` has no `timeline` field; the real merged history lives at `api.eventProposals.timeline(id)` instead (issue 016). Left optional here rather than removed since `EventProposals.tsx` still renders this card; a future pass should replace it with a real `timeline()` call. */
-  timeline?: ProposalTimeline[];
 }
 
 // ── Envelope & error types (I0.4/I0.5) ──────────────────────────────────────

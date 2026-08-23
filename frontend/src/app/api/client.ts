@@ -337,7 +337,7 @@ export const api = {
       // expectedOutcomes/activityFormat/estimatedCapacity/riskMeasures/
       // materialNeeds+budgetNeeds/recruitmentMethod/proofMethod) and a
       // handful of fields — myRole, reviewerName,
-      // feedback, linkedProjectId/Title, timeline,
+      // feedback, linkedProjectId/Title,
       // eligibility — genuinely don't exist on the backend at all (no
       // safe default beyond ''/derived-display, never written back by
       // the form). All of the above were originally left unmapped since

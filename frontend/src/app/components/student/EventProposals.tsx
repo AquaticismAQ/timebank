@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Plus, ChevronDown, ChevronUp, ChevronRight, Edit, Send, Copy, X, FileText, CheckCircle, AlertTriangle, Clock, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PROPOSAL_STATUS_LABELS } from '../../lib/statusLabels';
 import { useDictionaries } from '../../api/useDictionaries';
-import { type EventProposal, type ProposalStatus } from '../../api/types';
+import { type EventProposal, type ProposalStatus, type TimelineEntry } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { newIdempotencyKey } from '../../api/http';
@@ -74,6 +74,25 @@ export function EventProposals() {
   const { items: proposals, page, loading, error, setFilter, setPage, refetch } = usePagedApi(api.eventProposals.list, {});
 
   const detailProposal = proposals.find(p => p.id === detailId);
+
+  // The real `GET /event-proposals/{id}/timeline` merges revisions + review
+  // decisions server-side (04-DataViewOptimization.md §1.3 finding 2) — same
+  // endpoint the admin Proposal Review workbench already uses
+  // (`ProposalReview.tsx`); the detail card below was reading the old
+  // mock-era `EventProposal.timeline` field, which the real backend never
+  // populates (`Docs/issues/016-*.md`, `Docs/issues/049-*.md`).
+  const [detailTimeline, setDetailTimeline] = useState<TimelineEntry[]>([]);
+  const [detailTimelineLoading, setDetailTimelineLoading] = useState(false);
+  useEffect(() => {
+    if (!detailId) { setDetailTimeline([]); return; }
+    let cancelled = false;
+    setDetailTimelineLoading(true);
+    api.eventProposals.timeline(detailId)
+      .then(entries => { if (!cancelled) setDetailTimeline(entries); })
+      .catch(() => { if (!cancelled) setDetailTimeline([]); })
+      .finally(() => { if (!cancelled) setDetailTimelineLoading(false); });
+    return () => { cancelled = true; };
+  }, [detailId]);
 
   const openForm = (template?: EventProposal, mode: 'edit' | 'copy' = 'copy') => {
     if (template) {
@@ -685,21 +704,27 @@ export function EventProposals() {
             {/* Timeline */}
             <div className="bg-card border border-border rounded-2xl p-4">
               <h3 className="text-sm font-medium text-foreground mb-3">{t('student.proposals.timeline')}</h3>
-              <div className="space-y-3">
-                {(p.timeline ?? []).map((evt, i) => (
-                  <div key={i} className="flex gap-3">
-                    <div className="flex flex-col items-center shrink-0">
-                      <div className="w-2 h-2 rounded-full bg-primary mt-1" />
-                      {i < (p.timeline ?? []).length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
+              {detailTimelineLoading ? (
+                <div className="text-xs text-muted-foreground">{t('common.loading')}</div>
+              ) : detailTimeline.length === 0 ? (
+                <div className="text-xs text-muted-foreground">{t('student.proposals.noHistory')}</div>
+              ) : (
+                <div className="space-y-3">
+                  {detailTimeline.map((evt, i) => (
+                    <div key={i} className="flex gap-3">
+                      <div className="flex flex-col items-center shrink-0">
+                        <div className="w-2 h-2 rounded-full bg-primary mt-1" />
+                        {i < detailTimeline.length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
+                      </div>
+                      <div className="pb-3 flex-1">
+                        <div className="text-xs font-medium text-foreground">{evt.type}</div>
+                        <div className="text-xs text-muted-foreground">{evt.occurredAt.slice(0, 10)}</div>
+                        {evt.description && <p className="text-xs text-muted-foreground mt-1">{evt.description}</p>}
+                      </div>
                     </div>
-                    <div className="pb-3 flex-1">
-                      <div className="text-xs font-medium text-foreground">{evt.action}</div>
-                      <div className="text-xs text-muted-foreground">{evt.actor} · {evt.time.slice(0, 10)}</div>
-                      {evt.note && <p className="text-xs text-muted-foreground mt-1 italic">{evt.note}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
