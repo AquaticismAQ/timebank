@@ -393,6 +393,16 @@ export function AuditCenter() {
                 <div className="sm:col-span-2">
                   <Field label={t('admin.audit.fieldDescription')} value={detailRecord.description} />
                 </div>
+                {detailRecord.hasAnomaly && (
+                  <div className="sm:col-span-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+                    <div className="text-xs text-red-700 dark:text-red-300 font-medium flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" /> {t('admin.audit.fieldAnomalyReason')}
+                    </div>
+                    <div className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap mt-1">
+                      {detailRecord.anomalyNote || '—'}
+                    </div>
+                  </div>
+                )}
               </dl>
             ),
           },

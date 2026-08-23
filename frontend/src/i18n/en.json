@@ -866,6 +866,7 @@
       "fieldDescription": "Description",
       "fieldSupervisor": "Supervisor",
       "fieldTravelTime": "Travel Time Included",
+      "fieldAnomalyReason": "Anomaly Reason",
       "sourceProject": "Published Project",
       "sourceSelf": "Self-Initiated",
       "sourceExternal": "External (Historical)",

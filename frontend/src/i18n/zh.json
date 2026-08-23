@@ -866,6 +866,7 @@
       "fieldDescription": "描述",
       "fieldSupervisor": "主管",
       "fieldTravelTime": "含路途时间",
+      "fieldAnomalyReason": "异常原因",
       "sourceProject": "已发布项目",
       "sourceSelf": "自主发起",
       "sourceExternal": "校外历史记录",

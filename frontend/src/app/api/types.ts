@@ -213,6 +213,9 @@ export interface ServiceRecord {
   recordNumber?: string;
   evidenceFiles: EvidenceFile[];
   status: RecordStatus;
+  /** Rule-based, server-computed at submit time (overlap/travel-time disclosure) — see `ReviewQueueItem`'s copy of the same fields for the queue-row badge. */
+  hasAnomaly?: boolean;
+  anomalyNote?: string;
   reviewSummary?: string;
   reviewerName?: string;
   reviewedAt?: string;
