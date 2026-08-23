@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Search, X, FileText, AlertTriangle, ChevronDown, ChevronUp, Upload, Send, Trash2 } from 'lucide-react';
+import { Plus, Search, X, FileText, AlertTriangle, ChevronDown, ChevronUp, Upload, Send, Trash2, Pencil, RotateCcw, Gavel } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { RECORD_STATUS_LABELS } from '../../lib/statusLabels';
 import { type RecordStatus, type ServiceRecord, type EvidenceFile, type Application, type Project } from '../../api/types';
@@ -27,6 +27,17 @@ const colorMap: Record<string, string> = {
   red: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
   purple: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
 };
+
+// Row-action color per action — icon + label, bordered, never filled —
+// matching the convention `StudentList.tsx`/`SystemAdmin.tsx`/`RoleManagement.tsx`
+// established (`ACTION_COLORS`/`ACTION_BTN_BLUE`) for Admin Portal tables.
+const ACTION_COLORS = {
+  blue: 'border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20',
+  green: 'border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20',
+  red: 'border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20',
+  amber: 'border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20',
+  purple: 'border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20',
+} as const;
 
 type ViewMode = 'list' | 'new';
 type SupervisorKind = '' | 'internalUser' | 'student' | 'externalManual';
@@ -847,36 +858,36 @@ export function ServiceRecords() {
                         <div className="flex gap-1 justify-end">
                           {rec.status === 'returned' && (
                             <button onClick={() => openResubmit(rec)}
-                              className="text-xs px-2 py-1 bg-primary text-primary-foreground rounded-lg hover:opacity-90">
-                              {t('student.records.resubmit')}
+                              className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.green}`}>
+                              <Send className="w-3 h-3" /> {t('student.records.resubmit')}
                             </button>
                           )}
                           {rec.status === 'draft' && (
                             <>
                               <button onClick={() => openEditDraft(rec)}
-                                className="text-xs px-2 py-1 border border-border text-foreground rounded-lg hover:bg-accent">
-                                {t('student.records.edit')}
+                                className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.blue}`}>
+                                <Pencil className="w-3 h-3" /> {t('student.records.edit')}
                               </button>
                               <button onClick={() => handleDeleteDraft(rec.id)}
-                                className="text-xs px-2 py-1 border border-border text-muted-foreground rounded-lg hover:bg-accent">
-                                {t('common.delete')}
+                                className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.red}`}>
+                                <Trash2 className="w-3 h-3" /> {t('common.delete')}
                               </button>
                               <button onClick={() => handleSubmitDraft(rec.id)}
-                                className="text-xs px-2 py-1 bg-primary text-primary-foreground rounded-lg hover:opacity-90">
-                                {t('common.submit')}
+                                className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.green}`}>
+                                <Send className="w-3 h-3" /> {t('common.submit')}
                               </button>
                             </>
                           )}
                           {rec.status === 'submitted' && (
                             <button onClick={() => handleRevert(rec.id)}
-                              className="text-xs px-2 py-1 border border-border text-foreground rounded-lg hover:bg-accent">
-                              {t('student.records.revert')}
+                              className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.amber}`}>
+                              <RotateCcw className="w-3 h-3" /> {t('student.records.revert')}
                             </button>
                           )}
                           {rec.status === 'rejected' && (
                             <button onClick={() => setCaseFiling({ type: 'appeal', record: rec })}
-                              className="text-xs px-2 py-1 border border-border text-foreground rounded-lg hover:bg-accent">
-                              {t('student.records.appeal')}
+                              className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.purple}`}>
+                              <Gavel className="w-3 h-3" /> {t('student.records.appeal')}
                             </button>
                           )}
                         </div>
@@ -958,31 +969,37 @@ export function ServiceRecords() {
                       <div className="flex gap-2">
                         {rec.status === 'returned' && (
                           <button onClick={() => openResubmit(rec)}
-                            className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:opacity-90">{t('student.records.resubmit')}</button>
+                            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.green}`}>
+                            <Send className="w-3 h-3" /> {t('student.records.resubmit')}
+                          </button>
                         )}
                         {rec.status === 'draft' && (
                           <>
                             <button onClick={() => openEditDraft(rec)}
-                              className="text-xs px-3 py-1.5 border border-border text-foreground rounded-lg hover:bg-accent">
-                              {t('student.records.edit')}
+                              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.blue}`}>
+                              <Pencil className="w-3 h-3" /> {t('student.records.edit')}
                             </button>
                             <button onClick={() => handleDeleteDraft(rec.id)}
-                              className="text-xs px-3 py-1.5 border border-border text-muted-foreground rounded-lg hover:bg-accent flex items-center gap-1">
+                              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.red}`}>
                               <Trash2 className="w-3 h-3" /> {t('common.delete')}
                             </button>
                             <button onClick={() => handleSubmitDraft(rec.id)}
-                              className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:opacity-90 flex items-center gap-1">
+                              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.green}`}>
                               <Send className="w-3 h-3" /> {t('common.submit')}
                             </button>
                           </>
                         )}
                         {rec.status === 'submitted' && (
                           <button onClick={() => handleRevert(rec.id)}
-                            className="text-xs px-3 py-1.5 border border-border text-foreground rounded-lg hover:bg-accent">{t('student.records.revert')}</button>
+                            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.amber}`}>
+                            <RotateCcw className="w-3 h-3" /> {t('student.records.revert')}
+                          </button>
                         )}
                         {rec.status === 'rejected' && (
                           <button onClick={() => setCaseFiling({ type: 'appeal', record: rec })}
-                            className="text-xs px-3 py-1.5 border border-border text-foreground rounded-lg hover:bg-accent">{t('student.records.appeal')}</button>
+                            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.purple}`}>
+                            <Gavel className="w-3 h-3" /> {t('student.records.appeal')}
+                          </button>
                         )}
                       </div>
                     </div>

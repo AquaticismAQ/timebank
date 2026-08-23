@@ -24,6 +24,14 @@ const colorMap: Record<string, string> = {
   red: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
 };
 
+// Row-action color per action — icon + label, bordered, never filled —
+// matching the convention `StudentList.tsx`/`SystemAdmin.tsx`/`RoleManagement.tsx`
+// established (`ACTION_COLORS`/`ACTION_BTN_BLUE`) for Admin Portal tables.
+const ACTION_COLORS = {
+  blue: 'border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20',
+  cyan: 'border-cyan-200 dark:border-cyan-800 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/20',
+} as const;
+
 const STEP_KEYS = ['overview', 'implementation', 'organization', 'safety', 'recruitment', 'confirm'];
 
 type ViewMode = 'list' | 'form' | 'detail';
@@ -809,12 +817,12 @@ export function EventProposals() {
                         <div className="flex gap-1 justify-end">
                           {(p.status === 'draft' || p.status === 'changesRequested') && (
                             <button onClick={() => openForm(p, 'edit')}
-                              className="text-xs px-2 py-1 rounded-lg border border-border hover:bg-accent text-muted-foreground flex items-center gap-1">
+                              className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.blue}`}>
                               <Edit className="w-3 h-3" /> {t('common.edit')}
                             </button>
                           )}
                           <button onClick={() => openForm(p)}
-                            className="text-xs px-2 py-1 rounded-lg border border-border hover:bg-accent text-muted-foreground flex items-center gap-1">
+                            className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.cyan}`}>
                             <Copy className="w-3 h-3" /> {t('common.copy')}
                           </button>
                         </div>

@@ -6,6 +6,8 @@ globs:
 - Docs/issues/**
 - integration-test/STATUS.md
 - Docs/implementation/00-Status.md
+- frontend/**
+- backend/**
 ---
 
 # Bug Tracking & Issue Documentation
@@ -72,9 +74,16 @@ In the **same session** (not batched later):
 
 Update both files again when a "proposed fix" issue doc's fix actually lands and is verified.
 
-### 3. Update `Docs/implementation/00-Status.md`
+### 3. Update `Docs/implementation/00-Status.md` — phase/gate changes only, not every bug
 
-A new numbered section (§N+1) with the full narrative, following the existing style of §30–§35.
+`00-Status.md` tracks build *phases* (per `Docs/README.md` §2.5), not individual
+bugs — in practice it has **not** gotten a new numbered section for any of the
+issues filed after §37 (2026-08-10); ongoing bug-fix activity lives entirely in
+`integration-test/STATUS.md` instead. Only add/update a `00-Status.md` section
+when this bug fix also changes a phase's status, an acceptance-criteria gate, or
+a named risk (e.g. it closes an I3.7 scenario, or completes/reopens a phase). A
+UI-consistency or polish fix — even one the user asked to have tracked — is
+`integration-test/STATUS.md`-only unless it also does one of those things.
 
 ## Rules
 

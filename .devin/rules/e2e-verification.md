@@ -100,6 +100,6 @@ When a real defect is found and reproduced against the deployed app, follow the 
 
 1. **`Docs/issues/0NN-<slug>.md`** — one doc per bug, numbered sequentially
 2. **`integration-test/STATUS.md`** — append to §2 bug log table + §4 fix history
-3. **`Docs/implementation/00-Status.md`** — new numbered section (§N+1) with full narrative
+3. **`Docs/implementation/00-Status.md`** — only if this bug fix also changes a phase's status, an acceptance-criteria gate, or a named risk; a UI-consistency/polish bug is 1+2 only (see `bug-tracking.md` §3)
 
-All three, in the same session. Don't skip the issue doc just because the fix is small or data-only.
+1 and 2, in the same session, always. Don't skip the issue doc just because the fix is small or data-only.
