@@ -507,8 +507,8 @@ export function EventProposals() {
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
               <span className="text-xs text-muted-foreground">{p.categoryName}</span>
-              {p.revisionCount > 0 && (
-                <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">v{p.revisionCount + 1}</span>
+              {p.currentRevision > 1 && (
+                <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">v{p.currentRevision}</span>
               )}
             </div>
             <h2 className="text-foreground leading-snug">{p.title}</h2>
@@ -620,10 +620,6 @@ export function EventProposals() {
             <div className="bg-card border border-border rounded-2xl p-4">
               <h3 className="text-sm font-medium text-foreground mb-3">{t('student.proposals.approvalStatus')}</h3>
               <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{t('student.proposals.currentNode')}</span>
-                  <span className={`px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{p.currentApprovalNode}</span>
-                </div>
                 {p.reviewerName && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{t('student.proposals.reviewer')}</span>
@@ -632,7 +628,7 @@ export function EventProposals() {
                 )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{t('student.proposals.version')}</span>
-                  <span className="text-foreground">v{p.revisionCount + 1}</span>
+                  <span className="text-foreground">v{p.currentRevision}</span>
                 </div>
                 {p.submittedAt && (
                   <div className="flex justify-between">
@@ -763,7 +759,6 @@ export function EventProposals() {
                   <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('student.proposals.eventName')}</th>
                   <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('student.proposals.category')}</th>
                   <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('student.proposals.plannedDate')}</th>
-                  <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('student.proposals.currentNode')}</th>
                   <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('student.proposals.status')}</th>
                   <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('student.proposals.lastUpdated')}</th>
                   <th className="text-right px-4 py-3 text-xs text-muted-foreground font-medium">{t('student.records.colActions')}</th>
@@ -781,7 +776,6 @@ export function EventProposals() {
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{p.categoryName}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{p.plannedDate || '—'}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{p.currentApprovalNode}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
                       </td>
@@ -842,7 +836,6 @@ export function EventProposals() {
                       <Clock className="w-3 h-3" />
                       {p.plannedDate || t('student.proposals.dateTbd')}
                     </div>
-                    <div>{t('student.proposals.nodeLabel')}: {p.currentApprovalNode}</div>
                     <div>{t('student.proposals.roleLabel')}: {p.myRole}</div>
                     <div>{t('student.proposals.updatedLabel')}: {p.updatedAt.slice(0, 10)}</div>
                   </div>

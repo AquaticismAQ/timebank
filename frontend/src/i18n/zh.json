@@ -573,7 +573,7 @@
       "needDeclaration": "请先勾选真实性声明",
       "withdrawn": "提案已撤回",
       "withdrawPending": "审批进行中，已发起撤回申请，等待管理员处理",
-      "version": "第 {{count}} 版",
+      "version": "版本",
       "lastUpdate": "最后更新",
       "reviewerRequest": "{{name}} 老师要求修改",
       "approvedMsg": "提案已批准，正式项目草稿已生成",
@@ -609,13 +609,6 @@
         "eligibility": "报名条件",
         "proofMethod": "服务证明方式",
         "suggestedHours": "建议认定时长"
-      },
-      "statusCard": {
-        "title": "审批状态",
-        "currentNode": "当前节点",
-        "reviewer": "负责教师",
-        "version": "版本",
-        "submitTime": "提交时间"
       },
       "actions": {
         "title": "可用操作",
@@ -692,7 +685,6 @@
       "pendingPublication": "等待 {{name}} 老师发布",
       "studentInitiator": "学生发起人",
       "approvalStatus": "审批状态",
-      "currentNode": "当前节点",
       "reviewer": "审核教师",
       "submitted": "提交时间",
       "availableActions": "可用操作",
@@ -713,7 +705,6 @@
       "status": "状态",
       "revisionsRequired": "需要修改后重新提交",
       "dateTbd": "日期待定",
-      "nodeLabel": "节点",
       "roleLabel": "角色",
       "updatedLabel": "更新"
     }

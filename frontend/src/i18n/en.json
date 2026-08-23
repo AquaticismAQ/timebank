@@ -573,7 +573,7 @@
       "needDeclaration": "Please check the truthfulness declaration first",
       "withdrawn": "Proposal withdrawn",
       "withdrawPending": "Review in progress, withdrawal request submitted, awaiting admin processing",
-      "version": "Version {{count}}",
+      "version": "Version",
       "lastUpdate": "Last updated",
       "reviewerRequest": "Teacher {{name}} requests revisions",
       "approvedMsg": "Proposal approved, official project draft generated",
@@ -609,13 +609,6 @@
         "eligibility": "Registration Requirements",
         "proofMethod": "Service Proof Method",
         "suggestedHours": "Suggested Certified Hours"
-      },
-      "statusCard": {
-        "title": "Approval Status",
-        "currentNode": "Current Node",
-        "reviewer": "Reviewing Teacher",
-        "version": "Version",
-        "submitTime": "Submit Time"
       },
       "actions": {
         "title": "Available Actions",
@@ -692,7 +685,6 @@
       "pendingPublication": "pending publication by {{name}}",
       "studentInitiator": "Student Initiator",
       "approvalStatus": "Approval Status",
-      "currentNode": "Current Node",
       "reviewer": "Reviewer",
       "submitted": "Submitted",
       "availableActions": "Available Actions",
@@ -713,7 +705,6 @@
       "status": "Status",
       "revisionsRequired": "Revisions required before resubmission",
       "dateTbd": "Date TBD",
-      "nodeLabel": "Node",
       "roleLabel": "Role",
       "updatedLabel": "Updated"
     }

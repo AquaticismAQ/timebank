@@ -575,12 +575,12 @@ export interface EventProposal {
   eligibility: string;
   proofMethod: string;
   suggestedMinutes: number;
-  currentApprovalNode: string;
   reviewerName?: string;
   feedback?: string;
   linkedProjectId?: string;
   linkedProjectTitle?: string;
-  revisionCount: number;
+  /** Real backend field (`ProposalDto.currentRevision`, APIContract §3.2) — starts at 1, increments on every draft/changes-requested save. Not the optimistic-lock `version` below. */
+  currentRevision: number;
   version?: number;
   createdAt: string;
   updatedAt: string;
