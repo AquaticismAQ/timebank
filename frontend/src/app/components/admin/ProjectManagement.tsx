@@ -349,7 +349,7 @@ export function ProjectManagement() {
   const [showForm, setShowForm] = useState(false);
   const [newForm, setNewForm] = useState({
     title: '', summary: '', description: '', categoryId: 'cat_community', recognizedMinutes: 120,
-    startAt: '', endAt: '', location: '', capacity: 20, organizationId: '', ownerId: '',
+    startAt: '', endAt: '', location: '', capacity: 20, organizationId: '', ownerId: '', ownerName: '',
     deliveryScope: 'onCampus' as 'onCampus' | 'offCampus' | 'hybrid',
     registrationOpenAt: '', registrationCloseAt: '', eligibleGrades: [] as string[], evidenceRequirements: '',
   });
@@ -769,8 +769,8 @@ export function ProjectManagement() {
                 <div>
                   <label className={LABEL}>{t('admin.projects.ownerName')}</label>
                   <SearchPicker
-                    selected={newForm.ownerId ? [{ id: newForm.ownerId, label: newForm.ownerId }] : []}
-                    onChange={opts => setNewForm(f => ({ ...f, ownerId: opts[0]?.id ?? '' }))}
+                    selected={newForm.ownerId ? [{ id: newForm.ownerId, label: newForm.ownerName }] : []}
+                    onChange={opts => setNewForm(f => ({ ...f, ownerId: opts[0]?.id ?? '', ownerName: opts[0]?.label ?? '' }))}
                     fetchOptions={fetchOwnerOptions}
                     placeholder={t('admin.projects.ownerPlaceholderSelf')}
                     searchPlaceholder={t('admin.projects.ownerSearchPlaceholder')}
