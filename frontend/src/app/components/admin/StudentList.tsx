@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, ChevronDown, ChevronUp, AlertCircle, Pencil, Bell, FileText, X, Save } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Pencil, Bell, FileText, X, Save } from 'lucide-react';
 import { type Student } from '../../api/types';
 import { formatCoins, minutesToHours, formatGradeClass, formatClassName } from '../../lib/format';
+import { STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import { toast } from 'sonner';
 import { useAuth } from '../../App';
 import { api } from '../../api/client';
@@ -384,15 +385,9 @@ export function StudentList() {
                   <td className="px-4 py-3 text-sm text-foreground">{student.completedMinutes !== undefined ? `${minutesToHours(student.completedMinutes)}h` : '—'}</td>
                   <td className="px-4 py-3 text-sm text-foreground">{student.timeCoinBalance !== undefined ? formatCoins(student.timeCoinBalance) : '—'}</td>
                   <td className="px-4 py-3">
-                    {atRisk ? (
-                      <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
-                        <AlertCircle className="w-3 h-3" /> {t('admin.students.critical')}
-                      </span>
-                    ) : belowHalf ? (
-                      <span className="text-xs text-yellow-600 dark:text-yellow-400">{t('admin.students.behind')}</span>
-                    ) : (
-                      <span className="text-xs text-green-600 dark:text-green-400">{t('admin.students.onTrack')}</span>
-                    )}
+                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[atRisk ? 'red' : belowHalf ? 'yellow' : 'green']}`}>
+                      {t(atRisk ? 'admin.students.critical' : belowHalf ? 'admin.students.behind' : 'admin.students.onTrack')}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
@@ -580,8 +575,8 @@ export function StudentList() {
                       <span className="text-sm text-foreground font-medium">{student.name}</span>
                       <span className="text-xs text-muted-foreground">{formatGradeClass(student.gradeLevel, student.className)}</span>
                       {atRisk && (
-                        <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                          <AlertCircle className="w-3 h-3" /> {t('admin.students.critical')}
+                        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES.red}`}>
+                          {t('admin.students.critical')}
                         </span>
                       )}
                     </div>

@@ -12,6 +12,7 @@ import { useDictionaries } from '../../api/useDictionaries';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { formatGradeClass, minutesToHours } from '../../lib/format';
 import { localDateTimeToISO } from '../../lib/datetime';
+import { STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import type { RoleSummary, AuditLogEntry, SchoolInfo, RuleVersion, RuleDraftFields, RuleValidationResult } from '../../api/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { usePagedApi } from '../../api/useApi';
@@ -1113,7 +1114,7 @@ export function SystemAdmin() {
                       <span className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(u.roleCode)}`}>{roleName(u.roleCode)}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs ${u.status === 'active' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[u.status === 'active' ? 'green' : 'gray']}`}>
                         {u.status === 'active' ? t('admin.system.active') : t('admin.system.inactive')}
                       </span>
                     </td>
@@ -1139,7 +1140,7 @@ export function SystemAdmin() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-sm text-foreground font-medium">{u.name}</span>
-                      <span className={`text-xs ${u.status === 'active' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[u.status === 'active' ? 'green' : 'gray']}`}>
                         {u.status === 'active' ? t('admin.system.active') : t('admin.system.inactive')}
                       </span>
                     </div>
