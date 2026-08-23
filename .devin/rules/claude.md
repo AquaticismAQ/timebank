@@ -1,9 +1,9 @@
 ---
-description: Legacy Claude Code project guidance for TimeBank
+description: Project guidance for TimeBank — synced from CLAUDE.md and AGENTS.md
 trigger: always_on
 ---
 
-# TimeBank Legacy Rules
+# TimeBank Project Guidance
 
 This file provides guidance to Devin when working in this repository.
 
@@ -12,7 +12,7 @@ This file provides guidance to Devin when working in this repository.
 TimeBank (时间银行) is an institutional system for recording, auditing, and incentivizing middle-school student volunteer service. Service hours become "time coins" (never a currency/token — see Content Principles below). The project has four phases:
 
 - **Phase 1 — Institutional design**: complete, documented in `Design/chinese/*.md`.
-- **Phase 2 — Online system (current focus)**: React web frontend deployed at `https://tb.example.com/` (`frontend/`). Java/Spring Boot + MySQL backend implementation started 2026-08-02 (`backend/`) per `Docs/implementation/`; B0-B6 backend work is done and deployed to the shared test server (B6 with named infra-blocked gaps), B7 (Database Operations) started and mostly blocked on infrastructure that doesn't exist — see `Docs/implementation/00-Status.md` for current state. Integration: I0 done, I1 mostly done, I2 done (`✅`, all 10 exit criteria met), I3 in progress (I3.1-I3.6 done, I3.7 8/12 acceptance scenarios proven) — see `00-Status.md` §21–§34.
+- **Phase 2 — Online system (current focus)**: the React frontend and Spring Boot/MySQL backend are both deployed at `https://tb.example.com/`. B0-B6 are implemented and deployed, with B0.14 plus named performance/infrastructure exit criteria still open; B7 Database Operations is partial and mostly blocked on missing production infrastructure. I0 is done, I1/I2 have their remaining verification or UX-polish criteria, and I3 is in progress: I3.1-I3.6 are done and 11 of 12 I3.7 acceptance scenarios are proven; only the complete bilingual/mobile+desktop sweep in scenario #12 remains open. The Role & Permission Management overhaul is implemented, deployed, and live-verified (2026-08-19). `00-Status.md` is a living historical tracker whose opening snapshot predates later findings; read its latest sections as well as its phase tables, then check recent commits and the relevant optimization document before relying on a summary.
 - **Phase 3 — POV (Proof of Volunteering)**: WeChat Mini Program witness/AI-verification layer, reserved via feature flags, not implemented.
 - **Phase 4 — Redemption/borrowing/value-added**: reserved via feature flags, not implemented.
 
@@ -31,37 +31,47 @@ backend/                 Spring Boot 3.4 / Java 21 backend, single Maven module,
 
 `Docs/frontend/Design.md` and `Docs/integration/APIContract.md` each have a `_CN.md` Chinese counterpart that must stay in sync when edited.
 
+## Start-of-work checklist
+
+Use this order before changing code:
+
+1. Read the summary, phase table, acceptance table, and latest findings in `Docs/implementation/00-Status.md`.
+2. Read `integration-test/STATUS.md` for the deployed dataset and latest live-verification findings.
+3. Check `git status` and recent `git log`; inspect actual code and scripts. Historical status paragraphs describe what was true when written and may be superseded later.
+4. Read applicable clarification documents: `Docs/optimization/02-PorjectOrganization.md` for project/organization behavior, `03-ServiceRecordFormOptimization.md` for service-record sources, and `07-RoleFinetune.md` for users, roles, permissions, and data scope.
+5. After a deployed-app test finds or verifies a defect, update `integration-test/STATUS.md`. Update `00-Status.md` when phase or acceptance evidence changes.
+
 ## Commands
 
 All frontend commands run from `frontend/`:
 
 ```bash
 cd frontend
-pnpm install        # install deps (pnpm workspace, see pnpm-lock.yaml/pnpm-workspace.yaml)
-pnpm dev            # start Vite dev server
-pnpm build           # production build (tsc noEmit is not run separately; Vite handles the build)
-pnpm preview         # preview a production build
+pnpm install
+pnpm dev
+npx -y -p typescript tsc --noEmit -p tsconfig.json
+pnpm build
+pnpm preview
 ```
 
-There is no lint, test, or typecheck script configured in `frontend/package.json` — do not assume `pnpm lint`/`pnpm test` exist. TypeScript is `strict: true` but `noUnusedLocals`/`noUnusedParameters` are off (see `frontend/tsconfig.json`).
+There is no lint, test, or typecheck script in `frontend/package.json`; do not assume `pnpm lint`, `pnpm test`, or `pnpm typecheck` exists. Vite's build does not typecheck, so use the explicit `tsc` command above. TypeScript is strict, while `noUnusedLocals`/`noUnusedParameters` remain off.
 
-**Frontend testing/verification uses the real shared test server, not a local mock.** The real test-server hostname/credentials live in the untracked `test-server-credits.md` (this repo is public — no real hostnames are checked in; `tb.example.com` elsewhere in these docs is a placeholder). That server serves the real frontend against the real backend (`frontend/scripts/deploy.sh`, deployed 2026-08-07). Before any live frontend test or browser verification pass, check whether frontend source has changed since the last deploy (`git log` against the deploy commit) and re-run `frontend/scripts/deploy.sh` first if so — testing stale static output against new backend behavior (or vice versa) produces false results. This mirrors the backend's existing rsync-then-`verify.sh` live-verification workflow; there is no separate local/staging frontend environment. Log in with one of the real seeded accounts in `Docs/TestAccounts.md` (`admin001`/`student001`/`student002`/`teacher001`/`both001`) — the login page's old mock-only "demo accounts" quick-login card was removed 2026-08-07. The server also carries a full seeded dataset (`integration-test/`, README + STATUS.md) — projects/records/proposals in every workflow status — so screens aren't empty during a live test; check `integration-test/STATUS.md` before assuming a bug is new.
+**Frontend testing/verification uses the real shared test server, not a local mock.** The real test-server hostname/credentials live in the untracked `test-server-credits.md` (this repo is public — no real hostnames are checked in; `tb.example.com` elsewhere in these docs is a placeholder). That server serves the real frontend against the real backend (`frontend/scripts/deploy.sh`, deployed 2026-08-07). Before any live frontend test or browser verification pass, check whether frontend source has changed since the last deploy (`git log` against the deploy commit) and re-run `frontend/scripts/deploy.sh` first if so — testing stale static output against new backend behavior (or vice versa) produces false results. This mirrors the backend's existing rsync-then-`verify.sh` live-verification workflow; there is no separate local/staging frontend environment. Log in with one of the real seeded accounts in `Docs/TestAccounts.md` (`admin001`/`student001`/`student002`/`teacher001`) — the login page's old mock-only "demo accounts" quick-login card was removed 2026-08-07. The server also carries a full seeded dataset (`integration-test/`, README + STATUS.md) — projects/records/proposals in every workflow status — so screens aren't empty during a live test; check `integration-test/STATUS.md` before assuming a bug is new.
 
-Key frontend components added during I3 (§24-§34): `EvidenceLink.tsx` (short-lived URL evidence viewer, used in both portals), `SearchPicker.tsx` (generic Command+Popover picker for directory search), `ProjectRegistrants.tsx` (admin confirm/reject/bulk), `ProposalReview.tsx` (admin proposal review), `CaseReview.tsx` (admin case review). Language persistence consolidated in `lib/language.ts`. Timezone-safe date helpers in `lib/datetime.ts` (`localDateTimeToISO`/`isoToLocalDateTime`).
+Key frontend components added during I3 (§24-§34): `EvidenceLink.tsx` (short-lived URL evidence viewer, used in both portals), `SearchPicker.tsx` (generic Command+Popover picker for directory search), `ProjectRegistrants.tsx` (admin confirm/reject/bulk), `ProposalReview.tsx` (admin proposal review), `CaseReview.tsx` (admin case review), `OrganizationManagement.tsx`, and `RoleManagement.tsx`. Language persistence consolidated in `lib/language.ts`. Timezone-safe date helpers in `lib/datetime.ts` (`localDateTimeToISO`/`isoToLocalDateTime`).
 
 Backend commands run from `backend/` (single Maven module, no multi-module split — that question from earlier is resolved):
 
 ```bash
 cd backend
-mvn compile           # local compile check only
-mvn test               # fast tests: MockMvc slices + ArchUnit, no external dependency
-mvn verify              # adds *IT integration tests — needs TIMEBANK_DB_HOST/_USERNAME/_PASSWORD env vars
-                         # for an account with CREATE/DROP on `timebank_it_%` (see test-server-credits.md, untracked)
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn compile
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn test
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn verify
 ```
 
 **No Docker anywhere in this project** — not locally, not in tests, not in deployment (`Docs/implementation/01-Overview.md` §6). Integration tests (`*IT` classes, run via `mvn verify`/Failsafe, not `mvn test`/Surefire) run against real MySQL on the shared test server, each in its own `timebank_it_<random>` schema created and dropped per test class (`cn.timebank.testsupport.MySqlTestSchemaExtension`) — never against the application's own `timebank` schema. The app deploys as a systemd unit (`backend/scripts/deploy.sh`), not a container; see `backend/scripts/verify.sh` for the test entry point a CI runner would call. Both scripts read secrets from the environment and contain none themselves.
 
-The backend follows `Docs/implementation/` phase by phase — check `Docs/implementation/00-Status.md` before assuming what exists. As of B2 (Base Data & Rules), real code exists in `cn.timebank.common.*` (envelope, error handling, request-id logging, pagination, idempotency, i18n resolution), `cn.timebank.audit` (append-only audit log), `cn.timebank.iam` (users, roles, permissions, login logs, password lifecycle), `cn.timebank.security` (session auth, CSRF, `@PreAuthorize` on every endpoint, the data-scope resolver mechanism — not yet wired to a real resource), `cn.timebank.student` (students, academic years, grades, classes), `cn.timebank.organization` (partner organizations, service categories, school info, feature flags, the shared `RequestLanguageService`), `cn.timebank.rules` (versioned rules with an immutable-publish lifecycle and date-based resolution), and `cn.timebank.notification` (template rendering only, no send path yet). Local Maven builds need `JAVA_HOME=/opt/homebrew/opt/openjdk@21` explicitly set — the default `java` on this machine is JDK 17. Every other business module (`servicerecord`, `project`, etc.) has no code yet beyond an empty `package-info.java` marking its boundary for B0.2's ArchUnit rules. Package root is `cn.timebank`, not `cn.<school>.timebank` as `Docs/backend/Design.md` §7 originally proposed — deviation and rationale recorded there and in the status doc.
+The backend is a single Maven module rooted at package `cn.timebank` (not `cn.<school>.timebank`). Real code exists across `account`, `caseflow`, `dataexchange`, `enrollment`, `file`, `lifecycle`, `notification`, `organization`, `progress`, `project`, `proposal`, `reporting`, `review`, `servicerecord`, plus the base IAM/security/student/rules/audit modules. Do not use the old B2-era assumption that later business modules contain only `package-info.java`. Local Maven builds need `JAVA_HOME=/opt/homebrew/opt/openjdk@21` explicitly set — the default `java` on this machine is JDK 17.
 
 ## Frontend architecture
 
@@ -82,57 +92,51 @@ useEffect(() => { api.projects.list().then(setProjects).catch(() => {}); }, []);
 
 ### Routing, auth, and workspaces
 
-`frontend/src/app/App.tsx` is the composition root: `ThemeProvider` (light/dark/auto, auto follows local hour 7–19) → `AuthProvider` (user + workspace persisted to `localStorage`) → `LogsProvider` (client-only operation log, seeded, not backed by an API yet) → `BrowserRouter`.
+`frontend/src/app/App.tsx` is the composition root: `ThemeProvider` (light/dark/auto, auto follows local hour 7–19) → `AuthProvider` (user persisted to `localStorage`) → `LogsProvider` (client-only operation log, seeded, not backed by an API yet) → `BrowserRouter`.
 
-A user can hold both `student` and `admin` workspace access; `RequireAuth` redirects to `/workspace` (portal picker) when workspace is ambiguous, and to `/login` when unauthenticated. Routes are nested under `/student/*` (`StudentLayout`) and `/admin/*` (`AdminLayout`), matching the Student Portal / Admin+Teacher Portal split in `Docs/frontend/Design.md` §3–7 — teachers use the same Admin Portal as school admins but with scoped permissions, not a separate portal.
+Every user holds exactly one role, so exactly one workspace (`07-RoleFinetune.md` §2.5 — the dual-workspace/multi-role architecture and its `/workspace` picker were retired 2026-08-19). `RequireAuth` sends unauthenticated users to `/login` and a workspace mismatch straight to the user's own portal home. Routes are nested under `/student/*` (`StudentLayout`) and `/admin/*` (`AdminLayout`), matching the Student Portal / Admin+Teacher Portal split in `Docs/frontend/Design.md` §3–7 — teachers use the same Admin Portal as school admins but with scoped permissions, not a separate portal.
 
 ### Component organization
 
 ```
-components/auth/       login, workspace picker
+components/auth/       login
 components/layout/     AppShell, StudentLayout, AdminLayout (shell/nav chrome)
 components/student/    one file per student-portal page (StudentHome, ProjectCenter, ServiceRecords, EventProposals, ...)
 components/admin/      one file per admin-portal page (AdminDashboard, AuditCenter, ProjectManagement,
-                       ProjectRegistrants, ProposalReview, CaseReview, AccountManagement, UserManagement, ...)
+                       ProjectRegistrants, ProposalReview, CaseReview, AccountManagement, UserManagement,
+                       OrganizationManagement, RoleManagement, ...)
 components/shared/     EvidenceLink (short-lived URL viewer), SearchPicker (Command+Popover picker)
 components/ui/         shadcn/Radix primitives (button, dialog, table, ...) — treat as generated/vendored, prefer composing over editing
 components/figma/      ImageWithFallback — Figma-import artifact
 ```
 
-This is organized by portal/page today, not yet by the business-domain module layout (`projects/`, `service-records/`, `reviews/`, ...) that `Docs/frontend/Design.md` §12 recommends as the target structure — don't assume that reorganization has happened.
+This is organized by portal/page today, not yet by the business-domain module layout (`projects/`, `service-records/`, `reviews/`, ...) that `Docs/frontend/Design.md` §12 recommends as the target structure — don't assume that reorganization has happened. `RoleManagement.tsx` owns the configurable Roles and Role Templates tab; do not reintroduce a frontend role enum or workspace picker.
 
 ### Styling
 
 Tailwind CSS v4 (via `@tailwindcss/vite`, no `tailwind.config.js` — config lives in CSS). Theme tokens in `frontend/src/styles/theme.css`/`globals.css`. Mobile-first is a hard requirement per the design doc: build the mobile layout first, then progressively enhance for tablet/desktop, and don't invent new breakpoints outside Tailwind's defaults.
 
-## Domain and status-model conventions
+## Current domain rules
 
-These conventions are set by `Docs/integration/APIContract.md` and `Design/chinese/`, and both frontend and future backend work must respect them:
+- **Non-financial terminology**: time coins are a school-internal accounting unit. Never introduce token/currency, cash-out, transfer, mining, or wallet semantics outside explicitly reserved Phase 4 design.
+- **Backend-owned states**: `Project`, `EventProposal`, `Application`, `ServiceRecord`, and `Case` transitions are backend-owned. Frontend code displays state and invokes action endpoints; it does not derive or patch status directly.
+- **Immutable accounting**: balances are transaction-derived. Corrections and reversals append immutable `AccountTransaction` rows; never edit a balance or overwrite/delete a transaction.
+- **Append-only reviews**: review/approval changes append events rather than overwriting prior decisions.
+- **Proposal → Project**: proposal approval atomically writes the review event, marks the proposal approved, creates the official project draft, and backfills `approvedProjectId`. Never create then link in separate frontend calls.
+- **Proposal organization input**: choose an existing partner organization by opaque `organizationId`, or provide `newOrganizationName`; the backend atomically resolves/creates the organization during proposal creation. Students do not need `organizations.manage` merely to propose a new organization.
+- **Current project lifecycle**: `CLOSED` is time-derived and means the registration window elapsed. Managers use `POST /projects/{id}/cancel` with a required reason to cancel/archive unwanted projects, including drafts. Normal archive from `COMPLETED` is gated until every confirmed student's service record is reviewed. A registration-open project with zero confirmed registrants auto-archives when registration closes and records a system audit reason. Read `Docs/optimization/02-PorjectOrganization.md` and the bilingual contract before changing this state machine.
+- **Service-record sources**: new records are `PROJECT` or `SELF`. A `PROJECT` record requires the student's confirmed registration and snapshots project-derived organization/category/location plus the project owner as supervisor; those fields remain immutable on update. A `SELF` record needs an explicit supervisor kind; external-manual supervisors require name and contact. The legacy free-text `EXTERNAL` source is resubmit-only for historical records. Respect record-number sequencing and the explicit overnight (`endsNextDay`) behavior; see `Docs/optimization/03-ServiceRecordFormOptimization.md` before changing this flow.
+- **Roles, users, and scope**: each user has exactly one `roleCode` and therefore one workspace. Roles and permissions are data-driven; do not restore fixed frontend role lists, `roleCodes`, or the retired `/workspace` picker. Every non-`student` role has school-wide data scope; grade assignments for staff roles are organizational metadata, not a visibility boundary. `student`, `admin`, and `sysadmin` are fully protected roles; `sysadmin` is intentionally hidden from the standard Roles and Users UI. Custom roles cannot receive the three student-submission permissions (`eventProposals.create`, `applications.create`, `serviceRecords.create`). Role templates are permission presets; only `admin`/`sysadmin` may manage them. See `Docs/optimization/07-RoleFinetune.md` before changing any of these rules.
+- **Phase 3/4 flags**: disabled features show "Not yet available"; do not half-build POV or redemption/borrowing features.
+- **Opaque IDs**: IDs are server-generated strings. Never parse or derive semantics from their format.
+- **Integer units**: durations use integer minutes and time-coin amounts use integer minimum accounting units; never use floats.
 
-- **Never call it a "token"/"currency"**: time coins are a non-financial school-internal accounting unit. Don't introduce redemption/cash-out/transfer semantics outside the explicitly reserved Phase 4 namespace.
-- **Status machines are backend-owned**: `Project`, `EventProposal`, `Application`, `ServiceRecord`, `Case` all have defined status transitions (see APIContract §3) — the frontend displays state, it does not derive or invent it.
-- **Account balances are transaction-derived only**: no direct balance edit endpoint exists or should exist; every change is a new immutable `AccountTransaction` (including corrections/reversals — never overwrite or delete a transaction).
-- **Reviews/approvals are non-overwritable events**: changing a decision appends a new event rather than mutating the old one.
-- **Event Proposal → Project pipeline**: a student "activity proposal" (`EventProposal`) is not a `Project` and never appears in the Project Center until approved; approval must atomically generate the official `Project` draft and backfill `approvedProjectId` in the same transaction — never create the project first and separately link it.
-- **Phase 3/4 features are feature-flagged, not half-built**: disabled features must show "Not yet available" rather than a broken/blank action; don't wire up POV or redemption/borrowing UI beyond what's already flagged.
-- **IDs are opaque server-generated strings**: never parse or derive meaning from an ID format.
-- **Durations/amounts are integers**: minutes for duration, minimum accounting units for time-coins — no floats.
+## Documentation rules
 
-## Bug-tracking and live-verification workflow
+**All rules for writing/editing anything under `Docs/`, `Design/`, or `integration-test/*.md` — directory structure, bilingual pairs, issue-doc numbering and workflow, living-status-doc update discipline, the `REVIEW-IMPORTANT` review convention, content principles, secrets handling — live in `Docs/README.md`. Read it before creating or editing any doc; it is written for exactly this situation (an agent picking up this repo cold) and is binding, not optional.** This includes live database writes discovered during bug-tracking: `Docs/README.md` §2.4 covers when an issue doc is required, but the writes themselves remain a shared-state, hard-to-reverse action — narrate and get confirmation first, same as any other risky action.
 
-When a live-verification/browser-testing session against `https://tb.example.com/` finds a real defect (not a code-review finding — something reproduced against the real deployed app), write it up rather than just fixing it silently:
+## Live-verification and issue tracking
 
-- **One doc per bug in `Docs/issues/0NN-<slug>.md`**, numbered sequentially continuing from the highest existing number in that directory — never renumber or reuse a number, and check the directory first so two sessions don't collide. Shape (see any of `001`–`009` for the pattern): a `Status:` line (`Fixed and live-verified (YYYY-MM-DD)` once actually verified, not before), `## Symptom`, `## Root cause`, `## Fix` (or `## Proposed fix` before it's implemented), `## Test plan`, `## Resolution`, and a closing italic footer line stating what was live-verified and naming any gap (e.g. "no browser tool available this session" — say this explicitly whenever verification stopped at the API/code level instead of an actual click-through, so a later session knows to close that gap rather than assuming it's covered).
-- **Also update `integration-test/STATUS.md`** every time — it's the living record of actual live-testing activity (distinct from the per-bug doc, and distinct from `Docs/implementation/00-Status.md`'s build-phase tracking): append a row to the bug log table (§2) and a dated entry to the chronological fix history (§4). Do this as you go in the same session, not as a batch rewrite before a review.
-- **A data-only fix still gets a doc.** If the root cause is a live-database gap (e.g. a missing seed row) fixed via direct SQL with no application code touched, that's exactly as reportable as a code fix — don't skip the issue doc just because there's no diff to point to.
-- **Check `Docs/issues/` and `integration-test/STATUS.md`'s bug log before assuming something is new** — a symptom that looks fresh may already be a named, fixed issue (re-verify against the live app rather than trusting the doc blindly, since live data/deploys can drift from what a doc claims — see issue `008` for a case where a prior fix's data never actually landed).
-- Live database writes (direct `INSERT`/`UPDATE` against `tb.example.com`'s real `timebank` schema, not a `timebank_it_*` test schema) are a shared-state, hard-to-reverse action — narrate them and get confirmation before running them, same as any other risky action, even though this repo's established pattern is to do them directly (no admin UI exists yet for e.g. teacher grade-scope assignment).
-
-## Content/documentation conventions (when editing Design/Docs)
-
-From `CONTRIBUTING.md`, still binding for this repo:
-
-- Chinese docs are primary; English docs mirror their structure exactly. Keep `_CN` and non-`_CN` doc pairs in sync.
-- Preserve cross-references between design docs (`见 XDoc.md` / `see XDoc.md`) and don't renumber existing sections gratuitously — other docs cite section numbers.
-- Don't weaken anti-fraud/anti-Sybil/legal-compliance provisions without explicit justification.
-- Avoid financial vocabulary (代币/发币/挖矿/提现/钱包) anywhere in new content, per the non-financial design principle.
+- Before browser testing, deploy the relevant changed frontend/backend artifact; do not treat stale shared-server output as verification.
+- For every defect reproduced against the deployed app, first check `Docs/issues/` and `integration-test/STATUS.md`. Create the next sequential `Docs/issues/0NN-<slug>.md` entry, then update the integration-test bug log and chronological history in the same session. Data-only live fixes follow the same process.
+- A live database write against the shared `timebank` schema is shared, hard-to-reverse state. State the exact intended change and obtain user confirmation before performing it. Never run integration tests against that schema.

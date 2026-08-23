@@ -12,7 +12,7 @@ This file provides guidance to Devin when working in this repository.
 TimeBank (时间银行) is an institutional system for recording, auditing, and incentivizing middle-school student volunteer service. Service hours become "time coins" (never a currency/token — see Content Principles below).
 
 - **Phase 1 — Institutional design**: complete in `Design/chinese/*.md`.
-- **Phase 2 — Online system (current focus)**: the React frontend and Spring Boot/MySQL backend are both deployed at `https://tb.example.com/`. B1 and B2 are complete; the implemented B0/B3-B6 functionality is deployed, while B0.14 and several phase-level or infrastructure-dependent exit criteria remain open. B7 Database Operations is partial and mostly blocked on missing production infrastructure. I0 is done, I1 is mostly done, I2 is done (`✅`, all 10 exit criteria met), and I3 is in progress: I3.1-I3.6 are done and 11 of 12 I3.7 acceptance scenarios are proven; only the complete bilingual/mobile+desktop sweep in scenario #12 remains open. Always check `Docs/implementation/00-Status.md` before relying on this summary.
+- **Phase 2 — Online system (current focus)**: the React frontend and Spring Boot/MySQL backend are both deployed at `https://tb.example.com/`. B0-B6 are implemented and deployed, with B0.14 plus named performance/infrastructure exit criteria still open; B7 Database Operations is partial and mostly blocked on missing production infrastructure. I0 is done, I1/I2 have their remaining verification or UX-polish criteria, and I3 is in progress: I3.1-I3.6 are done and 11 of 12 I3.7 acceptance scenarios are proven; only the complete bilingual/mobile+desktop sweep in scenario #12 remains open. The Role & Permission Management overhaul is implemented, deployed, and live-verified (2026-08-19). `00-Status.md` is a living historical tracker whose opening snapshot predates later findings; read its latest sections as well as its phase tables, then check recent commits and the relevant optimization document before relying on a summary.
 - **Phase 3 — POV (Proof of Volunteering)**: WeChat Mini Program witness/AI-verification layer, reserved via feature flags, not implemented.
 - **Phase 4 — Redemption/borrowing/value-added**: reserved via feature flags, not implemented.
 
@@ -38,7 +38,7 @@ Use this order before changing code:
 1. Read the summary, phase table, acceptance table, and latest findings in `Docs/implementation/00-Status.md`.
 2. Read `integration-test/STATUS.md` for the deployed dataset and latest live-verification findings.
 3. Check `git status` and recent `git log`; inspect actual code and scripts. Historical status paragraphs describe what was true when written and may be superseded later.
-4. Read applicable clarification documents, especially `Docs/optimization/02-PorjectOrganization.md` for current project/organization behavior.
+4. Read applicable clarification documents: `Docs/optimization/02-PorjectOrganization.md` for project/organization behavior, `03-ServiceRecordFormOptimization.md` for service-record sources, and `07-RoleFinetune.md` for users, roles, permissions, and data scope.
 5. After a deployed-app test finds or verifies a defect, update `integration-test/STATUS.md`. Update `00-Status.md` when phase or acceptance evidence changes.
 
 ## Frontend
@@ -143,8 +143,15 @@ cd /opt/timebank-backend
 
 ## Documentation rules
 
-- Chinese design/contract docs are primary; English twins mirror their structure. Update both twins together.
-- Preserve cross-references and avoid gratuitous section renumbering.
-- Do not weaken anti-fraud, anti-Sybil, privacy, or legal-compliance provisions without explicit justification.
+**All rules for writing/editing anything under `Docs/`, `Design/`, or `integration-test/*.md` live in `Docs/README.md`. Read it before creating or editing any doc; it is binding, not optional.** Key points:
+
+- Within `Docs/`, English is primary. New docs are English-only — do not create new `_CN.md` twins.
+- Existing bilingual pairs (`Docs/frontend/Design.md`, `Docs/integration/APIContract.md`, `Docs/cost-estimation/DeploymentCostEstimate.md`) stay paired. English is source of truth; mirror into `_CN.md`.
+- `Design/chinese/` is Chinese-primary, historical.
+- Preserve cross-references and section numbers — they are load-bearing.
+- Numbered docs (`implementation/`, `optimization/`, `issues/`): check highest existing number before creating; never renumber or reuse.
+- Issue docs: file as work starts, not after silently shipping. Also update `integration-test/STATUS.md` §2 + §4 in the same session.
+- `REVIEW-IMPORTANT` markers in docs are authoritative — `grep -rn REVIEW-IMPORTANT` first, propagate consequences.
+- Do not weaken anti-fraud, anti-Sybil, privacy, or legal-compliance provisions.
 - Avoid financial vocabulary (代币/发币/挖矿/提现/钱包) in new content.
-- Keep secrets out of tracked files and scripts. `Docs/TestAccounts.md` contains shared-test credentials by explicit project convention; do not reuse them elsewhere.
+- Keep secrets out of tracked files. Real hostnames/credentials live only in untracked `test-server-credits.md`. Use `tb.example.com` placeholder.

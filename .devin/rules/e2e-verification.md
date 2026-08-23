@@ -30,7 +30,7 @@ globs:
 
 ## Seeded Test Accounts
 
-See `Docs/TestAccounts.md` for real seeded accounts: `admin001`, `student001`, `student002`, `teacher001`, `both001`. The login page's old mock "demo accounts" card was removed 2026-08-07.
+See `Docs/TestAccounts.md` for real seeded accounts: `admin001`, `student001`, `student002`, `teacher001`. The login page's old mock "demo accounts" card was removed 2026-08-07.
 
 The server also carries a full seeded dataset (`integration-test/`, README + STATUS.md) — projects/records/proposals in every workflow status — so screens aren't empty during a live test. Check `integration-test/STATUS.md` before assuming a bug is new.
 
@@ -49,7 +49,7 @@ curl https://tb.example.com/api/v1/ping
 
 # For local dev-proxy testing (alternative to deployed version):
 cd frontend
-echo 'VITE_API_REAL_DOMAINS=auth,school,students,accounts,serviceRecords,reviewQueue,projects,eventProposals,applications,notifications,dashboards,reports,files,users,rules,imports,exports,cases' > .env.local
+cp .env.example .env.local  # then edit VITE_DEV_PROXY_TARGET to the real test-server URL
 pnpm dev
 ```
 
@@ -69,7 +69,7 @@ Pattern from I3 (§33):
 Playwright/Chromium doesn't exempt `localhost` from `Secure`-flagged cookies (unlike real desktop browsers). For dev-proxy testing:
 1. Obtain session via `curl` (proven reliable)
 2. Inject into Playwright context with `secure: false`
-3. Seed `localStorage['timebank-user']`/`['timebank-workspace']` matching `AuthProvider.login()`'s real branch
+3. Seed `localStorage['timebank-user']` matching `AuthProvider.login()`'s real branch
 
 For testing against the deployed `https://tb.example.com/` directly, this workaround is unnecessary.
 

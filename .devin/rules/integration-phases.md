@@ -5,11 +5,11 @@ trigger: always_on
 
 # Integration Phases — I2 Done, I3 In Progress
 
-I0 `✅`. I1 `▶` (5/7, functionality complete). **I2 `✅` (all 10 exit criteria met).** I3 `▶` (I3.1-I3.6 done, I3.7 8/12 scenarios).
+I0 `✅`. I1 `▶` (5/7, functionality complete). **I2 `✅` (all 10 exit criteria met).** I3 `▶` (I3.1-I3.6 done, I3.7 11/12 scenarios — only #12 remaining).
 
 ## I0 · Contract Prep — `✅` done (2026-08-04, §21)
 
-Built: `api/types.ts` (lifted), `api/http.ts` (transport), `api/config.ts` (toggle), enum mapping, dev-proxy recipe. Gate G1 met.
+Built: `api/types.ts` (lifted), `api/http.ts` (transport), enum mapping, dev-proxy recipe. Gate G1 met. (`api/config.ts` and the per-domain toggle were removed when mock mode was eliminated 2026-08-07.)
 
 ## I1 · Read Path — `▶` mostly done (2026-08-05, §22)
 
@@ -47,7 +47,7 @@ All 10 exit criteria met. All mutation flows wired with real branches in `client
 | I3.5 | Localization sweep | `✅` | Static analysis: 826 keys audited, 8 gaps fixed in both locales including `common.unknownError` (§26) |
 | I3.6 | Notification render-on-read | `✅` | Backend renders `title`/`body` from `templateCode` + reader's `Accept-Language` per request (§27) |
 
-### I3.7 Acceptance Scenarios — 8/12 done
+### I3.7 Acceptance Scenarios — 11/12 done
 
 | # | Scenario | Status | Notes |
 |---|----------|--------|-------|

@@ -54,6 +54,36 @@ Review approval must produce exactly these in ONE transaction, or none:
 - No transfer between students, no cash-out, no tradeable semantics
 - Phase 3/4 features are feature-flagged, show "Not yet available", never half-built
 
+## Proposal Organization Input
+
+- Choose an existing partner organization by opaque `organizationId`, or provide `newOrganizationName`
+- The backend atomically resolves/creates the organization during proposal creation
+- Students do not need `organizations.manage` merely to propose a new organization
+
+## Current Project Lifecycle
+
+- `CLOSED` is time-derived — registration window elapsed
+- Managers use `POST /projects/{id}/cancel` with a required reason to cancel/archive unwanted projects, including drafts
+- Normal archive from `COMPLETED` is gated until every confirmed student's service record is reviewed
+- A registration-open project with zero confirmed registrants auto-archives when registration closes
+
+## Service-Record Sources
+
+- New records are `PROJECT` or `SELF`
+- `PROJECT` records require confirmed registration; snapshot project-derived org/category/location/supervisor (immutable)
+- `SELF` records need explicit supervisor kind; external-manual requires name and contact
+- Legacy `EXTERNAL` source is resubmit-only for historical records
+- Respect record-number sequencing and overnight (`endsNextDay`) behavior
+
+## Roles, Users, and Scope
+
+- Each user has exactly one `roleCode` and therefore one workspace
+- Roles and permissions are data-driven; no fixed frontend role lists or `/workspace` picker
+- Every non-`student` role has school-wide data scope; grade assignments are organizational metadata, not visibility boundary
+- `student`, `admin`, `sysadmin` are fully protected roles; `sysadmin` hidden from standard UI
+- Custom roles cannot receive student-submission permissions (`eventProposals.create`, `applications.create`, `serviceRecords.create`)
+- Role templates are permission presets; only `admin`/`sysadmin` may manage them
+
 ## IDs
 
 - Opaque server-generated strings — never parse or derive meaning from format

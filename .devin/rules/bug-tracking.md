@@ -1,6 +1,6 @@
 ---
 description: Bug tracking and issue documentation workflow — when a live-verified
-  defect is found against the real deployed app
+  defect is found against the real deployed app. Follow Docs/README.md §2.4 (binding).
 trigger: glob
 globs:
 - Docs/issues/**
@@ -10,7 +10,19 @@ globs:
 
 # Bug Tracking & Issue Documentation
 
+**The authoritative source is `Docs/README.md` §2.4. Read it before creating or editing any issue doc.**
+
 When a live-verification/browser-testing session against `https://tb.example.com/` finds a real defect (reproduced against the real deployed app, not a code-review finding), document it — don't just fix it silently.
+
+## When to file an issue doc
+
+File one **as the work starts**, not only after silently shipping a fix. This applies to:
+
+- A real defect found during live-verification/browser-testing against the actual deployed app
+- Anything a maintainer directly flags and wants tracked — including UI-consistency or polish gaps
+- A data-only fix (e.g. a missing seed row corrected via direct SQL, no application code touched)
+
+Before filing, check both `Docs/issues/` (highest number, and whether this symptom is already named) **and** `integration-test/STATUS.md`'s bug log — but re-verify against the live app rather than trusting either blindly.
 
 ## Required outputs for every live-found bug
 
@@ -21,8 +33,8 @@ Numbered sequentially from the highest existing file in the directory (check fir
 ```markdown
 # 0NN — Short human-readable title
 
-Status: **Fixed and live-verified** (YYYY-MM-DD)
-   — or: **Not fixed** (reason)
+Status: Proposed fix — not yet implemented
+   — or: Fixed and live-verified (YYYY-MM-DD)
 
 ## Symptom
 What the user sees. Be specific (page, role, action, observed vs expected).
@@ -44,8 +56,12 @@ Summary of what shipped (files changed, deployed, SQL applied).
 *Live-verified YYYY-MM-DD against `https://tb.example.com/` (describe what was
 actually clicked/observed). [Name any verification gap explicitly — e.g.
 "no browser tool available this session" or "API-level only, browser
-click-through deferred."]*
+click-through deferred.']*
 ```
+
+Status values, in order of progress:
+- `Proposed fix — not yet implemented` — filed at the start of work, before any fix exists
+- `Fixed and live-verified (YYYY-MM-DD)` — only once the fix has actually been confirmed against the real deployed app. Never write this status before that verification has actually happened.
 
 ### 2. Update `integration-test/STATUS.md`
 
@@ -53,6 +69,8 @@ In the **same session** (not batched later):
 
 - **§2 Bug log table**: append a numbered row — `| # | Date | Area | Symptom | Root cause | Fix | Status |`
 - **§4 Fix history**: append a dated bullet summarizing what was found, fixed, and how it was verified
+
+Update both files again when a "proposed fix" issue doc's fix actually lands and is verified.
 
 ### 3. Update `Docs/implementation/00-Status.md`
 
