@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Search, X, MapPin, Clock, Users, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Search, X, MapPin, Clock, Users, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
 import { type Project, type ProjectStatus } from '../../api/types';
@@ -24,14 +24,21 @@ const colorMap: Record<string, string> = {
 
 type FilterStatus = ProjectStatus | 'all' | 'canApply';
 
+// Same 3 fields/keys as ProjectManagement.tsx's admin view (Docs/optimization/05-SearchFilterSortConsistency.md) —
+// `enrolledCount` has no backend column to sort on (ProjectController's SORTABLE set is
+// id/startAt/registrationOpenAt/status/createdAt only), so it stays client-side, current-page-only.
+type SortKey = 'createdAt' | 'startAt' | 'enrolledCount';
+const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['enrolledCount'];
+
 export function ProjectCenter() {
   const { t } = useTranslation();
   const { serviceCategories } = useDictionaries();
-  const { items, page, loading, error, setSearch: setPagedSearch, setFilter, setPage, refetch } = usePagedApi(api.projects.list, {});
+  const { items, page, loading, error, setSearch: setPagedSearch, setFilter, setSort, setPage, refetch } = usePagedApi(api.projects.list, {});
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterCategory, setFilterCategory] = useState('all');
-  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('createdAt');
+  const [sortDesc, setSortDesc] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [applied, setApplied] = useState<Set<string>>(new Set());
 
@@ -48,6 +55,14 @@ export function ProjectCenter() {
   const applySearch = (val: string) => {
     setSearch(val);
     setPagedSearch(val);
+  };
+
+  const handleSortClick = (key: SortKey) => {
+    const nextDesc = sortKey === key ? !sortDesc : true;
+    setSortKey(key);
+    setSortDesc(nextDesc);
+    if (!CLIENT_ONLY_SORT_KEYS.includes(key)) setSort(nextDesc ? `-${key}` : key);
+    else setSort(undefined);
   };
 
   const handleApply = async (proj: Project) => {
@@ -104,57 +119,40 @@ export function ProjectCenter() {
     { value: 'completed', label: t('student.projects.completed') },
   ];
 
-  const FilterPanel = () => (
-    <div className="space-y-4">
-      <div>
-        <div className="text-xs text-muted-foreground font-medium mb-2">{t('student.projects.statusFilter')}</div>
-        <div className="flex flex-col gap-1">
-          {statusOptions.map(opt => (
-            <button key={opt.value} onClick={() => applyStatusFilter(opt.value as FilterStatus)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                filterStatus === opt.value ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'text-foreground hover:bg-accent'
-              }`}>
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <div className="text-xs text-muted-foreground font-medium mb-2">{t('student.projects.serviceCategory')}</div>
-        <div className="flex flex-col gap-1">
-          <button onClick={() => applyCategoryFilter('all')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-              filterCategory === 'all' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'text-foreground hover:bg-accent'
-            }`}>
-            {t('student.projects.allCategories')}
-          </button>
-          {serviceCategories.map(cat => (
-            <button key={cat.id} onClick={() => applyCategoryFilter(cat.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                filterCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'text-foreground hover:bg-accent'
-              }`}>
-              {cat.name}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  const sortOptions: { key: SortKey; label: string }[] = [
+    { key: 'createdAt', label: t('student.projects.sortCreated') },
+    { key: 'startAt', label: t('student.projects.sortStartAt') },
+    { key: 'enrolledCount', label: t('student.projects.sortEnrolled') },
+  ];
+
+  // Search/status/category filtering happen server-side (see apply*Filter above). Server-sortable keys
+  // arrive pre-sorted in `items`; enrolledCount has no backend column, so it's sorted locally, page-only —
+  // same split as ProjectManagement.tsx's admin view.
+  const sorted = useMemo(() => {
+    if (!CLIENT_ONLY_SORT_KEYS.includes(sortKey)) return items;
+    return [...items].sort((a, b) => {
+      const av = a[sortKey] as number;
+      const bv = b[sortKey] as number;
+      return sortDesc ? bv - av : av - bv;
+    });
+  }, [items, sortKey, sortDesc]);
 
   if (loading && items.length === 0) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
 
   return (
-    <div className="p-4 lg:p-6">
-      <div className="mb-4 lg:mb-5 flex items-center justify-between">
+    <div className="p-4 lg:p-6 space-y-4">
+      <div className="flex items-center justify-between">
         <div>
           <h2 className="text-foreground">{t('student.projects.title')}</h2>
           <p className="text-sm text-muted-foreground">{t('student.projects.count', { count: items.length })}</p>
         </div>
       </div>
 
-      {/* Search bar */}
-      <div className="flex gap-2 mb-4">
-        <div className="flex-1 relative">
+      {/* Search & filters — Docs/optimization/05-SearchFilterSortConsistency.md §2.4: search alone below lg:,
+          filters as an Nx1 grid alongside it, merged into one row at lg: and up. Same layout as
+          ProjectManagement.tsx's admin view, minus the grade filter (not meaningful for a student's own view). */}
+      <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
+        <div className="relative lg:flex-1 lg:min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input type="text" value={search} onChange={e => applySearch(e.target.value)}
             placeholder={t('student.projects.searchPlaceholder')}
@@ -165,74 +163,43 @@ export function ProjectCenter() {
             </button>
           )}
         </div>
-        {/* Mobile filter toggle */}
-        <button onClick={() => setShowMobileFilters(!showMobileFilters)}
-          className={`lg:hidden flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm transition-colors ${
-            showMobileFilters ? 'bg-[oklch(0.488_0.243_264.376)] text-white border-[oklch(0.488_0.243_264.376)]' : 'border-border text-muted-foreground hover:bg-accent'
-          }`}>
-          <SlidersHorizontal className="w-4 h-4" />
-          {t('common.filter')}
-        </button>
+        <div className="grid grid-cols-2 gap-2 lg:contents">
+          <select value={filterStatus} onChange={e => applyStatusFilter(e.target.value as FilterStatus)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            {statusOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
+          <select value={filterCategory} onChange={e => applyCategoryFilter(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('student.projects.allCategories')}</option>
+            {serviceCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+          </select>
+        </div>
       </div>
 
-      {/* Mobile filter panel */}
-      {showMobileFilters && (
-        <div className="lg:hidden bg-card border border-border rounded-xl p-4 mb-4">
-          <div className="flex gap-2 flex-wrap mb-3">
-            {statusOptions.map(opt => (
-              <button key={opt.value} onClick={() => applyStatusFilter(opt.value as FilterStatus)}
-                className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                  filterStatus === opt.value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
-                }`}>
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => applyCategoryFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${filterCategory === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-              {t('student.projects.allCategories')}
+      {/* Sort — always an Nx1 grid, no breakpoint condition (§2.5). */}
+      <div className="grid grid-cols-3 gap-2">
+        {sortOptions.map(({ key, label }) => (
+          <button key={key} onClick={() => handleSortClick(key)}
+            className={`px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors ${sortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+            {label} {sortKey === key && (sortDesc ? '↓' : '↑')}
+          </button>
+        ))}
+      </div>
+
+      {/* Project grid */}
+      <div>
+        <ListStateBanner error={error} empty={!loading && items.length === 0} emptyLabel={t('student.projects.noMatch')} />
+        {!loading && !error && items.length === 0 && (search || filterStatus !== 'all' || filterCategory !== 'all') && (
+          <div className="text-center -mt-8">
+            <button onClick={() => { applySearch(''); applyStatusFilter('all'); applyCategoryFilter('all'); }}
+              className="mt-2 text-xs text-primary hover:underline">
+              {t('student.projects.clearAllFilters')}
             </button>
-            {serviceCategories.map(cat => (
-              <button key={cat.id} onClick={() => applyCategoryFilter(cat.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${filterCategory === cat.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-                {cat.name}
-              </button>
-            ))}
           </div>
-        </div>
-      )}
-
-      {/* Desktop: sidebar + grid layout */}
-      <div className="lg:flex lg:gap-6">
-
-        {/* Desktop filter sidebar */}
-        <aside className="hidden lg:block w-48 xl:w-56 shrink-0">
-          <div className="bg-card border border-border rounded-2xl p-4 sticky top-4">
-            <FilterPanel />
-            {(filterStatus !== 'all' || filterCategory !== 'all') && (
-              <button onClick={() => { applyStatusFilter('all'); applyCategoryFilter('all'); }}
-                className="mt-3 w-full text-xs text-muted-foreground hover:text-destructive transition-colors text-center">
-                {t('student.projects.clearFilter')}
-              </button>
-            )}
-          </div>
-        </aside>
-
-        {/* Project grid */}
-        <div className="flex-1 min-w-0">
-          <ListStateBanner error={error} empty={!loading && items.length === 0} emptyLabel={t('student.projects.noMatch')} />
-          {!loading && !error && items.length === 0 && (search || filterStatus !== 'all' || filterCategory !== 'all') && (
-            <div className="text-center -mt-8">
-              <button onClick={() => { applySearch(''); applyStatusFilter('all'); applyCategoryFilter('all'); }}
-                className="mt-2 text-xs text-primary hover:underline">
-                {t('student.projects.clearAllFilters')}
-              </button>
-            </div>
-          )}
-          {items.length > 0 && (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {items.map(proj => {
+        )}
+        {items.length > 0 && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {sorted.map(proj => {
                 const status = PROJECT_STATUS_LABELS[proj.status];
                 const isExpanded = expandedId === proj.id;
                 const btnText = getApplyBtnText(proj);
@@ -302,8 +269,7 @@ export function ProjectCenter() {
               })}
             </div>
           )}
-          <PageControls page={page} onPageChange={setPage} />
-        </div>
+        <PageControls page={page} onPageChange={setPage} />
       </div>
     </div>
   );
