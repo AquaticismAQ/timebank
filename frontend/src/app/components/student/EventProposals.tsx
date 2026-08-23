@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, ChevronDown, ChevronUp, ChevronRight, Edit, Send, Copy, X, FileText, CheckCircle, AlertTriangle, Clock, RotateCcw } from 'lucide-react';
+import { Plus, Search, ChevronDown, ChevronUp, ChevronRight, Edit, Send, Copy, X, FileText, CheckCircle, AlertTriangle, Clock, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PROPOSAL_STATUS_LABELS } from '../../lib/statusLabels';
 import { useDictionaries } from '../../api/useDictionaries';
-import { type EventProposal, type ProposalStatus, type TimelineEntry } from '../../api/types';
+import { type EventProposal, type TimelineEntry } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { newIdempotencyKey } from '../../api/http';
@@ -33,6 +33,11 @@ const ACTION_COLORS = {
 } as const;
 
 const STEP_KEYS = ['overview', 'implementation', 'organization', 'safety', 'recruitment', 'confirm'];
+
+// Same fields ProposalController's SORTABLE set allows (id/plannedStartAt/status/createdAt) —
+// same 3 keys as ProposalReview.tsx's admin view, all real backend columns.
+type SortKey = 'plannedStartAt' | 'createdAt' | 'status';
+const SORT_KEYS: SortKey[] = ['plannedStartAt', 'createdAt', 'status'];
 
 type ViewMode = 'list' | 'form' | 'detail';
 
@@ -67,7 +72,6 @@ export function EventProposals() {
   const { serviceCategories } = useDictionaries();
   const { user } = useAuth();
   const [view, setView] = useState<ViewMode>('list');
-  const [filterStatus, setFilterStatus] = useState<ProposalStatus | 'all'>('all');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState(EMPTY_FORM);
@@ -79,7 +83,8 @@ export function EventProposals() {
   // silently created a duplicate instead of patching the original (found
   // 2026-08-06, `Docs/implementation/00-Status.md` §30).
   const [editing, setEditing] = useState<{ id: string; version: number } | null>(null);
-  const { items: proposals, page, loading, error, setFilter, setPage, refetch } = usePagedApi(api.eventProposals.list, {});
+  const { items: proposals, page, loading, error, params, setSearch, setFilter, setSort, setPage, setPageSize, refetch } =
+    usePagedApi(api.eventProposals.list, { sort: '-plannedStartAt' });
 
   const detailProposal = proposals.find(p => p.id === detailId);
 
@@ -743,9 +748,21 @@ export function EventProposals() {
   // ── List view ──────────────────────────────────────────────────────────────
   if (loading && proposals.length === 0) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
 
+  // Docs/optimization/05-SearchFilterSortConsistency.md's admin-page convention, reused here
+  // (issue 053/054): `params.sort`-derived active sort key/direction, one button per field —
+  // same interaction ProposalReview.tsx's admin view uses.
+  const sortKey = (params.sort?.replace(/^-/, '') as SortKey) ?? 'plannedStartAt';
+  const sortDesc = params.sort?.startsWith('-') ?? true;
+  const handleSortClick = (key: SortKey) => {
+    const nextDesc = sortKey === key ? !sortDesc : true;
+    setSort(nextDesc ? `-${key}` : key);
+  };
+  const hasActiveFilters = !!(params.search || params.filter?.status || params.filter?.categoryId);
+  const clearFilters = () => { setSearch(''); setFilter('status', undefined); setFilter('categoryId', undefined); };
+
   return (
-    <div className="p-4 lg:p-6">
-      <div className="flex items-center justify-between mb-5">
+    <div className="p-4 lg:p-6 space-y-4">
+      <div className="flex items-center justify-between">
         <div>
           <h2 className="text-foreground">{t('student.proposals.title')}</h2>
           <p className="text-sm text-muted-foreground">{t('student.proposals.subtitle')}</p>
@@ -756,30 +773,48 @@ export function EventProposals() {
         </button>
       </div>
 
-      {/* Status filter tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1 mb-4 -mx-4 px-4">
-        {([
-          ['all', t('student.proposals.tabAll')],
-          ['draft', t('student.proposals.tabDraft')],
-          ['submitted', t('student.proposals.tabSubmitted')],
-          ['changesRequested', t('student.proposals.tabChangesRequested')],
-          ['approved', t('student.proposals.tabApproved')],
-          ['rejected', t('student.proposals.tabRejected')],
-          ['withdrawn', t('student.proposals.tabWithdrawn')],
-        ] as const).map(([val, label]) => (
-          <button key={val} onClick={() => {
-            setFilterStatus(val as ProposalStatus | 'all');
-            setFilter('status', val === 'all' ? undefined : val);
-          }}
-            className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
-              filterStatus === val ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'
-            }`}>
-            {label}
+      {/* Search & filters — Docs/optimization/05-SearchFilterSortConsistency.md §2.4: search alone
+          below lg:, filters as an Nx1 grid alongside it, merged into one row at lg: and up. */}
+      <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
+        <div className="relative lg:flex-1 lg:min-w-48">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)}
+            placeholder={t('student.proposals.searchPlaceholder')}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+        </div>
+        <div className="grid grid-cols-2 gap-2 lg:contents">
+          <select value={params.filter?.status ?? 'all'} onChange={e => setFilter('status', e.target.value === 'all' ? undefined : e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('student.proposals.allStatuses')}</option>
+            <option value="draft">{t('student.proposals.tabDraft')}</option>
+            <option value="submitted">{t('student.proposals.tabSubmitted')}</option>
+            <option value="changesRequested">{t('student.proposals.tabChangesRequested')}</option>
+            <option value="approved">{t('student.proposals.tabApproved')}</option>
+            <option value="rejected">{t('student.proposals.tabRejected')}</option>
+            <option value="withdrawn">{t('student.proposals.tabWithdrawn')}</option>
+          </select>
+          <select value={params.filter?.categoryId ?? 'all'} onChange={e => setFilter('categoryId', e.target.value === 'all' ? undefined : e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('student.proposals.allCategories')}</option>
+            {serviceCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Sort — always an Nx1 grid, no breakpoint condition (§2.5). */}
+      <div className="grid grid-cols-3 gap-2">
+        {SORT_KEYS.map(key => (
+          <button key={key} onClick={() => handleSortClick(key)}
+            className={`px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors ${sortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+            {key === 'plannedStartAt' ? t('student.proposals.sortPlannedDate') : key === 'createdAt' ? t('student.proposals.sortCreated') : t('student.proposals.sortStatus')}
+            {sortKey === key && (sortDesc ? ' ↓' : ' ↑')}
           </button>
         ))}
       </div>
 
-      <ListStateBanner error={error} empty={!loading && proposals.length === 0} emptyLabel={t('student.proposals.noProposals')} />
+      <ListStateBanner error={error} empty={!loading && proposals.length === 0}
+        emptyLabel={t(hasActiveFilters ? 'common.list.emptyNoResults' : 'student.proposals.noProposals')}
+        hasActiveFilters={hasActiveFilters} onClearFilters={clearFilters} />
 
       {/* Proposals list — desktop table / mobile cards */}
       {proposals.length === 0 ? null : (
@@ -885,7 +920,7 @@ export function EventProposals() {
         </>
       )}
 
-      <PageControls page={page} onPageChange={setPage} />
+      <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
     </div>
   );
 }

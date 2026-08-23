@@ -44,13 +44,17 @@ type SupervisorKind = '' | 'internalUser' | 'student' | 'externalManual';
 
 const STEP_KEYS = ['source', 'serviceInfo', 'evidence', 'confirmSubmit'];
 
+// Same fields ServiceRecordController's SORTABLE set allows (id/serviceDate/status/createdAt) —
+// all 3 are real backend columns, unlike ProjectCenter's enrolledCount, so no client-only split needed.
+type SortKey = 'serviceDate' | 'createdAt' | 'status';
+const SORT_KEYS: SortKey[] = ['serviceDate', 'createdAt', 'status'];
+
 export function ServiceRecords() {
   const { t } = useTranslation();
   const { serviceCategories } = useDictionaries();
-  const { items: records, page, loading, error, setFilter, setSearch: setPagedSearch, setPage, refetch } = usePagedApi(api.serviceRecords.list, {});
+  const { items: records, page, loading, error, params, setFilter, setSearch, setSort, setPage, setPageSize, refetch } =
+    usePagedApi(api.serviceRecords.list, { sort: '-serviceDate' });
   const [view, setView] = useState<ViewMode>('list');
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<RecordStatus | 'all'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -730,6 +734,17 @@ export function ServiceRecords() {
 
   if (loading && records.length === 0) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
 
+  // Docs/optimization/05-SearchFilterSortConsistency.md's admin-page convention, reused here
+  // (issue 053/054): `params.sort`-derived active sort key/direction, one button per field.
+  const sortKey = (params.sort?.replace(/^-/, '') as SortKey) ?? 'serviceDate';
+  const sortDesc = params.sort?.startsWith('-') ?? true;
+  const handleSortClick = (key: SortKey) => {
+    const nextDesc = sortKey === key ? !sortDesc : true;
+    setSort(nextDesc ? `-${key}` : key);
+  };
+  const hasActiveFilters = !!(params.search || params.filter?.status || params.filter?.serviceCategoryId);
+  const clearFilters = () => { setSearch(''); setFilter('status', undefined); setFilter('serviceCategoryId', undefined); };
+
   return (
     <div className="p-4 lg:p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -767,49 +782,50 @@ export function ServiceRecords() {
         <StudentCases key={casesRefreshKey} />
       ) : (
       <>
-      {/* Status tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4">
-        {([
-          ['all', t('student.records.tabAll')],
-          ['draft', t('student.records.tabDraft')],
-          ['submitted', t('student.records.tabSubmitted')],
-          ['underReview', t('student.records.tabUnderReview')],
-          ['returned', t('student.records.tabReturned')],
-          ['approved', t('student.records.tabApproved')],
-          ['rejected', t('student.records.tabRejected')],
-        ] as const).map(([val, label]) => (
-          <button
-            key={val}
-            onClick={() => {
-              setFilterStatus(val as RecordStatus | 'all');
-              setFilter('status', val === 'all' ? undefined : val);
-            }}
-            className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
-              filterStatus === val
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
-                : 'bg-muted text-muted-foreground hover:bg-accent'
-            }`}
-          >
-            {label}
+      {/* Search & filters — Docs/optimization/05-SearchFilterSortConsistency.md §2.4: search alone
+          below lg:, filters as an Nx1 grid alongside it, merged into one row at lg: and up. */}
+      <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
+        <div className="relative lg:flex-1 lg:min-w-48">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)}
+            placeholder={t('student.records.searchPlaceholder')}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+        </div>
+        <div className="grid grid-cols-2 gap-2 lg:contents">
+          <select value={params.filter?.status ?? 'all'} onChange={e => setFilter('status', e.target.value === 'all' ? undefined : e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('student.records.allStatuses')}</option>
+            <option value="draft">{t('student.records.tabDraft')}</option>
+            <option value="submitted">{t('student.records.tabSubmitted')}</option>
+            <option value="underReview">{t('student.records.tabUnderReview')}</option>
+            <option value="returned">{t('student.records.tabReturned')}</option>
+            <option value="approved">{t('student.records.tabApproved')}</option>
+            <option value="rejected">{t('student.records.tabRejected')}</option>
+          </select>
+          <select value={params.filter?.serviceCategoryId ?? 'all'} onChange={e => setFilter('serviceCategoryId', e.target.value === 'all' ? undefined : e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('student.records.allCategories')}</option>
+            {serviceCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Sort — always an Nx1 grid, no breakpoint condition (§2.5). */}
+      <div className="grid grid-cols-3 gap-2">
+        {SORT_KEYS.map(key => (
+          <button key={key} onClick={() => handleSortClick(key)}
+            className={`px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors ${sortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+            {key === 'serviceDate' ? t('student.records.sortServiceDate') : key === 'createdAt' ? t('student.records.sortCreated') : t('student.records.sortStatus')}
+            {sortKey === key && (sortDesc ? ' ↓' : ' ↑')}
           </button>
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input
-          type="text"
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPagedSearch(e.target.value); }}
-          placeholder={t('student.records.searchPlaceholder')}
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-        />
-      </div>
-
       {/* Records — desktop table / mobile cards */}
-      <ListStateBanner error={error} empty={!loading && records.length === 0} emptyLabel={t('student.records.noRecords')} />
-      {!loading && !error && records.length === 0 && (
+      <ListStateBanner error={error} empty={!loading && records.length === 0}
+        emptyLabel={t(hasActiveFilters ? 'common.list.emptyNoResults' : 'student.records.noRecords')}
+        hasActiveFilters={hasActiveFilters} onClearFilters={clearFilters} />
+      {!loading && !error && records.length === 0 && !hasActiveFilters && (
         <div className="text-center -mt-8">
           <button onClick={openNewRecord} className="text-primary text-sm hover:underline">+ {t('student.records.submitFirst')}</button>
         </div>
@@ -1010,7 +1026,7 @@ export function ServiceRecords() {
           </div>
         </>
       )}
-      <PageControls page={page} onPageChange={setPage} />
+      <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
       </>
       )}
 

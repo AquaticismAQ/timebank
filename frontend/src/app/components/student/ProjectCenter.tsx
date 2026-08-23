@@ -33,7 +33,7 @@ const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['enrolledCount'];
 export function ProjectCenter() {
   const { t } = useTranslation();
   const { serviceCategories } = useDictionaries();
-  const { items, page, loading, error, setSearch: setPagedSearch, setFilter, setSort, setPage, refetch } = usePagedApi(api.projects.list, {});
+  const { items, page, loading, error, params, setSearch: setPagedSearch, setFilter, setSort, setPage, setPageSize, refetch } = usePagedApi(api.projects.list, {});
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -113,7 +113,7 @@ export function ProjectCenter() {
   };
 
   const statusOptions = [
-    { value: 'all', label: t('student.projects.all') },
+    { value: 'all', label: t('student.projects.allStatuses') },
     { value: 'canApply', label: t('student.projects.available') },
     { value: 'inProgress', label: t('student.projects.inProgress') },
     { value: 'completed', label: t('student.projects.completed') },
@@ -269,7 +269,7 @@ export function ProjectCenter() {
               })}
             </div>
           )}
-        <PageControls page={page} onPageChange={setPage} />
+        <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
       </div>
     </div>
   );
