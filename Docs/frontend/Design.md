@@ -29,6 +29,7 @@ The frontend must meet the following objectives:
 | Item | Convention |
 | --- | --- |
 | Frontend framework | React |
+| Build tooling | Vite |
 | Styling system | Tailwind CSS |
 | Device strategy | Mobile First, progressively enhanced to tablet and desktop |
 | API | RESTful API, unified `/api/v1` version prefix |
@@ -245,16 +246,18 @@ Behavior requirements:
 ### 5.6 Time-Coin Account
 
 - Current balance, cumulative earned, cumulative redeemed, frozen, and borrowed amounts.
-- Transaction list: crediting, reversal, freeze, unfreeze, redemption, borrowing, repayment.
+- Transaction list: crediting, correction, freeze, unfreeze, redemption, borrowing, repayment.
 - Transaction detail shows source record, before/after balance, time, and description.
 - If Phase 4 features are not enabled, redemption and borrowing entries display "Not yet available" instead of fake actionable buttons.
 
-### 5.7 Retroactive Entry & Appeal
+### 5.7 Cases: Retroactive Entry, Appeal & Manual Correction
 
-- Initiated from the relevant service record, avoiding duplicate entry of common information.
-- Retroactive entry requires selecting a reason and uploading supplementary proof.
-- Appeal requires filling in a dispute description.
-- List and detail display processing status, review comments, and timeline.
+A student may file a **retroactive entry (supplement)** or an **appeal (reconsideration)** case; a third type, **staff-filed manual correction**, exists for the same unified case model but has no student-side entry point.
+
+- Can be initiated from the relevant service record to avoid duplicate entry of common information, or filed generally with no specific record attached (e.g. an appeal that isn't about one particular record).
+- Retroactive entry requires selecting a reason and uploading supplementary proof; appeal requires filling in a dispute description.
+- All three case types share one status model: `draft → submitted → inReview → resolved`, with `inReview → needsInformation → submitted` (returned for more information, then resubmitted) and `inReview → rejected` as alternate outcomes.
+- **My Cases**: a personal history list of every case the student has filed, independent of the originating record, showing type, status, and the reviewer's comments/timeline for each.
 
 ### 5.8 Notifications & Personal Center
 
@@ -289,9 +292,9 @@ Teachers use the Admin Portal but can only access authorized projects and grade/
 - Pending review list sorted and filtered by submission time, planned activity date, grade, and review SLA.
 - Proposal detail displays public service goals, implementation plan, student organizers, target participants, safety plan, resource needs, suggested hours, and all revision history.
 - Evaluate educational value, public benefit, feasibility, safety, time crediting, venue conflicts, and resource needs.
-- Actions: request revision, recommend approval, approve, reject, or transfer; without final approval authority, can only recommend approval and transfer to Student Development Center.
+- Actions: request revision, approve, or reject. Approval is single-tier — any account holding the proposal-review permission (teacher, Student Development Center administrator, or system administrator) decides directly; there is no separate "recommend approval, then forward for final review" step.
 - Request revision or rejection must select a standardized reason and provide specific comments.
-- After approval, take over or assist in refining the system-generated official project draft, confirming student leader responsibilities, supervising teacher, and publication plan.
+- Approval atomically generates the official project draft and backfills the proposal's `approvedProjectId` in the same transaction; take over or assist in refining that draft afterward, confirming student leader responsibilities, supervising teacher, and publication plan.
 - Approval timeline is visible to the student proposer, but internal notes are only visible to authorized personnel.
 
 ### 6.4 Review Workbench
@@ -340,8 +343,8 @@ Administrators include Student Development Center administrators and system admi
 
 ### 7.3 Student Activity Proposal Review Management
 
-- School-wide activity proposal queue with views for needs revision, recommended approval, approved, rejected, and withdrawn.
-- Assign reviewers, configure multi-level approval, transfer to Student Development Center for final review, and monitor approval SLA.
+- School-wide activity proposal queue with views for needs revision, approved, rejected, and withdrawn.
+- Assign reviewers and monitor approval SLA. Approval is single-tier: any account holding the review permission decides directly — there is no recommend-then-forward-to-final-review step.
 - View proposal revision diffs, teacher comments, internal notes, venue conflicts, resource usage, and similar historical activities.
 - Execute request revision, approve, or reject; upon approval, generate official project draft and assign supervising teacher, student leader, and publication owner.
 - Handle post-approval major changes: return project draft for re-approval or revoke unpublished approval, all operations retaining audit records.
@@ -349,7 +352,8 @@ Administrators include Student Development Center administrators and system admi
 
 ### 7.4 Review Center
 
-- School-wide review queue, appeal queue, and exception records.
+- School-wide service-record review queue, plus exception records.
+- A separate case queue covers appeal, retroactive-entry/supplement, and staff-only manual-correction cases — its own queue and detail workbench, sharing the unified case status model (§5.7) but distinct from the service-record queue above.
 - Review task assignment and transfer.
 - Batch approval only applies to low-risk records meeting configured conditions.
 - View complete evidence, historical versions, review comments, and operation logs.
@@ -417,11 +421,10 @@ Teacher/Admin creates project draft
 Student creates activity proposal draft
 → Fills in activity goals, implementation plan, organization, safety measures, and recruitment plan
 → Submit for approval
-→ Teacher/Admin evaluates
+→ Teacher/Admin evaluates (single-tier — any account holding review permission decides directly)
    → Request revision: Student creates new revision per feedback and resubmits
    → Reject: Record standardized reason and explanation
-   → Recommend approval: Transfer to Student Development Center for final review
-   → Approve: Generate official project draft and assign responsible teacher
+   → Approve: Atomically generate official project draft, backfill approvedProjectId, and assign responsible teacher
 → Teacher/Admin refines project rules and officially publishes
 → Other students register in Project Center
 → Student initiator participates in preparation and registration collaboration via project page
@@ -442,15 +445,17 @@ Student creates new record and saves draft
 → Student views results, account, and progress
 ```
 
-### 8.4 Appeal
+### 8.4 Case: Appeal / Retroactive Entry / Manual Correction
 
 ```text
-Student initiates appeal from record detail
-→ Fills in dispute and supplements materials
-→ Student Development Center enters appeal queue
-→ Uphold original decision / Change to approved / Request additional supplement
-→ System notifies student and records in timeline
+Student initiates appeal or retroactive-entry case (from record detail or standalone)
+→ Fills in dispute/reason and supplements materials
+→ Enters the case queue (draft → submitted → inReview)
+→ Resolved (uphold / change to approved) / Needs Information (student resupplies, re-submits) / Rejected
+→ System notifies student and records in the case's own timeline; also visible in "My Cases"
 ```
+
+A fourth path, staff-filed **manual correction**, shares this same queue and status model but has no student-initiated entry point — used when staff correct a ledger directly rather than in response to a student's filing.
 
 ### 8.5 Historical Ledger Import
 
@@ -549,7 +554,6 @@ Recommended organization by business domain, not by page type:
 
 ```text
 auth
-workspace
 dashboard
 projects
 applications
@@ -560,7 +564,7 @@ students
 organizations
 accounts
 progress
-appeals
+cases
 notifications
 reports
 imports-exports
@@ -569,6 +573,8 @@ future-pov
 future-redemption
 future-borrowing
 ```
+
+(No `workspace` domain — the dual-workspace/portal-picker design was retired; a role determines exactly one portal directly at login, §3.1.)
 
 Each business domain contains its routing, pages, components, queries, form validation, and permission mapping. Cross-domain capabilities such as authentication, file upload, error handling, design tokens, and API client are placed in a shared foundation layer.
 
@@ -589,7 +595,7 @@ Each business domain contains its routing, pages, components, queries, form vali
 
 ## 14. Phase 2 Acceptance Criteria
 
-- Students, teachers, and administrators can log in with independent accounts and see the correct workspace.
+- Students, teachers, and administrators can log in with independent accounts and enter the correct portal directly (no portal-selection page, no workspace switching).
 - When permissions are insufficient, the frontend does not display entry points; direct route access is also rejected by the backend.
 - Students can complete project registration, record submission, material supplement, appeal, and result query.
 - Students can create, submit, revise, and withdraw activity proposals, and view approval comments and linked official projects.
