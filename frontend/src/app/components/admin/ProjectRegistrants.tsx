@@ -126,7 +126,7 @@ export function ProjectRegistrants({ projectId, projectTitle, onClose }: { proje
                 <div className="text-sm text-foreground truncate">{app.studentName}</div>
                 <div className="text-xs text-muted-foreground">{app.appliedAt?.slice(0, 10)}</div>
               </div>
-              <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLOR[app.status]}`}>{t(STATUS_LABEL_KEY[app.status])}</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${STATUS_COLOR[app.status]}`}>{t(STATUS_LABEL_KEY[app.status])}</span>
               {canManage && (app.status === 'pending' || app.status === 'waitlisted') && (
                 <div className="flex gap-1 shrink-0">
                   <button onClick={() => handleAction(app.id, 'confirm')} title={t('admin.projects.regConfirm')}

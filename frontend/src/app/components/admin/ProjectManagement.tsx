@@ -282,7 +282,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
             <div>
               <label className={LABEL}>{t('admin.projects.projectStatus')}</label>
               <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[PROJECT_STATUS_LABELS[project.status].color]}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${colorMap[PROJECT_STATUS_LABELS[project.status].color]}`}>
                   {t(PROJECT_STATUS_LABELS[project.status].label)}
                 </span>
                 <span className="text-xs text-muted-foreground">{t('admin.projects.statusChangeHint')}</span>
@@ -578,7 +578,7 @@ export function ProjectManagement() {
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color]}`}>{t(status.label)}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${colorMap[status.color]}`}>{t(status.label)}</span>
                     <span className="text-xs text-muted-foreground">{proj.categoryName}</span>
                   </div>
                   <div className="text-sm text-foreground font-medium mb-1">{proj.title}</div>

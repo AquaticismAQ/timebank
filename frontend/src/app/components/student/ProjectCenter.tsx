@@ -242,7 +242,7 @@ export function ProjectCenter() {
                   <div key={proj.id} className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col">
                     <div className="p-4 flex-1">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
                         <span className="text-xs text-muted-foreground">{proj.categoryName}</span>
                       </div>
                       <h3 className="text-sm text-foreground font-medium leading-snug mb-2">{proj.title}</h3>

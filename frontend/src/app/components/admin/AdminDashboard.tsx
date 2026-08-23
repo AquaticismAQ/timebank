@@ -213,7 +213,7 @@ export function AdminDashboard() {
               return (
                 <div key={proj.id} className="bg-card border border-border rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${
                       proj.status === 'registrationOpen' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
                     }`}>{t(status.label)}</span>
                   </div>

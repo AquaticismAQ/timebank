@@ -179,7 +179,7 @@ export function ProposalReview() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR_CLASSES[PROPOSAL_STATUS_LABELS[p.status].color]}`}>{t(PROPOSAL_STATUS_LABELS[p.status].label)}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[PROPOSAL_STATUS_LABELS[p.status].color]}`}>{t(PROPOSAL_STATUS_LABELS[p.status].label)}</span>
                   <span className="text-xs text-muted-foreground">{p.categoryName}</span>
                 </div>
                 <div className="text-sm text-foreground font-medium truncate">{p.title}</div>

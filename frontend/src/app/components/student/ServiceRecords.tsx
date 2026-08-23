@@ -849,7 +849,7 @@ export function ServiceRecords() {
                       <td className="px-4 py-3 text-xs text-muted-foreground">{rec.serviceDate}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{minutesToHours(rec.durationMinutes)}h</td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         {rec.creditedUnits ? <span className="text-yellow-600 dark:text-yellow-400">+{formatCoins(rec.creditedUnits)}</span> : '—'}
@@ -913,7 +913,7 @@ export function ServiceRecords() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
                           {rec.creditedUnits && <span className="text-xs text-yellow-600 dark:text-yellow-400">+{formatCoins(rec.creditedUnits)} {t('common.coins')}</span>}
                         </div>
                         <div className="text-sm text-foreground font-medium truncate">{rec.projectTitle || rec.organizationName}</div>

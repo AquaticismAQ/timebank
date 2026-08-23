@@ -532,10 +532,10 @@ export function EventProposals() {
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
               <span className="text-xs text-muted-foreground">{p.categoryName}</span>
               {p.currentRevision > 1 && (
-                <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">v{p.currentRevision}</span>
+                <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full whitespace-nowrap">v{p.currentRevision}</span>
               )}
             </div>
             <h2 className="text-foreground leading-snug">{p.title}</h2>
@@ -810,7 +810,7 @@ export function EventProposals() {
                       <td className="px-4 py-3 text-xs text-muted-foreground">{p.categoryName}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{p.plannedDate || '—'}</td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{p.updatedAt.slice(0, 10)}</td>
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
@@ -856,7 +856,7 @@ export function EventProposals() {
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
                         <span className="text-xs text-muted-foreground">{p.categoryName}</span>
                       </div>
                       <div className="text-sm text-foreground font-medium leading-snug">{p.title}</div>

@@ -85,7 +85,7 @@ export function NotificationsPage() {
               }`}
             >
               <div className="flex items-start gap-3">
-                <div className={`shrink-0 text-xs px-2 py-0.5 rounded-full mt-0.5 ${categoryColors[notif.category]}`}>
+                <div className={`shrink-0 text-xs px-2 py-0.5 rounded-full whitespace-nowrap mt-0.5 ${categoryColors[notif.category]}`}>
                   {t(categoryLabels[notif.category])}
                 </div>
                 <div className="flex-1 min-w-0">

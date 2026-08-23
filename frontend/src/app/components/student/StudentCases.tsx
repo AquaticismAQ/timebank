@@ -50,7 +50,7 @@ export function StudentCases() {
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR_CLASSES[status.color]}`}>{t(status.label)}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[status.color]}`}>{t(status.label)}</span>
                     <span className="text-xs text-muted-foreground">{t(TYPE_LABEL[c.type])}</span>
                     {c.subjectLabel && <span className="text-xs text-muted-foreground">{c.subjectLabel}</span>}
                   </div>

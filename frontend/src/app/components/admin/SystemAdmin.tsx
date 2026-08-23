@@ -1184,7 +1184,7 @@ export function SystemAdmin() {
             <div key={rule.id} className="bg-card border border-border rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${ruleStatusBadgeClass(rule.status)}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${ruleStatusBadgeClass(rule.status)}`}>
                     {t(`admin.system.rules.status.${rule.status}`)}
                   </span>
                   <span className="text-xs text-muted-foreground">

@@ -164,9 +164,9 @@ export function OrganizationManagement() {
             <div className="flex items-start gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{t(`admin.organizations.type.${org.type}`)}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap bg-muted text-muted-foreground">{t(`admin.organizations.type.${org.type}`)}</span>
                   {org.status !== 'active' && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+                    <span className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
                       {t(`admin.organizations.status${org.status.charAt(0).toUpperCase()}${org.status.slice(1)}`)}
                     </span>
                   )}

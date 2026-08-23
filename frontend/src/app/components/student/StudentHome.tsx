@@ -177,7 +177,7 @@ export function StudentHome() {
                       <div className="text-sm text-foreground truncate">{rec.projectTitle || rec.organizationName}</div>
                       <div className="text-xs text-muted-foreground">{rec.serviceDate} · {minutesToHours(rec.durationMinutes)}h</div>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
                   </div>
                 );
               })}
@@ -204,7 +204,7 @@ export function StudentHome() {
                       <td className="px-4 py-3 text-muted-foreground">{minutesToHours(rec.durationMinutes)}h</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{rec.serviceCategoryName}</td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${colorMap[status.color] || colorMap.gray}`}>{t(status.label)}</span>
                       </td>
                     </tr>
                   );
@@ -261,7 +261,7 @@ export function StudentHome() {
                   <div key={proj.id} className="px-4 py-3">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="text-sm text-foreground font-medium flex-1 leading-snug">{proj.title}</div>
-                      <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full shrink-0">Open</span>
+                      <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">Open</span>
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {minutesToHours(proj.recognizedMinutes)}h · {proj.capacity - proj.enrolledCount} {t('student.home.slots')}

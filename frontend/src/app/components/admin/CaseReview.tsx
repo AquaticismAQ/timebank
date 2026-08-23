@@ -192,7 +192,7 @@ export function CaseReview() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR_CLASSES[CASE_STATUS_LABELS[c.status].color]}`}>{t(CASE_STATUS_LABELS[c.status].label)}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[CASE_STATUS_LABELS[c.status].color]}`}>{t(CASE_STATUS_LABELS[c.status].label)}</span>
                   <span className="text-xs text-muted-foreground">{t(TYPE_LABEL[c.type])}</span>
                 </div>
                 <div className="text-sm text-foreground font-medium truncate">{c.title}</div>
