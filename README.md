@@ -16,9 +16,14 @@
 
 ## Documentation · 文档
 
-Documentation is currently available in **Chinese only**. English translations will be added in a future update.
+The Phase 1 institutional design documentation is available in **Chinese
+and English**. The same-named files in `Design/english/` mirror
+`Design/chinese/`; the Chinese documents are the authoritative source of
+truth and the English versions must remain synchronized with them.
 
-文档目前仅提供**中文版本**，英文版本将在后续版本中更新。
+第一阶段制度设计文档现已提供**中文与英文版本**。`Design/english/` 中的
+同名文件是 `Design/chinese/` 的英文镜像；中文文档是权威来源，英文版本须
+与其保持同步。
 
 ### Design Docs · 设计文档
 
@@ -34,7 +39,15 @@ Documentation is currently available in **Chinese only**. English translations w
 
 ### English Docs · 英文文档
 
-*Coming soon · 即将推出*
+| Document | Description |
+| --- | --- |
+| [01-TimeBankDesign.md](Design/english/01-TimeBankDesign.md) | Top-level institutional design: goals, core concepts, service requirements, functions, roles, and incentives |
+| [02-ManualAudit.md](Design/english/02-ManualAudit.md) | Manual review: paper-form workflow, data fields, review standards, and risk controls |
+| [03-AutoAudit.md](Design/english/03-AutoAudit.md) | Automated review and POV witness attestation: on-device de-identification, weak verification, AI risk controls, and anti-Sybil options |
+| [04-Blockchain.md](Design/english/04-Blockchain.md) | Blockchain evidence storage: positioning, compliance, consortium-chain selection, evidence-package design, and costs |
+| [05-OnlineSystem.md](Design/english/05-OnlineSystem.md) | Online system: modules, architecture, data security, and implementation plan |
+| [06-Legal.md](Design/english/06-Legal.md) | Legal compliance under Chinese law: blockchain constraints and the permitted boundaries for time coins |
+| [07-AI.md](Design/english/07-AI.md) | AI applications: on-device face de-identification, multimodal review, image-authenticity checks, statistical fraud controls, and witness scoring |
 
 ---
 
@@ -44,30 +57,46 @@ Documentation is currently available in **Chinese only**. English translations w
 - **Proof of Volunteering (POV)**: A multi-source evidence framework combining device metadata (GPS, timestamps), witness attestation (WeChat real-name, 2-second scan), AI scene recognition, and social endorsement (peer co-verification, guardian sign-off).
 - **Privacy by Default**: Client-side face blurring (WASM/BlazeFace) before any upload; original images destroyed in memory; only hashes stored on-chain.
 - **Anti-Sybil & Statistical Fraud Control**: Metcalfe dispersion filters, geo-fencing, seasonal/environmental consistency checks, witness credit scoring — borrowed from financial anti-money-laundering models.
-- **Token Economics**: Spontaneous volunteering earns low time-coin quotas with high honorary incentives (badges, rankings), making fraud economically pointless.
+- **Incentive Design**: Spontaneous volunteering earns low time-coin quotas with high honorary incentives (badges, rankings), making fraud unrewarding.
 - **Legal Compliance**: No token issuance, no financial transactions; consortium blockchain (recommended: WenChang Chain / BSN) for evidence only; all data stored domestically.
 
 **中文**
 - **POV 见证者证明**：多源加权可信度体系，整合设备元数据（GPS/时间戳）、见证者弱验证（微信实名 2 秒闭环）、多模态 AI 场景识别与社会佐证（组员互证 + 监护人背书）。
 - **隐私优先设计**：端侧（WASM/BlazeFace）人脸打码后才上传，原图内存销毁，链上仅存哈希。
 - **反作弊统计学风控**：梅特卡夫离散度过滤、地理时空围栏、季节环境一致性检验、见证者信用分——借鉴金融反洗钱/反刷单模型。
-- **代币经济学**：自发公益低时间币上限 + 高荣誉激励（勋章/排名），从源头使作弊无利可图。
+- **激励机制**：自发公益采用低时间币上限 + 高荣誉激励（勋章/排名），从源头使作弊无利可图。
 - **法律合规**：不发币、不交易；推荐文昌链（BSN 开放联盟链）仅作存证；数据与节点全部在境内。
 
 ---
 
 ## Project Status · 项目状态
 
+As of **2026-08-26**, Phase 2 is ongoing and approximately **90% complete**.
+The React frontend and Spring Boot backend are deployed together on the
+shared test server and have been verified through real API and browser
+flows. Remaining work is primarily acceptance/cutover completion and
+infrastructure-dependent operations; the current deployment is a test
+environment, not a production launch. See
+[`Docs/implementation/00-Status.md`](Docs/implementation/00-Status.md) for
+the authoritative item-by-item status.
+
+截至 **2026-08-26**，第二阶段仍在推进，整体约完成 **90%**。React 前端与
+Spring Boot 后端已共同部署到共享测试服务器，并通过真实 API 与浏览器流程
+验证。剩余工作主要是验收/切换收尾及依赖新增基础设施的运维事项；当前部署
+属于测试环境，并非正式生产上线。逐项权威状态见
+[`Docs/implementation/00-Status.md`](Docs/implementation/00-Status.md)。
+
 | Phase | Status |
 | --- | --- |
-| Institutional Design · 制度设计 | ✅ Draft complete |
-| Manual Audit · 人工审核 | ✅ Spec complete |
-| Auto Audit (POV) · 自动审核 | ✅ Spec complete |
-| Blockchain Evidence · 区块链存证 | ✅ Spec complete |
-| Online System · 线上系统 | 🔄 Spec complete, dev pending |
-| Legal Compliance · 法律合规 | ✅ Spec complete |
-| English Documentation · 英文文档 | 📋 Planned |
-| System Development · 系统开发 | 📋 Planned |
+| Phase 1: Institutional Design · 第一阶段：制度设计 | ✅ Complete; Chinese originals and English mirrors available |
+| Manual Review Design · 人工审核设计 | ✅ Specification complete and implemented in the online system |
+| Automated Review (POV) · 自动审核 | ✅ Specification complete; Phase 3 implementation reserved |
+| Blockchain Evidence Storage · 区块链存证 | ✅ Specification complete; optional Phase 3 capability |
+| Legal Compliance · 法律合规 | ✅ Specification complete |
+| English Design Documentation · 英文设计文档 | ✅ All seven mirrors complete |
+| Phase 2: Online System · 第二阶段：线上系统 | 🔄 Approximately 90% complete; frontend and backend deployed and verified on the shared test server |
+| Phase 3: POV Mini Program · 第三阶段：POV 小程序 | 📋 Reserved behind feature flags; not implemented |
+| Phase 4: Extended Incentives · 第四阶段：拓展激励 | 📋 Reserved behind feature flags; not implemented |
 
 ---
 
@@ -96,7 +125,14 @@ There is no local mock mode and no Docker anywhere in this project — the front
 
 ## Deployment · 部署
 
-**English** — The frontend and backend deploy to a single shared test server (no staging environment yet — see `Docs/operations/Runbooks.md`). Both deploy scripts are designed to be safe to commit: neither hardcodes the real hostname or any secret, both source an optional, untracked `~/.timebank.env` for convenience (see `Docs/operations/DeploymentEnv.md`), and real credentials live only in the untracked `test-server-credits.md`.
+**English** — The frontend and backend are currently deployed together on a
+single shared test server and have been verified there through real API and
+browser flows. There is no separate staging environment yet (see
+`Docs/operations/Runbooks.md`). Both deploy scripts are designed to be safe
+to commit: neither hardcodes the real hostname or any secret, both source an
+optional, untracked `~/.timebank.env` for convenience (see
+`Docs/operations/DeploymentEnv.md`), and real credentials live only in the
+untracked `test-server-credits.md`.
 
 ```bash
 frontend/scripts/deploy.sh [user@host]   # builds locally, rsyncs dist/ to nginx, reloads nginx
@@ -109,7 +145,15 @@ cd /opt/timebank-backend && ./scripts/verify.sh && ./scripts/deploy.sh
 
 `Docs/operations/DeploymentEnv.md` covers the `~/.timebank.env` convenience file that both scripts pick up automatically if present, so collaborators don't have to re-export the deploy target and database credentials by hand every session.
 
-**中文** — 前端与后端部署到同一台共享测试服务器（尚无独立的预发布环境，见 `Docs/operations/Runbooks.md`）。两个部署脚本均可安全提交：不硬编码真实主机名或任何密钥，均会在存在时自动加载未纳入版本控制的 `~/.timebank.env`（见 `Docs/operations/DeploymentEnv.md`），真实凭证仅保存在未纳入版本控制的 `test-server-credits.md` 中。命令示例见上方英文代码块。`Docs/operations/DeploymentEnv.md` 说明了 `~/.timebank.env` 这一便利文件的结构，两个脚本在其存在时会自动加载，协作者无需每次手动重新导出部署目标与数据库凭证。
+**中文** — 前端与后端现已共同部署到同一台共享测试服务器，并已通过真实 API
+与浏览器流程验证；目前尚无独立的预发布环境（见
+`Docs/operations/Runbooks.md`）。两个部署脚本均可安全提交：不硬编码真实
+主机名或任何密钥，均会在存在时自动加载未纳入版本控制的
+`~/.timebank.env`（见 `Docs/operations/DeploymentEnv.md`），真实凭证仅
+保存在未纳入版本控制的 `test-server-credits.md` 中。命令示例见上方英文
+代码块。`Docs/operations/DeploymentEnv.md` 说明了 `~/.timebank.env`
+这一便利文件的结构，两个脚本在其存在时会自动加载，协作者无需每次手动
+重新导出部署目标与数据库凭证。
 
 ---
 
