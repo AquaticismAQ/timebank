@@ -7,6 +7,17 @@ fast-growing directories (`issues/` in particular adds a new file almost
 every session). Run `ls Docs/<dir>` to see current contents. What follows is
 the *shape* of the directory tree and the rules for adding to it correctly.
 
+**Current project status (2026-08-26):** Phase 1 institutional design is
+complete, including the same-named English mirrors in `Design/english/`.
+Phase 2, the online system, is ongoing and approximately **90% complete**.
+The React frontend and Spring Boot backend are deployed together on the
+shared test server and have been verified there through real API and browser
+flows. Remaining work is primarily acceptance/cutover completion and
+infrastructure-dependent operations; this test deployment is not a
+production launch. For authoritative item-by-item status and verification
+evidence, read the latest dated sections of
+`Docs/implementation/00-Status.md`.
+
 ---
 
 ## 1. Directory structure
@@ -15,7 +26,8 @@ the *shape* of the directory tree and the rules for adding to it correctly.
 repo/
 ├── README.md                    Project overview (bilingual, root)
 ├── CONTRIBUTING.md              Contribution workflow, language/style, content principles
-├── Design/chinese/               Phase 1 institutional design (制度设计) — source of "why", Chinese-primary
+├── Design/chinese/               Phase 1 institutional design (制度设计) — authoritative source of truth
+├── Design/english/               Complete, same-named English mirrors of Design/chinese/
 ├── integration-test/            Live-dataset seeding for the shared test server; own README.md + STATUS.md
 ├── frontend/, backend/          Application source — see root CLAUDE.md
 └── Docs/
@@ -46,8 +58,11 @@ fits.
 ### 2.1 Language policy — English is primary in `Docs/`; new docs are English-only
 
 This inverts `CONTRIBUTING.md`'s Chinese-primary rule, which still governs
-`Design/chinese/` (Phase 1 institutional design — historical, left as-is,
-translate to English later, not urgent). **Within `Docs/` specifically:**
+the Phase 1 institutional design documents. `Design/chinese/` is the
+authoritative source of truth, and `Design/english/` contains complete,
+same-named English mirrors. When a Chinese design document changes, update
+its English mirror in the same change; do not edit the English mirror as an
+independent source. **Within `Docs/` specifically:**
 
 - **Future documents are English-only.** Do not create a new `_CN.md` twin
   for any new doc, including new numbered docs added to `issues/`,
@@ -197,6 +212,9 @@ existing doc does.
 ## 3. Quick checklist before finishing any doc edit
 
 - [ ] If this is a new doc, is it English-only (no new `_CN.md` created)?
+- [ ] If this changes a Phase 1 design document, are the same-named files in
+      `Design/chinese/` and `Design/english/` synchronized, with Chinese
+      treated as the source of truth?
 - [ ] If this doc is one of the three existing bilingual pairs, did I update its `_CN.md` twin too?
 - [ ] Did I preserve every existing cross-reference and section number?
 - [ ] If this is a new numbered doc, did I check the highest existing number

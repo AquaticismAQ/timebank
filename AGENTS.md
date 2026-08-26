@@ -16,7 +16,7 @@ incentivizing middle-school student volunteer service. Service hours become
 "time coins" (never a currency/token — see Domain conventions below). The
 project has four phases:
 
-- **Phase 1 — Institutional design**: complete, documented in `Design/chinese/*.md`.
+- **Phase 1 — Institutional design**: complete, documented in `Design/chinese/*.md`, with same-named English mirrors in `Design/english/*.md`. The Chinese documents are the source of truth; when the two versions differ, follow the Chinese version and update the English mirror to match.
 - **Phase 2 — Online system (current focus)**: React web frontend deployed at `https://tb.example.com/` (`frontend/`). Java/Spring Boot + MySQL backend implementation started 2026-08-02 (`backend/`) per `Docs/implementation/`; B0-B6 backend work is done and deployed to the shared test server (B6 with named infra-blocked gaps), B7 (Database Operations) started and mostly blocked on infrastructure that doesn't exist — see `Docs/implementation/00-Status.md` for current state. Integration: I0 done, I1 mostly done, I2 done (all 10 exit criteria met), I3 in progress (I3.1-I3.6 done, I3.7 8/12 acceptance scenarios proven) — see `00-Status.md` §21–§34.
 - **Phase 3 — POV (Proof of Volunteering)**: WeChat Mini Program witness/AI-verification layer, reserved via feature flags, not implemented.
 - **Phase 4 — Redemption/borrowing/value-added**: reserved via feature flags, not implemented.
@@ -30,7 +30,8 @@ paragraph describes what was true when written.
 Repo layout:
 
 ```
-Design/chinese/          Phase 1 institutional design docs (制度设计, source of "why")
+Design/chinese/          Phase 1 institutional design docs (制度设计, authoritative source of "why")
+Design/english/          Same-named English mirrors of Design/chinese/; Chinese remains the source of truth
 Docs/frontend/Design.md  Phase 2 frontend page/flow spec (English + _CN Chinese twin)
 Docs/integration/APIContract.md   The REST API contract — authoritative for both frontend and backend
 Docs/implementation/     Phase-by-phase backend + integration build plan and the living status tracker (00-Status.md)
