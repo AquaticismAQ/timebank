@@ -40,7 +40,7 @@ pnpm preview         # preview a production build
 
 There is no lint, test, or typecheck script configured in `frontend/package.json` — do not assume `pnpm lint`/`pnpm test` exist. TypeScript is `strict: true` but `noUnusedLocals`/`noUnusedParameters` are off (see `frontend/tsconfig.json`).
 
-**Frontend testing/verification uses the real shared test server, not a local mock.** The real test-server hostname/credentials live in the untracked `test-server-credits.md` (this repo is public — no real hostnames are checked in; `tb.example.com` elsewhere in these docs is a placeholder). That server serves the real frontend against the real backend (`frontend/scripts/deploy.sh`, deployed 2026-08-07). Before any live frontend test or browser verification pass, check whether frontend source has changed since the last deploy (`git log` against the deploy commit) and re-run `frontend/scripts/deploy.sh` first if so — testing stale static output against new backend behavior (or vice versa) produces false results. This mirrors the backend's existing rsync-then-`verify.sh` live-verification workflow; there is no separate local/staging frontend environment. Log in with one of the real seeded accounts in `Docs/TestAccounts.md` (`admin001`/`student001`/`student002`/`teacher001`/`both001`) — the login page's old mock-only "demo accounts" quick-login card was removed 2026-08-07. The server also carries a full seeded dataset (`integration-test/`, README + STATUS.md) — projects/records/proposals in every workflow status — so screens aren't empty during a live test; check `integration-test/STATUS.md` before assuming a bug is new.
+**Frontend testing/verification uses the real shared test server, not a local mock.** The real test-server hostname/credentials live in the untracked `test-server-credits.md` (this repo is meant to eventually go public — no real hostnames are checked in; `tb.example.com` elsewhere in these docs is a placeholder). That server serves the real frontend against the real backend (`frontend/scripts/deploy.sh`, deployed 2026-08-07). Before any live frontend test or browser verification pass, check whether frontend source has changed since the last deploy (`git log` against the deploy commit) and re-run `frontend/scripts/deploy.sh` first if so — testing stale static output against new backend behavior (or vice versa) produces false results. This mirrors the backend's existing rsync-then-`verify.sh` live-verification workflow; there is no separate local/staging frontend environment. Log in with one of the real seeded accounts in `Docs/TestAccounts.md` (`admin001`/`student001`/`student002`/`teacher001`/`both001`) — the login page's old mock-only "demo accounts" quick-login card was removed 2026-08-07. The server also carries a full seeded dataset (`integration-test/`, README + STATUS.md) — projects/records/proposals in every workflow status — so screens aren't empty during a live test; check `integration-test/STATUS.md` before assuming a bug is new.
 
 Key frontend components added during I3 (§24-§34): `EvidenceLink.tsx` (short-lived URL evidence viewer, used in both portals), `SearchPicker.tsx` (generic Command+Popover picker for directory search), `ProjectRegistrants.tsx` (admin confirm/reject/bulk), `ProposalReview.tsx` (admin proposal review), `CaseReview.tsx` (admin case review). Language persistence consolidated in `lib/language.ts`. Timezone-safe date helpers in `lib/datetime.ts` (`localDateTimeToISO`/`isoToLocalDateTime`).
 
@@ -112,6 +112,23 @@ These conventions are set by `Docs/integration/APIContract.md` and `Design/chine
 - **Phase 3/4 features are feature-flagged, not half-built**: disabled features must show "Not yet available" rather than a broken/blank action; don't wire up POV or redemption/borrowing UI beyond what's already flagged.
 - **IDs are opaque server-generated strings**: never parse or derive meaning from an ID format.
 - **Durations/amounts are integers**: minutes for duration, minimum accounting units for time-coins — no floats.
+
+## Privacy: no real identifying data in git
+
+This repo is meant to go public. Real hostnames, credentials, and any real
+person's or organization's name (school staff/students/the school itself)
+must never be committed — not in `Docs/`, not in frontend/backend code
+(i18n copy, seed data), not in commit messages. Full rules and the
+established placeholder set (`tb.example.com`, `Example City HD`, `Teacher
+Wei Chen`, `example.edu.cn`) live in `Docs/README.md` §2.8 — read it before
+writing anything that might quote what a live-verification session actually
+showed on the real deployed system. This isn't hypothetical: real
+school/contact/hostname data leaked into ~20 tracked docs and hardcoded
+i18n strings for about a week before being caught and scrubbed, requiring a
+full git-history rewrite to remove (`Docs/issues/057-*.md`, 2026-08-26). If
+you ever find real data already committed, treat it like any other
+hard-to-reverse action — flag it and confirm before rewriting history,
+don't just silently fix the working tree.
 
 ## Documentation rules
 

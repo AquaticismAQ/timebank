@@ -64,8 +64,8 @@ typecheck` exist. TypeScript is `strict: true` but
 **Frontend testing/verification uses the real shared test server, not a
 local mock.** There is no separate staging environment. Real hostname and
 credentials live in the untracked `test-server-credits.md` (this repo is
-public — `tb.example.com` elsewhere in these docs is a placeholder, never
-the real host). Before any live frontend test or browser verification pass,
+meant to eventually go public — `tb.example.com` elsewhere in these docs is
+a placeholder, never the real host). Before any live frontend test or browser verification pass,
 check whether frontend source has changed since the last deploy (`git log`
 against the deploy commit) and run `frontend/scripts/deploy.sh` first if so
 — testing stale static output against current backend behavior (or vice
@@ -180,6 +180,19 @@ restating here:
 
 ## Operational conventions for every agent and collaborator
 
+- **No real identifying data in git — docs or code.** This repo is meant to
+  go public. Real hostnames, credentials, and any real person's/school's
+  name must never be committed — in `Docs/`, in application code (frontend
+  i18n copy, backend seed data), or in a commit message. Use the
+  placeholders already established in the repo (`tb.example.com`,
+  `Example City HD`, `Teacher Wei Chen`, `example.edu.cn`; full rules in
+  `Docs/README.md` §2.8) instead of inventing new ones or quoting what a
+  live-verification session actually showed on the real deployed system.
+  This has already gone wrong once: real school/contact/hostname data
+  leaked into ~20 tracked docs and hardcoded i18n strings for about a week
+  before being caught, requiring a full git-history rewrite to remove
+  (`Docs/issues/057-*.md`, 2026-08-26). Finding real data already committed
+  is a flag-and-confirm situation, not a quiet fix.
 - **Audit every mutation, and verify it, not just review it.** Any new or
   modified write path (POST/PATCH/DELETE, or a service method with a real
   side effect) must call `AuditService.record(...)` with a real

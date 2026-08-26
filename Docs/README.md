@@ -199,13 +199,40 @@ in this repo, not just `Design/`. Read `CONTRIBUTING.md` directly rather
 than relying on a paraphrase — it is the source of truth, this file only
 points at it.
 
-### 2.8 Secrets never go in tracked docs
+### 2.8 No real identifying data anywhere in this repo — docs, code, or commit messages
 
-Real hostnames, credentials, and connection strings for the shared test
-server live only in the untracked, git-ignored `test-server-credits.md`.
-Never repeat them in a tracked doc, issue, commit message, or CI
-configuration — use a placeholder (`tb.example.com`) instead, as every
-existing doc does.
+This repo is intended to eventually go public. Real hostnames, credentials,
+and connection strings for the shared test server live only in the
+untracked, git-ignored `test-server-credits.md`. The same ban extends to any
+real person's or organization's name — school staff, students, the school
+itself — regardless of whether it appears in `Docs/`, in application code
+(frontend i18n copy, backend seed data), or in a commit message. Use the
+placeholders already established elsewhere in the repo instead of inventing
+new ones: `tb.example.com` for the shared test server's hostname,
+`Example City HD` / `Example Township Middle School` / `Teacher Wei Chen`
+for the school/contact (from `backend/.../R__seed_base_data.sql` and
+`Docs/integration/APIContract_CN.md`), `example.edu.cn` for email domains.
+
+This is easy to violate without noticing. Narrating a live-verification
+session ("logged in as `admin001`, saw '<real contact name>' in Admin
+Contact") naturally wants to quote whatever the real deployed system
+actually shows — but that's exactly how real PII leaked into ~20 issue docs
+and `STATUS.md` entries, undetected for a week (`Docs/issues/057-*.md`,
+found and scrubbed 2026-08-26, including a full git-history rewrite). When
+writing up a live-verification result, describe *what field/value it maps
+to* rather than quoting a literal live value unless you're certain it's
+fixture data you created yourself, not something the real deployment
+actually holds.
+
+Once something real lands in a commit, it exists in git history even after
+the file is fixed. Finding real data already committed is a shared,
+hard-to-reverse-action situation like §2.4's live database writes: flag it
+and get confirmation before any history rewrite, don't just quietly fix the
+working tree and move on. And when writing up the fix itself, describe
+*categories* of what changed rather than quoting the removed value verbatim
+— a rewrite that replaces a string throughout history will catch that quote
+too and mangle it into nonsense (`Docs/issues/057-*.md`'s own first draft
+hit exactly this).
 
 ---
 
@@ -223,5 +250,6 @@ existing doc does.
       matching bug-log row and fix-history entry, added in this same session?
 - [ ] Did I avoid financial vocabulary and avoid weakening any anti-fraud/
       legal-compliance provision?
-- [ ] Are there real hostnames or credentials anywhere in this diff? (There
-      should not be.)
+- [ ] Are there real hostnames, credentials, or any real person's/school's
+      name anywhere in this diff? (There should not be — check code and
+      i18n copy too, not just this doc; see §2.8.)
