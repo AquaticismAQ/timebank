@@ -3,7 +3,7 @@
     "appName": "时间银行",
     "schoolFullName": "示例中学学生志愿服务管理平台",
     "schoolFooter": "示例中学学生志愿服务时间银行 · 学生发展中心 H300 · 魏晨老师",
-    "loginNotice": "本系统仅限示例中学中学部师生使用 · 示例中学学生发展中心 H300",
+    "loginNotice": "本系统仅限示例中学师生使用 · 示例中学学生发展中心 H300",
     "theme": {
       "light": "浅色",
       "dark": "深色",
@@ -1366,7 +1366,7 @@
       "userDeleted": "用户「{{name}}」已删除",
       "featureToggleUpdated": "功能开关已更新",
       "adminOnlyRules": "仅系统管理员可修改规则",
-      "adminOnlyRulesDesc": "规则修改会立即重新计算全体学生达标状态，请联系 魏晨老师或 Vera 徐老师操作。",
+      "adminOnlyRulesDesc": "规则修改会立即重新计算全体学生达标状态，请联系魏晨老师或 Vera 徐老师操作。",
       "importHistoricalRecords": "导入历史台账",
       "importHistoricalDesc": "从 Excel 模板批量导入既有纸质服务记录",
       "downloadTemplate": "下载模板",
@@ -1523,7 +1523,7 @@
         "ruleArchived": "规则版本已归档",
         "noRules": "未找到规则版本。",
         "adminOnly": "仅系统管理员可修改规则",
-        "adminOnlyDesc": "规则修改会立即重新计算全体学生的达标状态，请联系 魏晨老师或 Vera 徐老师进行操作。"
+        "adminOnlyDesc": "规则修改会立即重新计算全体学生的达标状态，请联系魏晨老师或 Vera 徐老师进行操作。"
       },
       "import": {
         "importHistory": "导入历史台账",
