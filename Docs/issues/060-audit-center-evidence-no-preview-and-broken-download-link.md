@@ -193,3 +193,54 @@ sat open. The two caveats this doc closes with are also now resolved: the
 PDF path was properly exercised in issue 072 (and needed a `blob:` URL,
 because `X-Frame-Options: DENY` blocks framing the content URL), and the
 multi-file grid was measured above.
+
+## Database repair (2026-09-15, on request, confirmed before writing)
+
+This issue originally ended with the destroyed `evidence_file` rows left
+untouched. Asked later to "fix all the records with wrong or missing
+evidence file path", the first job was correcting the premise:
+
+- **No path was wrong.** `storage_key` equals `id` for every row, and no
+  `service_record.evidence_file_ids` entry was dangling. The path scheme
+  was never the problem.
+- **17 rows had no file on disk** — this issue's destruction, still
+  unrecoverable. No `UPDATE` can point a row at bytes that don't exist.
+
+An early check claimed *all 45* rows were missing; the base path was wrong
+(`storage_key` is bare, under `data/evidence-storage`), not the data. It
+was caught because files downloaded minutes earlier appeared in the
+"missing" list — a reminder to sanity-check a scary result against
+something known to be true before acting on it.
+
+Since the files cannot be restored, the only real question was what the
+database should *say* instead. That was put to the user, who chose the
+fullest option. Executed by a reviewed script, backup first
+(`mysqldump` of the affected rows plus a pre-change dump of every
+`service_record.evidence_file_ids`, under
+`/root/timebank-evidence-repair-<timestamp>/` on the server):
+
+1. **3 `DRAFT` records** had their dead references cleared (`[]`), so the
+   student can simply re-upload.
+2. **8 rows referenced by nothing were deleted** — 6 already unreferenced,
+   plus 2 freed by step 1. One file was referenced by *both* a draft and a
+   `REJECTED` record, so it was correctly retained rather than deleted.
+3. **9 rows still attached to real records** (4 `APPROVED`, 3 `SUBMITTED`,
+   1 `RETURNED`, 1 `REJECTED`) were marked `status='REJECTED'` with
+   `rejection_reason` naming this incident. Leaving them `READY` meant the
+   database asserting a download that cannot work; `REJECTED` is not a
+   perfect fit semantically, but it is the status the UI already renders as
+   an explicit "unavailable" tile, and it is *more* truthful than `READY`.
+
+Verified afterwards: 45 → 37 rows; 28 `READY`, every one with its content
+present; **0 rows claiming `READY` without a file on disk** — the
+invariant worth re-checking after any future storage incident. Drafts read
+`[]`. In the Audit Center the affected tiles now render as a warning with
+the reason in the tooltip, not a failing preview, and are not clickable
+into a viewer that would error.
+
+**Not resolved by this, and deliberately surfaced rather than buried:**
+four `APPROVED` records hold credited time coins (200/250/200/250
+centi-coins) whose supporting evidence no longer exists. The repair makes
+that visible; only a re-seed or a deliberate re-audit can actually settle
+it.
+
