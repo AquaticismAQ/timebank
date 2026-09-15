@@ -1,0 +1,6 @@
+[Unit]
+Description=TimeBank maintenance mode ON (create the nginx gate marker file)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/touch /var/www/timebank-maintenance.flag

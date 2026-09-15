@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# TimeBank maintenance-mode control. Installed at
+# /usr/local/sbin/timebank-maintctl by ops/maintenance/maintctl.sh (run
+# that from a workstation instead of calling this directly, unless you're
+# already logged into the server). See ops/maintenance/README.md.
+#
+# Three modes — exactly one is active at a time, tracked in
+# /etc/timebank-maintenance/state.conf:
+#   on        force maintenance mode on, regardless of time.
+#   off       force maintenance mode off, regardless of time.
+#   schedule  time-based (the default): on during [start, end) Asia/Shanghai
+#             daily, off otherwise. --start/--end change the window; omit
+#             both to just re-apply the currently configured one.
+#
+# The bypass cookie (/__ops/enter?key=...) keeps working in every mode —
+# nginx checks it independently of *why* the marker file is set, so
+# switching modes here never locks us out.
+set -euo pipefail
+
+STATE_DIR=/etc/timebank-maintenance
+STATE_FILE="$STATE_DIR/state.conf"
+FLAG_FILE=/var/www/timebank-maintenance.flag
+ON_TIMER=timebank-maintenance-on.timer
+OFF_TIMER=timebank-maintenance-off.timer
+OVERRIDE_DIR_ON=/etc/systemd/system/timebank-maintenance-on.timer.d
+OVERRIDE_DIR_OFF=/etc/systemd/system/timebank-maintenance-off.timer.d
+
+mkdir -p "$STATE_DIR"
+
+read_state() {
+  MODE=schedule
+  START_TIME=18:00
+  END_TIME=08:00
+  if [ -f "$STATE_FILE" ]; then
+    # shellcheck disable=SC1090
+    source "$STATE_FILE"
+  fi
+}
+
+write_state() {
+  cat > "$STATE_FILE" <<EOF
+MODE=$MODE
+START_TIME=$START_TIME
+END_TIME=$END_TIME
+EOF
+}
+
+validate_time() {
+  [[ "$1" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] || { echo "timebank-maintctl: invalid time '$1', expected 24h HH:MM" >&2; exit 1; }
+}
+
+stop_timers() {
+  systemctl disable --now "$ON_TIMER" "$OFF_TIMER" >/dev/null 2>&1 || true
+}
+
+apply_schedule_timers() {
+  mkdir -p "$OVERRIDE_DIR_ON" "$OVERRIDE_DIR_OFF"
+  # The empty `OnCalendar=` line first clears the base unit's own
+  # OnCalendar= (18:00/08:00) before adding ours — OnCalendar is a
+  # list-type directive, so a drop-in normally *adds* to it rather than
+  # replacing it.
+  printf '[Timer]\nOnCalendar=\nOnCalendar=*-*-* %s:00 Asia/Shanghai\n' "$START_TIME" > "$OVERRIDE_DIR_ON/override.conf"
+  printf '[Timer]\nOnCalendar=\nOnCalendar=*-*-* %s:00 Asia/Shanghai\n' "$END_TIME" > "$OVERRIDE_DIR_OFF/override.conf"
+  systemctl daemon-reload
+  systemctl enable --now "$ON_TIMER" "$OFF_TIMER"
+}
+
+# Is the current Asia/Shanghai wall-clock time inside [START_TIME, END_TIME)?
+# Handles a window that crosses midnight (START > END, e.g. 18:00-08:00)
+# the same way it handles one that doesn't (e.g. 09:00-17:00).
+within_window() {
+  local now=$(TZ=Asia/Shanghai date +%H:%M)
+  if [[ "$START_TIME" < "$END_TIME" ]]; then
+    [[ ! "$now" < "$START_TIME" && "$now" < "$END_TIME" ]]
+  else
+    [[ ! "$now" < "$START_TIME" || "$now" < "$END_TIME" ]]
+  fi
+}
+
+cmd_on() {
+  read_state
+  MODE=on
+  write_state
+  stop_timers
+  touch "$FLAG_FILE"
+  echo "timebank-maintctl: maintenance mode forced ON."
+}
+
+cmd_off() {
+  read_state
+  MODE=off
+  write_state
+  stop_timers
+  rm -f "$FLAG_FILE"
+  echo "timebank-maintctl: maintenance mode forced OFF."
+}
+
+cmd_schedule() {
+  read_state
+  MODE=schedule
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --start) validate_time "$2"; START_TIME=$2; shift 2 ;;
+      --end) validate_time "$2"; END_TIME=$2; shift 2 ;;
+      *) echo "timebank-maintctl: unknown argument '$1'" >&2; exit 1 ;;
+    esac
+  done
+  write_state
+  apply_schedule_timers
+  if within_window; then touch "$FLAG_FILE"; else rm -f "$FLAG_FILE"; fi
+  echo "timebank-maintctl: schedule mode active, ${START_TIME}-${END_TIME} Asia/Shanghai daily."
+}
+
+cmd_status() {
+  read_state
+  echo "Mode: $MODE"
+  echo "Schedule window (used when mode=schedule): ${START_TIME}-${END_TIME} Asia/Shanghai daily"
+  if [ -f "$FLAG_FILE" ]; then
+    echo "Gate: ACTIVE — visitors without the bypass cookie get the maintenance page"
+  else
+    echo "Gate: inactive — site serving normally"
+  fi
+  echo "Current Beijing time: $(TZ=Asia/Shanghai date '+%H:%M %Z')"
+  echo
+  systemctl list-timers "$ON_TIMER" "$OFF_TIMER" --no-pager --all 2>/dev/null || true
+}
+
+case "${1:-}" in
+  on) shift; cmd_on "$@" ;;
+  off) shift; cmd_off "$@" ;;
+  schedule) shift; cmd_schedule "$@" ;;
+  status) shift; cmd_status "$@" ;;
+  *)
+    echo "Usage: timebank-maintctl {on|off|schedule [--start HH:MM] [--end HH:MM]|status}" >&2
+    exit 1
+    ;;
+esac

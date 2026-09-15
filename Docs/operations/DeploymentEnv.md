@@ -36,6 +36,13 @@ export TIMEBANK_DB_HOST=127.0.0.1
 export TIMEBANK_DB_PORT=3306
 export TIMEBANK_DB_USERNAME=timebank_app
 export TIMEBANK_DB_PASSWORD='<real-password>'
+
+# ── Maintenance-mode bypass key ────────────────────────────────────────
+# Used by ops/maintenance/deploy.sh — lets /__ops/enter?key=... set a
+# cookie that skips the nightly maintenance gate. Generate with:
+#   openssl rand -hex 24
+# See ops/maintenance/README.md.
+export TIMEBANK_MAINTENANCE_BYPASS_KEY='<real-random-token>'
 ```
 
 Fill in the `<real-...>` placeholders from `test-server-credits.md`. Quote
@@ -54,6 +61,7 @@ chmod 600 ~/.timebank.env
 | `frontend/scripts/deploy.sh` | `TIMEBANK_DEPLOY_TARGET` | Sources `~/.timebank.env` first if present, then falls back to a CLI arg, then the tracked `tb.example.com` placeholder. |
 | `backend/scripts/verify.sh` | `TIMEBANK_DB_HOST`, `TIMEBANK_DB_USERNAME`, `TIMEBANK_DB_PASSWORD` | Sources `~/.timebank.env` first if present; still hard-fails if any of the three are unset (no placeholder fallback for DB credentials — see the script). |
 | `integration-test/seed.ts` (`npm run seed`) | `TIMEBANK_SSH_TARGET`, `TIMEBANK_BASE_URL`, `TIMEBANK_DB_USERNAME`, `TIMEBANK_DB_PASSWORD` | Not a shell script, so it doesn't auto-source anything — run `source ~/.timebank.env` in your shell first, then `npm run seed` picks up the exported vars like any child process would. |
+| `ops/maintenance/deploy.sh` | `TIMEBANK_DEPLOY_TARGET`, `TIMEBANK_MAINTENANCE_BYPASS_KEY` | Sources `~/.timebank.env` first if present; hard-fails if the bypass key is unset (no placeholder fallback — see the script). |
 
 Both `deploy.sh`/`verify.sh` source the file *conditionally* (`if [ -f
 "$HOME/.timebank.env" ]`) — nothing breaks if it's absent, and neither

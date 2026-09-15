@@ -1,0 +1,6 @@
+[Unit]
+Description=TimeBank maintenance mode OFF (remove the nginx gate marker file)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/rm -f /var/www/timebank-maintenance.flag

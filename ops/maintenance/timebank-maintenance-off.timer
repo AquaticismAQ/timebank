@@ -1,0 +1,9 @@
+[Unit]
+Description=Turn TimeBank maintenance mode off at 08:00 Beijing time daily
+
+[Timer]
+OnCalendar=*-*-* 08:00:00 Asia/Shanghai
+Persistent=false
+
+[Install]
+WantedBy=timers.target

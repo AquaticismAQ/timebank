@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="refresh" content="300" />
+<title>Scheduled Maintenance / 系统维护中</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+    background: #f5f6f8;
+    color: #1f2430;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #17191f; color: #e7e9ee; }
+    .card { background: #20232b; border-color: #2c303a; }
+    .divider { border-color: #2c303a; }
+    .time { color: #9aa3b2; }
+  }
+  .card {
+    max-width: 480px;
+    width: 100%;
+    background: #ffffff;
+    border: 1px solid #e4e6eb;
+    border-radius: 16px;
+    padding: 32px 28px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+  .icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #2554e8;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  p { font-size: 14px; line-height: 1.6; margin: 0 0 4px; color: #545b6b; }
+  @media (prefers-color-scheme: dark) { p { color: #9aa3b2; } }
+  .en { margin-bottom: 20px; }
+  .divider { border: none; border-top: 1px solid #e4e6eb; margin: 20px 0; }
+  .time { font-size: 12px; color: #8a90a0; margin-top: 20px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">TB</div>
+    <div class="en">
+      <h1>Scheduled Maintenance</h1>
+      <p>Time Bank is temporarily unavailable for scheduled nightly maintenance.</p>
+      <p>Please check back later. This page refreshes automatically.</p>
+    </div>
+    <hr class="divider" />
+    <div class="zh">
+      <h1>系统维护中</h1>
+      <p>时间银行正在进行例行夜间维护，暂时无法访问。</p>
+      <p>请稍后再试，本页面会自动刷新。</p>
+    </div>
+    <p class="time">Daily 18:00–08:00 (Beijing time) · 每日 18:00–次日 08:00（北京时间）</p>
+  </div>
+</body>
+</html>
