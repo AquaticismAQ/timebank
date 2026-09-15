@@ -244,3 +244,49 @@ centi-coins) whose supporting evidence no longer exists. The repair makes
 that visible; only a re-seed or a deliberate re-audit can actually settle
 it.
 
+## Re-audit of the four credited-but-evidence-less approvals (2026-09-16)
+
+The repair above deliberately left this open: four `APPROVED` records held
+credited time coins whose supporting evidence no longer existed. Asked to
+**re-audit them (explicitly not re-seed)**, each was examined individually.
+
+| record | student | service date | minutes | credited | provenance |
+| --- | --- | --- | --- | --- | --- |
+| `TB-2025-2026-10-2024001-005` | Zhang Ming (2024001) | 2026-08-07 | 120 | 200 | created 08-10 15:08, approved 08-11; review summary reads *"Testing issue 014 fix — please re-upload confirmation."* |
+| *(no record number)* | Spencer (2024003) | 2026-06-28 | 120 | 200 | created→submitted→approved within **0.4s** on 2026-08-07 13:48 |
+| *(no record number)* | Zhang Ming (2024001) | 2026-06-23 | 150 | 250 | created→submitted→approved within **0.5s** on 2026-08-07 13:48 |
+| *(no record number)* | Li Xiaoyu (2024002) | 2026-07-30 | 150 | 250 | created→submitted→approved within **0.6s** on 2026-08-07 13:48 |
+
+**Finding: none of the four is a genuine student submission.**
+
+- Three carry **no record number**, and their create → submit → approve
+  audit entries are milliseconds apart inside a single second on
+  2026-08-07 13:48 — one of eight records written in that minute. That is
+  `integration-test/seed.ts` driving the real API, not a person.
+- The fourth is a test artifact whose own reviewer comment names the issue
+  it was created to exercise (014).
+
+All four ledger transactions still exist and reconcile
+(`SERVICE_APPROVED`, +200/+250/+250/+200).
+
+**Determination: the approvals stand; no correction is made.** Three
+independent grounds, any one sufficient:
+
+1. No real student earned these hours, so there is no real credit to
+   reverse.
+2. The evidence was destroyed by this issue's own `deploy.sh`
+   `rsync --delete` fault — a system failure, not a student act. Clawing
+   back hours would penalise a student for our bug.
+3. Balances are transaction-derived and corrections must be new immutable
+   transactions (APIContract §2.11 / the account invariants). A negative
+   adjustment needs a justification, and there is none.
+
+**Nothing was mutated.** "No change" is the audit's outcome, not an
+omission — recorded here so the open item is closed rather than
+rediscovered. Had any of the four been a real submission, the supported
+route would have been a `MANUAL_CORRECTION` case resolved by an
+administrator, which is the only path that both moves the ledger and
+leaves an append-only decision event; `APPROVED → CORRECTED` is the sole
+transition out of `APPROVED` and is not reachable through the review
+endpoint.
+
