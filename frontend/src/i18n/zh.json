@@ -763,6 +763,15 @@
       "dateTbd": "日期待定",
       "roleLabel": "角色",
       "updatedLabel": "更新"
+    },
+    "cases": {
+      "respond": "补充并重新提交",
+      "respondTitle": "回复审核人",
+      "respondQuestion": "审核人的问题：",
+      "respondPlaceholder": "请回答上面的问题，或说明你补充的内容……",
+      "respondPrefix": "学生回复",
+      "respondRequired": "请先填写回复内容。",
+      "respondSuccess": "回复已提交，案件已回到审核人处。"
     }
   },
   "admin": {

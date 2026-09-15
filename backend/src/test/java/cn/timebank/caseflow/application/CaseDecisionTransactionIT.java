@@ -54,6 +54,8 @@ class CaseDecisionTransactionIT extends AbstractIntegrationTest {
     private UserService userService;
     @Autowired
     private TeacherScopeAssignmentRepository scopeAssignmentRepository;
+    @Autowired
+    private cn.timebank.audit.infrastructure.AuditLogRepository auditLogRepository;
 
     private static final AtomicInteger SEQ = new AtomicInteger();
 
@@ -74,6 +76,32 @@ class CaseDecisionTransactionIT extends AbstractIntegrationTest {
         AccountTransactionDto transaction = transactions.getContent().get(0);
         assertThat(transaction.amount()).isEqualTo(500);
         assertThat(transaction.type()).isEqualTo("CORRECTION");
+    }
+
+    /**
+     * Issue 077: the decision itself used to leave no audit trace at all — only the
+     * student's create/submit were logged, while the reviewer's resolve/reject/
+     * request-information were not. Matters most for MANUAL_CORRECTION, which moves
+     * time coins in this same transaction.
+     */
+    @Test
+    void aDecisionIsWrittenToTheAuditLog() {
+        StudentDetailDto student = createStudent();
+        CaseDto submitted = createAndSubmitAppeal(student);
+
+        caseService.decide(submitted.id(),
+                new DecideRequest("reject", "INSUFFICIENT_EVIDENCE", "Not evidenced", submitted.version()),
+                staffAuth("admin"), "idem-audit-" + submitted.id(), "zh-CN");
+
+        var entries = auditLogRepository.findByResourceTypeAndResourceId("case", submitted.id(),
+                PageRequest.of(0, 20));
+        assertThat(entries.getContent()).extracting(e -> e.getAction()).contains("case.decision");
+        var decision = entries.getContent().stream().filter(e -> "case.decision".equals(e.getAction())).findFirst().orElseThrow();
+        // AuditServiceImpl JSON-serializes the summaries, so a plain String is stored
+        // quoted ("REJECTED") — same for every other caller, hence `contains`.
+        assertThat(decision.getAfterSummary()).contains("REJECTED");
+        assertThat(decision.getBeforeSummary()).contains("SUBMITTED");
+        assertThat(decision.getReasonCode()).isEqualTo("INSUFFICIENT_EVIDENCE");
     }
 
     @Test

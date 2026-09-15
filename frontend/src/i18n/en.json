@@ -763,6 +763,15 @@
       "dateTbd": "Date TBD",
       "roleLabel": "Role",
       "updatedLabel": "Updated"
+    },
+    "cases": {
+      "respond": "Respond & Resubmit",
+      "respondTitle": "Respond to the reviewer",
+      "respondQuestion": "The reviewer asked:",
+      "respondPlaceholder": "Answer the question above, or describe what you are adding...",
+      "respondPrefix": "Student reply",
+      "respondRequired": "Please write a reply before submitting.",
+      "respondSuccess": "Reply submitted — the case is back with the reviewer."
     }
   },
   "admin": {

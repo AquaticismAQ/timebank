@@ -1,6 +1,8 @@
 package cn.timebank.caseflow.application;
 
 import cn.timebank.account.application.AccountService;
+import cn.timebank.audit.application.AuditEntry;
+import cn.timebank.audit.application.AuditService;
 import cn.timebank.account.application.dto.AccountRequests.AdjustmentRequest;
 import cn.timebank.caseflow.application.dto.CaseDto;
 import cn.timebank.caseflow.application.dto.CaseRequests.DecideRequest;
@@ -41,6 +43,7 @@ class CaseDecisionTransaction {
     private final CaseRepository repository;
     private final CaseDecisionEventRepository decisionEventRepository;
     private final AccountService accountService;
+    private final AuditService auditService;
     private final NotificationService notificationService;
     private final UserService userService;
     private final StudentService studentService;
@@ -50,7 +53,7 @@ class CaseDecisionTransaction {
     CaseDecisionTransaction(CaseRepository repository, CaseDecisionEventRepository decisionEventRepository,
                              AccountService accountService, NotificationService notificationService,
                              UserService userService, StudentService studentService,
-                             ServiceRecordService serviceRecordService, AcademicStructureService academicStructureService) {
+                             ServiceRecordService serviceRecordService, AcademicStructureService academicStructureService, AuditService auditService) {
         this.repository = repository;
         this.decisionEventRepository = decisionEventRepository;
         this.accountService = accountService;
@@ -59,6 +62,7 @@ class CaseDecisionTransaction {
         this.studentService = studentService;
         this.serviceRecordService = serviceRecordService;
         this.academicStructureService = academicStructureService;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -74,6 +78,7 @@ class CaseDecisionTransaction {
         };
 
         // Effect: the implicit SUBMITTED -> IN_REVIEW step (first decision), then the real target.
+        CaseStatus before = c.getStatus();
         if (c.getStatus() == CaseStatus.SUBMITTED) {
             CaseStateMachine.transition(c, CaseStatus.IN_REVIEW, ActorRole.REVIEWER);
         }
@@ -99,6 +104,13 @@ class CaseDecisionTransaction {
             accountService.adjustForStudent(c.getStudentId(), c.getGradeId(), c.getClassId(),
                     new AdjustmentRequest(c.getRequestedAmountCentiCoins(), c.getReasonCode(), request.comment()), actorId);
         }
+
+        // Effect: the audit-trail entry for the decision itself. Without this a
+        // resolve/reject/request-information left no trace at all — and a resolved
+        // MANUAL_CORRECTION moves time coins in this same transaction (issue 077).
+        // Shape mirrors ProposalApprovalTransaction's equivalent entry.
+        auditService.record(new AuditEntry(actorId, "cases.decide", "case.decision",
+                "case", caseId, before.name(), c.getStatus().name(), request.reasonCode()));
 
         // Effect: the notification, to the case's student.
         notifyStudent(c, decision);
