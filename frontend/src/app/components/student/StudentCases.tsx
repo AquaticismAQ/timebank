@@ -19,10 +19,10 @@ const TYPE_LABEL: Record<Case['type'], string> = {
 };
 
 const STATUS_FILTERS: (CaseStatus | 'all')[] =
-  ['all', 'draft', 'submitted', 'inReview', 'needsInformation', 'resolved', 'rejected'];
+  ['all', 'draft', 'submitted', 'needsInformation', 'resolved', 'rejected'];
 
 /** Statuses that still want something from the student or the reviewer. */
-const OPEN_STATUSES: CaseStatus[] = ['draft', 'submitted', 'inReview', 'needsInformation'];
+const OPEN_STATUSES: CaseStatus[] = ['draft', 'submitted', 'needsInformation'];
 
 /**
  * The student's own cases, as a page of their own (issue 081). It used to be a

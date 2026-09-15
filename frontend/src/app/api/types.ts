@@ -368,7 +368,8 @@ export interface ReviewQueueItem {
   recordVersion?: number;
 }
 
-export type CaseStatus = 'draft' | 'submitted' | 'inReview' | 'needsInformation' | 'resolved' | 'rejected';
+/** `inReview` removed 2026-09-16 (issue 082): unreachable — a reviewer decides straight from `submitted`, and cases never had a claim step. */
+export type CaseStatus = 'draft' | 'submitted' | 'needsInformation' | 'resolved' | 'rejected';
 
 /** Contract §3.6/§4.8 — appeals, supplements, and staff-filed manual corrections share one state machine and one endpoint family. */
 export interface Case {

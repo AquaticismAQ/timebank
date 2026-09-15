@@ -61,7 +61,6 @@ export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, { label: string; col
 export const CASE_STATUS_LABELS: Record<Case['status'], { label: string; color: string }> = {
   draft: { label: 'labels.caseStatus.draft', color: 'gray' },
   submitted: { label: 'labels.caseStatus.submitted', color: 'blue' },
-  inReview: { label: 'labels.caseStatus.inReview', color: 'yellow' },
   needsInformation: { label: 'labels.caseStatus.needsInformation', color: 'orange' },
   resolved: { label: 'labels.caseStatus.resolved', color: 'green' },
   rejected: { label: 'labels.caseStatus.rejected', color: 'red' },

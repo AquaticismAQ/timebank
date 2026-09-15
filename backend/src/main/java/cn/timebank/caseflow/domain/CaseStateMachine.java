@@ -22,13 +22,15 @@ public final class CaseStateMachine {
     static {
         rule(CaseStatus.DRAFT, CaseStatus.SUBMITTED, ActorRole.OWNER);
         // Withdraw (issue 081), mirroring the service record's own edge: there is
-        // deliberately no edge out of IN_REVIEW, so "only before review starts" is
-        // enforced by the table rather than by a separate check.
+        // deliberately no edge out of NEEDS_INFORMATION or any decided status, so
+        // "only before a decision" is enforced by the table, not a separate check.
         rule(CaseStatus.SUBMITTED, CaseStatus.DRAFT, ActorRole.OWNER);
-        rule(CaseStatus.SUBMITTED, CaseStatus.IN_REVIEW, ActorRole.REVIEWER);
-        rule(CaseStatus.IN_REVIEW, CaseStatus.RESOLVED, ActorRole.REVIEWER);
-        rule(CaseStatus.IN_REVIEW, CaseStatus.NEEDS_INFORMATION, ActorRole.REVIEWER);
-        rule(CaseStatus.IN_REVIEW, CaseStatus.REJECTED, ActorRole.REVIEWER);
+        // A decision is one step (issue 082): the IN_REVIEW hop these edges used
+        // to route through was never committed, and nothing else could put a case
+        // there — cases never had a claim endpoint at all.
+        rule(CaseStatus.SUBMITTED, CaseStatus.RESOLVED, ActorRole.REVIEWER);
+        rule(CaseStatus.SUBMITTED, CaseStatus.NEEDS_INFORMATION, ActorRole.REVIEWER);
+        rule(CaseStatus.SUBMITTED, CaseStatus.REJECTED, ActorRole.REVIEWER);
         rule(CaseStatus.NEEDS_INFORMATION, CaseStatus.SUBMITTED, ActorRole.OWNER);
     }
 

@@ -68,7 +68,7 @@ export function StudentHome() {
 
   const caseCount = (...statuses: CaseStatus[]) => cases.filter(c => statuses.includes(c.status)).length;
   const casesNeedingStudent = caseCount('draft', 'needsInformation');
-  const casesWithReviewer = caseCount('submitted', 'inReview');
+  const casesWithReviewer = caseCount('submitted');
   const casesClosed = caseCount('resolved', 'rejected');
 
   const pendingActions = [

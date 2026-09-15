@@ -385,11 +385,19 @@ Reviews are non-overwritable events; when a decision is changed, a new review ev
 Status:
 
 ```text
-draft → submitted → inReview → resolved
-                         ↘ needsInformation → submitted
-                         ↘ rejected
+draft → submitted → resolved
+                 ↘ needsInformation → submitted
+                 ↘ rejected
 submitted → draft
 ```
+
+(`inReview` was removed 2026-09-16, issue 082 — the same defect issue 080
+found in the proposal flow: the only way in was a hop inside the decision
+transaction that was never committed, and cases never had a claim endpoint
+either. A reviewer decides in one step, straight from `submitted`. Confirmed
+against live data first: no case, and no audit entry, ever held it.
+`assignedReviewerId` is kept — inert rather than misleading, and the field a
+future claim feature would use.)
 
 The `submitted → draft` edge is the student withdrawing their own case
 (issue 081), owner-only and deliberately absent from `inReview` — so "only

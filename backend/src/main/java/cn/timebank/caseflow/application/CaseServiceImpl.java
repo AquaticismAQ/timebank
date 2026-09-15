@@ -190,7 +190,7 @@ class CaseServiceImpl implements CaseService {
     public CaseDto withdraw(String id, Authentication auth, String resolvedLanguage) {
         Case c = findOwnedOrThrow(id, auth);
         // The state machine only defines SUBMITTED -> DRAFT for OWNER, so a case a
-        // reviewer has already claimed (IN_REVIEW) is refused here for free.
+        // reviewer has already decided on is refused here for free.
         CaseStateMachine.transition(c, CaseStatus.DRAFT, ActorRole.OWNER);
         c.setSubmittedAt(null);
         c.setUpdatedAt(Instant.now());

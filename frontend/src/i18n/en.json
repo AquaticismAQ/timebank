@@ -947,7 +947,6 @@
       "typeManualCorrection": "Manual Correction",
       "statusDraft": "Draft",
       "statusSubmitted": "Submitted",
-      "statusInReview": "In Review",
       "statusNeedsInformation": "Needs Information",
       "statusResolved": "Resolved",
       "statusRejected": "Rejected",
@@ -1903,7 +1902,6 @@
     "caseStatus": {
       "draft": "Draft",
       "submitted": "Submitted",
-      "inReview": "In Review",
       "needsInformation": "Needs Information",
       "resolved": "Resolved",
       "rejected": "Rejected"

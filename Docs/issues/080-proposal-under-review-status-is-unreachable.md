@@ -33,11 +33,16 @@ Confirmed against the live database before deciding: **0** proposals in
 `audit_log` rows for `resource_type = 'eventProposal'` whose before/after
 summary mentions `UNDER_REVIEW`. Nothing anywhere depends on the value.
 
-Note the service-record and case flows are **not** affected and keep their
-own `underReview`/`inReview` states: a service record really can rest in
-`UNDER_REVIEW` (that is what the `escalate` decision does), and `Case` has
-`IN_REVIEW`. This is specific to proposals, which lost their only reason for
-the state when the two-tier review went away.
+Note the service-record flow is **not** affected: a service record really can
+rest in `UNDER_REVIEW`, because that is what `ReviewDecisionTransaction`'s
+`escalate` decision does.
+
+> **Correction (2026-09-16, issue 082).** This section originally also claimed
+> that `Case`'s `IN_REVIEW` was a real resting state. It was not — it had
+> exactly the same defect described here, and worse, since cases never had a
+> claim endpoint at all. That claim was asserted without being checked; the
+> user's question about the My Cases page is what caught it. See
+> `082-case-in-review-status-is-unreachable.md`.
 
 ## Decision
 
@@ -86,7 +91,8 @@ Frontend:
 - `api/types.ts` — `ProposalStatus` union;
   `components/admin/ProposalReview.tsx` — status filter and `showDecisions`;
   `lib/statusLabels.ts` and `i18n/{en,zh}.json` — the label removed.
-  (`ReviewStatus`/`RecordStatus` keep their own `underReview` — different flow.)
+  (`ReviewStatus`/`RecordStatus` keep their own `underReview` — different
+  flow, and a real one. `Case` did not: see issue 082.)
 
 Docs: `APIContract{,_CN}.md` §3.2 diagram and divergence-table row 1.
 

@@ -8,7 +8,6 @@ import java.time.Instant;
 import static cn.timebank.caseflow.domain.CaseStateMachine.ActorRole.OWNER;
 import static cn.timebank.caseflow.domain.CaseStateMachine.ActorRole.REVIEWER;
 import static cn.timebank.caseflow.domain.CaseStatus.DRAFT;
-import static cn.timebank.caseflow.domain.CaseStatus.IN_REVIEW;
 import static cn.timebank.caseflow.domain.CaseStatus.NEEDS_INFORMATION;
 import static cn.timebank.caseflow.domain.CaseStatus.REJECTED;
 import static cn.timebank.caseflow.domain.CaseStatus.RESOLVED;
@@ -24,33 +23,34 @@ class CaseStateMachineTest {
         assertThat(CaseStateMachine.canTransition(DRAFT, SUBMITTED, OWNER)).isTrue();
     }
 
+    /** One step, since issue 082 removed the unreachable IN_REVIEW hop. */
     @Test
-    void reviewerMovesSubmittedThroughInReviewToAnyDecision() {
-        assertThat(CaseStateMachine.canTransition(SUBMITTED, IN_REVIEW, REVIEWER)).isTrue();
-        assertThat(CaseStateMachine.canTransition(IN_REVIEW, RESOLVED, REVIEWER)).isTrue();
-        assertThat(CaseStateMachine.canTransition(IN_REVIEW, NEEDS_INFORMATION, REVIEWER)).isTrue();
-        assertThat(CaseStateMachine.canTransition(IN_REVIEW, REJECTED, REVIEWER)).isTrue();
+    void reviewerDecidesDirectlyFromSubmitted() {
+        assertThat(CaseStateMachine.canTransition(SUBMITTED, RESOLVED, REVIEWER)).isTrue();
+        assertThat(CaseStateMachine.canTransition(SUBMITTED, NEEDS_INFORMATION, REVIEWER)).isTrue();
+        assertThat(CaseStateMachine.canTransition(SUBMITTED, REJECTED, REVIEWER)).isTrue();
     }
 
-    /** Issue 081: a student can take a filed case back, but only before review starts. */
     @Test
-    void ownerWithdrawsBeforeReviewStartsButNotAfter() {
+    void anOwnerCannotDecideTheirOwnCase() {
+        assertThat(CaseStateMachine.canTransition(SUBMITTED, RESOLVED, OWNER)).isFalse();
+        assertThat(CaseStateMachine.canTransition(SUBMITTED, REJECTED, OWNER)).isFalse();
+    }
+
+    /** Issue 081: a student can take a filed case back, but only before it is decided. */
+    @Test
+    void ownerWithdrawsBeforeADecisionButNotAfter() {
         assertThat(CaseStateMachine.canTransition(SUBMITTED, DRAFT, OWNER)).isTrue();
-        assertThat(CaseStateMachine.canTransition(IN_REVIEW, DRAFT, OWNER)).isFalse();
         assertThat(CaseStateMachine.canTransition(NEEDS_INFORMATION, DRAFT, OWNER)).isFalse();
+        assertThat(CaseStateMachine.canTransition(RESOLVED, DRAFT, OWNER)).isFalse();
         // ...and a reviewer is not the one who withdraws a student's case.
         assertThat(CaseStateMachine.canTransition(SUBMITTED, DRAFT, REVIEWER)).isFalse();
     }
 
     @Test
-    void thereIsNoDirectEdgeFromSubmittedToResolved() {
-        assertThat(CaseStateMachine.canTransition(SUBMITTED, RESOLVED, REVIEWER)).isFalse();
-    }
-
-    @Test
     void needsInformationCanOnlyGoBackToSubmitted() {
         assertThat(CaseStateMachine.canTransition(NEEDS_INFORMATION, SUBMITTED, OWNER)).isTrue();
-        assertThat(CaseStateMachine.canTransition(NEEDS_INFORMATION, IN_REVIEW, REVIEWER)).isFalse();
+        assertThat(CaseStateMachine.canTransition(NEEDS_INFORMATION, RESOLVED, REVIEWER)).isFalse();
     }
 
     @Test

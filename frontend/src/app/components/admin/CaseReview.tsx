@@ -16,7 +16,7 @@ import { CASE_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels
 import { formatGradeClass } from '../../lib/format';
 import { formatLocalInstant, isoToLocalDate } from '../../lib/datetime';
 
-const STATUSES: (Case['status'])[] = ['submitted', 'inReview', 'needsInformation', 'resolved', 'rejected'];
+const STATUSES: (Case['status'])[] = ['submitted', 'needsInformation', 'resolved', 'rejected'];
 const TYPES: (Case['type'])[] = ['appeal', 'supplement', 'manualCorrection'];
 type SortKey = 'submittedAt' | 'createdAt' | 'status';
 const SORT_KEYS: SortKey[] = ['submittedAt', 'createdAt', 'status'];
@@ -274,7 +274,7 @@ export function CaseReview() {
             ),
           },
         ];
-        const showDecisions = canDecide && (detailCase.status === 'submitted' || detailCase.status === 'inReview');
+        const showDecisions = canDecide && detailCase.status === 'submitted';
         return (
           <DetailWorkbench
             open

@@ -380,11 +380,17 @@ approved → corrected
 状态：
 
 ```text
-draft → submitted → inReview → resolved
-                         ↘ needsInformation → submitted
-                         ↘ rejected
+draft → submitted → resolved
+                 ↘ needsInformation → submitted
+                 ↘ rejected
 submitted → draft
 ```
+
+（`inReview` 已于 2026-09-16 移除，见 issue 082——与 issue 080 在提案流程中
+发现的问题完全相同：唯一入口是审批事务内部一次从未提交的中间跳转，而且个案
+流程连"接手"接口都没有。审核人从 `submitted` 一步作出决定。移除前已先核对线上
+数据：没有任何申诉、也没有任何审计记录曾处于该状态。`assignedReviewerId`
+保留——它只是闲置而非误导，且是将来实现"接手"功能时自然会用到的字段。）
 
 `submitted → draft` 是学生撤回自己的申诉（issue 081），仅本人可执行，并且
 刻意不从 `inReview` 出发——"仅在审核人接手之前可撤回"由状态机本身保证，

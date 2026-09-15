@@ -77,11 +77,9 @@ class CaseDecisionTransaction {
             case REJECT -> CaseStatus.REJECTED;
         };
 
-        // Effect: the implicit SUBMITTED -> IN_REVIEW step (first decision), then the real target.
+        // Effect: the status change. One step — a reviewer decides directly from
+        // SUBMITTED, there is no claim state to pass through (issue 082).
         CaseStatus before = c.getStatus();
-        if (c.getStatus() == CaseStatus.SUBMITTED) {
-            CaseStateMachine.transition(c, CaseStatus.IN_REVIEW, ActorRole.REVIEWER);
-        }
         if (c.getStatus() != target) {
             CaseStateMachine.transition(c, target, ActorRole.REVIEWER);
         }

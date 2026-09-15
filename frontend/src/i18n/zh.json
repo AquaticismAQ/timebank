@@ -947,7 +947,6 @@
       "typeManualCorrection": "人工调整",
       "statusDraft": "草稿",
       "statusSubmitted": "已提交",
-      "statusInReview": "审核中",
       "statusNeedsInformation": "需补充信息",
       "statusResolved": "已解决",
       "statusRejected": "已驳回",
@@ -1903,7 +1902,6 @@
     "caseStatus": {
       "draft": "草稿",
       "submitted": "已提交",
-      "inReview": "审核中",
       "needsInformation": "需补充信息",
       "resolved": "已解决",
       "rejected": "已驳回"
