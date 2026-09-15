@@ -19,6 +19,24 @@ import { minutesToHours } from '../../lib/format';
  * as the original inline appeal flow this replaces — no draft/submit
  * distinction is exposed to the student (§2.5 keeps the whole form simple).
  */
+/**
+ * The stored title must not carry the type label (issue 079). Every surface
+ * that shows a case renders the type as its own translated element, so putting
+ * `t('...supplement')` in the title both duplicated it and froze the filer's
+ * UI language into the database — a case filed in Chinese then read as Chinese
+ * to an English reviewer. What is left is the case's own content: the attached
+ * record's name, or the student's own words. `case_record.title` is
+ * VARCHAR(200).
+ */
+function caseTitle(subject: ServiceRecord | null, reason: string): string {
+  // A self-initiated record can carry neither a project title nor an
+  // organization name, so the reason is the fallback in that case too — the
+  // backend requires a non-blank title.
+  const subjectName = subject ? (subject.projectTitle || subject.organizationName || '').trim() : '';
+  const raw = subjectName || reason.trim().split('\n')[0];
+  return raw.length > 200 ? `${raw.slice(0, 199)}…` : raw;
+}
+
 export function CaseFilingModal({
   type, record, onClose, onFiled,
 }: {
@@ -59,7 +77,7 @@ export function CaseFilingModal({
         type,
         subjectType: subject ? 'serviceRecord' : undefined,
         subjectId: subject?.id,
-        title: `${t(titleKey)}${subject ? `: ${subject.projectTitle || subject.organizationName}` : ''}`,
+        title: caseTitle(subject, reason),
         description: reason,
         reasonCode: type === 'appeal' ? 'STUDENT_APPEAL' : 'STUDENT_SUPPLEMENT',
       });
