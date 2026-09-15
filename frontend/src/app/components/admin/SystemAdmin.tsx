@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Pencil, Trash2, Lock, Building2, KeyRound } from 'lucide-react';
+import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Pencil, Trash2, Lock, Building2, KeyRound, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
@@ -517,10 +517,6 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
       if (!form.password) { toast.error(t('admin.system.errorPasswordRequired')); return; }
       if (form.password.length < 6) { toast.error(t('admin.system.errorPasswordTooShort')); return; }
       if (form.password !== form.confirmPassword) { toast.error(t('admin.system.errorPasswordMismatch')); return; }
-    } else if (form.showResetPwd) {
-      if (!form.password) { toast.error(t('admin.system.errorNewPasswordRequired')); return; }
-      if (form.password.length < 6) { toast.error(t('admin.system.errorPasswordTooShort')); return; }
-      if (form.password !== form.confirmPassword) { toast.error(t('admin.system.errorPasswordMismatch')); return; }
     }
     onSave(form);
   };
@@ -668,29 +664,26 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
             </div>
           )}
 
-          {/* Reset password (edit) */}
+          {/* Reset password (edit). The admin reset endpoint takes no body — the
+              server always generates a temporary password and returns it once
+              (APIContract §7, `POST /users/{id}/reset-password`). This used to
+              offer "new password"/"confirm" boxes whose value was validated and
+              then silently thrown away, so the admin walked off believing they'd
+              set the password they typed (issue 064). It's now an explicit
+              arm-the-reset toggle that says what will actually happen. */}
           {mode === 'edit' && (
             <div className="border border-border rounded-xl overflow-hidden">
               <button type="button" onClick={() => set({ showResetPwd: !form.showResetPwd, password: '', confirmPassword: '' })}
                 className="w-full flex items-center justify-between px-4 py-3 text-sm text-muted-foreground hover:bg-accent transition-colors">
                 <span>{t('admin.system.resetPassword')}</span>
-                <ChevronRight className={`w-4 h-4 transition-transform ${form.showResetPwd ? 'rotate-90' : ''}`} />
+                <span className={`w-4 h-4 rounded border flex items-center justify-center ${form.showResetPwd ? 'bg-[oklch(0.488_0.243_264.376)] border-transparent text-white' : 'border-border'}`}>
+                  {form.showResetPwd && <Check className="w-3 h-3" />}
+                </span>
               </button>
               {form.showResetPwd && (
-                <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
-                  <div className="relative">
-                    <input type={showPwd ? 'text' : 'password'} value={form.password} onChange={e => set({ password: e.target.value })}
-                      placeholder={t('admin.system.newPasswordPlaceholder')}
-                      className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
-                    <button type="button" onClick={() => setShowPwd(!showPwd)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                      {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <input type={showConfirmPwd ? 'text' : 'password'} value={form.confirmPassword} onChange={e => set({ confirmPassword: e.target.value })}
-                    placeholder={t('admin.system.confirmNewPassword')}
-                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
-                </div>
+                <p className="px-4 pb-4 pt-3 border-t border-border text-xs text-muted-foreground">
+                  {t('admin.system.resetPasswordHint')}
+                </p>
               )}
             </div>
           )}
@@ -913,7 +906,7 @@ export function SystemAdmin() {
         studentId: isStudent ? form.studentId : undefined,
         staffId: needsStaffId ? form.staffId.trim() : undefined,
       });
-      if (form.showResetPwd && form.password) {
+      if (form.showResetPwd) {
         const result = await api.users.resetPassword(editTarget.id);
         toast.success(t('admin.system.passwordReset') + (result.temporaryPassword ? `: ${result.temporaryPassword}` : ''));
       }

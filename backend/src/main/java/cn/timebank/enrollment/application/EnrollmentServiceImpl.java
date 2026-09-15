@@ -94,22 +94,41 @@ class EnrollmentServiceImpl implements EnrollmentService {
             throw ApiException.stateConflict("Registration is not open for this project.");
         }
 
-        if (repository.findByProjectIdAndStudentId(projectId, studentId).isPresent()) {
+        // `enrollment` has a unique key on (project_id, student_id) and cancelling
+        // only flips the row's status, so this guard has to exist — but a CANCELLED
+        // row means the student is *not* registered, and rejecting that locked them
+        // out of the project permanently (issue 071). Revive that one case by
+        // reusing the row; every other status is still a genuine conflict.
+        // REJECTED deliberately stays a conflict: that is an administrator's
+        // decision about this student, not something they may clear themselves.
+        Enrollment existing = repository.findByProjectIdAndStudentId(projectId, studentId).orElse(null);
+        if (existing != null && existing.getStatus() != EnrollmentStatus.CANCELLED) {
             throw ApiException.stateConflict("Already registered for this project.");
         }
+        boolean reRegistering = existing != null;
 
         long confirmedCount = repository.countByProjectIdAndStatus(projectId, EnrollmentStatus.CONFIRMED);
         EnrollmentStatus status = confirmedCount < snapshot.capacity() ? EnrollmentStatus.CONFIRMED : EnrollmentStatus.WAITLISTED;
         Instant now = Instant.now();
-        Enrollment enrollment = new Enrollment(OpaqueIds.generate("enr"), projectId, studentId, status, now);
-        enrollment.setNote(request.note());
-        if (status == EnrollmentStatus.CONFIRMED) {
-            enrollment.setConfirmedAt(now);
+        Enrollment enrollment;
+        if (reRegistering) {
+            enrollment = existing;
+            enrollment.setStatus(status);
+            // `appliedAt` is deliberately `updatable = false` on the entity, so a
+            // revived row keeps its original application time. Left as-is rather
+            // than making the column mutable: nothing currently orders a waitlist
+            // by it (promotion is a manual admin `confirm`), so the only effect is
+            // an accurate record of when this student first applied.
+            enrollment.setCancelledAt(null);
+            enrollment.setConfirmedAt(status == EnrollmentStatus.CONFIRMED ? now : null);
+        } else {
+            enrollment = new Enrollment(OpaqueIds.generate("enr"), projectId, studentId, status, now);
         }
+        enrollment.setNote(request.note());
         repository.save(enrollment);
 
         auditService.record(new AuditEntry(principal.id(), "applications.create", "enrollment.register",
-                "enrollment", enrollment.getId(), null, status.name(), null));
+                "enrollment", enrollment.getId(), null, status.name(), reRegistering ? "REREGISTER" : null));
         return toDto(enrollment, projectService.titlesOf(List.of(projectId)), studentNameMap(List.of(enrollment), resolvedLanguage));
     }
 

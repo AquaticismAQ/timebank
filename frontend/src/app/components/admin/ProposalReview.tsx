@@ -13,6 +13,7 @@ import { DetailWorkbench, type DetailWorkbenchTab } from '../shared/DetailWorkbe
 import { type EventProposal, type TimelineEntry } from '../../api/types';
 import { minutesToHours, formatGradeClass } from '../../lib/format';
 import { PROPOSAL_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
+import { formatLocalInstant } from '../../lib/datetime';
 
 const STATUSES: (EventProposal['status'])[] = ['submitted', 'underReview', 'changesRequested', 'approved', 'rejected'];
 type SortKey = 'plannedStartAt' | 'createdAt' | 'status';
@@ -263,7 +264,7 @@ export function ProposalReview() {
                   <li key={i} className="flex gap-3">
                     <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs text-muted-foreground">{entry.occurredAt.slice(0, 16).replace('T', ' ')} · {entry.type}</div>
+                      <div className="text-xs text-muted-foreground">{formatLocalInstant(entry.occurredAt)} · {entry.type}</div>
                       <div className="text-sm text-foreground">{entry.description}</div>
                     </div>
                   </li>

@@ -33,7 +33,7 @@
       "emptyNoRecords": "暂无记录。",
       "emptyNoResults": "当前筛选条件下没有结果。"
     },
-    "close": "收起",
+    "close": "关闭",
     "viewDetails": "查看详情",
     "viewAll": "查看全部",
     "viewMore": "更多 →",
@@ -68,7 +68,12 @@
     "unknownError": "出现错误，请重试。",
     "noPermission": "您没有权限查看此页面。",
     "saving": "保存中...",
-    "publishing": "发布中..."
+    "publishing": "发布中...",
+    "ok": "知道了",
+    "view": "查看",
+    "download": "下载",
+    "evidenceNoPreview": "该文件类型无法在浏览器中预览，请下载后查看。",
+    "evidenceDownloadFailed": "无法准备该文件的下载，请重试。"
   },
   "layout": {
     "admin": {
@@ -215,7 +220,8 @@
       "notAccepting": "未开放报名",
       "appliedSuccess": "报名成功",
       "cancelRegistration": "取消报名",
-      "cancelSuccess": "报名已取消"
+      "cancelSuccess": "报名已取消",
+      "waitlistedSuccess": "你已进入“{{title}}”的候补名单，仅在有人取消报名时才会空出名额。"
     },
     "records": {
       "submitRecord": "提交服务记录",
@@ -381,7 +387,30 @@
       "revert": "撤回",
       "editDraftTitle": "编辑草稿记录",
       "revertedToDraft": "记录已撤回为草稿",
-      "draftLoaded": "草稿已载入，可编辑后提交"
+      "draftLoaded": "草稿已载入，可编辑后提交",
+      "overlapTitle": "与其他记录的时间冲突",
+      "overlapMessage": "本条记录的服务时段与你的另一条服务记录重叠，无法提交。",
+      "overlapChoicesHint": "可以删除本条记录，或先保存为草稿，修改日期和时间后再提交。",
+      "overlapReturnedHint": "请修改本条记录的日期和时间后再重新提交。",
+      "overlapDelete": "删除记录",
+      "overlapKeepDraft": "保存为草稿",
+      "overlapThisRecord": "本条记录",
+      "overlapExistingRecord": "与该记录冲突",
+      "detailTitle": "服务记录详情",
+      "projectOrOrg": "项目 / 组织",
+      "travelTime": "含往返时间",
+      "creditedCoins": "已发放时间币",
+      "reviewer": "审核人",
+      "timelineReviewed": "已审核",
+      "timelineType": {
+        "created": "创建记录",
+        "submitted": "提交审核",
+        "revised": "修改内容",
+        "review_approve": "审核通过",
+        "review_return_for_changes": "退回补充",
+        "review_reject": "审核驳回",
+        "review_escalate": "上报复审"
+      }
     },
     "account": {
       "title": "时间币账户",
@@ -410,7 +439,12 @@
       "balance": "余额",
       "balanceBefore": "变动前余额",
       "balanceAfter": "变动后余额",
-      "operator": "操作人"
+      "operator": "操作人",
+      "reason": {
+        "SERVICE_APPROVED": "服务记录审核通过",
+        "CORRECTION": "人工更正",
+        "REVERSAL": "冲正"
+      }
     },
     "progress": {
       "title": "达标进度",
@@ -1349,6 +1383,7 @@
       "confirmPassword": "确认密码",
       "reenterPassword": "再次输入密码",
       "resetPassword": "重置密码",
+      "resetPasswordHint": "保存后，系统会为该用户生成一个新的临时密码，并向你展示一次。请将其转交给该用户，其登录后可自行修改。此处无法自行指定密码。",
       "newPasswordPlaceholder": "新密码（至少 6 位）",
       "confirmNewPassword": "确认新密码",
       "deleteUser": "删除用户",
@@ -1666,7 +1701,9 @@
           "close": "提前关闭项目",
           "archive": "在所有已确认学生的记录均通过审核后，归档已完成的项目",
           "cancel": "直接取消并归档项目（跳过\"记录已审核\"限制，需填写原因）",
-          "audit": { "read": "查看项目变更时间线" }
+          "audit": {
+            "read": "查看项目变更时间线"
+          }
         },
         "eventProposals": {
           "read": "查看可见范围内的活动提案",

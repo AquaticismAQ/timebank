@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import { Search, X, MapPin, Clock, Users, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
-import { type Project, type ProjectStatus } from '../../api/types';
+import { type Project, type ProjectStatus, type ApplicationStatus } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
+import { isoToLocalDate } from '../../lib/datetime';
 import { ApiError, mapApiError } from '../../api/http';
 import { usePagedApi } from '../../api/useApi';
 import { useDictionaries } from '../../api/useDictionaries';
@@ -27,6 +28,14 @@ type FilterStatus = ProjectStatus | 'all' | 'canApply';
 // Same 3 fields/keys as ProjectManagement.tsx's admin view (Docs/optimization/05-SearchFilterSortConsistency.md) —
 // `enrolledCount` has no backend column to sort on (ProjectController's SORTABLE set is
 // id/startAt/registrationOpenAt/status/createdAt only), so it stays client-side, current-page-only.
+/**
+ * The statuses that mean "this student already holds a place (or a claim on one)".
+ * CANCELLED is deliberately absent: a cancelled registration means they are *not*
+ * registered and may join again — treating any truthy status as "already applied"
+ * locked them out of the project permanently (issue 071).
+ */
+const ACTIVE_APPLICATION_STATUSES = ['pending', 'confirmed', 'waitlisted', 'completed'];
+
 type SortKey = 'createdAt' | 'startAt' | 'enrolledCount';
 const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['enrolledCount'];
 
@@ -40,7 +49,11 @@ export function ProjectCenter() {
   const [sortKey, setSortKey] = useState<SortKey>('createdAt');
   const [sortDesc, setSortDesc] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [applied, setApplied] = useState<Set<string>>(new Set());
+  // The *server-returned* status per project id, not a "did they press the
+  // button" bit. `EnrollmentServiceImpl.register` returns CONFIRMED when under
+  // capacity and WAITLISTED when full — it never returns PENDING on this path —
+  // so inferring a status locally reported both real outcomes wrongly (issue 070).
+  const [applied, setApplied] = useState<Map<string, ApplicationStatus>>(new Map());
 
   const applyStatusFilter = (val: FilterStatus) => {
     setFilterStatus(val);
@@ -66,12 +79,19 @@ export function ProjectCenter() {
   };
 
   const handleApply = async (proj: Project) => {
-    if (applied.has(proj.id) || proj.myApplicationStatus) { toast.info(t('student.projects.alreadyApplied')); return; }
+    const current = applied.get(proj.id) ?? proj.myApplicationStatus;
+    if (current && ACTIVE_APPLICATION_STATUSES.includes(current)) { toast.info(t('student.projects.alreadyApplied')); return; }
     if (proj.status !== 'registrationOpen') { toast.error(t('student.projects.notAccepting')); return; }
     try {
-      await api.applications.create(proj.id);
-      setApplied(prev => new Set([...prev, proj.id]));
-      toast.success(t('student.projects.appliedSuccess', { title: proj.title }));
+      const application = await api.applications.create(proj.id);
+      setApplied(prev => new Map(prev).set(proj.id, application.status));
+      toast.success(application.status === 'waitlisted'
+        ? t('student.projects.waitlistedSuccess', { title: proj.title })
+        : t('student.projects.appliedSuccess', { title: proj.title }));
+      // Without this the seat count stays stale and `myApplicationStatus` never
+      // arrives, so the Cancel button (gated on it) never appears — leaving the
+      // student who just registered with no way to back out until a reload.
+      refetch();
     } catch (err) {
       if (err instanceof ApiError) toast.error(mapApiError(err).message);
       else toast.error(t('common.unknownError'));
@@ -91,7 +111,7 @@ export function ProjectCenter() {
       const application = page.data[0];
       if (!application) throw new Error('Application not found');
       await api.applications.cancel(application.id);
-      setApplied(prev => { const next = new Set(prev); next.delete(proj.id); return next; });
+      setApplied(prev => { const next = new Map(prev); next.delete(proj.id); return next; });
       toast.success(t('student.projects.cancelSuccess'));
       refetch();
     } catch (err) {
@@ -102,11 +122,15 @@ export function ProjectCenter() {
     }
   };
 
+  /** Local (just-registered) status wins over the list's, which lags until `refetch()` lands. */
+  const statusOf = (proj: Project) => applied.get(proj.id) ?? proj.myApplicationStatus;
+
   const getApplyBtnText = (proj: Project) => {
-    if (applied.has(proj.id) || proj.myApplicationStatus === 'pending') return t('student.projects.pendingConfirm');
-    if (proj.myApplicationStatus === 'confirmed') return t('student.projects.registered');
-    if (proj.myApplicationStatus === 'completed') return t('student.projects.completed');
-    if (proj.myApplicationStatus === 'waitlisted') return t('student.projects.waitlist');
+    const status = statusOf(proj);
+    if (status === 'pending') return t('student.projects.pendingConfirm');
+    if (status === 'confirmed') return t('student.projects.registered');
+    if (status === 'completed') return t('student.projects.completed');
+    if (status === 'waitlisted') return t('student.projects.waitlist');
     if (proj.status !== 'registrationOpen') return t('student.projects.registrationClosed');
     if (proj.enrolledCount >= proj.capacity) return t('student.projects.joinWaitlist');
     return t('student.projects.registerNow');
@@ -203,7 +227,8 @@ export function ProjectCenter() {
                 const status = PROJECT_STATUS_LABELS[proj.status];
                 const isExpanded = expandedId === proj.id;
                 const btnText = getApplyBtnText(proj);
-                const isApplied = applied.has(proj.id) || (proj.myApplicationStatus && ['confirmed', 'completed', 'waitlisted', 'pending'].includes(proj.myApplicationStatus));
+                const myStatus = statusOf(proj);
+                const isApplied = !!myStatus && ACTIVE_APPLICATION_STATUSES.includes(myStatus);
 
                 return (
                   <div key={proj.id} className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col">
@@ -228,7 +253,7 @@ export function ProjectCenter() {
                           <Users className="w-3 h-3 shrink-0" />
                           <span>{proj.enrolledCount}/{proj.capacity} {t('common.people')}</span>
                         </div>
-                        <div>{proj.startAt.slice(0, 10)}</div>
+                        <div>{isoToLocalDate(proj.startAt)}</div>
                       </div>
 
                       {isExpanded && (
@@ -236,7 +261,7 @@ export function ProjectCenter() {
                           <p><span className="font-medium text-foreground">{t('student.projects.details')}</span>{proj.description}</p>
                           <p><span className="font-medium text-foreground">{t('student.projects.organizer')}</span>{proj.organizationName}</p>
                           <p><span className="font-medium text-foreground">{t('student.projects.owner')}</span>{proj.ownerName}</p>
-                          <p><span className="font-medium text-foreground">{t('student.projects.registrationDeadline')}</span>{proj.registrationCloseAt.slice(0, 10)}</p>
+                          <p><span className="font-medium text-foreground">{t('student.projects.registrationDeadline')}</span>{isoToLocalDate(proj.registrationCloseAt)}</p>
                           <p><span className="font-medium text-foreground">{t('student.projects.evidenceReq')}</span>{proj.evidenceRequirements}</p>
                           <p><span className="font-medium text-foreground">{t('student.projects.eligibleGrades')}</span>{proj.eligibleGrades.join(', ')}</p>
                         </div>
@@ -249,7 +274,7 @@ export function ProjectCenter() {
                         {isExpanded ? <><ChevronUp className="w-3 h-3" /> {t('student.projects.collapse')}</> : <><ChevronDown className="w-3 h-3" /> {t('student.projects.viewDetails')}</>}
                       </button>
                       <button onClick={() => handleApply(proj)}
-                        disabled={!!isApplied && proj.myApplicationStatus !== 'pending'}
+                        disabled={isApplied && myStatus !== 'pending'}
                         className={`px-4 py-1.5 rounded-xl text-xs transition-colors ${
                           isApplied ? 'bg-muted text-muted-foreground cursor-default' :
                           proj.status === 'registrationOpen' ? 'bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90' :
@@ -257,7 +282,7 @@ export function ProjectCenter() {
                         }`}>
                         {btnText}
                       </button>
-                      {proj.myApplicationStatus && ['pending', 'confirmed', 'waitlisted'].includes(proj.myApplicationStatus) && (
+                      {myStatus && ['pending', 'confirmed', 'waitlisted'].includes(myStatus) && (
                         <button onClick={() => handleCancel(proj)} disabled={cancelling === proj.id}
                           className="px-4 py-1.5 rounded-xl text-xs border border-border text-muted-foreground hover:bg-accent disabled:opacity-50">
                           {t('student.projects.cancelRegistration')}

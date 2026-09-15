@@ -6,6 +6,7 @@ import { api } from '../../api/client';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
+import { formatLocalInstant } from '../../lib/datetime';
 
 const categoryColors: Record<string, string> = {
   review: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
@@ -96,7 +97,7 @@ export function NotificationsPage() {
                     {!notif.isRead && <div className="w-2 h-2 bg-primary rounded-full shrink-0" />}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 leading-relaxed">{notif.body}</div>
-                  <div className="text-xs text-muted-foreground mt-1.5">{notif.createdAt.slice(0, 16).replace('T', ' ')}</div>
+                  <div className="text-xs text-muted-foreground mt-1.5">{formatLocalInstant(notif.createdAt)}</div>
                 </div>
               </div>
             </div>

@@ -8,7 +8,7 @@ import { api } from '../../api/client';
 import { useFieldErrors, FieldError, handleMutationError } from '../../api/useFieldErrors';
 import { usePermissions } from '../../App';
 import { useDictionaries } from '../../api/useDictionaries';
-import { localDatetimeLocalToISO } from '../../lib/datetime';
+import { localDatetimeLocalToISO, isoToLocalDatetimeLocal, isoToLocalDate } from '../../lib/datetime';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
@@ -81,10 +81,10 @@ function toForm(p: Project, grades: Grade[]): EditForm {
     location: p.location,
     capacity: p.capacity,
     recognizedMinutes: p.recognizedMinutes,
-    startAt: p.startAt.slice(0, 16),
-    endAt: p.endAt.slice(0, 16),
-    registrationOpenAt: p.registrationOpenAt.slice(0, 16),
-    registrationCloseAt: p.registrationCloseAt.slice(0, 16),
+    startAt: isoToLocalDatetimeLocal(p.startAt),
+    endAt: isoToLocalDatetimeLocal(p.endAt),
+    registrationOpenAt: isoToLocalDatetimeLocal(p.registrationOpenAt),
+    registrationCloseAt: isoToLocalDatetimeLocal(p.registrationCloseAt),
     eligibleGrades: p.eligibleGrades.map(name => grades.find(g => g.name === name)?.id ?? name),
     evidenceRequirements: p.evidenceRequirements,
   };
@@ -597,7 +597,7 @@ export function ProjectManagement() {
                       <Users className="w-3 h-3" />
                       <span>{proj.enrolledCount}/{proj.capacity} {t('common.people')}</span>
                     </div>
-                    <div>{proj.startAt.slice(0, 10)} → {proj.endAt.slice(0, 10)}</div>
+                    <div>{isoToLocalDate(proj.startAt)} → {isoToLocalDate(proj.endAt)}</div>
                   </div>
 
                   {proj.eligibleGrades.length > 0 && (
@@ -662,9 +662,9 @@ export function ProjectManagement() {
 
               {/* Quick info footer */}
               <div className="flex items-center gap-2 text-xs text-muted-foreground border-t border-border pt-3">
-                <span>{t('admin.projects.owner')}: {proj.ownerName}</span>
+                <span>{t('admin.projects.owner')}{proj.ownerName}</span>
                 <span>·</span>
-                <span>{t('admin.projects.regCloses')}: {proj.registrationCloseAt.slice(0, 10)}</span>
+                <span>{t('admin.projects.regCloses')}: {isoToLocalDate(proj.registrationCloseAt)}</span>
               </div>
             </div>
           );

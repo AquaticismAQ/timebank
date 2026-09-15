@@ -156,8 +156,14 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
                         .contains("supervisorKind"));
     }
 
+    /**
+     * Issue 069: an overlap is a hard block at submit, not an anomaly flag for
+     * the reviewer to catch later. The blocked record must stay submittable-
+     * later — i.e. still DRAFT — so the student's "keep as draft" choice in the
+     * UI has something real to keep.
+     */
     @Test
-    void overlappingRecordsAreFlaggedAsAnomalyNotBlocked() {
+    void overlappingRecordsAreBlockedAtSubmitAndLeftAsDraft() {
         StudentDetailDto student = createStudent();
         Instant end1 = Instant.now().minus(2, ChronoUnit.DAYS);
         Instant start1 = end1.minusSeconds(7200);
@@ -168,10 +174,38 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
         Instant start2 = start1.plusSeconds(1800);
         Instant end2 = end1.plusSeconds(1800);
         ServiceRecordDto second = createDraft(student, List.of(readyFile()), false, LocalDate.now().minusDays(2), start2, end2);
-        ServiceRecordDto submittedSecond = serviceRecordService.submit(second.id(), studentAuth(student.id()), "idem-overlap-2", "zh-CN");
 
-        assertThat(submittedSecond.hasAnomaly()).isTrue();
-        assertThat(submittedSecond.anomalyNote()).containsIgnoringCase("overlaps");
+        assertThatThrownBy(() -> serviceRecordService.submit(second.id(), studentAuth(student.id()), "idem-overlap-2", "zh-CN"))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> {
+                    assertThat(((ApiException) e).fieldErrors())
+                            .extracting(fe -> fe.code())
+                            .contains("OVERLAPPING_RECORD", "OVERLAPPING_RECORD_ID");
+                    // The id entry must name the record actually clashed with, so the
+                    // student can be shown which one rather than just "some conflict".
+                    assertThat(((ApiException) e).fieldErrors())
+                            .filteredOn(fe -> "OVERLAPPING_RECORD_ID".equals(fe.code()))
+                            .extracting(fe -> fe.message())
+                            .containsExactly(first.id());
+                });
+
+        assertThat(serviceRecordService.getDetail(second.id(), studentAuth(student.id()), "zh-CN").status())
+                .isEqualTo("DRAFT");
+    }
+
+    /** The overlap check deliberately ignores DRAFT records, so parking one can never block a later submit. */
+    @Test
+    void anOverlappingDraftDoesNotBlockSubmission() {
+        StudentDetailDto student = createStudent();
+        Instant end1 = Instant.now().minus(3, ChronoUnit.DAYS);
+        Instant start1 = end1.minusSeconds(7200);
+        createDraft(student, List.of(readyFile()), false, LocalDate.now().minusDays(3), start1, end1);
+
+        ServiceRecordDto other = createDraft(student, List.of(readyFile()), false, LocalDate.now().minusDays(3),
+                start1.plusSeconds(1800), end1.plusSeconds(1800));
+
+        assertThat(serviceRecordService.submit(other.id(), studentAuth(student.id()), "idem-overlap-3", "zh-CN").status())
+                .isEqualTo("SUBMITTED");
     }
 
     @Test

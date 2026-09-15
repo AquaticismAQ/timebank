@@ -33,7 +33,7 @@
       "emptyNoRecords": "Nothing here yet.",
       "emptyNoResults": "No results match the current filters."
     },
-    "close": "Collapse",
+    "close": "Close",
     "viewDetails": "View Details",
     "viewAll": "View All",
     "viewMore": "More →",
@@ -68,7 +68,12 @@
     "unknownError": "Something went wrong. Please try again.",
     "noPermission": "You do not have permission to view this page.",
     "saving": "Saving...",
-    "publishing": "Publishing..."
+    "publishing": "Publishing...",
+    "ok": "OK",
+    "view": "View",
+    "download": "Download",
+    "evidenceNoPreview": "This file type can't be previewed in the browser — download it to open it.",
+    "evidenceDownloadFailed": "Couldn't prepare that file for download. Please try again."
   },
   "layout": {
     "admin": {
@@ -215,7 +220,8 @@
       "notAccepting": "Not accepting registrations",
       "appliedSuccess": "Registration successful",
       "cancelRegistration": "Cancel",
-      "cancelSuccess": "Registration cancelled"
+      "cancelSuccess": "Registration cancelled",
+      "waitlistedSuccess": "You are on the waitlist for \"{{title}}\" — a place will open up only if someone cancels."
     },
     "records": {
       "submitRecord": "Submit Service Record",
@@ -381,7 +387,30 @@
       "revert": "Revert",
       "editDraftTitle": "Edit Draft Record",
       "revertedToDraft": "Record reverted to draft",
-      "draftLoaded": "Draft loaded for editing"
+      "draftLoaded": "Draft loaded for editing",
+      "overlapTitle": "Time conflict with another record",
+      "overlapMessage": "This record's time window overlaps another of your service records, so it can't be submitted.",
+      "overlapChoicesHint": "Delete it, or keep it as a draft and correct the date and times before submitting again.",
+      "overlapReturnedHint": "Correct the date and times on this record before submitting it again.",
+      "overlapDelete": "Delete record",
+      "overlapKeepDraft": "Keep as draft",
+      "overlapThisRecord": "This record",
+      "overlapExistingRecord": "Conflicts with",
+      "detailTitle": "Service Record Details",
+      "projectOrOrg": "Project / Organization",
+      "travelTime": "Travel Time Included",
+      "creditedCoins": "Time Coins Credited",
+      "reviewer": "Reviewed By",
+      "timelineReviewed": "Reviewed",
+      "timelineType": {
+        "created": "Created",
+        "submitted": "Submitted for review",
+        "revised": "Fields updated",
+        "review_approve": "Approved by reviewer",
+        "review_return_for_changes": "Returned for changes",
+        "review_reject": "Rejected by reviewer",
+        "review_escalate": "Escalated for further review"
+      }
     },
     "account": {
       "title": "Time Coin Account",
@@ -410,7 +439,12 @@
       "balance": "Balance",
       "balanceBefore": "Balance Before",
       "balanceAfter": "Balance After",
-      "operator": "Operator"
+      "operator": "Operator",
+      "reason": {
+        "SERVICE_APPROVED": "Service record approved",
+        "CORRECTION": "Manual correction",
+        "REVERSAL": "Reversal"
+      }
     },
     "progress": {
       "title": "Progress",
@@ -1349,6 +1383,7 @@
       "confirmPassword": "Confirm Password",
       "reenterPassword": "Re-enter password",
       "resetPassword": "Reset Password",
+      "resetPasswordHint": "On save, the system generates a new temporary password for this user and shows it to you once. Pass it on to them — they can change it after signing in. You cannot choose the password here.",
       "newPasswordPlaceholder": "New password (at least 6 characters)",
       "confirmNewPassword": "Confirm new password",
       "deleteUser": "Delete User",
@@ -1666,7 +1701,9 @@
           "close": "Close a project early",
           "archive": "Archive a completed project once every confirmed student's record is reviewed",
           "cancel": "Cancel and archive a project outright, with a reason, bypassing the reviewed-records gate",
-          "audit": { "read": "View project change timeline" }
+          "audit": {
+            "read": "View project change timeline"
+          }
         },
         "eventProposals": {
           "read": "View event proposals within scope",

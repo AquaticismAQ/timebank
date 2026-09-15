@@ -15,7 +15,7 @@ import java.util.List;
  */
 public record ServiceRecordDto(
         String id, String studentId, String studentName,
-        String projectId, String sourceType,
+        String projectId, String projectTitle, String sourceType,
         LocalDate serviceDate, Instant startAt, Instant endAt, int durationMinutes,
         String location, String organizationId, String organizationName,
         String serviceCategoryId, String serviceCategoryName,

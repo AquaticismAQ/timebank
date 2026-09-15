@@ -14,6 +14,7 @@ import { EvidencePreview } from '../shared/EvidencePreview';
 import { DetailWorkbench, type DetailWorkbenchTab } from '../shared/DetailWorkbench';
 import { type ServiceRecord, type TimelineEntry } from '../../api/types';
 import { formatGradeClass, minutesToHours } from '../../lib/format';
+import { formatLocalInstant } from '../../lib/datetime';
 
 type SortKey = 'daysWaiting' | 'submittedAt' | 'durationMinutes';
 const SORT_KEYS: SortKey[] = ['daysWaiting', 'submittedAt', 'durationMinutes'];
@@ -384,8 +385,8 @@ export function AuditCenter() {
                 <Field label={t('admin.audit.fieldProjectOrg')} value={detailRecord.projectTitle || detailRecord.organizationName} />
                 <Field label={t('admin.audit.fieldServiceDate')} value={detailRecord.serviceDate} />
                 <Field label={t('admin.audit.fieldDuration')} value={`${minutesToHours(detailRecord.durationMinutes)} ${t('admin.audit.hoursUnit')}`} />
-                <Field label={t('admin.audit.fieldStartTime')} value={detailRecord.startAt?.slice(0, 16).replace('T', ' ')} />
-                <Field label={t('admin.audit.fieldEndTime')} value={detailRecord.endAt?.slice(0, 16).replace('T', ' ')} />
+                <Field label={t('admin.audit.fieldStartTime')} value={formatLocalInstant(detailRecord.startAt)} />
+                <Field label={t('admin.audit.fieldEndTime')} value={formatLocalInstant(detailRecord.endAt)} />
                 <Field label={t('admin.audit.fieldLocation')} value={detailRecord.location} />
                 <Field label={t('admin.audit.fieldCategory')} value={detailRecord.serviceCategoryName} />
                 <Field label={t('admin.audit.fieldSupervisor')} value={[detailRecord.supervisorName, detailRecord.supervisorContact].filter(Boolean).join(' · ')} />
@@ -419,7 +420,7 @@ export function AuditCenter() {
                   <li key={i} className="flex gap-3">
                     <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs text-muted-foreground">{entry.occurredAt.slice(0, 16).replace('T', ' ')} · {entry.type}</div>
+                      <div className="text-xs text-muted-foreground">{formatLocalInstant(entry.occurredAt)} · {entry.type}</div>
                       <div className="text-sm text-foreground">{entry.description}</div>
                     </div>
                   </li>

@@ -13,6 +13,7 @@ import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { SearchPicker } from '../SearchPicker';
+import { isoToLocalDate } from '../../lib/datetime';
 
 export function AccountManagement() {
   const { t } = useTranslation();
@@ -231,7 +232,7 @@ export function AccountManagement() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs text-foreground">{t(typeInfo.label)} · {tx.relatedRecordTitle || tx.description}</div>
-                            <div className="text-xs text-muted-foreground">{tx.createdAt.slice(0, 10)}</div>
+                            <div className="text-xs text-muted-foreground">{isoToLocalDate(tx.createdAt)}</div>
                           </div>
                           <div className={`text-sm font-medium ${colorMap[typeInfo.color]}`}>{typeInfo.sign}{formatCoins(tx.amount)}</div>
                         </div>

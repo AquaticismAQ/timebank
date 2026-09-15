@@ -14,6 +14,7 @@ import { DetailWorkbench, type DetailWorkbenchTab } from '../shared/DetailWorkbe
 import { type Case, type EvidenceFile, type TimelineEntry } from '../../api/types';
 import { CASE_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import { formatGradeClass } from '../../lib/format';
+import { formatLocalInstant, isoToLocalDate } from '../../lib/datetime';
 
 const STATUSES: (Case['status'])[] = ['submitted', 'inReview', 'needsInformation', 'resolved', 'rejected'];
 const TYPES: (Case['type'])[] = ['appeal', 'supplement', 'manualCorrection'];
@@ -196,7 +197,7 @@ export function CaseReview() {
                   <span className="text-xs text-muted-foreground">{t(TYPE_LABEL[c.type])}</span>
                 </div>
                 <div className="text-sm text-foreground font-medium truncate">{c.title}</div>
-                <div className="text-xs text-muted-foreground">{c.studentName} · {formatGradeClass(c.gradeLevel, c.className)}{c.submittedAt ? ` · ${c.submittedAt.slice(0, 10)}` : ''}</div>
+                <div className="text-xs text-muted-foreground">{c.studentName} · {formatGradeClass(c.gradeLevel, c.className)}{c.submittedAt ? ` · ${isoToLocalDate(c.submittedAt)}` : ''}</div>
                 {c.description && <p className="text-xs text-muted-foreground mt-2">{c.description}</p>}
               </div>
               {/* Decision actions live in the detail modal's footer only — this just opens it. */}
@@ -227,7 +228,7 @@ export function CaseReview() {
                 <Field label={t('admin.cases.fieldReasonCode')} value={detailCase.reasonCode} />
                 {detailCase.subjectLabel && <Field label={t('admin.cases.fieldSubject')} value={detailCase.subjectLabel} />}
                 {detailCase.requestedAmountCentiCoins != null && <Field label={t('admin.cases.fieldAmount')} value={detailCase.requestedAmountCentiCoins} />}
-                <Field label={t('admin.cases.fieldSubmitted')} value={detailCase.submittedAt?.slice(0, 16).replace('T', ' ')} />
+                <Field label={t('admin.cases.fieldSubmitted')} value={formatLocalInstant(detailCase.submittedAt)} />
                 <div className="sm:col-span-2">
                   <Field label={t('admin.cases.fieldDescription')} value={detailCase.description} />
                 </div>
@@ -247,7 +248,7 @@ export function CaseReview() {
                   <li key={i} className="flex gap-3">
                     <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs text-muted-foreground">{entry.occurredAt.slice(0, 16).replace('T', ' ')} · {entry.type}</div>
+                      <div className="text-xs text-muted-foreground">{formatLocalInstant(entry.occurredAt)} · {entry.type}</div>
                       <div className="text-sm text-foreground">{entry.description}</div>
                     </div>
                   </li>

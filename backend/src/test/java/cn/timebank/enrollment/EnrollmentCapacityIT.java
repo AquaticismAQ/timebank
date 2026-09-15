@@ -31,7 +31,10 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
+import cn.timebank.common.error.ApiException;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * B4.7's exit criterion: N concurrent registrations for M places, real
@@ -87,6 +90,63 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
         } finally {
             executor.shutdown();
         }
+    }
+
+    /**
+     * Issue 071: cancelling used to leave a CANCELLED row that `register`'s
+     * "already registered" guard then treated as a permanent lock-out. A
+     * student may re-register; the row is reused (the unique key on
+     * (project_id, student_id) allows only one).
+     */
+    @Test
+    void aCancelledRegistrationCanBeRegisteredAgain() {
+        Instant start = Instant.now().plus(8, ChronoUnit.DAYS);
+        CreateProjectRequest request = new CreateProjectRequest(
+                "Re-register Test Project", "summary", "description", "cat_campus", null, null, "ON_CAMPUS",
+                start, start.plusSeconds(7200), "Hall", 5, 100, null, null,
+                Instant.now().minusSeconds(60), start);
+        ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        projectService.getDetail(published.id(), adminAuth(), "zh-CN");
+
+        Authentication student = studentAuth(createStudent(300).id());
+        EnrollmentDto first = enrollmentService.register(published.id(), new RegisterRequest(null), student, "zh-CN");
+        assertThat(first.status()).isEqualTo("CONFIRMED");
+
+        enrollmentService.cancel(first.id(), student, "zh-CN");
+
+        EnrollmentDto again = enrollmentService.register(published.id(), new RegisterRequest(null), student, "zh-CN");
+        assertThat(again.status()).isEqualTo("CONFIRMED");
+        // Same row revived, not a second one — the unique key permits only one.
+        assertThat(again.id()).isEqualTo(first.id());
+
+        Page<EnrollmentDto> forProject = enrollmentService.list(PageRequest.of(0, 100), null, published.id(), adminAuth(), "zh-CN");
+        assertThat(forProject.getContent()).hasSize(1);
+    }
+
+    /** The asymmetry is deliberate: a REJECTED enrollment is an administrator's decision, not the student's to undo (issue 071). */
+    @Test
+    void aRejectedRegistrationCannotBeRegisteredAgain() {
+        Instant start = Instant.now().plus(9, ChronoUnit.DAYS);
+        CreateProjectRequest request = new CreateProjectRequest(
+                "Rejected Re-register Test Project", "summary", "description", "cat_campus", null, null, "ON_CAMPUS",
+                start, start.plusSeconds(7200), "Hall", 1, 100, null, null,
+                Instant.now().minusSeconds(60), start);
+        ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        projectService.getDetail(published.id(), adminAuth(), "zh-CN");
+
+        // `reject` only accepts PENDING/WAITLISTED, so the single seat is taken
+        // first and this student lands on the waitlist before being rejected.
+        enrollmentService.register(published.id(), new RegisterRequest(null), studentAuth(createStudent(302).id()), "zh-CN");
+        Authentication student = studentAuth(createStudent(301).id());
+        EnrollmentDto first = enrollmentService.register(published.id(), new RegisterRequest(null), student, "zh-CN");
+        assertThat(first.status()).isEqualTo("WAITLISTED");
+        enrollmentService.reject(first.id(), "usr_test_admin", "zh-CN");
+
+        assertThatThrownBy(() -> enrollmentService.register(published.id(), new RegisterRequest(null), student, "zh-CN"))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Already registered");
     }
 
     /** I1: `GET /applications?filter[status]=...` must actually narrow the result set, not silently discard the param. */

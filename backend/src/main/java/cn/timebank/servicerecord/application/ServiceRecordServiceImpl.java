@@ -583,17 +583,33 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
             }
         }
 
-        if (!errors.isEmpty()) {
-            throw ApiException.validationFailed("Submission failed validation.", errors);
+        // Duplicate detection. 05-Backend-B3-CoreLoop.md's design caution made this a
+        // warning-plus-review-routing *"where the rule is fuzzy"*, pending an explicit
+        // specification; that specification arrived (issue 069) and it is a hard block:
+        // the student is stopped at submit and chooses whether to delete or park the
+        // record, rather than a reviewer discovering the clash later. `DRAFT` is
+        // deliberately outside DUPLICATE_CHECK_STATUSES, which is what makes parking it
+        // as a draft a coherent escape hatch instead of just deferring the same block.
+        List<ServiceRecord> overlapping = repository.findOverlapping(record.getStudentId(), record.getId(),
+                record.getStartAt(), record.getEndAt(), DUPLICATE_CHECK_STATUSES);
+        if (!overlapping.isEmpty()) {
+            errors.add(new FieldErrorDetail("startAt", "OVERLAPPING_RECORD",
+                    "This record's time window overlaps another of your service records."));
+            // The id of the record it clashes with, so the student can be shown *which*
+            // one and when, rather than a bare "there's a conflict somewhere" (issue 069).
+            // Carried as its own coded entry rather than interpolated into the message
+            // above: FieldErrorDetail is contract §2.6's fixed {field, code, message}
+            // shape and isn't ours to extend, and the alternative — formatting the
+            // conflicting record's times into the message server-side — would render
+            // them in UTC, which is the exact defect issue 067 just fixed. The client
+            // resolves the id through the existing GET /service-records/{id} (always
+            // the same student's own record, so already authorized) and formats in
+            // local time.
+            errors.add(new FieldErrorDetail("startAt", "OVERLAPPING_RECORD_ID", overlapping.get(0).getId()));
         }
 
-        // Duplicate detection — a business rule, not a hard block (warning + review routing per the phase doc).
-        boolean overlaps = !repository.findOverlapping(record.getStudentId(), record.getId(), record.getStartAt(),
-                record.getEndAt(), DUPLICATE_CHECK_STATUSES).isEmpty();
-        if (overlaps) {
-            record.setHasAnomaly(true);
-            record.setAnomalyNote(appendNote(record.getAnomalyNote(),
-                    "Overlaps another service record's time window for this student."));
+        if (!errors.isEmpty()) {
+            throw ApiException.validationFailed("Submission failed validation.", errors);
         }
 
         // Travel-time disclosure (Q5): no automated approval path exists anywhere in this
@@ -686,7 +702,8 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
 
     /** Bundles {@link #toDto}'s lookup tables so call sites (list and every single-record mutation) pass one object, not four. */
     private record DtoLookups(Map<String, String> categoryNames, Map<String, Integer> gradeSequences,
-                               Map<String, String> classNames, Map<String, String> reviewerNames) {
+                               Map<String, String> classNames, Map<String, String> reviewerNames,
+                               Map<String, String> projectTitles) {
     }
 
     /**
@@ -701,13 +718,20 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         Map<String, String> classNames = academicStructureService.listClasses().stream()
                 .collect(Collectors.toMap(ClassDto::id, ClassDto::name));
         Map<String, String> reviewerNames = new HashMap<>();
+        List<String> projectIds = new ArrayList<>();
         for (ServiceRecord r : records) {
             String reviewerId = r.getAssignedReviewerId();
             if (reviewerId != null) {
                 reviewerNames.computeIfAbsent(reviewerId, id -> userService.getById(id).displayName());
             }
+            if (r.getProjectId() != null && !projectIds.contains(r.getProjectId())) {
+                projectIds.add(r.getProjectId());
+            }
         }
-        return new DtoLookups(categoryNameMap(resolvedLanguage), gradeSequences, classNames, reviewerNames);
+        // Contract §2.11 rule 1: `projectId` must travel with `projectTitle`. One
+        // batched lookup per page for the distinct projects present, never per row.
+        Map<String, String> projectTitles = projectIds.isEmpty() ? Map.of() : projectService.titlesOf(projectIds);
+        return new DtoLookups(categoryNameMap(resolvedLanguage), gradeSequences, classNames, reviewerNames, projectTitles);
     }
 
     private ServiceRecordDto toDto(ServiceRecord r, DtoLookups lookups) {
@@ -717,6 +741,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         List<String> partnerOrganizationNames = snapshot.stream().filter(e -> "PARTNER".equals(e.role()))
                 .map(OrgSnapshotEntry::organizationName).toList();
         return new ServiceRecordDto(r.getId(), r.getStudentId(), r.getStudentName(), r.getProjectId(),
+                r.getProjectId() != null ? lookups.projectTitles().get(r.getProjectId()) : null,
                 r.getSourceType().name(), r.getServiceDate(), r.getStartAt(), r.getEndAt(), r.getDurationMinutes(),
                 r.getLocation(), r.getOrganizationId(), r.getOrganizationName(), r.getServiceCategoryId(),
                 lookups.categoryNames().getOrDefault(r.getServiceCategoryId(), ""), r.getDescription(),

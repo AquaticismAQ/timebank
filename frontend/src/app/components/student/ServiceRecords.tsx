@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { Plus, Search, X, FileText, AlertTriangle, ChevronDown, ChevronUp, Upload, Send, Trash2, Pencil, RotateCcw, Gavel } from 'lucide-react';
+import { Plus, Search, X, FileText, AlertTriangle, ChevronDown, ChevronUp, Upload, Send, Trash2, Pencil, RotateCcw, Gavel, Eye } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { RECORD_STATUS_LABELS } from '../../lib/statusLabels';
 import { type RecordStatus, type ServiceRecord, type EvidenceFile, type Application, type Project } from '../../api/types';
@@ -16,6 +16,8 @@ import { ListStateBanner } from '../ListStateBanner';
 import { EvidenceLink } from '../EvidenceLink';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { ConfirmDeleteDialog } from '../shared/ConfirmDeleteDialog';
+import { ServiceRecordDetail } from './ServiceRecordDetail';
+import { OverlapBlockedDialog } from '../shared/OverlapBlockedDialog';
 import { TimeInput } from '../shared/TimeInput';
 import { CaseFilingModal } from './CaseFilingModal';
 import { StudentCases } from './StudentCases';
@@ -300,11 +302,75 @@ export function ServiceRecords() {
     ? api.serviceRecords.update(editing.id, { ...buildRecordPayload(), version: editing.version })
     : api.serviceRecords.create(buildRecordPayload());
 
+  // Issue 069: an overlap with one of the student's own non-draft records is a
+  // hard block at submit (it used to sail through and reach the reviewer flagged
+  // as an anomaly). It gets a dialog rather than the usual inline field error,
+  // because by this point the wizard has already *created* the draft — so the
+  // student has a real decision to make about it, not just a field to correct.
+  // No `message` is carried from the server: every submission-validation message
+  // in `runSubmissionValidation` is a hardcoded English literal regardless of
+  // `Accept-Language`, so this dialog renders its own translated copy instead.
+  const [overlapBlock, setOverlapBlock] = useState<
+    { recordId: string; canDelete: boolean; attempted: { date: string; startTime: string; endTime: string; endDate: string }; conflict: ServiceRecord | null } | null
+  >(null);
+
+  const overlapErrorOf = (err: unknown) =>
+    err instanceof ApiError ? err.fieldErrors?.find(f => f.code === 'OVERLAPPING_RECORD') : undefined;
+
+  /**
+   * The server names the clashing record by id only (see `OVERLAPPING_RECORD_ID`
+   * in `runSubmissionValidation`); resolve it here so the dialog can show *which*
+   * record and *when*, formatted in local time. A failed lookup is not fatal —
+   * the dialog still blocks and explains, just without the comparison rows.
+   */
+  const openOverlapBlock = async (
+    err: unknown,
+    recordId: string,
+    canDelete: boolean,
+    attempted: { date: string; startTime: string; endTime: string; endDate: string },
+  ) => {
+    const conflictId = err instanceof ApiError
+      ? err.fieldErrors?.find(f => f.code === 'OVERLAPPING_RECORD_ID')?.message
+      : undefined;
+    setOverlapBlock({ recordId, canDelete, attempted, conflict: null });
+    if (!conflictId) return;
+    try {
+      const conflict = await api.serviceRecords.get(conflictId);
+      setOverlapBlock(prev => (prev && prev.recordId === recordId ? { ...prev, conflict } : prev));
+    } catch {
+      // Leave `conflict` null — the block itself still stands.
+    }
+  };
+
+  /** Wizard path: the attempted window is whatever is in the form right now. */
+  const openOverlapBlockFromForm = (err: unknown, recordId: string, canDelete: boolean) =>
+    openOverlapBlock(err, recordId, canDelete, {
+      date: formData.serviceDate,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      endDate: formData.endsNextDay ? addOneDay(formData.serviceDate) : formData.serviceDate,
+    });
+
+  /** List path: the wizard is closed, so the attempted window comes off the stored record. */
+  const openOverlapBlockFromRow = (err: unknown, recordId: string) => {
+    const row = records.find(r => r.id === recordId);
+    const start = row ? isoToLocalDateTime(row.startAt) : null;
+    const end = row ? isoToLocalDateTime(row.endAt) : null;
+    return openOverlapBlock(err, recordId, true, {
+      date: start?.date ?? '',
+      startTime: start?.time ?? '',
+      endTime: end?.time ?? '',
+      endDate: end?.date ?? '',
+    });
+  };
+
   const handleSubmitRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    let savedRecordId: string | null = null;
     try {
       const record = await saveRecord();
+      savedRecordId = record.id;
       // A submit-time-only validation failure below must not leave `editing`
       // holding the pre-save version — a retry's PATCH would send it and get
       // a spurious 409 from the server, which has already moved on (issue 014).
@@ -319,10 +385,46 @@ export function ServiceRecords() {
       setEditing(null);
       refetch();
     } catch (err) {
-      handleMutationError(err, { fieldErrors, fallbackMessage: t('common.unknownError') });
+      const overlap = overlapErrorOf(err);
+      if (overlap && savedRecordId) {
+        // A resubmitted record is RETURNED, not DRAFT — `deleteDraft` only
+        // permits deleting a draft (issue 059), so the delete choice is
+        // genuinely unavailable there rather than merely hidden.
+        await openOverlapBlockFromForm(err, savedRecordId, editing?.status !== 'returned');
+      } else {
+        handleMutationError(err, { fieldErrors, fallbackMessage: t('common.unknownError') });
+      }
     } finally {
       setSaving(false);
     }
+  };
+
+  /** Shared by both overlap-dialog choices: either way the wizard closes and the list refreshes. */
+  const closeAfterOverlapChoice = () => {
+    setOverlapBlock(null);
+    setView('list');
+    setStep(0);
+    setEvidenceFiles([]);
+    setEditing(null);
+    fieldErrors.clearAll();
+    refetch();
+  };
+
+  const handleOverlapDelete = async () => {
+    if (!overlapBlock) return;
+    try {
+      await api.serviceRecords.delete(overlapBlock.recordId);
+      toast.success(t('student.records.draftDeleted'));
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(t('common.unknownError'));
+    }
+    closeAfterOverlapChoice();
+  };
+
+  const handleOverlapKeepDraft = () => {
+    toast.success(t('student.records.draftSaved'));
+    closeAfterOverlapChoice();
   };
 
   const handleSaveDraft = async () => {
@@ -331,6 +433,13 @@ export function ServiceRecords() {
       await saveRecord();
       fieldErrors.clearAll();
       toast.success(t('student.records.draftSaved'));
+      // Close the wizard, not just reset it. The two lines below tear down the
+      // state the form needs (uploaded evidence, and the `editing` link that
+      // makes a later submit a PATCH rather than a POST), so leaving the form on
+      // screen afterwards left it looking usable while silently dropping the
+      // evidence and turning the next submit into a duplicate record (issue 073).
+      setView('list');
+      setStep(0);
       setEvidenceFiles([]);
       setEditing(null);
       refetch();
@@ -342,6 +451,9 @@ export function ServiceRecords() {
   };
 
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  // Issue 072: read-only detail view for any non-draft record (a draft's Edit
+  // opens the wizard, which already shows everything a View would).
+  const [viewRecordId, setViewRecordId] = useState<string | null>(null);
 
   const handleDeleteDraft = async (id: string) => {
     try {
@@ -361,7 +473,12 @@ export function ServiceRecords() {
       toast.success(t('student.records.submittedForReview'));
       refetch();
     } catch (err) {
-      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      const overlap = overlapErrorOf(err);
+      // Submitting straight from the list only ever targets a DRAFT, so both
+      // choices are available here (issue 069). `formData` belongs to the wizard
+      // and is stale on this path, so the attempted window comes off the row.
+      if (overlap) await openOverlapBlockFromRow(err, id);
+      else if (err instanceof ApiError) toast.error(mapApiError(err).message);
       else toast.error(t('common.unknownError'));
     }
   };
@@ -407,6 +524,21 @@ export function ServiceRecords() {
     ? [selectedProject?.hostOrganizationName, selectedProject?.organizationName].filter(Boolean).join(' / ')
     : formData.organizationName;
   const confirmSupervisorName = formData.sourceType === 'project' ? selectedProject?.ownerName ?? '' : formData.supervisorName;
+
+  // Rendered in both returns below: the wizard's `view === 'new'` branch returns
+  // early, so a dialog declared only at the end of the list branch is unreachable
+  // from exactly the screen that raises it (caught live — the block fired, the
+  // conflict lookup ran, and nothing appeared).
+  const overlapDialog = overlapBlock && (
+    <OverlapBlockedDialog
+      attempted={overlapBlock.attempted}
+      conflict={overlapBlock.conflict}
+      canDelete={overlapBlock.canDelete}
+      onDelete={handleOverlapDelete}
+      onKeepDraft={handleOverlapKeepDraft}
+      onClose={() => setOverlapBlock(null)}
+    />
+  );
 
   if (view === 'new') {
     return (
@@ -713,7 +845,7 @@ export function ServiceRecords() {
                   <span className="text-muted-foreground">{t('student.records.time')}</span>
                   <span className="text-foreground">
                     {formData.startTime} - {formData.endTime || '—'}{formData.endsNextDay && ` (${t('student.records.endsNextDay')})`}
-                    {durationMinutes !== null && durationMinutes > 0 && ` (${minutesToHours(durationMinutes)}${t('common.hours')})`}
+                    {durationMinutes !== null && durationMinutes > 0 && ` (${minutesToHours(durationMinutes)} ${t('common.hours')})`}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -750,12 +882,18 @@ export function ServiceRecords() {
               // (e.g. issue 058 — a student could skip picking a project entirely).
               // Checking validity here, while those fields are still mounted, is
               // what actually catches it.
-              <button type="button" disabled={!nextEnabled} onClick={() => { if (formRef.current?.reportValidity()) setStep(s => s + 1); }}
+              // The explicit `key`s matter: without them React reconciles these
+              // two branches onto the *same* <button> DOM node and only patches
+              // its attributes, so clicking "Next" on the evidence step would
+              // flip that very node's `type` to "submit" before the in-flight
+              // click's default action ran — submitting the record immediately
+              // and skipping the confirm/declaration step entirely (issue 066).
+              <button key="next" type="button" disabled={!nextEnabled} onClick={() => { if (formRef.current?.reportValidity()) setStep(s => s + 1); }}
                 className="flex-1 py-3 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90 transition-opacity text-sm disabled:opacity-50">
                 {t('common.next')}
               </button>
             ) : (
-              <button type="submit"
+              <button key="submit" type="submit"
                 className="flex-1 py-3 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90 transition-opacity text-sm flex items-center justify-center gap-2">
                 <Send className="w-4 h-4" />
                 {t('student.records.confirmSubmit')}
@@ -768,6 +906,7 @@ export function ServiceRecords() {
             {t('student.records.saveDraft')}
           </button>
         </form>
+        {overlapDialog}
       </div>
     );
   }
@@ -912,6 +1051,12 @@ export function ServiceRecords() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1 justify-end">
+                          {rec.status !== 'draft' && (
+                            <button onClick={() => setViewRecordId(rec.id)}
+                              className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.blue}`}>
+                              <Eye className="w-3 h-3" /> {t('common.view')}
+                            </button>
+                          )}
                           {rec.status === 'returned' && (
                             <button onClick={() => openResubmit(rec)}
                               className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.green}`}>
@@ -1023,6 +1168,12 @@ export function ServiceRecords() {
                         {isExpanded ? <><ChevronUp className="w-3 h-3" /> {t('common.collapse')}</> : <><ChevronDown className="w-3 h-3" /> {t('common.details')}</>}
                       </button>
                       <div className="flex gap-2">
+                        {rec.status !== 'draft' && (
+                          <button onClick={() => setViewRecordId(rec.id)}
+                            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.blue}`}>
+                            <Eye className="w-3 h-3" /> {t('common.view')}
+                          </button>
+                        )}
                         {rec.status === 'returned' && (
                           <button onClick={() => openResubmit(rec)}
                             className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.green}`}>
@@ -1086,6 +1237,12 @@ export function ServiceRecords() {
           onCancel={() => setDeleteTargetId(null)}
           onConfirm={() => { const id = deleteTargetId; setDeleteTargetId(null); handleDeleteDraft(id); }}
         />
+      )}
+
+      {overlapDialog}
+
+      {viewRecordId && (
+        <ServiceRecordDetail recordId={viewRecordId} onClose={() => setViewRecordId(null)} />
       )}
     </div>
   );

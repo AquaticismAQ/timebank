@@ -14,6 +14,7 @@ import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { SearchPicker, CREATE_NEW_ID, type SearchPickerOption } from '../SearchPicker';
 import { useAuth } from '../../App';
+import { isoToLocalDate } from '../../lib/datetime';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -545,7 +546,7 @@ export function EventProposals() {
             </div>
             <h2 className="text-foreground leading-snug">{p.title}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {p.myRole} · {t('student.proposals.lastUpdated')} {p.updatedAt.slice(0, 10)}
+              {p.myRole} · {t('student.proposals.lastUpdated')} {isoToLocalDate(p.updatedAt)}
             </p>
           </div>
         </div>
@@ -665,7 +666,7 @@ export function EventProposals() {
                 {p.submittedAt && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{t('student.proposals.submitted')}</span>
-                    <span className="text-foreground">{p.submittedAt.slice(0, 10)}</span>
+                    <span className="text-foreground">{isoToLocalDate(p.submittedAt)}</span>
                   </div>
                 )}
               </div>
@@ -731,7 +732,7 @@ export function EventProposals() {
                       </div>
                       <div className="pb-3 flex-1">
                         <div className="text-xs font-medium text-foreground">{evt.type}</div>
-                        <div className="text-xs text-muted-foreground">{evt.occurredAt.slice(0, 10)}</div>
+                        <div className="text-xs text-muted-foreground">{isoToLocalDate(evt.occurredAt)}</div>
                         {evt.description && <p className="text-xs text-muted-foreground mt-1">{evt.description}</p>}
                       </div>
                     </div>
@@ -847,7 +848,7 @@ export function EventProposals() {
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${colorMap[statusInfo.color]}`}>{t(statusInfo.label)}</span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{p.updatedAt.slice(0, 10)}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{isoToLocalDate(p.updatedAt)}</td>
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-end">
                           {(p.status === 'draft' || p.status === 'changesRequested') && (
@@ -905,7 +906,7 @@ export function EventProposals() {
                       {p.plannedDate || t('student.proposals.dateTbd')}
                     </div>
                     <div>{t('student.proposals.roleLabel')}: {p.myRole}</div>
-                    <div>{t('student.proposals.updatedLabel')}: {p.updatedAt.slice(0, 10)}</div>
+                    <div>{t('student.proposals.updatedLabel')}: {isoToLocalDate(p.updatedAt)}</div>
                   </div>
 
                   {p.status === 'approved' && p.linkedProjectTitle && (

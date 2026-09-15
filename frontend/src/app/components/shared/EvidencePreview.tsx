@@ -3,21 +3,21 @@ import { useTranslation } from 'react-i18next';
 import { FileText, AlertTriangle } from 'lucide-react';
 import { api } from '../../api/client';
 import { type FileMetadata } from '../../api/types';
+import { EvidenceViewerDialog } from './EvidenceViewerDialog';
 
 /**
- * Grid of evidence-file tiles with real inline preview for images (thumbnail,
- * clicking opens full-size) and browser-native inline preview for PDFs
- * (`Content-Disposition: inline` server-side already supports this — clicking
- * just opens the tab). Everything else falls back to a plain file-icon tile.
+ * Grid of evidence-file tiles with real inline preview for images (thumbnail)
+ * and a file-icon tile for everything else. Clicking a ready tile opens
+ * `EvidenceViewerDialog` — a large in-app viewer with download/close (issue
+ * 072). Tiles used to be `<a target="_blank">`, which sent a reviewer out to a
+ * browser tab and lost their place in the queue.
  *
  * Unlike `EvidenceLink` (fetch-on-click), this fetches every file's fresh
  * signed URL up front so a thumbnail has something to render — still never
  * stored beyond this component's own state (I3.3: never cache a download
- * URL). Each tile's `<a href>` is populated by the time of render, so a click
- * is a real, synchronous navigation — no async gap between the click and
- * opening the tab for a browser's popup blocker to catch (unlike a `window.open`
- * called after an `await`, which is what made `EvidenceLink`'s link
- * intermittently just not open at all).
+ * URL). Because the metadata is already resolved by the time a tile is
+ * clickable, opening the viewer costs no extra request and there is no async
+ * gap between the click and the content appearing.
  *
  * Tiles are fixed-size and wrap in a flex row rather than growing with
  * content, so a record with many evidence files stays a tidy grid instead of
@@ -35,6 +35,11 @@ function EvidenceTile({ fileId, name }: { fileId: string; name: string }) {
   const { t } = useTranslation();
   const [meta, setMeta] = useState<FileMetadata | null>(null);
   const [error, setError] = useState(false);
+  const [viewing, setViewing] = useState(false);
+  // Bumped to re-mint a thumbnail's expired URL exactly once (issue 074): the
+  // signed link lives 300s, so a queue left open past that boundary would
+  // otherwise fill with broken images.
+  const [refreshes, setRefreshes] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +48,7 @@ function EvidenceTile({ fileId, name }: { fileId: string; name: string }) {
       () => { if (!cancelled) setError(true); },
     );
     return () => { cancelled = true; };
-  }, [fileId]);
+  }, [fileId, refreshes]);
 
   const tileClass = 'w-24 shrink-0 flex flex-col gap-1';
   const boxClass = 'w-24 h-24 rounded-lg border border-border bg-muted flex items-center justify-center overflow-hidden';
@@ -89,15 +94,27 @@ function EvidenceTile({ fileId, name }: { fileId: string; name: string }) {
 
   const isImage = meta.mimeType.startsWith('image/');
   return (
-    <a href={meta.downloadUrl} target="_blank" rel="noreferrer" className={tileClass}>
-      <div className={`${boxClass} hover:opacity-80 transition-opacity`}>
-        {isImage ? (
-          <img src={meta.downloadUrl} alt={name} className="w-full h-full object-cover" />
-        ) : (
-          <FileText className="w-6 h-6 text-muted-foreground" />
-        )}
-      </div>
-      {caption}
-    </a>
+    <>
+      <button type="button" onClick={() => setViewing(true)} className={`${tileClass} text-left`} title={name}>
+        <div className={`${boxClass} hover:opacity-80 transition-opacity cursor-zoom-in`}>
+          {isImage ? (
+            // The cache-buster is load-bearing, not decoration: `DownloadTokenService`
+            // signs `fileId:(now + 300)`, so two mints within the same second produce a
+            // byte-identical URL. Without it the retry re-fetched metadata, got the same
+            // `src` back, and the browser never re-requested — the thumbnail stayed
+            // broken (proven by forcing a 400 on the first content request: 1 request,
+            // naturalWidth 0). The endpoint reads only `token`, so the extra param is
+            // ignored server-side.
+            <img src={refreshes > 0 ? `${meta.downloadUrl}&_retry=${refreshes}` : meta.downloadUrl}
+              alt={name} className="w-full h-full object-cover"
+              onError={() => { if (refreshes === 0) setRefreshes(1); }} />
+          ) : (
+            <FileText className="w-6 h-6 text-muted-foreground" />
+          )}
+        </div>
+        {caption}
+      </button>
+      {viewing && <EvidenceViewerDialog fileId={fileId} meta={meta} name={name} onClose={() => setViewing(false)} />}
+    </>
   );
 }

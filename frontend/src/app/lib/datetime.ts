@@ -28,6 +28,34 @@ export function isoToLocalDateTime(iso: string): { date: string; time: string } 
   return { date, time };
 }
 
+/**
+ * Inverse of `localDatetimeLocalToISO` — a UTC instant back into one
+ * `<input type="datetime-local">` value ("YYYY-MM-DDTHH:mm"). Slicing the raw
+ * ISO string instead pre-fills the field with the *UTC* wall clock, which
+ * `localDatetimeLocalToISO` then re-reads as local on save and shifts the
+ * stored instant by the browser's UTC offset on every edit (issue 067).
+ */
+export function isoToLocalDatetimeLocal(iso: string): string {
+  const { date, time } = isoToLocalDateTime(iso);
+  return `${date}T${time}`;
+}
+
+/** A UTC instant as its local "YYYY-MM-DD" calendar date — not the same date as the raw ISO string's first 10 chars near a day boundary. */
+export function isoToLocalDate(iso: string): string {
+  return isoToLocalDateTime(iso).date;
+}
+
+/**
+ * A UTC instant as a local "YYYY-MM-DD HH:mm" display string. Slicing the raw
+ * ISO string instead renders it in UTC — 8h off for a China-based user, and
+ * silently plausible-looking, which is how it survived so long (issue 067).
+ */
+export function formatLocalInstant(iso?: string): string {
+  if (!iso) return '';
+  const { date, time } = isoToLocalDateTime(iso);
+  return `${date} ${time}`;
+}
+
 /** Adds one calendar day to a `<input type="date">`-shaped "YYYY-MM-DD" string, for an overnight service window's end date. */
 export function addOneDay(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number);

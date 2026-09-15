@@ -7,6 +7,7 @@ import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { CASE_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import { type Case, type TimelineEntry } from '../../api/types';
+import { formatLocalInstant, isoToLocalDate } from '../../lib/datetime';
 
 const TYPE_LABEL: Record<Case['type'], string> = {
   appeal: 'admin.cases.typeAppeal',
@@ -55,7 +56,7 @@ export function StudentCases() {
                     {c.subjectLabel && <span className="text-xs text-muted-foreground">{c.subjectLabel}</span>}
                   </div>
                   <div className="text-sm text-foreground font-medium truncate">{c.title}</div>
-                  {c.submittedAt && <div className="text-xs text-muted-foreground">{c.submittedAt.slice(0, 10)}</div>}
+                  {c.submittedAt && <div className="text-xs text-muted-foreground">{isoToLocalDate(c.submittedAt)}</div>}
                 </div>
                 {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
               </div>
@@ -73,7 +74,7 @@ export function StudentCases() {
                       <div key={i} className="flex gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-border mt-1.5 shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <div className="text-muted-foreground">{entry.occurredAt.slice(0, 16).replace('T', ' ')}</div>
+                          <div className="text-muted-foreground">{formatLocalInstant(entry.occurredAt)}</div>
                           <div className="text-foreground">{entry.description}</div>
                         </div>
                       </div>

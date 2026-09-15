@@ -11,6 +11,23 @@ import type { PageResult } from '../../api/http';
 import type { ListParams } from '../../lib/pagination';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
+import { isoToLocalDate } from '../../lib/datetime';
+
+/**
+ * The API has no `description` field — `reasonCode` (plus an optional admin
+ * `memo`) stands in for it (`api/client.ts`'s `transactions`). Rendering the
+ * raw code showed students literal "SERVICE_APPROVED" in their ledger, so
+ * known codes get a translated label here and anything unrecognised falls
+ * back to the raw code rather than to a blank cell.
+ */
+function useTxDescription() {
+  const { t } = useTranslation();
+  return (description: string) => {
+    const [code, ...rest] = description.split(': ');
+    const label = t(`student.account.reason.${code}`, { defaultValue: code });
+    return rest.length ? `${label}: ${rest.join(': ')}` : label;
+  };
+}
 
 const colorMap: Record<string, string> = {
   green: 'text-green-600 dark:text-green-400',
@@ -32,6 +49,7 @@ const txBg: Record<string, string> = {
 
 export function AccountPage() {
   const { t } = useTranslation();
+  const txDescription = useTxDescription();
   const { user } = useAuth();
   const [account, setAccount] = useState<Account | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -196,9 +214,9 @@ export function AccountPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate">
-                            {tx.relatedRecordTitle || tx.description}
+                            {tx.relatedRecordTitle || txDescription(tx.description)}
                           </td>
-                          <td className="px-4 py-3 text-xs text-muted-foreground">{tx.createdAt.slice(0, 10)}</td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{isoToLocalDate(tx.createdAt)}</td>
                           <td className={`px-4 py-3 text-right font-medium ${colorMap[typeInfo.color]}`}>
                             {typeInfo.sign}{formatCoins(tx.amount)}
                           </td>
@@ -228,8 +246,8 @@ export function AccountPage() {
                               <span className="text-sm text-foreground">{t(typeInfo.label)}</span>
                               <span className={`font-semibold ${colorMap[typeInfo.color]}`}>{typeInfo.sign}{formatCoins(tx.amount)}</span>
                             </div>
-                            <div className="text-xs text-muted-foreground truncate">{tx.relatedRecordTitle || tx.description}</div>
-                            <div className="text-xs text-muted-foreground">{tx.createdAt.slice(0, 10)}</div>
+                            <div className="text-xs text-muted-foreground truncate">{tx.relatedRecordTitle || txDescription(tx.description)}</div>
+                            <div className="text-xs text-muted-foreground">{isoToLocalDate(tx.createdAt)}</div>
                           </div>
                           {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
                         </button>
@@ -238,7 +256,7 @@ export function AccountPage() {
                             <div className="flex justify-between"><span>{t('student.account.balanceBefore')}</span><span className="text-foreground">{formatCoins(tx.balanceBefore)} {t('common.coins')}</span></div>
                             <div className="flex justify-between"><span>{t('student.account.balanceAfter')}</span><span className="text-foreground">{formatCoins(tx.balanceAfter)} {t('common.coins')}</span></div>
                             <div className="flex justify-between"><span>{t('student.account.operator')}</span><span className="text-foreground">{tx.operatorName}</span></div>
-                            <div><span>{t('student.account.description')}: </span><span className="text-foreground">{tx.description}</span></div>
+                            <div><span>{t('student.account.description')}: </span><span className="text-foreground">{txDescription(tx.description)}</span></div>
                           </div>
                         )}
                       </div>
