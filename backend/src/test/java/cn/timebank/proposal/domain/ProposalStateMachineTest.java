@@ -12,7 +12,6 @@ import static cn.timebank.proposal.domain.ProposalStatus.CHANGES_REQUESTED;
 import static cn.timebank.proposal.domain.ProposalStatus.DRAFT;
 import static cn.timebank.proposal.domain.ProposalStatus.REJECTED;
 import static cn.timebank.proposal.domain.ProposalStatus.SUBMITTED;
-import static cn.timebank.proposal.domain.ProposalStatus.UNDER_REVIEW;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -24,29 +23,30 @@ class ProposalStateMachineTest {
         assertThat(ProposalStateMachine.canTransition(DRAFT, SUBMITTED, OWNER)).isTrue();
     }
 
+    /** One step, since issue 080 removed the unreachable UNDER_REVIEW hop. */
     @Test
-    void reviewerMovesSubmittedThroughUnderReviewToAnyDecision() {
-        assertThat(ProposalStateMachine.canTransition(SUBMITTED, UNDER_REVIEW, REVIEWER)).isTrue();
-        assertThat(ProposalStateMachine.canTransition(UNDER_REVIEW, APPROVED, REVIEWER)).isTrue();
-        assertThat(ProposalStateMachine.canTransition(UNDER_REVIEW, CHANGES_REQUESTED, REVIEWER)).isTrue();
-        assertThat(ProposalStateMachine.canTransition(UNDER_REVIEW, REJECTED, REVIEWER)).isTrue();
+    void reviewerDecidesDirectlyFromSubmitted() {
+        assertThat(ProposalStateMachine.canTransition(SUBMITTED, APPROVED, REVIEWER)).isTrue();
+        assertThat(ProposalStateMachine.canTransition(SUBMITTED, CHANGES_REQUESTED, REVIEWER)).isTrue();
+        assertThat(ProposalStateMachine.canTransition(SUBMITTED, REJECTED, REVIEWER)).isTrue();
     }
 
     @Test
-    void thereIsNoDirectEdgeFromSubmittedToApproved() {
-        assertThat(ProposalStateMachine.canTransition(SUBMITTED, APPROVED, REVIEWER)).isFalse();
+    void anOwnerCannotDecideTheirOwnProposal() {
+        assertThat(ProposalStateMachine.canTransition(SUBMITTED, APPROVED, OWNER)).isFalse();
+        assertThat(ProposalStateMachine.canTransition(SUBMITTED, REJECTED, OWNER)).isFalse();
     }
 
     @Test
     void changesRequestedCanOnlyGoBackToSubmitted() {
         assertThat(ProposalStateMachine.canTransition(CHANGES_REQUESTED, SUBMITTED, OWNER)).isTrue();
-        assertThat(ProposalStateMachine.canTransition(CHANGES_REQUESTED, UNDER_REVIEW, REVIEWER)).isFalse();
+        assertThat(ProposalStateMachine.canTransition(CHANGES_REQUESTED, APPROVED, REVIEWER)).isFalse();
     }
 
     @Test
     void ownerCanWithdrawBeforeReviewStarts() {
         assertThat(ProposalStateMachine.canTransition(SUBMITTED, DRAFT, OWNER)).isTrue();
-        assertThat(ProposalStateMachine.canTransition(UNDER_REVIEW, DRAFT, OWNER)).isFalse();
+        assertThat(ProposalStateMachine.canTransition(APPROVED, DRAFT, OWNER)).isFalse();
     }
 
     @Test

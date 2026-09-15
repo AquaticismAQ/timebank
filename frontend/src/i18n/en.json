@@ -1879,7 +1879,6 @@
     "proposalStatus": {
       "draft": "Draft",
       "submitted": "Pending Review",
-      "underReview": "Under Review",
       "changesRequested": "Changes Requested",
       "approved": "Approved",
       "rejected": "Rejected",

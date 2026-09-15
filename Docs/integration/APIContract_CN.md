@@ -291,11 +291,17 @@ draft → published → registrationOpen → inProgress → completed → archiv
 状态：
 
 ```text
-draft → submitted → underReview → approved
-                   ↘ changesRequested → submitted
-                   ↘ rejected
+draft → submitted → approved
+                 ↘ changesRequested → submitted
+                 ↘ rejected
 draft/submitted → withdrawn
 ```
+
+（`underReview` 已于 2026-09-16 移除，见 issue 080。下文的 `recommendApproval`
+被移除后，它就无法再到达：唯一的入口是审批事务内部一次从未提交的中间跳转，因此
+任何提案都不可能被看到或筛选为该状态。审核人从 `submitted` 一步作出决定。移除前
+已先核对线上数据：没有任何提案、也没有任何审计记录曾处于该状态。服务记录与个案
+流程各自的 `underReview`/`inReview` 是真实的驻留状态，保持不变。）
 
 审批决定：
 
@@ -1104,7 +1110,7 @@ Mock Client 有意采取了若干捷径，不得被当作合约行为：
 
 | # | 事项 | 前端现状 | 处理方式 | 改动落在 |
 | --- | --- | --- | --- | --- |
-| 1 | 提案状态 | `needsRevision`，且没有 `underReview` | 合约为准：`changesRequested`，并存在 `underReview`（§3.2） | 前端 |
+| 1 | 提案状态 | `needsRevision`，且没有 `underReview` | `changesRequested` 以合约为准。前端*没有* `underReview` 反而歪打正着——该状态已于 2026-09-16 从合约中整体移除（§3.2，issue 080） | 前端 |
 | 2 | 记录状态 | 没有 `appealPending` | 合约为准；接入复核时补齐（§3.4） | 前端 |
 | 3 | 时间币金额 | `balance: 6` 表示 6 时间币 | 合约为准：传输层为整数分币，展示时格式化（§2.1） | 前端格式化 |
 | 4 | 时长 | `completedHours` 等与分钟字段重复 | 合约为准：传输层只有分钟，小时在界面换算（§2.1） | 前端 |

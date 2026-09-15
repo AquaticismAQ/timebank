@@ -87,11 +87,9 @@ class ProposalApprovalTransaction {
             case REJECT -> ProposalStatus.REJECTED;
         };
 
-        // Effect: the implicit SUBMITTED -> UNDER_REVIEW step (first decision), then the real target.
+        // Effect: the status change. One step — a reviewer decides directly from
+        // SUBMITTED, there is no claim state to pass through (issue 080).
         ProposalStatus before = proposal.getStatus();
-        if (proposal.getStatus() == ProposalStatus.SUBMITTED) {
-            ProposalStateMachine.transition(proposal, ProposalStatus.UNDER_REVIEW, ActorRole.REVIEWER);
-        }
         if (proposal.getStatus() != target) {
             ProposalStateMachine.transition(proposal, target, ActorRole.REVIEWER);
         }

@@ -50,7 +50,6 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, { label: string; color
 export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, { label: string; color: string }> = {
   draft: { label: 'labels.proposalStatus.draft', color: 'gray' },
   submitted: { label: 'labels.proposalStatus.submitted', color: 'blue' },
-  underReview: { label: 'labels.proposalStatus.underReview', color: 'blue' },
   changesRequested: { label: 'labels.proposalStatus.changesRequested', color: 'orange' },
   approved: { label: 'labels.proposalStatus.approved', color: 'green' },
   rejected: { label: 'labels.proposalStatus.rejected', color: 'red' },

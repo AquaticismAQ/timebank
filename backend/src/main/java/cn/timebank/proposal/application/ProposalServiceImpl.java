@@ -333,7 +333,7 @@ class ProposalServiceImpl implements ProposalService {
     @Transactional(readOnly = true)
     public ProposalQueueSummaryDto queueSummary(Authentication auth) {
         Specification<EventProposal> scopeSpec = scopeSpecification(auth);
-        Specification<EventProposal> pending = statusIn(ProposalStatus.SUBMITTED, ProposalStatus.UNDER_REVIEW);
+        Specification<EventProposal> pending = statusIn(ProposalStatus.SUBMITTED);
         Specification<EventProposal> combined = scopeSpec == null ? pending : pending.and(scopeSpec);
         long pendingCount = repository.count(combined);
 

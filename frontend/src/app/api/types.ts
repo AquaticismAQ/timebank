@@ -523,7 +523,8 @@ export interface ReportData {
   topProjects: { title: string; participants: number; totalHours: number }[];
 }
 
-export type ProposalStatus = 'draft' | 'submitted' | 'underReview' | 'changesRequested' | 'approved' | 'rejected' | 'withdrawn';
+/** `underReview` removed 2026-09-16 (issue 080): unreachable since the two-tier review went away — a reviewer decides straight from `submitted`. */
+export type ProposalStatus = 'draft' | 'submitted' | 'changesRequested' | 'approved' | 'rejected' | 'withdrawn';
 
 /** `estimatedDurationMinutes`/`suggestedMinutes` are minutes-only on the wire; derive hours via `minutesToHours`. */
 export interface EventProposal {

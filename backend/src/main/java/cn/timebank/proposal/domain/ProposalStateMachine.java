@@ -22,10 +22,12 @@ public final class ProposalStateMachine {
     static {
         rule(ProposalStatus.DRAFT, ProposalStatus.SUBMITTED, ActorRole.OWNER);
         rule(ProposalStatus.SUBMITTED, ProposalStatus.DRAFT, ActorRole.OWNER);
-        rule(ProposalStatus.SUBMITTED, ProposalStatus.UNDER_REVIEW, ActorRole.REVIEWER);
-        rule(ProposalStatus.UNDER_REVIEW, ProposalStatus.APPROVED, ActorRole.REVIEWER);
-        rule(ProposalStatus.UNDER_REVIEW, ProposalStatus.CHANGES_REQUESTED, ActorRole.REVIEWER);
-        rule(ProposalStatus.UNDER_REVIEW, ProposalStatus.REJECTED, ActorRole.REVIEWER);
+        // A decision is one step (issue 080): the UNDER_REVIEW hop these three
+        // edges used to route through was never committed, and nothing could
+        // leave a proposal parked there once `recommendApproval` was removed.
+        rule(ProposalStatus.SUBMITTED, ProposalStatus.APPROVED, ActorRole.REVIEWER);
+        rule(ProposalStatus.SUBMITTED, ProposalStatus.CHANGES_REQUESTED, ActorRole.REVIEWER);
+        rule(ProposalStatus.SUBMITTED, ProposalStatus.REJECTED, ActorRole.REVIEWER);
         rule(ProposalStatus.CHANGES_REQUESTED, ProposalStatus.SUBMITTED, ActorRole.OWNER);
     }
 

@@ -294,11 +294,19 @@ Core fields:
 Status:
 
 ```text
-draft → submitted → underReview → approved
-                   ↘ changesRequested → submitted
-                   ↘ rejected
+draft → submitted → approved
+                 ↘ changesRequested → submitted
+                 ↘ rejected
 draft/submitted → withdrawn
 ```
+
+(`underReview` was removed 2026-09-16, issue 080. It had become unreachable
+when `recommendApproval` went away below — the only remaining way in was a
+hop inside the decision transaction that was never committed, so no proposal
+could ever be seen or filtered in that state. A reviewer decides in one step,
+straight from `submitted`. Confirmed against live data first: no proposal,
+and no audit entry, ever held it. The service-record and case flows keep
+their own `underReview`/`inReview`, which are real resting states.)
 
 Approval decisions:
 
@@ -1120,7 +1128,7 @@ Known differences between the frontend as built and this contract. The resolutio
 
 | # | Item | Frontend today | Resolution | Change lands in |
 | --- | --- | --- | --- | --- |
-| 1 | Proposal status | `needsRevision`; no `underReview` | Contract wins: `changesRequested`, and `underReview` exists (§3.2) | Frontend |
+| 1 | Proposal status | `needsRevision`; no `underReview` | Contract wins on `changesRequested`. The frontend's *absence* of `underReview` turned out to be right for a different reason — it was removed from the contract entirely in 2026-09-16 (§3.2, issue 080) | Frontend |
 | 2 | Record status | No `appealPending` | Contract wins; add when appeals are wired (§3.4) | Frontend |
 | 3 | Coin amounts | `balance: 6` meaning 6 coins | Contract wins: integer centi-coins on the wire, formatted for display (§2.1) | Frontend formatter |
 | 4 | Duration | `completedHours` etc. duplicated alongside minutes | Contract wins: minutes only on the wire; hours derived in the UI (§2.1) | Frontend |

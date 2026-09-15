@@ -15,7 +15,7 @@ import { minutesToHours, formatGradeClass } from '../../lib/format';
 import { PROPOSAL_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import { formatLocalInstant } from '../../lib/datetime';
 
-const STATUSES: (EventProposal['status'])[] = ['submitted', 'underReview', 'changesRequested', 'approved', 'rejected'];
+const STATUSES: (EventProposal['status'])[] = ['submitted', 'changesRequested', 'approved', 'rejected'];
 type SortKey = 'plannedStartAt' | 'createdAt' | 'status';
 const SORT_KEYS: SortKey[] = ['plannedStartAt', 'createdAt', 'status'];
 
@@ -273,7 +273,7 @@ export function ProposalReview() {
             ),
           },
         ];
-        const showDecisions = canReview && (detailProposal.status === 'submitted' || detailProposal.status === 'underReview');
+        const showDecisions = canReview && detailProposal.status === 'submitted';
         return (
           <DetailWorkbench
             open
