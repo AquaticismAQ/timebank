@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Pencil, Trash2, Lock, Building2, KeyRound, Check } from 'lucide-react';
+import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Pencil, Trash2, Lock, Building2, KeyRound, Check, Tags } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { OrganizationManagement } from './OrganizationManagement';
 import { RoleManagement } from './RoleManagement';
+import { ServiceCategoryManagement } from './ServiceCategoryManagement';
 import { GradePicker } from '../GradePicker';
 import { useDictionaries } from '../../api/useDictionaries';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
@@ -366,7 +367,7 @@ function SchoolInfoEditModal({ initial, onClose, onSaved }: SchoolInfoEditModalP
   );
 }
 
-type Tab = 'users' | 'roles' | 'rules' | 'import' | 'logs' | 'organizations' | 'settings';
+type Tab = 'users' | 'roles' | 'rules' | 'import' | 'logs' | 'categories' | 'organizations' | 'settings';
 type UserStatus = 'active' | 'inactive';
 
 interface AdminUser {
@@ -1051,6 +1052,7 @@ export function SystemAdmin() {
     { key: 'rules', label: t('admin.system.tabRules'), icon: Shield },
     { key: 'import', label: t('admin.system.tabImport'), icon: FileText },
     { key: 'logs', label: t('admin.system.tabLogs'), icon: FileText },
+    { key: 'categories', label: t('admin.system.tabCategories'), icon: Tags },
     { key: 'organizations', label: t('admin.system.tabOrganizations'), icon: Building2 },
     { key: 'settings', label: t('admin.system.tabSettings'), icon: Settings },
   ];
@@ -1357,6 +1359,9 @@ export function SystemAdmin() {
       )}
 
       {/* ── Partner Organizations tab ────────────────────────────────── */}
+      {/* ── Service Categories tab (issue 078) ────────────────────── */}
+      {activeTab === 'categories' && <ServiceCategoryManagement />}
+
       {activeTab === 'organizations' && <OrganizationManagement />}
 
       {/* ── Settings tab ──────────────────────────────────────────── */}

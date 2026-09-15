@@ -256,6 +256,24 @@ export const api = {
     },
   },
 
+  /** Service-category management (issue 078) — admin-only, gated on `rules.manage`. */
+  serviceCategories: {
+    /** Management view: inactive categories included, so they can be re-activated. */
+    async list(): Promise<ServiceCategory[]> {
+      return http.get<ServiceCategory[]>('/service-categories?includeInactive=true');
+    },
+    /** No code: the backend derives it from the English name (issue 078). */
+    async create(data: { nameZh: string; nameEn: string }): Promise<ServiceCategory> {
+      return http.post<ServiceCategory>('/service-categories', data);
+    },
+    async update(id: string, data: { nameZh?: string; nameEn?: string; active?: boolean }): Promise<ServiceCategory> {
+      return http.patch<ServiceCategory>(`/service-categories/${id}`, data);
+    },
+    async remove(id: string): Promise<void> {
+      await http.delete<void>(`/service-categories/${id}`);
+    },
+  },
+
   projects: {
     async list(params?: ListParams): Promise<PageResult<Project>> {
       const filter = { ...params?.filter };

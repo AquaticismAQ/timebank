@@ -620,9 +620,10 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 | `GET` | `/organizations/{id}` | `organizations.read` | Detail |
 | `PATCH` | `/organizations/{id}` | `organizations.manage` | Update |
 | `POST` | `/organizations/{id}/archive` | `organizations.manage` | Archive — the only removal action; there is no hard delete, by design (`02-PorjectOrganization.md` §4) |
-| `GET` | `/service-categories` | Authenticated | Service categories |
+| `GET` | `/service-categories` | Authenticated | Service categories. Active ones only by default; `?includeInactive=true` adds retired ones, for the management screen |
 | `POST` | `/service-categories` | `rules.manage` | Create category |
-| `PATCH` | `/service-categories/{id}` | `rules.manage` | Update category |
+| `PATCH` | `/service-categories/{id}` | `rules.manage` | Update category (both names, `active`) |
+| `DELETE` | `/service-categories/{id}` | `rules.manage` | Delete category; `409` when any record/project/proposal still references it |
 
 `organizations.manage` is granted to `role_admin` and `role_teacher` (changed 2026-08-08 — previously admin-only). `Organization` gained a `description` field (free text, alongside the existing structured `type`/`contactName`/`contactEmail`/`contactPhone`/`address`) in the same change; `CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` all carry it.
 
@@ -774,7 +775,7 @@ Example response:
     "name": "Example Middle School",
     "fullName": "Example Middle School (Full Legal Name)",
     "studentDevCenter": "Student Development Center",
-    "contact": "dev-center@example.edu.cn",
+    "contact": "dev-center@example-township-school.edu",
     "academicYear": "2025-2026"
   }
 }

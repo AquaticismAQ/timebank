@@ -211,7 +211,7 @@ placeholders already established elsewhere in the repo instead of inventing
 new ones: `tb.example.com` for the shared test server's hostname,
 `Example City HD` / `Example Township Middle School` / `Teacher Wei Chen`
 for the school/contact (from `backend/.../R__seed_base_data.sql` and
-`Docs/integration/APIContract_CN.md`), `example.edu.cn` for email domains.
+`Docs/integration/APIContract_CN.md`), `example-township-school.edu` for email domains.
 
 This is easy to violate without noticing. Narrating a live-verification
 session ("logged in as `admin001`, saw '<real contact name>' in Admin

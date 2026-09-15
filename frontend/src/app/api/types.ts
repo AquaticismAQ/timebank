@@ -449,7 +449,11 @@ export interface AcademicYear {
 export interface ServiceCategory {
   id: string;
   code: string;
+  /** Already resolved to the caller's language by the backend — what pickers display. */
   name: string;
+  /** Raw stored values, for the admin management screen which edits both (issue 078). */
+  nameZh: string;
+  nameEn: string;
   active: boolean;
 }
 

@@ -30,7 +30,7 @@ export interface SeedOrganization {
 }
 
 export const organizations: SeedOrganization[] = [
-  { name: 'Example Township Middle School', type: 'SCHOOL', contactName: 'Teacher Wei Chen', contactEmail: 'wei.chen@example-school.cn', contactPhone: '0000-88888888', address: 'No. 1 Campus Road, Example District A, Example City' },
+  { name: 'Example Township Middle School', type: 'SCHOOL', contactName: 'Teacher Wei Chen', contactEmail: 'wei.chen@example-township-school.edu', contactPhone: '0000-88888888', address: 'No. 1 Campus Road, Example District A, Example City' },
   { name: 'Example City First Welfare Home', type: 'NONPROFIT', contactName: 'Deputy Director Chen', contactEmail: 'welfare@example.org', contactPhone: '0000-87654321', address: 'No. 88 Example Road, Example District B, Example City' },
   { name: 'Example District C Environmental Protection Association', type: 'NONPROFIT', contactName: 'President Li', contactEmail: 'enviro@example.org', contactPhone: '0000-87123456', address: 'Example Town, Example District C, Example City' },
   { name: 'Example County Charity Education Association', type: 'NONPROFIT', contactName: 'Director Zhang', contactEmail: 'charity@example.org', contactPhone: '0000-63456789', address: 'Example Town Two, Example County' },
@@ -65,24 +65,24 @@ export interface SeedUser {
 }
 
 export const users: SeedUser[] = [
-  { username: 'student001', displayName: 'Jia Ming', email: 'jiaming@example-school.cn', roleCodes: ['student'], linkedStudentNumber: '2024001' },
-  { username: 'student002', displayName: 'Yun Li', email: 'yunli@example-school.cn', roleCodes: ['student'], linkedStudentNumber: '2024002' },
-  { username: 'teacher001', displayName: 'Alex Lin', email: 'alex.lin@example-school.cn', roleCodes: ['teacher'], scopeGrades: ['grade_10'] },
-  { username: 'admin001', displayName: 'Teacher Wei Chen', email: 'wei.chen@example-school.cn', roleCodes: ['admin'] },
+  { username: 'student001', displayName: 'Jia Ming', email: 'jiaming@example-township-school.edu', roleCodes: ['student'], linkedStudentNumber: '2024001' },
+  { username: 'student002', displayName: 'Yun Li', email: 'yunli@example-township-school.edu', roleCodes: ['student'], linkedStudentNumber: '2024002' },
+  { username: 'teacher001', displayName: 'Alex Lin', email: 'alex.lin@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_10'] },
+  { username: 'admin001', displayName: 'Teacher Wei Chen', email: 'wei.chen@example-township-school.edu', roleCodes: ['admin'] },
   // `sysadmin` holds identical permission grants to `admin` post-`V21`'s
   // merge, but a handful of surfaces are deliberately gated by role code
   // rather than permission (e.g. school info editing, `Docs/optimization/
   // 03-ServiceRecordFormOptimization.md` §4.1) — this account exists so
   // that distinction is actually exercisable against the seeded dataset,
   // not just provable in an integration test.
-  { username: 'sysadmin001', displayName: 'System Administrator', email: 'sysadmin@example-school.cn', roleCodes: ['sysadmin'] },
+  { username: 'sysadmin001', displayName: 'System Administrator', email: 'sysadmin@example-township-school.edu', roleCodes: ['sysadmin'] },
   // 07-RoleFinetune.md §2.5: every user holds exactly one role now — this
   // was 'both001', roleCodes: ['student', 'teacher'], the dual-workspace
   // test fixture for the now-retired `/workspace` picker. The live account
   // was deleted 2026-08-19 (integration-test/STATUS.md); kept here as a
   // single-role student so the service-record/case fixtures below that
   // reference 'both001' as studentUsername still resolve on a fresh reseed.
-  { username: 'both001', displayName: 'Jordan', email: 'jordan@example-school.cn', roleCodes: ['student'], linkedStudentNumber: '2024003' },
+  { username: 'both001', displayName: 'Jordan', email: 'jordan@example-township-school.edu', roleCodes: ['student'], linkedStudentNumber: '2024003' },
 ];
 
 // ── Student roster ──────────────────────────────────────────────────────────
@@ -104,19 +104,19 @@ export interface SeedStudent {
 }
 
 export const students: SeedStudent[] = [
-  { studentNumber: '2024001', displayName: 'Jia Ming', gradeId: 'grade_10', classId: 'class_10A', graduationYear: 2028, joinedAtOffsetDays: -700, email: 'jiaming@example-school.cn', guardianName: 'Zhang Daqiang', guardianContact: '139xxxx1234' },
-  { studentNumber: '2024002', displayName: 'Yun Li', gradeId: 'grade_10', classId: 'class_10A', graduationYear: 2028, joinedAtOffsetDays: -700, email: 'yunli@example-school.cn', guardianName: 'Li Guoqiang', guardianContact: '138xxxx5678' },
-  { studentNumber: '2024003', displayName: 'Jordan', gradeId: 'grade_10', classId: 'class_10B', graduationYear: 2028, joinedAtOffsetDays: -700, email: 'jordan@example-school.cn' },
-  { studentNumber: '2024004', displayName: 'Chen Meiling', gradeId: 'grade_9', classId: 'class_9A', graduationYear: 2029, joinedAtOffsetDays: -335, email: 'chenmei@example-school.cn' },
-  { studentNumber: '2024005', displayName: 'Liu Yufei', gradeId: 'grade_9', classId: 'class_9B', graduationYear: 2029, joinedAtOffsetDays: -335, email: 'liuyufei@example-school.cn' },
-  { studentNumber: '2023001', displayName: 'Huang Zihan', gradeId: 'grade_11', classId: 'class_11A', graduationYear: 2027, joinedAtOffsetDays: -1065, email: 'huangzihan@example-school.cn' },
-  { studentNumber: '2023002', displayName: 'Zhao Siyuan', gradeId: 'grade_11', classId: 'class_11B', graduationYear: 2027, joinedAtOffsetDays: -1065, email: 'zhaosy@example-school.cn' },
-  { studentNumber: '2025001', displayName: 'Sun Wenting', gradeId: 'grade_7', classId: 'class_7A', graduationYear: 2031, joinedAtOffsetDays: -30, email: 'sunwenting@example-school.cn' },
-  { studentNumber: '2025002', displayName: 'Zhou Junjie', gradeId: 'grade_7', classId: 'class_7A', graduationYear: 2031, joinedAtOffsetDays: -30, email: 'zhoujunjie@example-school.cn' },
-  { studentNumber: '2025003', displayName: 'Wu Yaqi', gradeId: 'grade_8', classId: 'class_8A', graduationYear: 2030, joinedAtOffsetDays: -335, email: 'wuyaqi@example-school.cn' },
+  { studentNumber: '2024001', displayName: 'Jia Ming', gradeId: 'grade_10', classId: 'class_10A', graduationYear: 2028, joinedAtOffsetDays: -700, email: 'jiaming@example-township-school.edu', guardianName: 'Zhang Daqiang', guardianContact: '139xxxx1234' },
+  { studentNumber: '2024002', displayName: 'Yun Li', gradeId: 'grade_10', classId: 'class_10A', graduationYear: 2028, joinedAtOffsetDays: -700, email: 'yunli@example-township-school.edu', guardianName: 'Li Guoqiang', guardianContact: '138xxxx5678' },
+  { studentNumber: '2024003', displayName: 'Jordan', gradeId: 'grade_10', classId: 'class_10B', graduationYear: 2028, joinedAtOffsetDays: -700, email: 'jordan@example-township-school.edu' },
+  { studentNumber: '2024004', displayName: 'Chen Meiling', gradeId: 'grade_9', classId: 'class_9A', graduationYear: 2029, joinedAtOffsetDays: -335, email: 'chenmei@example-township-school.edu' },
+  { studentNumber: '2024005', displayName: 'Liu Yufei', gradeId: 'grade_9', classId: 'class_9B', graduationYear: 2029, joinedAtOffsetDays: -335, email: 'liuyufei@example-township-school.edu' },
+  { studentNumber: '2023001', displayName: 'Huang Zihan', gradeId: 'grade_11', classId: 'class_11A', graduationYear: 2027, joinedAtOffsetDays: -1065, email: 'huangzihan@example-township-school.edu' },
+  { studentNumber: '2023002', displayName: 'Zhao Siyuan', gradeId: 'grade_11', classId: 'class_11B', graduationYear: 2027, joinedAtOffsetDays: -1065, email: 'zhaosy@example-township-school.edu' },
+  { studentNumber: '2025001', displayName: 'Sun Wenting', gradeId: 'grade_7', classId: 'class_7A', graduationYear: 2031, joinedAtOffsetDays: -30, email: 'sunwenting@example-township-school.edu' },
+  { studentNumber: '2025002', displayName: 'Zhou Junjie', gradeId: 'grade_7', classId: 'class_7A', graduationYear: 2031, joinedAtOffsetDays: -30, email: 'zhoujunjie@example-township-school.edu' },
+  { studentNumber: '2025003', displayName: 'Wu Yaqi', gradeId: 'grade_8', classId: 'class_8A', graduationYear: 2030, joinedAtOffsetDays: -335, email: 'wuyaqi@example-township-school.edu' },
   // Issue 006: a student in the named (not single-letter) "Mils" class, proving
   // display/filter logic handles an arbitrary-length className, not just "A"/"B".
-  { studentNumber: '2024006', displayName: 'Xu Ran', gradeId: 'grade_10', classId: 'class_10_mils', graduationYear: 2028, joinedAtOffsetDays: -700, email: 'xuran@example-school.cn' },
+  { studentNumber: '2024006', displayName: 'Xu Ran', gradeId: 'grade_10', classId: 'class_10_mils', graduationYear: 2028, joinedAtOffsetDays: -700, email: 'xuran@example-township-school.edu' },
 ];
 
 // ── Projects ─────────────────────────────────────────────────────────────
@@ -268,7 +268,7 @@ export const serviceRecords: SeedServiceRecord[] = [
     studentUsername: 'student001', sourceType: 'PROJECT', projectTitle: 'School Library Organization and Classification',
     serviceCategoryId: 'cat_campus', serviceDateOffsetDays: -45, startHour: 14, endHour: 16.5, location: 'Library (H504)',
     description: 'Assisted the librarian with reclassifying and shelving humanities and social science books.',
-    supervisorName: 'Librarian Wang', supervisorContact: 'library@example-school.cn',
+    supervisorName: 'Librarian Wang', supervisorContact: 'library@example-township-school.edu',
     targetStatus: 'approved', reviewerUsername: 'admin001', reasonCode: 'DOCUMENTATION_COMPLETE', comment: 'Documentation complete, service record verified, approved.',
     key: 'student001_library_project',
   },
@@ -276,7 +276,7 @@ export const serviceRecords: SeedServiceRecord[] = [
     studentUsername: 'student001', sourceType: 'EXTERNAL', organizationName: 'Example City City Library',
     serviceCategoryId: 'cat_community', serviceDateOffsetDays: -18, startHour: 9, endHour: 13, location: 'Example City City Main Library',
     description: 'Participated in the summer reading festival, assisted with organizing children reading activities.',
-    supervisorName: 'Director Zhao', supervisorContact: 'zhao@nblib.cn',
+    supervisorName: 'Director Zhao', supervisorContact: 'zhao@partner.example.org',
     targetStatus: 'submitted',
     key: 'student001_library_external',
   },
@@ -384,7 +384,7 @@ export const eventProposals: SeedEventProposal[] = [
     targetParticipants: 'All school students and younger grade students', capacity: 30,
     volunteerTasks: 'Book organization and pricing, booth setup, reading guide, cashier, venue cleanup',
     supervisorUsername: 'teacher001', newOrganizationName: 'Example City City Library Volunteer Association',
-    externalContact: 'jiaming@example-school.cn',
+    externalContact: 'jiaming@example-township-school.edu',
     safetyPlan: 'Dedicated personnel maintain order during peak hours; charity sale funds jointly managed by two volunteers.',
     resourceNeeds: 'Bookshelves/display tables (borrowed from library), price tags, change fund, picture books',
     recruitmentPlan: 'Class WeChat group announcement + school bulletin board posting',
@@ -401,7 +401,7 @@ export const eventProposals: SeedEventProposal[] = [
     targetParticipants: 'Community residents aged 60 and above', capacity: 15,
     volunteerTasks: 'On-site tutoring, check-in reception, post-class questionnaire collection',
     supervisorUsername: 'teacher001', organizationName: 'Example District D Community Service Center',
-    externalContact: 'jiaming@example-school.cn',
+    externalContact: 'jiaming@example-township-school.edu',
     safetyPlan: 'No screen recording or screenshots of phone content; contact community staff immediately if health issues are noticed.',
     resourceNeeds: 'Projector (provided by community), printed operation guides',
     recruitmentPlan: 'Class WeChat group recruitment',
@@ -419,7 +419,7 @@ export const eventProposals: SeedEventProposal[] = [
     targetParticipants: 'All students and staff', capacity: 20,
     volunteerTasks: 'Stationed outreach, poster design and posting, brochure distribution',
     supervisorUsername: 'teacher001',
-    externalContact: 'yunli@example-school.cn',
+    externalContact: 'yunli@example-township-school.edu',
     safetyPlan: 'Volunteer rotations during hot weather, each shift no more than 30 minutes; heat-prevention drinks prepared in advance.',
     resourceNeeds: 'Outreach posters, brochures, waste sorting label stickers',
     recruitmentPlan: 'Student council channels + class group announcements',
@@ -435,7 +435,7 @@ export const eventProposals: SeedEventProposal[] = [
     targetParticipants: 'Grade 7-8 students', capacity: 25,
     volunteerTasks: 'Subject tutoring, study plan development assistance',
     supervisorUsername: 'teacher001',
-    externalContact: 'jordan@example-school.cn',
+    externalContact: 'jordan@example-township-school.edu',
     safetyPlan: '', resourceNeeds: '', recruitmentPlan: '',
     proposedRecognizedMinutes: 120, evidencePlan: '',
     targetStatus: 'draft',

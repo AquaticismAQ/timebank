@@ -185,7 +185,7 @@ restating here:
   name must never be committed — in `Docs/`, in application code (frontend
   i18n copy, backend seed data), or in a commit message. Use the
   placeholders already established in the repo (`tb.example.com`,
-  `Example City HD`, `Teacher Wei Chen`, `example.edu.cn`; full rules in
+  `Example City HD`, `Teacher Wei Chen`, `example-township-school.edu`; full rules in
   `Docs/README.md` §2.8) instead of inventing new ones or quoting what a
   live-verification session actually showed on the real deployed system.
   This has already gone wrong once: real school/contact/hostname data

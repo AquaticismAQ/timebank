@@ -120,7 +120,7 @@ person's or organization's name (school staff/students/the school itself)
 must never be committed — not in `Docs/`, not in frontend/backend code
 (i18n copy, seed data), not in commit messages. Full rules and the
 established placeholder set (`tb.example.com`, `Example City HD`, `Teacher
-Wei Chen`, `example.edu.cn`) live in `Docs/README.md` §2.8 — read it before
+Wei Chen`, `example-township-school.edu`) live in `Docs/README.md` §2.8 — read it before
 writing anything that might quote what a live-verification session actually
 showed on the real deployed system. This isn't hypothetical: real
 school/contact/hostname data leaked into ~20 tracked docs and hardcoded

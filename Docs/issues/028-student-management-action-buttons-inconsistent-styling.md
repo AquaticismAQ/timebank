@@ -60,7 +60,7 @@ redeployed (`frontend/scripts/deploy.sh`).
 
 ---
 *Live-verified 2026-08-19 against the real deployed server via Playwright
-MCP, logged in as `admin001`/`wei.chen@example.edu.cn`: desktop table
+MCP, logged in as `admin001`/`wei.chen@example-township-school.edu`: desktop table
 shows 编辑/提醒/记录 as blue/amber/cyan bordered icon+text buttons; at a
 390px mobile viewport, expanding a student card shows the same three
 buttons as an equal-width row with the same coloring. No console errors

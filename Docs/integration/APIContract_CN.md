@@ -617,9 +617,10 @@ queued → running → succeeded
 | `GET` | `/organizations/{id}` | `organizations.read` | 详情 |
 | `PATCH` | `/organizations/{id}` | `organizations.manage` | 更新 |
 | `POST` | `/organizations/{id}/archive` | `organizations.manage` | 归档——唯一的移除方式；按设计不提供永久删除（见 `02-PorjectOrganization.md` §4） |
-| `GET` | `/service-categories` | 已登录 | 服务类别 |
+| `GET` | `/service-categories` | 已登录 | 服务类别。默认仅返回启用项；`?includeInactive=true` 同时返回已停用项，供管理页使用 |
 | `POST` | `/service-categories` | `rules.manage` | 创建类别 |
-| `PATCH` | `/service-categories/{id}` | `rules.manage` | 更新类别 |
+| `PATCH` | `/service-categories/{id}` | `rules.manage` | 更新类别（中英文名称、`active`） |
+| `DELETE` | `/service-categories/{id}` | `rules.manage` | 删除类别；若仍被记录/项目/提案引用则返回 `409` |
 
 `organizations.manage` 现由 `role_admin` 和 `role_teacher` 共同持有（2026-08-08 变更——此前仅管理员持有）。同一变更中，`Organization` 新增了 `description`（自由文本简介）字段，与既有的结构化字段 `type`/`contactName`/`contactEmail`/`contactPhone`/`address` 并列；`CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` 均已携带该字段。
 
@@ -758,7 +759,7 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
     "name": "示例中学",
     "fullName": "示例中学（法定全称）",
     "studentDevCenter": "学生发展中心",
-    "contact": "dev-center@example.edu.cn",
+    "contact": "dev-center@example-township-school.edu",
     "academicYear": "2025-2026"
   }
 }
