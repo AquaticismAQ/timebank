@@ -25,7 +25,7 @@ import { EvidenceViewerDialog } from './EvidenceViewerDialog';
  */
 export function EvidencePreview({ files }: { files: { id: string; name: string }[] }) {
   return (
-    <div className="flex flex-wrap gap-3">
+    <div className="flex flex-wrap items-start gap-3">
       {files.map(f => <EvidenceTile key={f.id} fileId={f.id} name={f.name} />)}
     </div>
   );
@@ -52,13 +52,16 @@ function EvidenceTile({ fileId, name }: { fileId: string; name: string }) {
 
   const tileClass = 'w-24 shrink-0 flex flex-col gap-1';
   const boxClass = 'w-24 h-24 rounded-lg border border-border bg-muted flex items-center justify-center overflow-hidden';
-  const caption = <p className="text-xs text-muted-foreground truncate" title={name}>{name}</p>;
+  // Full name, wrapped — not truncated. `break-words` breaks at the natural
+  // points in a filename (hyphens, dots) and only splits mid-word when a run
+  // genuinely can't fit, so the caption can never exceed the tile's own w-24.
+  const caption = <p className="text-xs text-muted-foreground break-words" title={name}>{name}</p>;
 
   if (error) {
     return (
       <div className={tileClass}>
         <div className={`${boxClass} text-destructive`}><AlertTriangle className="w-5 h-5" /></div>
-        <p className="text-xs text-destructive truncate" title={t('common.evidenceLoadFailed')}>{t('common.evidenceLoadFailed')}</p>
+        <p className="text-xs text-destructive break-words" title={t('common.evidenceLoadFailed')}>{t('common.evidenceLoadFailed')}</p>
       </div>
     );
   }

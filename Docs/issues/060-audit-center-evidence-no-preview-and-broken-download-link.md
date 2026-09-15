@@ -151,3 +151,45 @@ click-proven. Did not verify the mobile/narrow-viewport rendering of the
 multi-file grid — reasoned from `flex-wrap` being a standard, well-tested
 CSS pattern, not independently screenshotted at a mobile width this
 session.*
+
+---
+
+## Follow-ups on the preview tiles (merged here rather than filed separately)
+
+`EvidencePreview` is this issue's component, so later changes to it are
+recorded here instead of accumulating near-duplicate issue docs.
+
+**2026-09-15 — the tile caption now shows the full filename.** Reported
+directly by the user: the caption should show the whole name, wrapping as
+needed, without ever extending past the thumbnail's own border. It was
+`truncate` — one line, ellipsised — so
+`supervisor-confirmation-signed-by-the-community-centre-director-2026-09-15.jpg`
+read as `supervisor-confirm…`, and the only way to see the real name was
+the `title` tooltip.
+
+Changed to `break-words`, which breaks at a filename's natural points
+(hyphens, dots) and only splits mid-word when a run genuinely cannot fit,
+so the caption is bounded by the tile's own `w-24` and can never overflow
+it. The grid also gained `items-start`, so tiles whose captions wrap to
+different heights stay top-aligned instead of stretching the row.
+
+Verified by measurement rather than by eye, against a deliberately
+77-character filename, in both consumers (student record detail and Audit
+Center):
+
+| file | caption width | thumbnail border | overflows | lines |
+| --- | --- | --- | --- | --- |
+| `supervisor-confirmation-signed-by-the-…-2026-09-15.jpg` | 96px | 96px | no | 6 |
+| `supervisor-confirmation.pdf` | 96px | 96px | no | 3 |
+| `1.jpg` | 96px | 96px | no | 1 |
+
+Full names render with no ellipsis in every case.
+
+**Superseded parts of this doc.** The tiles described above as
+`<a target="_blank">` links are no longer links — issue 072 replaced them
+with buttons opening an in-app `EvidenceViewerDialog`, and issue 074 then
+fixed the 300s signed-URL expiry that made those URLs die while a panel
+sat open. The two caveats this doc closes with are also now resolved: the
+PDF path was properly exercised in issue 072 (and needed a `blob:` URL,
+because `X-Frame-Options: DENY` blocks framing the content URL), and the
+multi-file grid was measured above.
