@@ -105,7 +105,8 @@
       "personalCenter": "个人中心",
       "completed": "已完成",
       "timeCoins": "时间币",
-      "studentPortal": "学生入口"
+      "studentPortal": "学生入口",
+      "cases": "我的申诉"
     },
     "shell": {
       "collapse": "收起",
@@ -179,7 +180,13 @@
       "coinBalance": "时间币余额",
       "totalEarned": "累计获得",
       "exchanged": "已兑换",
-      "viewAccountDetails": "查看账户明细"
+      "viewAccountDetails": "查看账户明细",
+      "casesSummary": "我的申诉",
+      "casesNeedYouShort": "待你处理",
+      "casesInReview": "审核中",
+      "casesClosed": "已结束",
+      "casesNeedYou": "有申诉需要你处理",
+      "casesNeedYouDesc": "{{count}} 项申诉为草稿或等待你的回复"
     },
     "projects": {
       "title": "项目中心",
@@ -300,8 +307,6 @@
       "fileRequest": "发起申诉",
       "supplementAttachRecord": "关联记录（可选）",
       "supplementNoRecordOption": "不关联具体记录——一般性申诉",
-      "myRecords": "我的记录",
-      "myCases": "我的申诉",
       "noCases": "暂无已提交的申诉",
       "noHistory": "暂无处理记录",
       "coinDetails": "时间币",
@@ -772,7 +777,18 @@
       "respondPlaceholder": "请回答上面的问题，或说明你补充的内容……",
       "respondPrefix": "学生回复",
       "respondRequired": "请先填写回复内容。",
-      "respondSuccess": "回复已提交，案件已回到审核人处。"
+      "respondSuccess": "回复已提交，申诉已回到审核人处。",
+      "title": "我的申诉",
+      "subtitle": "你提交的复核申请与材料补充，以及每一项的处理进度。",
+      "allStatuses": "全部",
+      "saveDraft": "保存草稿",
+      "draftSaved": "草稿已保存",
+      "submitted": "申诉已提交审核",
+      "withdraw": "撤回",
+      "withdrawn": "申诉已撤回，已回到草稿状态",
+      "deleteTitle": "删除此草稿？",
+      "deleteWarning": "此操作将永久删除该草稿。仅草稿可删除；已提交的申诉需先撤回。",
+      "deleted": "草稿已删除"
     }
   },
   "admin": {
@@ -781,7 +797,7 @@
       "welcome": "欢迎回来，{{name}} · 今日 {{date}}",
       "pendingReviews": "待审核记录",
       "clickToReview": "点击进入审核",
-      "pendingCases": "待处理个案",
+      "pendingCases": "待处理申诉",
       "pendingProposals": "待审核提案",
       "activeStudents": "在校学生",
       "totalStudents": "共 {{count}} 人",
@@ -924,8 +940,8 @@
     },
     "cases": {
       "title": "申诉处理",
-      "count": "{{count}} 个案件",
-      "noCases": "暂无待处理案件",
+      "count": "{{count}} 项申诉",
+      "noCases": "暂无待处理申诉",
       "typeAppeal": "复核申请",
       "typeSupplement": "材料补充",
       "typeManualCorrection": "人工调整",
@@ -940,7 +956,7 @@
       "rejectCase": "驳回",
       "decisionRecorded": "处理结果已记录",
       "commentPlaceholder": "为学生添加说明（可选）……",
-      "searchPlaceholder": "按标题搜索",
+      "searchPlaceholder": "按标题搜索申诉",
       "allTypes": "全部类型",
       "allStatuses": "全部状态",
       "allGrades": "全部年级",

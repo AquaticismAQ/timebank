@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Home, FolderOpen, FileText, Wallet, User, Bell, TrendingUp, Lightbulb } from 'lucide-react';
+import { Home, FolderOpen, FileText, Wallet, User, Bell, TrendingUp, Lightbulb, MessageSquareWarning } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../App';
 import { api } from '../../api/client';
@@ -32,6 +32,7 @@ export function StudentLayout() {
     { to: '/student/home', icon: Home, label: t('layout.student.home') },
     { to: '/student/projects', icon: FolderOpen, label: t('layout.student.projectCenter') },
     { to: '/student/records', icon: FileText, label: t('layout.student.serviceRecords') },
+    { to: '/student/cases', icon: MessageSquareWarning, label: t('layout.student.cases') },
     { to: '/student/proposals', icon: Lightbulb, label: t('layout.student.eventProposals') },
     { to: '/student/account', icon: Wallet, label: t('layout.student.timeCoinAccount') },
     { to: '/student/progress', icon: TrendingUp, label: t('layout.student.progress') },

@@ -32,6 +32,16 @@ class CaseStateMachineTest {
         assertThat(CaseStateMachine.canTransition(IN_REVIEW, REJECTED, REVIEWER)).isTrue();
     }
 
+    /** Issue 081: a student can take a filed case back, but only before review starts. */
+    @Test
+    void ownerWithdrawsBeforeReviewStartsButNotAfter() {
+        assertThat(CaseStateMachine.canTransition(SUBMITTED, DRAFT, OWNER)).isTrue();
+        assertThat(CaseStateMachine.canTransition(IN_REVIEW, DRAFT, OWNER)).isFalse();
+        assertThat(CaseStateMachine.canTransition(NEEDS_INFORMATION, DRAFT, OWNER)).isFalse();
+        // ...and a reviewer is not the one who withdraws a student's case.
+        assertThat(CaseStateMachine.canTransition(SUBMITTED, DRAFT, REVIEWER)).isFalse();
+    }
+
     @Test
     void thereIsNoDirectEdgeFromSubmittedToResolved() {
         assertThat(CaseStateMachine.canTransition(SUBMITTED, RESOLVED, REVIEWER)).isFalse();

@@ -21,6 +21,10 @@ public final class CaseStateMachine {
 
     static {
         rule(CaseStatus.DRAFT, CaseStatus.SUBMITTED, ActorRole.OWNER);
+        // Withdraw (issue 081), mirroring the service record's own edge: there is
+        // deliberately no edge out of IN_REVIEW, so "only before review starts" is
+        // enforced by the table rather than by a separate check.
+        rule(CaseStatus.SUBMITTED, CaseStatus.DRAFT, ActorRole.OWNER);
         rule(CaseStatus.SUBMITTED, CaseStatus.IN_REVIEW, ActorRole.REVIEWER);
         rule(CaseStatus.IN_REVIEW, CaseStatus.RESOLVED, ActorRole.REVIEWER);
         rule(CaseStatus.IN_REVIEW, CaseStatus.NEEDS_INFORMATION, ActorRole.REVIEWER);

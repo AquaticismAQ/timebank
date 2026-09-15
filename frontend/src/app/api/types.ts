@@ -368,6 +368,8 @@ export interface ReviewQueueItem {
   recordVersion?: number;
 }
 
+export type CaseStatus = 'draft' | 'submitted' | 'inReview' | 'needsInformation' | 'resolved' | 'rejected';
+
 /** Contract §3.6/§4.8 — appeals, supplements, and staff-filed manual corrections share one state machine and one endpoint family. */
 export interface Case {
   id: string;
@@ -386,7 +388,7 @@ export interface Case {
   description: string;
   requestedAmountCentiCoins?: number;
   reasonCode: string;
-  status: 'draft' | 'submitted' | 'inReview' | 'needsInformation' | 'resolved' | 'rejected';
+  status: CaseStatus;
   assignedReviewerId?: string;
   version: number;
   createdAt: string;

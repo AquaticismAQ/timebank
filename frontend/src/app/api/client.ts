@@ -973,6 +973,15 @@ export const api = {
       const dto = await http.post<Case>(`/cases/${id}/submit`, undefined, idempotencyKey);
       return mapEnumFields(dto, ['status', 'type']);
     },
+    /** Owner-only, and only while review has not started (issue 081). */
+    async withdraw(id: string): Promise<Case> {
+      const dto = await http.post<Case>(`/cases/${id}/withdraw`);
+      return mapEnumFields(dto, ['status', 'type']);
+    },
+    /** Owner-only, drafts only (issue 081). */
+    async remove(id: string): Promise<void> {
+      await http.delete<void>(`/cases/${id}`);
+    },
     // Decision vocabulary is CaseDecision (contract §4.8) — distinct from ReviewQueue's Decision enum,
     // not reused even though 'reject' overlaps, since the two case shapes diverge (RESOLVE/REQUEST_INFORMATION here).
     async decide(id: string, decision: 'resolve' | 'requestInformation' | 'reject', reasonCode: string, comment: string | undefined, caseVersion: number, idempotencyKey?: string): Promise<Case> {

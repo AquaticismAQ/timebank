@@ -17,6 +17,7 @@ import { ProgressPage } from './components/student/ProgressPage';
 import { ProfilePage } from './components/student/ProfilePage';
 import { NotificationsPage } from './components/student/NotificationsPage';
 import { EventProposals } from './components/student/EventProposals';
+import { StudentCases } from './components/student/StudentCases';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AuditCenter } from './components/admin/AuditCenter';
 import { CaseReview } from './components/admin/CaseReview';
@@ -197,6 +198,7 @@ export default function App() {
               <Route path="home" element={<StudentHome />} />
               <Route path="projects" element={<ProjectCenter />} />
               <Route path="records" element={<ServiceRecords />} />
+              <Route path="cases" element={<StudentCases />} />
               <Route path="account" element={<AccountPage />} />
               <Route path="progress" element={<ProgressPage />} />
               <Route path="proposals" element={<EventProposals />} />

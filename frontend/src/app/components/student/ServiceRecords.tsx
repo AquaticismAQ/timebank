@@ -20,7 +20,6 @@ import { ServiceRecordDetail } from './ServiceRecordDetail';
 import { OverlapBlockedDialog } from '../shared/OverlapBlockedDialog';
 import { TimeInput } from '../shared/TimeInput';
 import { CaseFilingModal } from './CaseFilingModal';
-import { StudentCases } from './StudentCases';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -69,8 +68,6 @@ export function ServiceRecords() {
   // null for a standalone/unattached supplement request (§2.3), set for a per-record
   // Appeal or Supplement button.
   const [caseFiling, setCaseFiling] = useState<{ type: 'appeal' | 'supplement'; record: ServiceRecord | null } | null>(null);
-  const [recordsView, setRecordsView] = useState<'records' | 'cases'>('records');
-  const [casesRefreshKey, setCasesRefreshKey] = useState(0);
 
   // Evidence upload — the "evidence" step existed as a purely decorative
   // dropzone (no <input>, no handler) even though `api.files` was fully
@@ -940,12 +937,9 @@ export function ServiceRecords() {
       <div className="flex items-center justify-between">
         <h2 className="text-foreground">{t('student.records.title')}</h2>
         <div className="flex gap-2">
-          <button
-            onClick={() => setCaseFiling({ type: 'supplement', record: null })}
-            className="flex items-center gap-1.5 px-3 py-2 border border-border text-foreground rounded-xl text-sm hover:bg-accent transition-colors"
-          >
-            {t('student.records.fileRequest')}
-          </button>
+          {/* The standalone "file a case" entry point lives on /student/cases now
+              (issue 081). The per-record Appeal/Supplement actions stay on their
+              own rows, where the student already has the context for them. */}
           <button
             onClick={openNewRecord}
             className="flex items-center gap-1.5 px-3 py-2 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90 transition-opacity"
@@ -956,22 +950,6 @@ export function ServiceRecords() {
         </div>
       </div>
 
-      {/* My Records / My Cases — 06-StudentCaseFiling.md §2.4: case history folded into this page, not a new nav item. */}
-      <div className="flex gap-2 border-b border-border">
-        <button onClick={() => setRecordsView('records')}
-          className={`px-3 py-2 text-sm border-b-2 transition-colors -mb-px ${recordsView === 'records' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
-          {t('student.records.myRecords')}
-        </button>
-        <button onClick={() => setRecordsView('cases')}
-          className={`px-3 py-2 text-sm border-b-2 transition-colors -mb-px ${recordsView === 'cases' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
-          {t('student.records.myCases')}
-        </button>
-      </div>
-
-      {recordsView === 'cases' ? (
-        <StudentCases key={casesRefreshKey} />
-      ) : (
-      <>
       {/* Search & filters — Docs/optimization/05-SearchFilterSortConsistency.md §2.4: search alone
           below lg:, filters as an Nx1 grid alongside it, merged into one row at lg: and up. */}
       <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
@@ -1229,15 +1207,13 @@ export function ServiceRecords() {
         </>
       )}
       <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
-      </>
-      )}
 
       {caseFiling && (
         <CaseFilingModal
           type={caseFiling.type}
           record={caseFiling.record}
           onClose={() => setCaseFiling(null)}
-          onFiled={() => { setCaseFiling(null); setCasesRefreshKey(k => k + 1); }}
+          onFiled={() => setCaseFiling(null)}
         />
       )}
 

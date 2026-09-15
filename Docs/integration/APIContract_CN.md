@@ -383,7 +383,12 @@ approved → corrected
 draft → submitted → inReview → resolved
                          ↘ needsInformation → submitted
                          ↘ rejected
+submitted → draft
 ```
+
+`submitted → draft` 是学生撤回自己的申诉（issue 081），仅本人可执行，并且
+刻意不从 `inReview` 出发——"仅在审核人接手之前可撤回"由状态机本身保证，
+而非另设前置校验，与服务记录的做法一致。
 
 `CaseDto` 还携带 `gradeId`/`gradeLevel`/`className`——案件在创建时从提交学生快照下来的年级/班级（从不实时重新查询），与 `EventProposal`（§3.2）、`ServiceRecord` 已有的方式一致。`GET /cases` 的 `filter[gradeId]`（§4.8）按此快照值匹配。
 
@@ -586,6 +591,8 @@ queued → running → succeeded
 | `GET` | `/cases/{id}` | `cases.read` | 详情 |
 | `PATCH` | `/cases/{id}` | 本人且草稿/补充状态 | 编辑 |
 | `POST` | `/cases/{id}/submit` | 本人 | 提交 |
+| `POST` | `/cases/{id}/withdraw` | 本人且尚未开始审核 | 撤回（issue 081） |
+| `DELETE` | `/cases/{id}` | 本人且仅草稿 | 删除草稿（issue 081） |
 | `POST` | `/cases/{id}/decisions` | `cases.decide` | 管理员处理 |
 | `GET` | `/cases/{id}/timeline` | `cases.read` | 时间线 |
 | `GET` | `/cases/{id}/revisions` | `cases.read` | 修订历史（2026-08-12 补录此表——功能早已实现，只是此前漏收录） |

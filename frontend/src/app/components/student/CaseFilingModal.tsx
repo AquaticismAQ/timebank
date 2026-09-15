@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
-import { type ServiceRecord } from '../../api/types';
+import { type Case, type ServiceRecord } from '../../api/types';
 import { minutesToHours } from '../../lib/format';
 
 /**
@@ -38,19 +38,21 @@ function caseTitle(subject: ServiceRecord | null, reason: string): string {
 }
 
 export function CaseFilingModal({
-  type, record, onClose, onFiled,
+  type, record, draft, onClose, onFiled,
 }: {
   type: 'appeal' | 'supplement';
   record: ServiceRecord | null;
+  /** An existing DRAFT/NEEDS_INFORMATION case being edited instead of a new filing (issue 081). */
+  draft?: Case | null;
   onClose: () => void;
   onFiled: () => void;
 }) {
   const { t } = useTranslation();
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(draft?.description ?? '');
   const [saving, setSaving] = useState(false);
   const keyRef = useRef(newIdempotencyKey());
 
-  const allowPicker = type === 'supplement' && !record;
+  const allowPicker = type === 'supplement' && !record && !draft;
   const [pickedRecordId, setPickedRecordId] = useState('');
   const [pickableRecords, setPickableRecords] = useState<ServiceRecord[]>([]);
   useEffect(() => {
@@ -69,21 +71,34 @@ export function CaseFilingModal({
   const reasonRequiredKey = type === 'appeal' ? 'student.records.appealReasonRequired' : 'student.records.supplementReasonRequired';
   const submittedKey = type === 'appeal' ? 'student.records.appealSubmitted' : 'student.records.supplementSubmitted';
 
-  const handleSubmit = async () => {
+  /**
+   * Issue 081: filing is create-then-submit, but the two halves are now
+   * separable — "Save Draft" stops after the create, which the backend always
+   * supported and only the UI never offered.
+   */
+  const save = async (thenSubmit: boolean) => {
     if (!reason.trim()) { toast.error(t(reasonRequiredKey)); return; }
     setSaving(true);
     try {
-      const created = await api.cases.create({
-        type,
-        subjectType: subject ? 'serviceRecord' : undefined,
-        subjectId: subject?.id,
-        title: caseTitle(subject, reason),
-        description: reason,
-        reasonCode: type === 'appeal' ? 'STUDENT_APPEAL' : 'STUDENT_SUPPLEMENT',
-      });
-      await api.cases.submit(created.id, keyRef.current);
-      keyRef.current = newIdempotencyKey();
-      toast.success(t(submittedKey));
+      const id = draft
+        ? (await api.cases.update(draft.id, {
+            title: caseTitle(subject, reason), description: reason, version: draft.version,
+          })).id
+        : (await api.cases.create({
+            type,
+            subjectType: subject ? 'serviceRecord' : undefined,
+            subjectId: subject?.id,
+            title: caseTitle(subject, reason),
+            description: reason,
+            reasonCode: type === 'appeal' ? 'STUDENT_APPEAL' : 'STUDENT_SUPPLEMENT',
+          })).id;
+      if (thenSubmit) {
+        await api.cases.submit(id, keyRef.current);
+        keyRef.current = newIdempotencyKey();
+        toast.success(t(submittedKey));
+      } else {
+        toast.success(t('student.cases.draftSaved'));
+      }
       onFiled();
     } catch (err) {
       if (err instanceof ApiError) toast.error(mapApiError(err).message);
@@ -123,10 +138,14 @@ export function CaseFilingModal({
           placeholder={t(reasonPlaceholderKey)} maxLength={4000}
           className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none" />
 
-        <div className="flex gap-3 mt-4">
+        <div className="flex gap-2 mt-4">
           <button onClick={onClose} disabled={saving}
             className="flex-1 py-2.5 rounded-xl border border-border text-foreground hover:bg-accent text-sm">{t('common.cancel')}</button>
-          <button onClick={handleSubmit} disabled={saving}
+          <button onClick={() => save(false)} disabled={saving}
+            className="flex-1 py-2.5 rounded-xl border border-border text-foreground hover:bg-accent text-sm disabled:opacity-50">
+            {t('student.cases.saveDraft')}
+          </button>
+          <button onClick={() => save(true)} disabled={saving}
             className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 text-sm disabled:opacity-50">
             {saving ? t('common.saving', { defaultValue: 'Saving...' }) : t('common.submit')}
           </button>

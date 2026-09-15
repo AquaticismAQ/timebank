@@ -186,6 +186,37 @@ class CaseServiceImpl implements CaseService {
     }
 
     @Override
+    @Transactional
+    public CaseDto withdraw(String id, Authentication auth, String resolvedLanguage) {
+        Case c = findOwnedOrThrow(id, auth);
+        // The state machine only defines SUBMITTED -> DRAFT for OWNER, so a case a
+        // reviewer has already claimed (IN_REVIEW) is refused here for free.
+        CaseStateMachine.transition(c, CaseStatus.DRAFT, ActorRole.OWNER);
+        c.setSubmittedAt(null);
+        c.setUpdatedAt(Instant.now());
+
+        auditService.record(new AuditEntry(principalId(auth), "cases.create", "case.withdraw",
+                "case", c.getId(), null, null, null));
+        repository.saveAndFlush(c);
+        return toDto(c, resolvedLanguage);
+    }
+
+    @Override
+    @Transactional
+    public void deleteDraft(String id, Authentication auth) {
+        Case c = findOwnedOrThrow(id, auth);
+        if (c.getStatus() != CaseStatus.DRAFT) {
+            throw ApiException.stateConflict("Only a draft case can be deleted.");
+        }
+        // A draft edited at least once has case_revision rows FK'd to it, so they
+        // go first or the delete below fails on the constraint (issue 059).
+        revisionRepository.deleteByCaseId(id);
+        repository.delete(c);
+        auditService.record(new AuditEntry(principalId(auth), "cases.create", "case.delete",
+                "case", id, null, null, null));
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<RevisionDto> revisions(String id, Authentication auth) {
         findInScopeOrThrow(id, auth);

@@ -388,7 +388,13 @@ Status:
 draft → submitted → inReview → resolved
                          ↘ needsInformation → submitted
                          ↘ rejected
+submitted → draft
 ```
+
+The `submitted → draft` edge is the student withdrawing their own case
+(issue 081), owner-only and deliberately absent from `inReview` — so "only
+before a reviewer picks it up" is enforced by the transition table rather
+than by a separate precondition, exactly as it is for a service record.
 
 `CaseDto` also carries `gradeId`/`gradeLevel`/`className` — the case's own snapshotted grade/class (set at creation from the filing student's grade at that time, never a live re-lookup), same convention as `EventProposal`'s (§3.2) and `ServiceRecord`'s. `GET /cases`'s `filter[gradeId]` (§4.8) matches against this snapshotted value.
 
@@ -591,6 +597,8 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 | `GET` | `/cases/{id}` | `cases.read` | Detail |
 | `PATCH` | `/cases/{id}` | Owner & draft/supplement state | Edit |
 | `POST` | `/cases/{id}/submit` | Owner | Submit |
+| `POST` | `/cases/{id}/withdraw` | Owner & review not started | Withdraw (issue 081) |
+| `DELETE` | `/cases/{id}` | Owner & draft only | Delete draft (issue 081) |
 | `POST` | `/cases/{id}/decisions` | `cases.decide` | Admin processing |
 | `GET` | `/cases/{id}/timeline` | `cases.read` | Timeline |
 | `GET` | `/cases/{id}/revisions` | `cases.read` | Revision history (added here 2026-08-12 — was already implemented, just missing from this table) |

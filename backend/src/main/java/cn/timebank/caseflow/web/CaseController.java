@@ -19,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -85,6 +86,21 @@ public class CaseController {
             @PathVariable String id, @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
         return ApiResponse.of(caseService.submit(id, auth, idempotencyKey, resolveLanguage(acceptLanguage, auth)));
+    }
+
+    @PostMapping("/api/v1/cases/{id}/withdraw")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<CaseDto> withdraw(
+            @PathVariable String id,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
+        return ApiResponse.of(caseService.withdraw(id, auth, resolveLanguage(acceptLanguage, auth)));
+    }
+
+    @DeleteMapping("/api/v1/cases/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<Void> delete(@PathVariable String id, Authentication auth) {
+        caseService.deleteDraft(id, auth);
+        return ApiResponse.of(null);
     }
 
     @GetMapping("/api/v1/cases/{id}/timeline")

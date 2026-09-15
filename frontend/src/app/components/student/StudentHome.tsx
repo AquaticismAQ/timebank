@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Clock, ChevronRight, Plus, AlertCircle, FileText, Star } from 'lucide-react';
+import { Clock, ChevronRight, Plus, AlertCircle, FileText, Star, MessageSquareWarning } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { RECORD_STATUS_LABELS, RECOGNITION_LEVELS } from '../../lib/statusLabels';
-import { type StudentProgress, type Account, type ServiceRecord, type Project } from '../../api/types';
+import { type StudentProgress, type Account, type ServiceRecord, type Project, type Case, type CaseStatus } from '../../api/types';
 import { formatCoins, minutesToHours } from '../../lib/format';
 import { useAuth } from '../../App';
 import { api } from '../../api/client';
@@ -41,6 +41,8 @@ export function StudentHome() {
   const [account, setAccount] = useState<Account | null>(null);
   const [recentRecords, setRecentRecords] = useState<ServiceRecord[]>([]);
   const [upcomingProjects, setUpcomingProjects] = useState<Project[]>([]);
+  /** Issue 081: the student's own cases, summarized here and managed on /student/cases. */
+  const [cases, setCases] = useState<Case[]>([]);
 
   useEffect(() => {
     api.dashboards.student(user?.studentId).then(d => {
@@ -49,6 +51,9 @@ export function StudentHome() {
       setRecentRecords(d.recentRecords);
       setUpcomingProjects(d.upcomingProjects);
     }).catch(() => {});
+    // A page of cases is plenty for a count — the dashboard endpoint does not
+    // carry case data, and `GET /cases` is already scoped to this student.
+    api.cases.list({ pageSize: 100 }).then(res => setCases(res.data)).catch(() => {});
   }, [user?.studentId]);
 
   if (!progress || !account) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
@@ -61,7 +66,13 @@ export function StudentHome() {
   ) || RECOGNITION_LEVELS[0];
   const nextLevel = RECOGNITION_LEVELS.find(l => l.minHours > totalEarnedCoins);
 
+  const caseCount = (...statuses: CaseStatus[]) => cases.filter(c => statuses.includes(c.status)).length;
+  const casesNeedingStudent = caseCount('draft', 'needsInformation');
+  const casesWithReviewer = caseCount('submitted', 'inReview');
+  const casesClosed = caseCount('resolved', 'rejected');
+
   const pendingActions = [
+    casesNeedingStudent > 0 && { label: t('student.home.casesNeedYou'), desc: t('student.home.casesNeedYouDesc', { count: casesNeedingStudent }), to: '/student/cases', icon: MessageSquareWarning, color: 'text-orange-500' },
     recentRecords.find(r => r.status === 'returned') && { label: t('student.home.supplementMaterial'), desc: t('student.home.supplementDesc'), to: '/student/records', icon: AlertCircle, color: 'text-orange-500' },
     recentRecords.filter(r => r.status === 'underReview').length > 0 && { label: t('student.home.reviewUpdate'), desc: `${recentRecords.filter(r => r.status === 'underReview').length} ${t('student.home.recordsPending')}`, to: '/student/records', icon: Clock, color: 'text-blue-500' },
   ].filter(Boolean) as { label: string; desc: string; to: string; icon: typeof Clock; color: string }[];
@@ -140,6 +151,32 @@ export function StudentHome() {
               <span className="text-sm">{t('student.home.browseProjects')}</span>
             </button>
           </div>
+
+          {/* Case progress summary (issue 081) — counts only; the page itself is
+              where a case is acted on. Hidden entirely when the student has
+              never filed one, so it never becomes empty furniture. */}
+          {cases.length > 0 && (
+            <div className="bg-card border border-border rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-foreground">{t('student.home.casesSummary')}</h3>
+                <button onClick={() => navigate('/student/cases')} className="text-xs text-primary">{t('common.allArrow')}</button>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-xl bg-muted/50 py-2">
+                  <div className="text-lg font-semibold text-orange-500">{casesNeedingStudent}</div>
+                  <div className="text-xs text-muted-foreground">{t('student.home.casesNeedYouShort')}</div>
+                </div>
+                <div className="rounded-xl bg-muted/50 py-2">
+                  <div className="text-lg font-semibold text-blue-500">{casesWithReviewer}</div>
+                  <div className="text-xs text-muted-foreground">{t('student.home.casesInReview')}</div>
+                </div>
+                <div className="rounded-xl bg-muted/50 py-2">
+                  <div className="text-lg font-semibold text-foreground">{casesClosed}</div>
+                  <div className="text-xs text-muted-foreground">{t('student.home.casesClosed')}</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Pending actions */}
           {pendingActions.length > 0 && (

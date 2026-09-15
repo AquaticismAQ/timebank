@@ -190,6 +190,65 @@ class CaseDecisionTransactionIT extends AbstractIntegrationTest {
         return caseService.submit(draft.id(), staffAuth("teacher"), "idem-case-submit-" + draft.id(), "zh-CN");
     }
 
+    /**
+     * Issue 081: the student's own lifecycle actions. Withdraw is owner-only and
+     * only before a reviewer has claimed the case; delete is drafts only.
+     */
+    @Test
+    void aStudentCanWithdrawTheirCaseUntilAReviewerClaimsIt() {
+        StudentDetailDto student = createStudent();
+        CaseDto submitted = createAndSubmitAppeal(student);
+
+        CaseDto withdrawn = caseService.withdraw(submitted.id(), studentAuth(student.id()), "en");
+
+        assertThat(withdrawn.status()).isEqualTo("DRAFT");
+        assertThat(withdrawn.submittedAt()).isNull();
+
+        // Resubmitted, then claimed by the first decision — now it is too late.
+        CaseDto resubmitted = caseService.submit(withdrawn.id(), studentAuth(student.id()),
+                "idem-resubmit-" + withdrawn.id(), "en");
+        caseService.decide(resubmitted.id(),
+                new DecideRequest("requestInformation", "MORE_DETAIL", "Which session?", resubmitted.version()),
+                staffAuth("admin"), "idem-claim-" + resubmitted.id(), "en");
+
+        assertThatThrownBy(() -> caseService.withdraw(resubmitted.id(), studentAuth(student.id()), "en"))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void onlyADraftCaseCanBeDeleted() {
+        StudentDetailDto student = createStudent();
+        CaseDto submitted = createAndSubmitAppeal(student);
+
+        assertThatThrownBy(() -> caseService.deleteDraft(submitted.id(), studentAuth(student.id())))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("draft");
+
+        caseService.withdraw(submitted.id(), studentAuth(student.id()), "en");
+        caseService.deleteDraft(submitted.id(), studentAuth(student.id()));
+
+        assertThatThrownBy(() -> caseService.getDetail(submitted.id(), studentAuth(student.id()), "en"))
+                .isInstanceOf(ApiException.class);
+    }
+
+    /** A draft edited at least once has revision rows FK'd to it — they must not block the delete. */
+    @Test
+    void aDraftWithRevisionsCanStillBeDeleted() {
+        StudentDetailDto student = createStudent();
+        CreateCaseRequest request = new CreateCaseRequest(null, "supplement", null, null,
+                "Draft to delete", "First description", null, "STUDENT_SUPPLEMENT");
+        CaseDto draft = caseService.createDraft(request, studentAuth(student.id()), "en");
+        CaseDto edited = caseService.updateDraft(draft.id(),
+                new cn.timebank.caseflow.application.dto.CaseRequests.UpdateCaseRequest(
+                        null, "Second description", null, null, draft.version()),
+                studentAuth(student.id()), "en");
+
+        caseService.deleteDraft(edited.id(), studentAuth(student.id()));
+
+        assertThatThrownBy(() -> caseService.getDetail(edited.id(), studentAuth(student.id()), "en"))
+                .isInstanceOf(ApiException.class);
+    }
+
     private CaseDto createAndSubmitAppeal(StudentDetailDto student) {
         CreateCaseRequest request = new CreateCaseRequest(null, "appeal", "serviceRecord", null,
                 "My record was rejected unfairly", "The supervisor did confirm my hours by phone", null, "DISPUTE_REJECTION");

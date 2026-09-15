@@ -105,7 +105,8 @@
       "personalCenter": "Personal Center",
       "completed": "Completed",
       "timeCoins": "Time Coins",
-      "studentPortal": "Student Portal"
+      "studentPortal": "Student Portal",
+      "cases": "My Cases"
     },
     "shell": {
       "collapse": "Collapse",
@@ -179,7 +180,13 @@
       "coinBalance": "Time Coin Balance",
       "totalEarned": "Total Earned",
       "exchanged": "Exchanged",
-      "viewAccountDetails": "View Account Details"
+      "viewAccountDetails": "View Account Details",
+      "casesSummary": "My Cases",
+      "casesNeedYouShort": "Need you",
+      "casesInReview": "With reviewer",
+      "casesClosed": "Closed",
+      "casesNeedYou": "A case needs your attention",
+      "casesNeedYouDesc": "{{count}} case(s) are a draft or waiting on your reply"
     },
     "projects": {
       "title": "Project Center",
@@ -300,8 +307,6 @@
       "fileRequest": "File a Case",
       "supplementAttachRecord": "Attach a record (optional)",
       "supplementNoRecordOption": "No specific record — general case",
-      "myRecords": "My Records",
-      "myCases": "My Cases",
       "noCases": "No cases filed yet",
       "noHistory": "No history yet",
       "coinDetails": "Time Coins",
@@ -772,7 +777,18 @@
       "respondPlaceholder": "Answer the question above, or describe what you are adding...",
       "respondPrefix": "Student reply",
       "respondRequired": "Please write a reply before submitting.",
-      "respondSuccess": "Reply submitted — the case is back with the reviewer."
+      "respondSuccess": "Reply submitted — the case is back with the reviewer.",
+      "title": "My Cases",
+      "subtitle": "Appeals and supplementary-material requests you have filed, and where each one stands.",
+      "allStatuses": "All",
+      "saveDraft": "Save Draft",
+      "draftSaved": "Draft saved",
+      "submitted": "Case submitted for review",
+      "withdraw": "Withdraw",
+      "withdrawn": "Case withdrawn — it is a draft again",
+      "deleteTitle": "Delete this draft?",
+      "deleteWarning": "This permanently deletes the draft. Only drafts can be deleted; a submitted case must be withdrawn first.",
+      "deleted": "Draft deleted"
     }
   },
   "admin": {

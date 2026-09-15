@@ -27,6 +27,12 @@ public interface CaseService {
 
     CaseDto submit(String id, Authentication auth, String idempotencyKey, String resolvedLanguage);
 
+    /** Owner-only, and only while review has not started — {@code SUBMITTED -> DRAFT} (issue 081). */
+    CaseDto withdraw(String id, Authentication auth, String resolvedLanguage);
+
+    /** Owner-only, drafts only; physical delete, revisions first (issue 081). */
+    void deleteDraft(String id, Authentication auth);
+
     List<RevisionDto> revisions(String id, Authentication auth);
 
     List<TimelineEntryDto> timeline(String id, Authentication auth);
