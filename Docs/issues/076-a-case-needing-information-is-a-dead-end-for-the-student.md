@@ -67,11 +67,18 @@ Resubmit action plus its modal, `PATCH` + `submit`.
 
 ## Also confirmed during this pass (not bugs)
 
-- **Teachers cannot decide cases, by design.** `cases.decide` is granted
-  only to `role_admin`/`role_sysadmin`
+- **Teachers cannot decide cases, by design — confirmed, do not re-raise.**
+  `cases.decide` is granted only to `role_admin`/`role_sysadmin`
   (`R__seed_permissions_and_roles.sql`), so `teacher001` sees the Case
   Review queue and case details but no Resolve/Request Information/Reject
   buttons. `07-RoleFinetune.md` §188 explicitly declines to extend the
   "anyone non-student can view, only permission-holders can act" relaxation
-  to Case Review. Worth knowing when reading a request for "teacher
-  resolve/reject" — it is an admin-only action today.
+  to Case Review.
+
+  This surfaced during the 2026-09-15 verification pass, where the request
+  was phrased as "admin/teacher resolve/reject/request info" and the missing
+  buttons looked like a UI bug. They are not. Raised with the user and
+  **explicitly confirmed as correct**, so a future session finding a teacher
+  unable to act on a case should treat that as intended behaviour rather
+  than a defect. Changing it would be a permission-model decision, not a
+  frontend fix.
