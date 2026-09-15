@@ -71,7 +71,7 @@ server.
 | --- | --- | --- |
 | `case_8p5mb8pg…` | `材料补充: Overnight Watch Program` | `Overnight Watch Program` (its record's organization; the record has no project) |
 | `case_t4yr7tw9…` | `材料补充` | the description's first line (a beach-cleanup request) |
-| `case_419r951z…` | `材料补充` | `ff` — the whole description; junk from an early test, and the rule applied honestly rather than inventing a nicer title |
+| `case_419r951z…` | `材料补充` | `ff` — the whole description; junk from an early test, and the rule applied honestly rather than inventing a nicer title. **Subsequently deleted** on the user's instruction, see below |
 
 The five seeded cases were left alone. Their titles (`Appeal: …`,
 `Supplement: …`) are English prose a student could plausibly have typed, not
@@ -112,3 +112,22 @@ repeating its own Type field.
 
 The two cases filed for this check were removed afterwards (with their
 revision rows); the queue is back to the 10 it held before.
+
+## Follow-up: the `ff` case deleted
+
+On the user's instruction the `ff` case (`case_419r951z…`) was deleted
+outright rather than left carrying a meaningless title — it was junk from an
+early manual test: a `SUPPLEMENT`, description `ff`, no attached record and
+no `requestedAmountCentiCoins`, so nothing in the ledger depended on it. Its
+one `case_decision` row and one notification went with it; `mysqldump` of the
+row and its dependents taken first to `/root/timebank-case-ff-delete-<stamp>/`
+on the server.
+
+**Its three `audit_log` rows were deliberately kept.** The audit log is
+append-only by design, and an entry describing a decision that really
+happened stays true whether or not the case row still exists; deleting from
+it is reserved for the PII case that forced it once before. A future reader
+finding `case.decision` entries for a `resource_id` with no case row should
+read that as this deletion, not as corruption.
+
+Queue after: 9 cases.
