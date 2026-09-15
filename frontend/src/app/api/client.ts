@@ -362,14 +362,21 @@ export const api = {
       return fromProposalDto(dto);
     },
     async create(data: Partial<EventProposal>): Promise<EventProposal> {
+      // Two genuinely different numbers, and they must not collapse into one
+      // (issue 075): the planned window is sized by how long the activity runs,
+      // while `proposedRecognizedMinutes` is how much gets credited. They used to
+      // share a value, which silently discarded whatever the student typed for
+      // duration *and* mis-sized the project generated on approval, since
+      // ProposalApprovalTransaction copies the window into the project verbatim.
       const proposedRecognizedMinutes = data.suggestedMinutes || data.estimatedDurationMinutes || 60;
+      const windowMinutes = data.estimatedDurationMinutes || proposedRecognizedMinutes;
       const body = {
         title: data.title,
         objective: data.goal,
         description: data.description,
         expectedOutcome: data.expectedOutcomes,
         categoryId: data.categoryId,
-        ...plannedStartEnd(data.plannedDate, proposedRecognizedMinutes),
+        ...plannedStartEnd(data.plannedDate, windowMinutes),
         location: data.location,
         format: data.activityFormat,
         targetParticipants: data.targetParticipants,
@@ -395,13 +402,15 @@ export const api = {
     },
     async update(id: string, data: Partial<EventProposal>): Promise<EventProposal> {
       const proposedRecognizedMinutes = data.suggestedMinutes || data.estimatedDurationMinutes;
+      // Same split as `create` above (issue 075).
+      const windowMinutes = data.estimatedDurationMinutes || proposedRecognizedMinutes || 60;
       const body = withVersion({
         title: data.title,
         objective: data.goal,
         description: data.description,
         expectedOutcome: data.expectedOutcomes,
         categoryId: data.categoryId,
-        ...plannedStartEnd(data.plannedDate, proposedRecognizedMinutes || 60),
+        ...plannedStartEnd(data.plannedDate, windowMinutes),
         location: data.location,
         format: data.activityFormat,
         targetParticipants: data.targetParticipants,
@@ -1185,7 +1194,7 @@ export const api = {
 // out since both need the identical field translation (see the comment on
 // `eventProposals.list` for the full rationale).
 type ProposalDtoWire = Omit<EventProposal, 'coOrganizerStudentIds'> & {
-  proposerStudentName?: string; plannedStartAt?: string; proposedRecognizedMinutes?: number;
+  proposerStudentName?: string; plannedStartAt?: string; plannedEndAt?: string; proposedRecognizedMinutes?: number;
   proposedSupervisorName?: string; organizationName?: string;
   objective?: string; expectedOutcome?: string; format?: string; capacity?: number;
   safetyPlan?: string; resourceNeeds?: string; recruitmentPlan?: string; evidencePlan?: string;
@@ -1207,7 +1216,11 @@ function fromProposalDto(dto: ProposalDtoWire): EventProposal {
     // inspection — the resubmit call failed with a swallowed client-side
     // exception, no network request even sent).
     plannedDate: dto.plannedStartAt ? isoToLocalDateTime(dto.plannedStartAt).date : dto.plannedDate,
-    estimatedDurationMinutes: dto.proposedRecognizedMinutes ?? dto.estimatedDurationMinutes,
+    // Derived from the stored window, not from `proposedRecognizedMinutes` —
+    // reading both from the same field is what made the two inputs one (issue 075).
+    estimatedDurationMinutes: dto.plannedStartAt && dto.plannedEndAt
+      ? Math.max(1, Math.round((new Date(dto.plannedEndAt).getTime() - new Date(dto.plannedStartAt).getTime()) / 60000))
+      : dto.estimatedDurationMinutes,
     suggestedMinutes: dto.proposedRecognizedMinutes ?? dto.suggestedMinutes,
     // Display strings, resolved server-side — the raw ids
     // (coOrganizerStudentIds/proposedSupervisorId/organizationId)
