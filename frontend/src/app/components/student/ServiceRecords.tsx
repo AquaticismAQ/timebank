@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Plus, Search, X, FileText, AlertTriangle, ChevronDown, ChevronUp, Upload, Send, Trash2, Pencil, RotateCcw, Gavel } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { RECORD_STATUS_LABELS } from '../../lib/statusLabels';
@@ -15,6 +15,8 @@ import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { EvidenceLink } from '../EvidenceLink';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
+import { ConfirmDeleteDialog } from '../shared/ConfirmDeleteDialog';
+import { TimeInput } from '../shared/TimeInput';
 import { CaseFilingModal } from './CaseFilingModal';
 import { StudentCases } from './StudentCases';
 
@@ -77,6 +79,7 @@ export function ServiceRecords() {
   const [evidenceFiles, setEvidenceFiles] = useState<EvidenceFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // I3.2: reject obviously-bad files before ever hitting the network
   // (matches the real backend limits — FileServiceImpl's 20MB default and
@@ -120,7 +123,9 @@ export function ServiceRecords() {
   // fresh record ('external' only ever appears here when resubmitting an existing
   // historical record, never as a chooseable option — see sourceOptions below).
   const EMPTY_FORM = {
-    sourceType: 'self' as 'project' | 'external' | 'self',
+    // Reported directly by the user: "School Project" should be the default
+    // selection, since most records are project-sourced (issue 062).
+    sourceType: 'project' as 'project' | 'external' | 'self',
     projectId: '',
     serviceDate: '',
     startTime: '',
@@ -139,6 +144,15 @@ export function ServiceRecords() {
   };
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [supervisorOption, setSupervisorOption] = useState<SearchPickerOption[]>([]);
+
+  // Gates the "Next" button on the current step's own required fields being
+  // filled — only they're mounted at any given time (conditional per-step
+  // rendering), so `checkValidity()` here naturally scopes to just them,
+  // the same way `reportValidity()` on click already does below.
+  const [nextEnabled, setNextEnabled] = useState(false);
+  useLayoutEffect(() => {
+    setNextEnabled(formRef.current?.checkValidity() ?? false);
+  }, [step, formData]);
 
   // Distinguishes "resubmitting a returned record" (PATCH the existing
   // record, then submit) from "brand new record" (POST) — without this,
@@ -168,6 +182,26 @@ export function ServiceRecords() {
     api.projects.get(formData.projectId).then(p => { if (!cancelled) setSelectedProject(p); }).catch(() => { if (!cancelled) setSelectedProject(null); });
     return () => { cancelled = true; };
   }, [formData.sourceType, formData.projectId]);
+
+  // Reported directly by the user: the record's date/start/end time should
+  // follow the selected project's own activity window automatically —
+  // always, and every time the pick changes, not just once. Skipped
+  // entirely while editing an existing record: its real saved date/time
+  // are what should show, not the project's defaults (issue 062).
+  //
+  // Also sets `endsNextDay` when the project's own end date differs from
+  // its start date (issue 063) — without this, e.g. a project spanning
+  // 16:00 to a later day's 01:00 autofills a start/end time pair that
+  // *looks* like a same-day 16:00→01:00 range, which is a negative
+  // duration; the duration preview below correctly hides a negative value,
+  // so it silently never appeared until the student happened to toggle
+  // this checkbox themselves with no indication that was the reason.
+  useEffect(() => {
+    if (!selectedProject || editing) return;
+    const start = isoToLocalDateTime(selectedProject.startAt);
+    const end = isoToLocalDateTime(selectedProject.endAt);
+    setFormData(f => ({ ...f, serviceDate: start.date, startTime: start.time, endTime: end.time, endsNextDay: start.date !== end.date }));
+  }, [selectedProject, editing]);
 
   const durationMinutes = formData.startTime && formData.endTime
     ? Math.round((new Date(`2000-01-0${formData.endsNextDay ? 2 : 1}T${formData.endTime}`).getTime() - new Date('2000-01-01T' + formData.startTime).getTime()) / 60000)
@@ -307,6 +341,8 @@ export function ServiceRecords() {
     }
   };
 
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
   const handleDeleteDraft = async (id: string) => {
     try {
       await api.serviceRecords.delete(id);
@@ -398,7 +434,7 @@ export function ServiceRecords() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmitRecord} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmitRecord} className="space-y-4">
           {/* Step 0: Source */}
           {step === 0 && (
             <div className="space-y-4">
@@ -433,7 +469,7 @@ export function ServiceRecords() {
                   <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.selectProject')} *</label>
                   <select required disabled={!!editing} value={formData.projectId}
                     onChange={e => { fieldErrors.clearField('projectId'); setFormData(f => ({ ...f, projectId: e.target.value })); }}
-                    className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm disabled:opacity-60">
+                    className="w-full h-12 px-4 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm disabled:opacity-60">
                     <option value="">{t('student.records.selectProjectPlaceholder')}</option>
                     {confirmedProjects.map(a => <option key={a.projectId} value={a.projectId}>{a.projectTitle}</option>)}
                   </select>
@@ -461,20 +497,18 @@ export function ServiceRecords() {
               <div>
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.serviceDate')} *</label>
                 <input type="date" required value={formData.serviceDate} onChange={e => { fieldErrors.clearField('serviceDate'); setFormData(f => ({ ...f, serviceDate: e.target.value })); }}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                  className="w-full h-12 px-4 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
                 <FieldError message={fieldErrors.getError('serviceDate')} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.startTime')} *</label>
-                  <input type="time" required value={formData.startTime} onChange={e => { fieldErrors.clearField('startAt'); setFormData(f => ({ ...f, startTime: e.target.value })); }}
-                    className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                  <TimeInput required value={formData.startTime} onChange={v => { fieldErrors.clearField('startAt'); setFormData(f => ({ ...f, startTime: v })); }} />
                   <FieldError message={fieldErrors.getError('startAt', 'startTime')} />
                 </div>
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.endTime')} *</label>
-                  <input type="time" required value={formData.endTime} onChange={e => { fieldErrors.clearField('endAt'); setFormData(f => ({ ...f, endTime: e.target.value })); }}
-                    className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                  <TimeInput required value={formData.endTime} onChange={v => { fieldErrors.clearField('endAt'); setFormData(f => ({ ...f, endTime: v })); }} />
                   <FieldError message={fieldErrors.getError('endAt', 'endTime')} />
                 </div>
               </div>
@@ -508,7 +542,7 @@ export function ServiceRecords() {
                   <div>
                     <label className="block text-xs text-muted-foreground mb-1.5">{t('student.records.serviceCategory')}</label>
                     <select value={formData.categoryId} onChange={e => { fieldErrors.clearField('serviceCategoryId'); setFormData(f => ({ ...f, categoryId: e.target.value })); }}
-                      className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
+                      className="w-full h-12 px-4 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
                       {serviceCategories.map(cat => (
                         <option key={cat.id} value={cat.id}>{cat.name}</option>
                       ))}
@@ -571,7 +605,7 @@ export function ServiceRecords() {
                         setSupervisorOption([]);
                         setFormData(f => ({ ...f, supervisorKind: kind, supervisorSubjectId: '', supervisorName: '', supervisorContact: '' }));
                       }}
-                      className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
+                      className="w-full h-12 px-4 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
                       <option value="">{t('student.records.supervisorKindPlaceholder')}</option>
                       <option value="internalUser">{t('student.records.supervisorKindInternal')}</option>
                       <option value="student">{t('student.records.supervisorKindStudent')}</option>
@@ -710,8 +744,14 @@ export function ServiceRecords() {
               </button>
             )}
             {step < STEP_KEYS.length - 1 ? (
-              <button type="button" onClick={() => setStep(s => s + 1)}
-                className="flex-1 py-3 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90 transition-opacity text-sm">
+              // Each step's required fields are only mounted for that step, so a
+              // browser-native submit at the final step never sees earlier steps'
+              // `required` inputs at all and silently lets them through empty
+              // (e.g. issue 058 — a student could skip picking a project entirely).
+              // Checking validity here, while those fields are still mounted, is
+              // what actually catches it.
+              <button type="button" disabled={!nextEnabled} onClick={() => { if (formRef.current?.reportValidity()) setStep(s => s + 1); }}
+                className="flex-1 py-3 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90 transition-opacity text-sm disabled:opacity-50">
                 {t('common.next')}
               </button>
             ) : (
@@ -884,7 +924,7 @@ export function ServiceRecords() {
                                 className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.blue}`}>
                                 <Pencil className="w-3 h-3" /> {t('student.records.edit')}
                               </button>
-                              <button onClick={() => handleDeleteDraft(rec.id)}
+                              <button onClick={() => setDeleteTargetId(rec.id)}
                                 className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.red}`}>
                                 <Trash2 className="w-3 h-3" /> {t('common.delete')}
                               </button>
@@ -995,7 +1035,7 @@ export function ServiceRecords() {
                               className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.blue}`}>
                               <Pencil className="w-3 h-3" /> {t('student.records.edit')}
                             </button>
-                            <button onClick={() => handleDeleteDraft(rec.id)}
+                            <button onClick={() => setDeleteTargetId(rec.id)}
                               className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.red}`}>
                               <Trash2 className="w-3 h-3" /> {t('common.delete')}
                             </button>
@@ -1036,6 +1076,15 @@ export function ServiceRecords() {
           record={caseFiling.record}
           onClose={() => setCaseFiling(null)}
           onFiled={() => { setCaseFiling(null); setCasesRefreshKey(k => k + 1); }}
+        />
+      )}
+
+      {deleteTargetId && (
+        <ConfirmDeleteDialog
+          title={t('student.records.deleteRecord')}
+          message={t('student.records.confirmDeleteRecord')}
+          onCancel={() => setDeleteTargetId(null)}
+          onConfirm={() => { const id = deleteTargetId; setDeleteTargetId(null); handleDeleteDraft(id); }}
         />
       )}
     </div>

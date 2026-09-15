@@ -11,4 +11,9 @@ public interface ServiceRecordRevisionRepository extends Repository<ServiceRecor
     ServiceRecordRevision save(ServiceRecordRevision revision);
 
     List<ServiceRecordRevision> findByServiceRecordIdOrderByRevisionNumberAsc(String serviceRecordId);
+
+    // Not a mutation of an existing revision (still append-only) — only ever called
+    // by ServiceRecordServiceImpl.deleteDraft, which purges the owning record itself,
+    // so its revision history has nothing left to be history of (issue 059).
+    void deleteByServiceRecordId(String serviceRecordId);
 }

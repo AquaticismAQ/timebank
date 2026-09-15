@@ -221,6 +221,10 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
             // Invariant 4: only a draft may ever be physically deleted.
             throw ApiException.stateConflict("Only a draft record can be deleted.");
         }
+        // A draft edited at least once has service_record_revision rows FK'd to it
+        // (writeRevision, called from updateDraft) — delete those first or the
+        // record delete below fails with a FK constraint violation (issue 059).
+        revisionRepository.deleteByServiceRecordId(id);
         repository.delete(record);
         auditService.record(new AuditEntry(principalId(auth), "serviceRecords.create", "serviceRecord.delete",
                 "serviceRecord", id, null, null, null));

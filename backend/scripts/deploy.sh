@@ -4,9 +4,18 @@
 # root or with sudo rights over the timebank-backend service.
 #
 # Usage (from a workstation):
-#   rsync -az --delete --exclude 'target/' --exclude '.git/' \
+#   rsync -az --delete --exclude 'target/' --exclude '.git/' --exclude 'data/' \
 #     backend/ root@<test-server>:/opt/timebank-backend/
 #   ssh root@<test-server> '/opt/timebank-backend/scripts/deploy.sh'
+#
+# The --exclude 'data/' is load-bearing, not optional: `data/evidence-storage/`
+# (LocalFileStorage's runtime-created upload directory, `timebank.file.storage-path`)
+# lives only on the server and is never part of this source tree. Without that
+# exclude, `--delete` treats it as "extraneous" and wipes every previously
+# uploaded evidence file on every single deploy — silently, since the DB rows
+# referencing them are untouched and still say READY (issue 060: this had
+# already destroyed every evidence file uploaded since 2026-08-07 before
+# being caught).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

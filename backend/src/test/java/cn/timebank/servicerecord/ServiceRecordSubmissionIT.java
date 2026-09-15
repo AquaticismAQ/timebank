@@ -204,6 +204,23 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
                 .hasMessageContaining("version");
     }
 
+    /** issue 059 — an edited draft has service_record_revision rows FK'd to it; deleting it used to 500 with a raw FK constraint violation. */
+    @Test
+    void deletingADraftThatWasPreviouslyEditedSucceeds() {
+        StudentDetailDto student = createStudent();
+        ServiceRecordDto draft = createDraft(student, List.of("file_1"), false);
+
+        UpdateServiceRecordRequest edit = new UpdateServiceRecordRequest(
+                null, null, null, null, null, null, null, null, "Edited before delete", null, null, null, null, null,
+                null, null, draft.version());
+        serviceRecordService.updateDraft(draft.id(), edit, studentAuth(student.id()), "zh-CN");
+
+        serviceRecordService.deleteDraft(draft.id(), studentAuth(student.id()));
+
+        assertThatThrownBy(() -> serviceRecordService.getDetail(draft.id(), studentAuth(student.id()), "zh-CN"))
+                .isInstanceOf(ApiException.class);
+    }
+
     @Test
     void listFiltersByStatusAndSearchesByOrganizationName() {
         StudentDetailDto student = createStudent();

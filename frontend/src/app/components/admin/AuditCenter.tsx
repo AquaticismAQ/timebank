@@ -10,7 +10,7 @@ import { useUrlSyncedPagedApi } from '../../api/useApi';
 import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
-import { EvidenceLink } from '../EvidenceLink';
+import { EvidencePreview } from '../shared/EvidencePreview';
 import { DetailWorkbench, type DetailWorkbenchTab } from '../shared/DetailWorkbench';
 import { type ServiceRecord, type TimelineEntry } from '../../api/types';
 import { formatGradeClass, minutesToHours } from '../../lib/format';
@@ -435,13 +435,7 @@ export function AuditCenter() {
             ) : detailRecord.evidenceFiles.length === 0 ? (
               <div className="text-sm text-muted-foreground">{t('admin.audit.noEvidence')}</div>
             ) : (
-              <div className="flex gap-2 flex-wrap">
-                {detailRecord.evidenceFiles.map(f => (
-                  <span key={f.id} className="px-2 py-1 bg-muted rounded">
-                    <EvidenceLink fileId={f.id} name={f.name} />
-                  </span>
-                ))}
-              </div>
+              <EvidencePreview files={detailRecord.evidenceFiles} />
             ),
           },
         ];

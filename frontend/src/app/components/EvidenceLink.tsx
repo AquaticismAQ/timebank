@@ -20,16 +20,26 @@ export function EvidenceLink({ fileId, name }: { fileId: string; name: string })
 
   const handleClick = async () => {
     setLoading(true);
+    // Opening the tab only after the `await` below (i.e. calling
+    // `window.open` for the first time here) is exactly what most browsers'
+    // popup blockers treat as "not a direct result of a user gesture" and
+    // silently swallow — no console error, the tab just never appears. Open
+    // a blank tab synchronously, in the click handler itself, and navigate
+    // it once the real URL is known.
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
     try {
       const meta = await api.files.get(fileId);
       if (meta.status === 'ready' && meta.downloadUrl) {
-        window.open(meta.downloadUrl, '_blank', 'noopener,noreferrer');
-      } else if (meta.status === 'rejected') {
-        toast.error(t('common.evidenceRejectedReason', { reason: meta.rejectionReason || '' }));
+        if (tab) tab.location.href = meta.downloadUrl;
+        else window.open(meta.downloadUrl, '_blank', 'noopener,noreferrer');
       } else {
-        toast.info(t('common.evidenceProcessing'));
+        tab?.close();
+        if (meta.status === 'rejected') toast.error(t('common.evidenceRejectedReason', { reason: meta.rejectionReason || '' }));
+        else toast.info(t('common.evidenceProcessing'));
       }
     } catch (err) {
+      tab?.close();
       if (err instanceof ApiError) toast.error(mapApiError(err).message);
       else toast.error(t('common.unknownError'));
     } finally {
