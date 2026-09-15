@@ -8,6 +8,8 @@ import { api } from '../../api/client';
 import { type SchoolInfo } from '../../api/types';
 import { LanguageSwitcher } from '../LanguageSwitcher';
 
+const PROJECT_REPO_URL = 'https://github.com/AquaticismAQ/timebank';
+
 export function LoginPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -87,7 +89,10 @@ export function LoginPage() {
             <Clock className="w-8 h-8 text-primary-foreground" />
           </div>
           <h1 className="text-foreground mb-1">{t('auth.login.title')}</h1>
-          <p className="text-muted-foreground text-sm">{schoolInfo?.name ?? ''} {t('auth.login.subtitle')}</p>
+          {/* School name leads at a larger size; the platform description sits on
+              its own line rather than running on after it. */}
+          <p className="text-foreground text-lg font-medium">{schoolInfo?.name ?? ''}</p>
+          <p className="text-muted-foreground text-sm">{t('auth.login.subtitle')}</p>
         </div>
 
         {/* Login card */}
@@ -161,9 +166,15 @@ export function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          {t('auth.login.title')} · {schoolInfo?.name ?? ''} · {schoolInfo?.studentDevCenter ?? ''}
-        </p>
+        <div className="text-center text-xs text-muted-foreground mt-6 space-y-1">
+          <p>{t('auth.login.versionLine', { name: t('auth.login.title'), version: __APP_VERSION__ })}</p>
+          <p>
+            <a href={PROJECT_REPO_URL} target="_blank" rel="noreferrer"
+              className="hover:text-foreground transition-colors underline-offset-2 hover:underline">
+              {PROJECT_REPO_URL}
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );

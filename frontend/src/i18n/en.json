@@ -130,7 +130,8 @@
       "loginButton": "Log In",
       "forgotPassword": "Forgot password? Contact admin",
       "loginSuccess": "Login successful",
-      "loginError": "Invalid account or password, please try again"
+      "loginError": "Invalid account or password, please try again",
+      "versionLine": "{{name}}, Version {{version}}"
     },
     "workspace": {
       "welcomeBack": "Welcome back, ",

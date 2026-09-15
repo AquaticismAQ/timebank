@@ -1,7 +1,15 @@
 import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
+import { createRequire } from 'module'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+
+// The login page shows the app version, but it renders *before* authentication
+// and `GET /system/version` is `@PreAuthorize("isAuthenticated()")`, so it can't
+// be fetched there. Baked in at build time instead — package.json and the
+// backend pom are kept on the same version, so this matches what the sidebar
+// shows post-login without opening up an endpoint pre-auth.
+const appVersion = createRequire(import.meta.url)('./package.json').version
 
 export default defineConfig(({ mode, command }) => {
   // I0.12: point the local dev server at the remote test server as if it
@@ -29,6 +37,9 @@ export default defineConfig(({ mode, command }) => {
   }
 
   return {
+    define: {
+      __APP_VERSION__: JSON.stringify(appVersion),
+    },
     plugins: [
       // The React and Tailwind plugins are both required for Make, even if
       // Tailwind is not being actively used – do not remove them

@@ -130,7 +130,8 @@
       "loginButton": "登录",
       "forgotPassword": "忘记密码？联系管理员",
       "loginSuccess": "登录成功",
-      "loginError": "账号或密码错误，请重试"
+      "loginError": "账号或密码错误，请重试",
+      "versionLine": "{{name}}，版本 {{version}}"
     },
     "workspace": {
       "welcomeBack": "欢迎回来，",
