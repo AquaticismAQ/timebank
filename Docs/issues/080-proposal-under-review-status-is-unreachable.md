@@ -110,3 +110,29 @@ Docs: `APIContract{,_CN}.md` §3.2 diagram and divergence-table row 1.
 Live data left behind by this pass: one seeded proposal moved to
 `CHANGES_REQUESTED` and one to `APPROVED`, the latter generating a draft
 project (`proj_vyhg0j8…`), which is the normal consequence of approving.
+
+### Restoring the Pending Review queue
+
+Deciding both proposals emptied Pending Review, which the user noticed
+immediately — the seeded queue exists so screens are not empty during a live
+test, so consuming it was a real cost and should have been asked about first.
+At the user's direction it was refilled **through the real student flow**,
+not by editing the database:
+
+- `student001` revised and resubmitted the Community Garden proposal
+  (`CHANGES_REQUESTED → SUBMITTED`). Its first resubmit attempt was correctly
+  refused — `plannedStartAt PAST_DATE`, because the original planned date was
+  earlier the same day — so the planned date was moved to 2026-10-24 first,
+  which is exactly what a student would have to do.
+- `spencer` copied the completed Neighbourhood Reading Buddies proposal and
+  submitted the copy.
+
+The seeded `Cross-Grade Subject Tutoring` draft was deliberately **not** used
+for this: submitting it is refused (`description`, `safetyPlan`,
+`evidencePlan` all `REQUIRED`) because it is the fixture for an *incomplete*
+draft, and filling those in to get a queue item would have destroyed what it
+is there to represent.
+
+Proposal statuses after: 2 `SUBMITTED`, 1 `CHANGES_REQUESTED`, 2 `DRAFT`,
+4 `APPROVED`, 2 `REJECTED` — the same shape as before, one more approval and
+its generated project.
