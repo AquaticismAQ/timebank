@@ -79,3 +79,58 @@ code says the author meant to leave.
 `frontend/src/app/components/student/ServiceRecords.tsx` — `handleSaveDraft`
 now closes the wizard (`setView('list')`, `setStep(0)`) after saving,
 matching `handleSubmitRecord`.
+
+---
+
+## Follow-up: placement and availability of the button (2026-09-15)
+
+Merged here rather than filed separately — this doc is where "Save Draft"
+behaviour lives.
+
+Reported directly by the user: the source step shouldn't offer Save Draft
+at all ("it doesn't work in fact"), and on the other steps the button
+should sit **between** Previous and Next, and between Previous and the
+submit button on the final step.
+
+**The "doesn't work" half is real, and has a specific cause.** Confirmed
+live before changing anything — pressing Save Draft on the source step:
+
+```
+POST /api/v1/service-records
+422 VALIDATION_FAILED
+  serviceDate: NOTNULL, startAt: NOTNULL, endAt: NOTNULL
+```
+
+`createDraft` requires the service date and window even for a *draft*, and
+those fields live on the Service Info step. So on the source step there is
+nothing savable yet, and the button could only ever fail — the student got
+a bare "The request contains invalid fields." toast for pressing a button
+the UI offered them.
+
+**Changes:**
+
+- Save Draft is **not rendered on the source step** (`step > 0`). That step
+  now shows Next alone, full width.
+- It moved out of the full-width row underneath and **into** the navigation
+  row, so the order is `[Previous] [Save Draft] [Next]`, and
+  `[Previous] [Save Draft] [Confirm Submit]` on the final step. Styled as a
+  secondary action — bordered like Previous but muted — so the primary
+  action stays visually distinct.
+- It is **disabled until the record is actually savable** (service date,
+  start and end time all present), with a tooltip saying why. The same 422
+  was reachable on the Service Info step before those fields were filled;
+  disabling closes that off rather than leaving one route to the error open.
+
+**Verified live** across all four steps:
+
+| step | buttons |
+| --- | --- |
+| 1 Source | `Next` |
+| 2 Service Info (empty) | `Previous`, `Save Draft [disabled]`, `Next [disabled]` |
+| 2 Service Info (filled) | `Previous`, `Save Draft`, `Next` |
+| 3 Evidence | `Previous`, `Save Draft`, `Next` |
+| 4 Confirm & Submit | `Previous`, `Save Draft`, `Confirm Submit` |
+
+Saving from the final step returned `200`, toasted "Draft saved" and
+returned to the list — i.e. the fix at the top of this doc still holds.
+

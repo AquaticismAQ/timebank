@@ -410,7 +410,8 @@
         "review_return_for_changes": "Returned for changes",
         "review_reject": "Rejected by reviewer",
         "review_escalate": "Escalated for further review"
-      }
+      },
+      "saveDraftNeedsWindow": "Fill in the service date and times before saving a draft."
     },
     "account": {
       "title": "Time Coin Account",

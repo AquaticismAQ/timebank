@@ -152,6 +152,12 @@ export function ServiceRecords() {
   // rendering), so `checkValidity()` here naturally scopes to just them,
   // the same way `reportValidity()` on click already does below.
   const [nextEnabled, setNextEnabled] = useState(false);
+  // `createDraft`/`updateDraft` require serviceDate/startAt/endAt even for a
+  // draft, and those live on the Service Info step — so "Save Draft" is only
+  // a real action once they exist. Before that it 422s
+  // (`serviceDate/startAt/endAt: NOTNULL`), which is why it was hidden on the
+  // source step entirely and is disabled until the window is filled in.
+  const canSaveDraft = !!formData.serviceDate && !!formData.startTime && !!formData.endTime;
   useLayoutEffect(() => {
     setNextEnabled(formRef.current?.checkValidity() ?? false);
   }, [step, formData]);
@@ -875,6 +881,16 @@ export function ServiceRecords() {
                 {t('common.previous')}
               </button>
             )}
+            {/* Sits between Previous and Next/Confirm Submit. Absent on the source
+                step: nothing savable exists yet there, and pressing it only ever
+                produced a validation error. */}
+            {step > 0 && (
+              <button type="button" onClick={handleSaveDraft} disabled={saving || !canSaveDraft}
+                title={canSaveDraft ? undefined : t('student.records.saveDraftNeedsWindow')}
+                className="flex-1 py-3 rounded-xl border border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-colors text-sm disabled:opacity-50 disabled:hover:bg-transparent">
+                {t('student.records.saveDraft')}
+              </button>
+            )}
             {step < STEP_KEYS.length - 1 ? (
               // Each step's required fields are only mounted for that step, so a
               // browser-native submit at the final step never sees earlier steps'
@@ -900,11 +916,6 @@ export function ServiceRecords() {
               </button>
             )}
           </div>
-
-          <button type="button" onClick={handleSaveDraft} disabled={saving}
-            className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
-            {t('student.records.saveDraft')}
-          </button>
         </form>
         {overlapDialog}
       </div>

@@ -410,7 +410,8 @@
         "review_return_for_changes": "退回补充",
         "review_reject": "审核驳回",
         "review_escalate": "上报复审"
-      }
+      },
+      "saveDraftNeedsWindow": "请先填写服务日期和起止时间，然后才能保存草稿。"
     },
     "account": {
       "title": "时间币账户",
