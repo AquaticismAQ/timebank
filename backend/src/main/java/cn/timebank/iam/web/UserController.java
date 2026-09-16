@@ -6,7 +6,6 @@ import cn.timebank.common.pagination.PageableFactory;
 import cn.timebank.common.web.ApiResponse;
 import cn.timebank.common.web.PageMeta;
 import cn.timebank.iam.application.UserService;
-import cn.timebank.iam.application.dto.AuthDtos.AdminResetPasswordResponse;
 import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.iam.application.dto.UpdateUserRequest;
 import cn.timebank.iam.application.dto.UserDirectoryEntryDto;
@@ -166,13 +165,10 @@ public class UserController {
         return ApiResponse.of(null);
     }
 
-    @PostMapping("/{id}/reset-password")
-    @PreAuthorize("hasAuthority('users.manage')")
-    public ApiResponse<AdminResetPasswordResponse> resetPassword(@PathVariable String id, Authentication auth) {
-        AdminResetPasswordResponse result = userService.adminResetPassword(id, principalId(auth));
-        sessionRevocationService.revokeAllSessionsForUser(result.username());
-        return ApiResponse.of(result);
-    }
+    // `POST /users/{id}/reset-password` lives in CredentialSlipController now
+    // (10-StudentIdentityAndOnboarding.md §3.7): a reset issues an activation
+    // code and streams the same slip a class batch prints, so it belongs with
+    // the other credential-minting endpoint rather than with the CRUD ones.
 
     private String principalId(Authentication auth) {
         return ((CookieSessionUserDetails) auth.getPrincipal()).id();

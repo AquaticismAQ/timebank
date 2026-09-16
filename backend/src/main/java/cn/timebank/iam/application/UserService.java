@@ -1,6 +1,5 @@
 package cn.timebank.iam.application;
 
-import cn.timebank.iam.application.dto.AuthDtos;
 import cn.timebank.iam.application.dto.AuthenticatedUserView;
 import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.iam.application.dto.MeResponse;
@@ -52,7 +51,34 @@ public interface UserService {
 
     void unlock(String id, String actorId);
 
-    AuthDtos.AdminResetPasswordResponse adminResetPassword(String id, String actorId);
+    /**
+     * 10-StudentIdentityAndOnboarding.md §3.7: the account half of an admin
+     * password reset. <b>Clears the stored password and returns the account to
+     * {@code PENDING_ACTIVATION}</b> — it does not set a new password, because
+     * §2.4 removes server-side password generation entirely.
+     *
+     * <p>Both reasons a reset is ever asked for want the old password gone
+     * rather than replaced: it was forgotten, so it is worthless, or the
+     * account is compromised, so it must stop working this second. The account
+     * is inert afterwards exactly as a freshly imported one is ({@link
+     * #createPendingStudentAccount}) — {@code hasUsableCredential()} is false,
+     * so it cannot be logged into until the caller's freshly issued activation
+     * code is redeemed, and §3.6's sweep will move it to {@code
+     * ACTIVATION_EXPIRED} if the slip is never used.
+     *
+     * <p>Callers are expected to issue an activation code in the same
+     * transaction (see {@code CredentialSlipService.issueForReset}); this
+     * method on its own leaves an account nobody can get into.</p>
+     *
+     * @throws cn.timebank.common.error.ApiException 409 for a self-reset, and
+     *         409 for an {@code INACTIVE} account — see the implementation for
+     *         why neither is merely an awkward case
+     * @return enough to print the slip and revoke the account's live sessions
+     */
+    ResetAccount resetToPendingActivation(String id, String actorId);
+
+    record ResetAccount(String userId, String username, String displayName) {
+    }
 
     void changeOwnPassword(String userId, String currentPassword, String newPassword);
 

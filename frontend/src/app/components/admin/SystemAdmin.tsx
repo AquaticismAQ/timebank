@@ -79,6 +79,20 @@ function minutesToHourInputValue(minutes: number): number {
   return Math.round((minutes / 60) * 100) / 100;
 }
 
+/**
+ * Hands a fetched file to the browser as a download. Shared by the import
+ * template and the activation slip a password reset returns — the slip's bytes
+ * are a live credential, so they are revoked from the object URL immediately
+ * rather than left addressable for the life of the page.
+ */
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
 function ruleStatusBadgeClass(status: RuleVersion['status']): string {
   if (status === 'published') return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300';
   if (status === 'draft') return 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300';
@@ -667,13 +681,16 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
             </div>
           )}
 
-          {/* Reset password (edit). The admin reset endpoint takes no body — the
-              server always generates a temporary password and returns it once
-              (APIContract §7, `POST /users/{id}/reset-password`). This used to
-              offer "new password"/"confirm" boxes whose value was validated and
-              then silently thrown away, so the admin walked off believing they'd
-              set the password they typed (issue 064). It's now an explicit
-              arm-the-reset toggle that says what will actually happen. */}
+          {/* Reset password (edit). The admin reset endpoint takes no body and
+              returns no password: it clears this account's password, issues a
+              single-use activation code and streams back a printable slip
+              (APIContract §4.15, `POST /users/{id}/reset-password`; plan 10
+              §3.7). It offered "new password"/"confirm" boxes once, whose value
+              was validated and then silently thrown away (issue 064), and then
+              showed a server-generated temporary password (issue 088) — both
+              are gone. The toggle arms the reset and the hint says what
+              actually happens, including that the user cannot sign in until
+              they redeem the slip. */}
           {mode === 'edit' && (
             <div className="border border-border rounded-xl overflow-hidden">
               <button type="button" onClick={() => set({ showResetPwd: !form.showResetPwd, password: '', confirmPassword: '' })}
@@ -910,8 +927,11 @@ export function SystemAdmin() {
         staffId: needsStaffId ? form.staffId.trim() : undefined,
       });
       if (form.showResetPwd) {
-        const result = await api.users.resetPassword(editTarget.id);
-        toast.success(t('admin.system.passwordReset') + (result.temporaryPassword ? `: ${result.temporaryPassword}` : ''));
+        // The reset returns the printable activation slip, not a password —
+        // there is no longer one to put in a toast (plan 10 §3.7, issue 088).
+        const { blob, filename } = await api.users.resetPassword(editTarget.id);
+        downloadBlob(blob, filename);
+        toast.success(t('admin.system.passwordReset'));
       }
       setUsers(prev => prev.map(u => u.id === editTarget.id
         ? { ...u, name: form.name.trim(), email: form.email.trim(), roleCode: form.roleCode, status: form.status, version: u.version + 1,
@@ -948,12 +968,7 @@ export function SystemAdmin() {
 
   const handleTemplateDownload = async (type: string) => {
     try {
-      const blob = await api.imports.template(type);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `${type}-template.csv`;
-      document.body.appendChild(a); a.click();
-      document.body.removeChild(a); URL.revokeObjectURL(url);
+      downloadBlob(await api.imports.template(type), `${type}-template.csv`);
       toast.success(t(type === 'students' ? 'admin.system.studentTemplateDownloaded' : 'admin.system.templateDownloaded'));
     } catch (err) {
       if (err instanceof ApiError) toast.error(mapApiError(err).message);

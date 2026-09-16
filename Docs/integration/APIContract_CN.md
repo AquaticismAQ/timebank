@@ -752,7 +752,7 @@ queued → running → succeeded
 | `POST` | `/users` | `users.manage` | 创建用户 |
 | `PATCH` | `/users/{id}` | `users.manage` | 更新用户 |
 | `POST` | `/users/{id}/unlock` | `users.manage` | 解锁 |
-| `POST` | `/users/{id}/reset-password` | `users.manage` | 管理员触发重置 |
+| `POST` | `/users/{id}/reset-password` | `users.manage` + `admin`/`sysadmin` 角色 | 管理员触发重置——清除该账号的密码，并以 PDF 返回一张可打印的激活凭条（见 `Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.7）；**不返回任何密码，因为根本不会生成密码** |
 | `POST` | `/users/activation-slips` | `users.manage` + `admin`/`sysadmin` 角色 | 生成整个班级的可打印激活凭条，合为一份 PDF（见 `Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.4） |
 | `GET` | `/roles` | `roles.read` | 角色列表 |
 | `POST` | `/roles` | `roles.manage` | 创建角色 |
@@ -845,6 +845,36 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
   签发了多少张，以及有多少学生被跳过。
 - 服务端需设置 `TIMEBANK_SITE_ROOT_URL`（`timebank.auth.activation.site-root-url`）；
   未设置时启动即失败，因为取值错误会把学校并不拥有的域名印到发给学生的纸上。
+
+**`POST /users/{id}/reset-password`——管理员重置签发的是激活凭条，而不是密码**
+（2026-09-17 变更，见 `Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.7）。
+该端点过去会在服务端生成一个临时密码，并以 `{ username, temporaryPassword }`
+返回明文。现在不再如此，也不再有任何 JSON 响应。
+
+- **无请求体，响应体就是 PDF**，与上面的 `POST /users/activation-slips` 完全一致：
+  相同的 `Content-Disposition`、相同的 `Cache-Control: no-store`，以及相同的
+  "失败仍返回常规错误信封，客户端通过 content type 区分"规则。它是同一格式、
+  同一语言解析规则下的单张凭条文档；文件名不指向任何个人
+  （`activation-slip-<yyyymmdd>.pdf`）。
+- **账号会发生什么**：已存储的密码被**清除**，账号回到 `PENDING_ACTIVATION`，
+  同时签发一个新的一次性激活码——三者在同一个事务内完成，因此渲染失败会整体回滚，
+  而不会让账号落入"既没有密码、又没有印出凭条"的状态。在该用户兑换激活码并自行
+  设置密码之前，其完全无法登录；若凭条一直未被使用，过期扫描会把账号置为
+  `ACTIVATION_EXPIRED`，再次重置即可重新签发。
+- **该账号的所有在线会话一律作废**，与此前一致。清除密码本身并不会结束会话——
+  会话中携带的是已经通过认证的主体。
+- **仅限管理员**（§2.10，D-9/D-10）：从原先的仅需 `users.manage` 收窄，与凭条批量
+  签发保持一致——这个调用会铸造凭据。
+- **以下情况返回 `409`**：管理员重置自己的账号（应改用
+  `POST /me/change-password`，它同样会作废所有会话；或请另一位管理员代为重置），
+  以及账号处于 `INACTIVE`（应先恢复启用；否则重置会静默撤销停用决定）。未知用户 id
+  返回 `404`。`LOCKED` 账号可以正常重置，并在重置后解除锁定——锁定本就是申请重置
+  最常见的原因。
+- 该账号此前持有的任何激活码都会被本次重置作废，因此之后有且仅有一个可用激活码
+  （§2.7）。
+- **激活码明文只出现在 PDF 里，别无他处**——不在响应头里、不进审计记录
+  （`user` 上的 `user.adminResetCredential`，其后是 `user.issueActivationCode`）、
+  不进日志。
 
 ### 4.16 学校信息
 

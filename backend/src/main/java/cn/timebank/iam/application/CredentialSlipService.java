@@ -25,6 +25,39 @@ public interface CredentialSlipService {
                                 String resolvedLanguage);
 
     /**
+     * An admin password reset (10-StudentIdentityAndOnboarding.md §3.7): one
+     * account, one fresh single-use activation code, and the same slip in the
+     * same format — one flow and one document, not a second credential
+     * mechanism beside the first.
+     *
+     * <p>Clears the account's password and returns it to {@code
+     * PENDING_ACTIVATION} ({@code UserService.resetToPendingActivation}) in the
+     * same transaction that mints the code and renders the document, so a
+     * failed render leaves the account exactly as it was rather than stranding
+     * somebody with no password and no printed slip.</p>
+     *
+     * <p>Unlike a class batch, no status filter applies beyond that method's
+     * own refusals: §2.7 spares already-activated <em>students in a batch</em>,
+     * whereas an already-activated account is precisely who a reset is for.</p>
+     *
+     * @throws cn.timebank.common.error.ApiException 403 for a non-admin, 404 for
+     *         an unknown user, 409 for a self-reset or a deactivated account
+     */
+    ResetSlip issueForReset(String userId, SlipActor actor, String resolvedLanguage);
+
+    /**
+     * The one-slip document, plus the username its live sessions are keyed by.
+     *
+     * <p>The username travels back for the same module-boundary reason
+     * {@code UserServiceImpl}'s Javadoc gives: {@code iam} cannot call {@code
+     * security}, so the web layer revokes, and it needs the username to do it
+     * without a second lookup. A reset that leaves live sessions authenticated
+     * is not a reset.</p>
+     */
+    record ResetSlip(SlipDocument document, String username) {
+    }
+
+    /**
      * Who asked, resolved by the caller from the real {@code Authentication}
      * and passed in — the same shape {@code SchoolInfoService.update} uses for
      * its {@code sysadmin} check, and for the same reason: it keeps the

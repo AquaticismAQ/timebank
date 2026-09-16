@@ -98,6 +98,18 @@ class AuthServiceImpl implements AuthService {
             // Deliberately silent — do not let this endpoint reveal which usernames exist.
             return;
         }
+        if (viewOpt.get().passwordHash() == null) {
+            // An account with no stored password has nothing to reset, and its
+            // way back in is the activation slip, not a token
+            // (10-StudentIdentityAndOnboarding.md §2.4/§3.7). Without this, a
+            // token minted here could set a password on an account §3.7 had
+            // just cleared — leaving it PENDING_ACTIVATION *with* a hash: still
+            // unable to log in (the auth view needs both), invisible to §3.6's
+            // sweep, which treats a stored hash as proof of activation, and
+            // bypassing the slip that was the whole point. Silent for the same
+            // reason the branch above is.
+            return;
+        }
         String rawToken = generateRawToken();
         String tokenHash = sha256Hex(rawToken);
         Instant now = Instant.now();

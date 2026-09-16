@@ -760,7 +760,7 @@ Imports must validate before commit. Duplicate imports are prevented by source f
 | `POST` | `/users` | `users.manage` | Create user |
 | `PATCH` | `/users/{id}` | `users.manage` | Update user |
 | `POST` | `/users/{id}/unlock` | `users.manage` | Unlock |
-| `POST` | `/users/{id}/reset-password` | `users.manage` | Admin-triggered reset |
+| `POST` | `/users/{id}/reset-password` | `users.manage` + `admin`/`sysadmin` role | Admin-triggered reset — clears the account's password and returns a printable activation slip as a PDF (`Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.7); **no password is returned, because none is generated** |
 | `POST` | `/users/activation-slips` | `users.manage` + `admin`/`sysadmin` role | Generate a class's printable activation slips as one PDF (`Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.4) |
 | `GET` | `/roles` | `roles.read` | Role list |
 | `POST` | `/roles` | `roles.manage` | Create role |
@@ -877,6 +877,43 @@ printable slips as **one PDF**.
 - The server needs `TIMEBANK_SITE_ROOT_URL` set (`timebank.auth.activation.site-root-url`);
   it fails fast at startup without it, since a wrong value would print a domain
   the school does not own onto paper handed to students.
+
+**`POST /users/{id}/reset-password` — an admin reset issues an activation slip,
+not a password** (changed 2026-09-17,
+`Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.7). It used to
+generate a temporary password server-side and return the plaintext in
+`{ username, temporaryPassword }`. It no longer does, and there is no longer a
+JSON response at all.
+
+- **No request body. The response is the PDF**, exactly as
+  `POST /users/activation-slips` above — same `Content-Disposition`, same
+  `Cache-Control: no-store`, same "errors still arrive as a normal envelope, so
+  tell them apart by content type" rule. It is a one-slip document in the same
+  format and the same language resolution; the filename identifies nobody
+  (`activation-slip-<yyyymmdd>.pdf`).
+- **What happens to the account**: its stored password is **cleared** and it
+  returns to `PENDING_ACTIVATION`, and a fresh single-use activation code is
+  issued, all in one transaction — so a failed render leaves the account
+  untouched rather than stranding it with no password and no printed slip. The
+  user cannot sign in at all until they redeem the code and choose a password;
+  the expiry sweep will move the account to `ACTIVATION_EXPIRED` if the slip is
+  never used, and another reset re-issues.
+- **Every live session of that account is revoked**, as before. Clearing the
+  password does not end a session on its own — a session carries its own
+  already-authenticated principal.
+- **Admin only** (§2.10, D-9/D-10), narrowed from `users.manage` alone to match
+  the slip batch: this call mints a credential.
+- **Refused with `409`** for a self-reset (an admin resetting their own account
+  — use `POST /me/change-password`, which also revokes sessions, or ask another
+  admin) and for an `INACTIVE` account (reactivate it first; a reset would
+  silently undo the deactivation). `404` for an unknown user id. A `LOCKED`
+  account is reset normally and comes back unlocked — a lockout is the most
+  common reason a reset is asked for.
+- Any activation code the account was already holding is retired by the reset,
+  so exactly one code is usable afterwards (§2.7).
+- **The plaintext code appears in the PDF and nowhere else** — not in the
+  response headers, not in the audit rows (`user.adminResetCredential` on
+  `user`, then `user.issueActivationCode`), not in a log line.
 
 ### 4.16 School Info
 

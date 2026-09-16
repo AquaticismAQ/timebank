@@ -319,7 +319,7 @@ first-time entry described in §2.9 — wording identical to the slip's, in both
 | §3.4 Credential document | Done — `POST /users/activation-slips`, `CredentialSlipService`/`CredentialSlipDocument`/`SlipFont`/`SlipCopy`/`QrCodeImage`, contract §4.15 in both languages, slip text bilingual and in an embedded font (issue 087). **No admin UI yet** (see below) |
 | §3.5 Activation endpoint | Done — `POST /auth/activate`, `ActivationService`/`ActivationCodeFormat`/`ActivationThrottle`, contract §2.2 in both languages |
 | §3.6 Expiry sweep | Done — `ActivationExpirySweep` (hourly, ShedLock-guarded) → `ActivationExpiryTransaction`, `ActivationExpiryRepository` |
-| §3.7 Password reset | Not started |
+| §3.7 Password reset | Done — `POST /users/{id}/reset-password` now clears the password and streams a one-slip document (`CredentialSlipService.issueForReset` → `UserService.resetToPendingActivation` + `ActivationService.issue`), contract §4.15 in both languages. Closes the §2.4 contradiction (issue 088). The older `password_reset_token` mechanism is **still present and recommended for removal** — see below |
 | §3.8 Login copy and first-time entry | Done — `ActivationPage`, `/activate`, login copy in both languages |
 
 Everything above is covered by **unit tests only** (`mvn test`). No integration
@@ -400,3 +400,56 @@ in-memory and therefore per-instance, the same trade-off
   holding no data yet — but it is a weaker primitive than the one protecting
   passwords, and `Design/*/08-mlps-level1-security-design-guide.md` §8.2 should
   not be read as claiming otherwise.
+
+**§3.7 closes the last slice, and with it a live contradiction.** §2.4's "no
+password is ever generated server-side, so no password plaintext exists at any
+point" was not merely aspirational — it had been written into
+`Design/*/08-mlps-level1-security-design-guide.md` §8.2 as a compliance claim
+shown to schools, while `UserServiceImpl.adminResetPassword` generated a
+16-character password, hashed it, and returned the plaintext in the response
+body of `POST /users/{id}/reset-password`, which the Admin Portal then printed
+in a toast. Filed and fixed as `Docs/issues/088-*.md`. What the slice settled:
+
+| Item | Resolution |
+| :--- | :--- |
+| What the reset does to the account | **Clears** `password_hash` and returns the account to `PENDING_ACTIVATION`, rather than setting a new password. Both reasons a reset is ever requested want the old password *gone*: forgotten (worthless) or compromised (must stop working now). The consequences are coherent rather than merely tolerable — `hasUsableCredential()` already makes a password-less account unusable, §3.6's sweep moves it to `ACTIVATION_EXPIRED` if the slip is never used, and another reset re-issues. `LOCKED` is reset normally and comes back unlocked, since a lockout is the commonest reason to ask |
+| Self-reset | **Refused, `409`.** Only an authenticated admin can reach the endpoint, so a self-reset cannot be the forgotten-password case — they just used the password. That leaves "I may be compromised", which `POST /me/change-password` answers better: it revokes every session too and leaves them holding a working login. Allowing it would let the last remaining admin clear their own password and stake their way back in on a PDF download completing, with nobody else able to issue them a slip |
+| A deactivated account | **Refused, `409`.** A reset would move it to `PENDING_ACTIVATION` and hand out a redeemable code, quietly undoing a deliberate deactivation. `ActivationServiceImpl.redeem` refuses `INACTIVE` and §3.4's `ISSUABLE_STATUSES` excludes it, for the same reason |
+| Authorization | Narrowed from `users.manage` alone to `users.manage` **plus** the `admin`/`sysadmin` role check §3.4 uses. D-10 already said "issue, reissue and reset are all admin"; the endpoint predates that decision and had not been brought in line |
+| Where it lives | `CredentialSlipController`, beside the class batch, not `UserController`. It *is* a slip issuance now: same admin rule, same language resolution, same PDF response, same reason for being a POST. The path is unchanged — `POST /users/{id}/reset-password` still describes what an admin is doing, and renaming it would churn the contract, the client and the permission model for no behavioural gain |
+| Audit | Two rows, each where the mutation happens: `user.adminResetCredential` (before/after carrying `status`/`hasPassword`/`mustChangePassword`, so "had a password, now does not" is stated rather than implied) and §3.5's `user.issueActivationCode`. No third batch-level row — §3.4's exists because a batch's subject is a *class*, which nothing else names |
+| Session revocation | Preserved, in the controller, after the transaction commits. Clearing a password does not end a session: a cookie session carries its own authenticated principal and never presents a password again |
+
+**Recommendation: remove the `password_reset_token` mechanism (code now,
+schema later).** §2.4's point is that there should be *one* credential flow, and
+after this slice there are still two. The older one is `POST
+/auth/forgot-password` → `POST /auth/reset-password`, backed by V3's
+`password_reset_token` table, `PasswordResetToken`,
+`PasswordResetTokenRepository`, `AuthService.forgotPassword`/`resetPassword` and
+`UserService.resetPasswordWithToken`. It is:
+
+- **Unreachable from the frontend.** Nothing calls either endpoint; the login
+  page's "forgot password" line is static copy reading *"Forgot password?
+  Contact admin"*, which now points at exactly the flow §3.7 rebuilt.
+- **Non-functional by design as deployed.** With no mail infrastructure,
+  `forgotPassword` *logs the token as a warning* for an operator to relay by
+  hand — a live credential written to the server log, which is precisely what
+  the rest of this plan is careful never to do.
+- **Actively hazardous next to §3.7.** A token minted for a just-reset account
+  would set a password on it while leaving it `PENDING_ACTIVATION`: unable to
+  log in either way, invisible to §3.6's sweep (which reads a stored hash as
+  proof of activation), and having bypassed the slip. This slice closed that
+  with a one-line guard — `forgotPassword` is silently a no-op for an account
+  with no stored password — but the guard is a patch on a mechanism that should
+  not be there.
+
+A removal would delete the two endpoints and their DTOs, the two `AuthService`
+methods, `UserService.resetPasswordWithToken`, the entity and the repository —
+roughly 120 lines, no caller left behind. **A migration dropping the table is
+warranted but is a separate decision**, and not urgent: the table holds
+short-lived rows, `PurgeQueryRepository` already deletes from it by user id with
+raw SQL that needs no entity, and an unused table costs nothing. Dropping it
+should wait until the code removal has been live for a release, so the rollback
+path is a redeploy rather than a restore. **Not done in this slice** — removing
+a public authentication endpoint from a deployed system wants an explicit yes,
+not a "while I was in here".
