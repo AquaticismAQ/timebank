@@ -145,7 +145,9 @@ class Session {
     const text = await res.text();
     const json = text ? JSON.parse(text) : undefined;
     if (!res.ok) {
-      throw new Error(`${method} ${path} -> ${res.status}: ${json?.error?.message ?? text}`);
+      const fieldErrors = json?.error?.fieldErrors;
+      const detail = fieldErrors ? ` ${JSON.stringify(fieldErrors)}` : '';
+      throw new Error(`${method} ${path} -> ${res.status}: ${json?.error?.message ?? text}${detail}`);
     }
     return json?.data;
   }
@@ -303,6 +305,7 @@ async function main() {
     const created = await owner.request('POST', '/api/v1/projects', {
       title: p.title, summary: p.summary, description: p.description, categoryId: p.categoryId,
       organizationId: p.organizationName ? orgIdByName.get(p.organizationName) : undefined,
+      deliveryScope: p.deliveryScope,
       startAt: daysFromNow(p.startOffsetDays, 8), endAt: daysFromNow(p.endOffsetDays, 17),
       location: p.location, capacity: p.capacity, recognizedMinutes: p.recognizedMinutes,
       eligibleGradeIds: p.eligibleGradeIds, evidenceRequirements: p.evidenceRequirements,
@@ -314,9 +317,6 @@ async function main() {
     if (p.targetStatus !== 'draft') {
       const published = await owner.request('POST', `/api/v1/projects/${created.id}/publish`, { version });
       version = published.version;
-    }
-    if (p.targetStatus === 'closed') {
-      await owner.request('POST', `/api/v1/projects/${created.id}/close`, { version });
     }
     console.log(`  project "${p.title}" -> ${p.targetStatus}`);
   }
@@ -409,7 +409,16 @@ async function main() {
   console.log('== Phase 6: API — cases ==');
   for (const c of cases as SeedCase[]) {
     const filer = session(c.filedByUsername ?? c.studentUsername);
-    const student = session(c.studentUsername);
+    // Staff filing on a student's behalf must send the *roster row* id
+    // (`student.id`, what CaseServiceImpl hands to studentRepository.findById),
+    // not the student's login user id — the two are different entities linked
+    // by `user.student_id`.
+    const filedForStudentId = c.filedByUsername
+      ? studentIdByNumber.get(users.find(u => u.username === c.studentUsername)?.linkedStudentNumber ?? '')
+      : undefined;
+    if (c.filedByUsername && !filedForStudentId) {
+      throw new Error(`Case "${c.title}" is filed by ${c.filedByUsername} for ${c.studentUsername}, but that user has no linkedStudentNumber in mock-data.ts.`);
+    }
     // `c.subjectId` is a SeedServiceRecord.key, not a real id, when subjectType is 'serviceRecord' —
     // real ids don't exist until Phase 4 creates that record (see SeedCase.subjectId's doc comment).
     const subjectId = c.subjectType === 'serviceRecord' && c.subjectId ? serviceRecordIdByKey.get(c.subjectId) : c.subjectId;
@@ -417,7 +426,7 @@ async function main() {
       throw new Error(`Case "${c.title}" references unknown service record key "${c.subjectId}" — check serviceRecords[].key in mock-data.ts.`);
     }
     const created = await filer.request('POST', '/api/v1/cases', {
-      studentId: c.filedByUsername ? student.userId : undefined,
+      studentId: filedForStudentId,
       type: c.type, subjectType: c.subjectType, subjectId,
       title: c.title, description: c.description,
       requestedAmountCentiCoins: c.requestedAmountCentiCoins, reasonCode: c.reasonCode,

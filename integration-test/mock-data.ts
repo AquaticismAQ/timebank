@@ -135,6 +135,7 @@ export interface SeedProject {
   categoryId: string;
   organizationName?: string;
   ownerUsername: string;
+  deliveryScope: 'ON_CAMPUS' | 'OFF_CAMPUS' | 'HYBRID';
   capacity: number;
   recognizedMinutes: number;
   eligibleGradeIds: string[];
@@ -166,7 +167,7 @@ export const projects: SeedProject[] = [
   {
     title: 'Campus Open Day Volunteers', summary: 'Assist the school in organizing the fall campus open day, serving as guides and exhibition assistants.',
     description: 'Volunteers help maintain order, guide visiting families through subject exhibition areas, and answer basic questions.',
-    categoryId: 'cat_campus', organizationName: 'Example Township Middle School', ownerUsername: 'admin001',
+    categoryId: 'cat_campus', organizationName: 'Example Township Middle School', ownerUsername: 'admin001', deliveryScope: 'ON_CAMPUS',
     capacity: 30, recognizedMinutes: 240, eligibleGradeIds: ['grade_9', 'grade_10', 'grade_11'],
     evidenceRequirements: 'On-site photos and signed confirmation form from supervising teacher', location: 'Example Township Middle School Exhibition Areas',
     startOffsetDays: 30, endOffsetDays: 30, registrationOpenOffsetDays: -10, registrationCloseOffsetDays: 20,
@@ -176,7 +177,7 @@ export const projects: SeedProject[] = [
   {
     title: 'Rural Teaching Support Team (Summer)', summary: 'Week-long teaching support program at a rural elementary school.',
     description: 'Participants provide tutoring in Chinese, Math, and English at a rural elementary school. Room and board arranged by the school.',
-    categoryId: 'cat_education', organizationName: 'Example County Charity Education Association', ownerUsername: 'admin001',
+    categoryId: 'cat_education', organizationName: 'Example County Charity Education Association', ownerUsername: 'admin001', deliveryScope: 'OFF_CAMPUS',
     capacity: 12, recognizedMinutes: 1800, eligibleGradeIds: ['grade_10', 'grade_11'],
     evidenceRequirements: 'Hours certificate from the teaching institution and personal work journal', location: 'Example County Example Town Two Central Elementary School',
     startOffsetDays: -2, endOffsetDays: 3, registrationOpenOffsetDays: -30, registrationCloseOffsetDays: -10,
@@ -186,7 +187,7 @@ export const projects: SeedProject[] = [
   {
     title: 'School Library Organization and Classification', summary: 'Assist the librarian with organizing books and maintaining the reading environment.',
     description: 'Volunteers classify books, shelve them, update labels, and collect reader feedback under the librarian.',
-    categoryId: 'cat_campus', organizationName: 'Example Township Middle School', ownerUsername: 'admin001',
+    categoryId: 'cat_campus', organizationName: 'Example Township Middle School', ownerUsername: 'admin001', deliveryScope: 'ON_CAMPUS',
     capacity: 8, recognizedMinutes: 120, eligibleGradeIds: ['grade_6', 'grade_7', 'grade_8', 'grade_9', 'grade_10', 'grade_11'],
     evidenceRequirements: 'Signed confirmation form from the librarian', location: 'Library (H504)',
     startOffsetDays: -60, endOffsetDays: -30, registrationOpenOffsetDays: -90, registrationCloseOffsetDays: -65,
@@ -200,7 +201,7 @@ export const projects: SeedProject[] = [
   {
     title: 'Example District C Community Environmental Cleanup', summary: 'Clean community parks and streets, raise environmental awareness.',
     description: 'In collaboration with the Example District C Environmental Protection Association, students clean streets and distribute educational materials.',
-    categoryId: 'cat_environment', organizationName: 'Example District C Environmental Protection Association', ownerUsername: 'teacher001',
+    categoryId: 'cat_environment', organizationName: 'Example District C Environmental Protection Association', ownerUsername: 'teacher001', deliveryScope: 'OFF_CAMPUS',
     capacity: 20, recognizedMinutes: 180, eligibleGradeIds: ['grade_6', 'grade_7', 'grade_8', 'grade_9', 'grade_10'],
     evidenceRequirements: 'Before-and-after photos and stamped certificate from the organizer', location: 'Example District C Zhongshan Park',
     startOffsetDays: 25, endOffsetDays: 25, registrationOpenOffsetDays: 5, registrationCloseOffsetDays: 20,
@@ -209,10 +210,13 @@ export const projects: SeedProject[] = [
   {
     title: 'Nursing Home Visit and Care Activity', summary: 'Visit the welfare home to spend time with elderly residents.',
     description: 'Volunteers chat with elderly residents, assist with crafts, and perform short shows. A brief training session is required beforehand.',
-    categoryId: 'cat_welfare', organizationName: 'Example City First Welfare Home', ownerUsername: 'admin001',
+    categoryId: 'cat_welfare', organizationName: 'Example City First Welfare Home', ownerUsername: 'admin001', deliveryScope: 'HYBRID',
     capacity: 15, recognizedMinutes: 120, eligibleGradeIds: ['grade_9', 'grade_10', 'grade_11'],
     evidenceRequirements: 'Stamped confirmation letter from the welfare home and activity photos', location: 'Example City First Welfare Home',
-    startOffsetDays: -5, endOffsetDays: 10, registrationOpenOffsetDays: -20, registrationCloseOffsetDays: -8,
+    // Registration has elapsed but the activity hasn't started yet — the only
+    // window in which a project rests at `closed`, since the start date would
+    // immediately carry it on to `inProgress`.
+    startOffsetDays: 6, endOffsetDays: 13, registrationOpenOffsetDays: -20, registrationCloseOffsetDays: -8,
     targetStatus: 'closed',
     // student002 (Yun Li) already has an approved PROJECT-sourced service
     // record against this project (`student002_welfare_project` below).
@@ -221,7 +225,7 @@ export const projects: SeedProject[] = [
   {
     title: 'Student Council Welcome Party Assistance', summary: 'Assist the student council with the welcome party — check-in, stage setup, crowd control.',
     description: 'Tasks include venue setup before the event, serving as guides/check-in staff during the party, and cleanup afterward.',
-    categoryId: 'cat_campus', organizationName: 'Example Township Middle School', ownerUsername: 'teacher001',
+    categoryId: 'cat_campus', organizationName: 'Example Township Middle School', ownerUsername: 'teacher001', deliveryScope: 'ON_CAMPUS',
     capacity: 25, recognizedMinutes: 180, eligibleGradeIds: ['grade_7', 'grade_8', 'grade_9', 'grade_10'],
     evidenceRequirements: 'Signature from the student council president or supervising teacher', location: 'School Auditorium',
     startOffsetDays: 45, endOffsetDays: 45, registrationOpenOffsetDays: 35, registrationCloseOffsetDays: 43,
@@ -242,7 +246,9 @@ export type RecordStatusTarget = 'draft' | 'submitted' | 'approved' | 'returned'
 
 export interface SeedServiceRecord {
   studentUsername: string;
-  sourceType: 'PROJECT' | 'EXTERNAL' | 'SELF';
+  // No 'EXTERNAL': it is historical/resubmit-only and POST /service-records
+  // rejects it outright (issue 03 §3/§7.3), so it is uncreatable from seed.
+  sourceType: 'PROJECT' | 'SELF';
   projectTitle?: string;
   organizationName?: string;
   serviceCategoryId: string;
@@ -251,7 +257,7 @@ export interface SeedServiceRecord {
   endHour: number;
   location?: string;
   description?: string;
-  /** Required for SELF at submission time (`INTERNAL_USER`/`STUDENT`/`EXTERNAL_MANUAL`) — `EXTERNAL_MANUAL` is the only kind seed data can express, since the others resolve a real internal user/student subjectId server-side. Ignored for PROJECT (derived) and EXTERNAL (historical, uses supervisorName/supervisorContact directly). */
+  /** Required for SELF at submission time (`INTERNAL_USER`/`STUDENT`/`EXTERNAL_MANUAL`) — `EXTERNAL_MANUAL` is the only kind seed data can express, since the others resolve a real internal user/student subjectId server-side. Ignored for PROJECT (derived). */
   supervisorKind?: string;
   supervisorName?: string;
   supervisorContact?: string;
@@ -273,10 +279,10 @@ export const serviceRecords: SeedServiceRecord[] = [
     key: 'student001_library_project',
   },
   {
-    studentUsername: 'student001', sourceType: 'EXTERNAL', organizationName: 'Example City City Library',
+    studentUsername: 'student001', sourceType: 'SELF', organizationName: 'Example City City Library',
     serviceCategoryId: 'cat_community', serviceDateOffsetDays: -18, startHour: 9, endHour: 13, location: 'Example City City Main Library',
     description: 'Participated in the summer reading festival, assisted with organizing children reading activities.',
-    supervisorName: 'Director Zhao', supervisorContact: 'zhao@partner.example.org',
+    supervisorKind: 'EXTERNAL_MANUAL', supervisorName: 'Director Zhao', supervisorContact: 'zhao@partner.example.org',
     targetStatus: 'submitted',
     key: 'student001_library_external',
   },
@@ -288,7 +294,7 @@ export const serviceRecords: SeedServiceRecord[] = [
     targetStatus: 'returned', reviewerUsername: 'teacher001', reasonCode: 'INSUFFICIENT_EVIDENCE', comment: 'Documentation incomplete, please submit a stamped confirmation letter from the community.',
   },
   {
-    studentUsername: 'student001', sourceType: 'EXTERNAL', organizationName: 'Example District A Cultural Center',
+    studentUsername: 'student001', sourceType: 'SELF', organizationName: 'Example District A Cultural Center',
     serviceCategoryId: 'cat_education', serviceDateOffsetDays: -10, startHour: 14, endHour: 16, location: 'Community Reading Corner',
     description: 'Served as a reading tutor volunteer at the community reading corner.',
     targetStatus: 'draft',
@@ -302,10 +308,10 @@ export const serviceRecords: SeedServiceRecord[] = [
     key: 'student002_welfare_project',
   },
   {
-    studentUsername: 'student002', sourceType: 'EXTERNAL', organizationName: 'Example District C Environmental Protection Association',
+    studentUsername: 'student002', sourceType: 'SELF', organizationName: 'Example District C Environmental Protection Association',
     serviceCategoryId: 'cat_environment', serviceDateOffsetDays: -3, startHour: 9, endHour: 12, location: 'Zhongshan Park',
     description: 'Helped with pre-event street cleanup and educational material distribution.',
-    supervisorName: 'President Li', supervisorContact: 'enviro@example.org',
+    supervisorKind: 'EXTERNAL_MANUAL', supervisorName: 'President Li', supervisorContact: 'enviro@example.org',
     targetStatus: 'submitted',
   },
   {
@@ -322,10 +328,10 @@ export const serviceRecords: SeedServiceRecord[] = [
     key: 'student002_returned_external',
   },
   {
-    studentUsername: 'both001', sourceType: 'EXTERNAL', organizationName: 'Example City First Welfare Home',
+    studentUsername: 'both001', sourceType: 'SELF', organizationName: 'Example City First Welfare Home',
     serviceCategoryId: 'cat_welfare', serviceDateOffsetDays: -40, startHour: 10, endHour: 12, location: 'Example City First Welfare Home',
     description: 'Assisted with a nursing home visit, helped set up activity materials.',
-    supervisorName: 'Deputy Director Chen', supervisorContact: '0000-87654321',
+    supervisorKind: 'EXTERNAL_MANUAL', supervisorName: 'Deputy Director Chen', supervisorContact: '0000-87654321',
     targetStatus: 'approved', reviewerUsername: 'admin001', reasonCode: 'DOCUMENTATION_COMPLETE', comment: 'Approved.',
   },
   {

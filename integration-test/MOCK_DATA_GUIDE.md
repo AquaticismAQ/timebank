@@ -28,13 +28,15 @@ Add to `students`. `gradeId`/`classId` must be real ids already seeded by Flyway
 
 Add to `projects`. `categoryId` must be a real `service_category` id (`cat_campus`/`cat_community`/`cat_welfare`/`cat_education`/`cat_environment`/`cat_other`). `eligibleGradeIds` is a list of grade ids, same as above.
 
+`deliveryScope` is **required** by `POST /projects` — one of `ON_CAMPUS`/`OFF_CAMPUS`/`HYBRID`, sent as the raw enum name (the backend does `DeliveryScope.valueOf`, so the frontend's camelCase `onCampus` form is not accepted here). Omitting it fails the whole seed run with a `422` on the first project.
+
 `targetStatus` determines what `seed.ts` does after creating it:
 - `draft` — create only, nothing else.
 - `published` — create, then `POST /projects/{id}/publish`. Pick offsets where `registrationOpenOffsetDays` is still in the future (registration hasn't opened yet).
 - `registrationOpen` — publish, `registrationOpenOffsetDays` in the past, `registrationCloseOffsetDays` and `startOffsetDays` in the future.
 - `inProgress` — publish, `startOffsetDays` in the past, `endOffsetDays` in the future.
 - `completed` — publish, `endOffsetDays` in the past. Never explicitly closed.
-- `closed` — publish, then `POST /projects/{id}/close` (an explicit early-end action, independent of the date fields — used this way deliberately to also exercise the close action itself, not just reach a status that dates alone would produce).
+- `closed` — publish, `registrationCloseOffsetDays` in the past, `startOffsetDays` **in the future**, and at least one `registrantStudentNumbers` entry. `closed` means exactly one thing now — the registration window elapsed (`ProjectStateMachine`, split out 2026-08-08 by `Docs/optimization/02-PorjectOrganization.md` §2) — so it is purely date-derived: a past start date carries it straight on to `inProgress`, and zero confirmed registrants auto-archives it instead. There is no `POST /projects/{id}/close` endpoint; manager-initiated cancellation is `POST /projects/{id}/cancel`, which archives with a required reason.
 
 There is no `targetStatus: 'archived'` — archiving is meant to be exercised manually against one of the `completed`/`closed` seeded projects during testing, not pre-seeded (archiving everything up front would leave nothing to test the archive action against).
 
