@@ -212,6 +212,25 @@ Keep the route name plain and descriptive. Informal or idiomatic names tend not 
 translation, and this is the one page a parent is likely to see. Avoid "sign up" — the
 account already exists.
 
+### 2.10 Only administrators issue slips
+
+Every issuance, reissuance and password reset goes through an administrator. Teachers get no
+slip path, not even a scoped one for their own class.
+
+The argument against was operational: the head teacher is the one who notices a student never
+activated, so routing reissues through an admin may be the bottleneck that makes people
+photograph slips instead. That is a real cost and it was accepted deliberately.
+
+What buys it: the slip is the one artefact in the system that carries a working credential.
+Keeping its issuance on a single role means one permission to audit, no data-scope logic on
+the credential path, and no second, wider population of accounts that can mint logins for
+students. A data-scope bug on a reporting endpoint leaks a list; the same bug on this endpoint
+mints credentials.
+
+If the bottleneck proves real in practice, revisit it with usage evidence — a scoped teacher
+path can be added later without reworking anything here, whereas withdrawing the capability
+once teachers have it is much harder.
+
 ---
 
 ## 3. Implementation plan
@@ -239,6 +258,9 @@ inert until activated.
 Generated on demand and **streamed, never stored** — and deliberately not through the
 evidence `FileStorage` path, which sanitizes and watermarks *evidence* and would be the wrong
 pipeline for credentials. Audited: who generated slips for which class, and when.
+
+**Admin-only, with no data-scope path for teachers** (§2.10). The authorization is a plain
+role check, not a scope resolver — there is deliberately no "own class" branch to get wrong.
 
 QR generation needs one small dependency (zxing or equivalent, Apache-2.0); PDFBox is already
 present from Wave 2.
@@ -282,12 +304,8 @@ first-time entry described in §2.9 — wording identical to the slip's, in both
 | D-7 | Regeneration spares activated students (§2.7) | Settled |
 | D-8 | One PDF, `slipsPerPage` ∈ {1,2} on the request, default 1 (§2.8) | Settled |
 | D-8a | Slip prints the root URL; login page carries the first-time entry (§2.9) | Settled |
-| D-9 | **Who may generate slips** — admin only, or teachers for their own class? | **Open** |
-| D-10 | **Are teachers scoped to their own class** for regeneration and reset? | **Open** |
-
-D-9 and D-10 are the same question from two directions and matter operationally: the head
-teacher is the one who notices a student never activated, and routing every reissue through
-an admin may be the bottleneck that makes people photograph slips instead.
+| D-9 | Slip generation is **admin only** (§2.10) | Settled |
+| D-10 | Teachers get no slip path at all — issue, reissue and reset are all admin (§2.10) | Settled |
 
 ---
 
