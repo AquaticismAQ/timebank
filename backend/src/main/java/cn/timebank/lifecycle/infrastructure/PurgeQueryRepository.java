@@ -133,6 +133,14 @@ public class PurgeQueryRepository {
             MapSqlParameterSource up = new MapSqlParameterSource("userId", linkedUserId);
             total += update("delete from notification where recipient_user_id = :userId", up);
             total += update("delete from user_role where user_id = :userId", up);
+            // Issue 090. `activation_code` (V27) holds two FKs onto `user`, and
+            // rows survive redemption, so a graduated student almost always has
+            // at least one — without this the purge fails on
+            // `fk_activation_code_user` at the `delete from user` below.
+            // Deliberately only `user_id`: `issued_by` names the *admin* who
+            // issued the slip, so deleting by it would destroy other, current
+            // students' codes. No staff purge path exists today; see issue 090 §4.
+            total += update("delete from activation_code where user_id = :userId", up);
             // No `password_reset_token` delete: the table is gone (V28, issue
             // 089) along with the self-service recovery flow it backed. This
             // line had to go in the same change as the drop — it is raw SQL, so
