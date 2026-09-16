@@ -50,6 +50,32 @@ fi
 mvn -q -DskipTests package
 chown -R timebank:timebank /opt/timebank-backend
 systemctl restart timebank-backend
-sleep 5
-systemctl is-active --quiet timebank-backend && echo "deploy.sh: service is active" \
-  || { echo "deploy.sh: service failed to start" >&2; journalctl -u timebank-backend --no-pager -n 40; exit 1; }
+
+# Wait for readiness, not for the process to exist. `systemctl is-active` after a
+# fixed sleep reports success as soon as the JVM is running, but startup takes
+# ~23s — so anything that kills the app *after* the sleep (a failed Flyway
+# migration, a Hibernate schema-validation mismatch, a missing env var) left
+# this script printing success over a crash-looping service. That is the worst
+# possible failure mode for a deploy that carries a migration.
+PORT="$(grep -E '^TIMEBANK_SERVER_PORT=' "$ENV_FILE" | cut -d= -f2-)"
+PORT="${PORT:-8080}"
+READY_URL="http://127.0.0.1:${PORT}/actuator/health/readiness"
+DEADLINE=$(( $(date +%s) + 120 ))
+while :; do
+  if ! systemctl is-active --quiet timebank-backend; then
+    echo "deploy.sh: service exited during startup — see the log below." >&2
+    journalctl -u timebank-backend --no-pager -n 60 >&2
+    exit 1
+  fi
+  if curl -fsS --max-time 3 "$READY_URL" 2>/dev/null | grep -q '"status":"UP"'; then
+    echo "deploy.sh: service is READY (readiness probe UP)"
+    break
+  fi
+  if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+    echo "deploy.sh: timed out after 120s waiting for $READY_URL to report UP." >&2
+    echo "deploy.sh: the process may be running but unable to serve — log below." >&2
+    journalctl -u timebank-backend --no-pager -n 60 >&2
+    exit 1
+  fi
+  sleep 2
+done
