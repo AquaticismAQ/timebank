@@ -122,3 +122,18 @@ timebank:
       # absurdly long document is a cheap way to make one request expensive
       # on a 1 vCPU box. Evidence scans are a handful of pages.
       max-pages: ${TIMEBANK_FILE_PDF_MAX_PAGES:100}
+  activation:
+    expiry-sweep:
+      # 10-StudentIdentityAndOnboarding.md §3.6. Hourly at :40 — off the hour,
+      # where the grade-summary materialisation already runs. §2.6 makes the
+      # activation window itself configurable because the tension between
+      # "long enough to reach the student" and "short enough that emailing a
+      # class's slips is tolerable" belongs to the school; the sweep that
+      # notices the window closed is configurable for the duller reason that
+      # its right frequency depends on how the school actually works.
+      cron: ${TIMEBANK_ACTIVATION_EXPIRY_SWEEP_CRON:0 40 * * * *}
+      # Accounts transitioned per run, bounding both the transaction and the
+      # single audit row's id list. A larger backlog drains over successive
+      # runs, oldest expiry first. A whole school's import lapsing at once is
+      # the case this exists for.
+      batch-limit: ${TIMEBANK_ACTIVATION_EXPIRY_SWEEP_BATCH_LIMIT:500}

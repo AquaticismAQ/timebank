@@ -318,13 +318,16 @@ first-time entry described in §2.9 — wording identical to the slip's, in both
 | §3.3 Import creates pending accounts | Done — `ImportJobRunner.commitStudents` → `UserService.createPendingStudentAccount` |
 | §3.4 Credential document | Not started |
 | §3.5 Activation endpoint | Not started |
-| §3.6 Expiry sweep | Not started |
+| §3.6 Expiry sweep | Done — `ActivationExpirySweep` (hourly, ShedLock-guarded) → `ActivationExpiryTransaction`, `ActivationExpiryRepository` |
 | §3.7 Password reset | Not started |
 | §3.8 Login copy and first-time entry | Done — `ActivationPage`, `/activate`, login copy in both languages |
 
-§3.1–§3.3 are covered by unit tests only (`mvn test`); no integration test or
-live-server verification has run against them yet, so the migration itself is
-unapplied and the import path is unproven end to end. Until §3.4/§3.5 land,
+§3.1–§3.3 and §3.6 are covered by unit tests only (`mvn test`); no integration
+test or live-server verification has run against them yet, so the migration
+itself is unapplied and the import path is unproven end to end. §3.6's two SQL
+reads are the specific thing unit tests cannot reach — the sweep's *decisions*
+are in Java and tested, but nothing has yet run the candidate query against a
+real `activation_code` table. Until §3.4/§3.5 land,
 an imported account is created and can never be logged into — which is the
 intended interim state (§2.4), not a gap, but it does mean the next re-seed
 must wait for the activation path.
