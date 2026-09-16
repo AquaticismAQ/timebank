@@ -1,0 +1,26 @@
+-- The system has no self-service password recovery, by design
+-- (Design/*/08-mlps-level1-security-design-guide.md §8.1/§8.2, issue 089,
+-- Docs/optimization/10-StudentIdentityAndOnboarding.md §5). This table backed
+-- the one mechanism that contradicted that: POST /auth/forgot-password minted
+-- a token for whichever username an unauthenticated caller named, and POST
+-- /auth/reset-password redeemed it into a new password. Both endpoints, their
+-- DTOs, the PasswordResetToken entity and its repository went in the same
+-- change; this drops the storage behind them.
+--
+-- Recovery is admin-initiated and offline-verified instead: the user asks an
+-- administrator in person, who issues a single-use activation slip through
+-- POST /users/{id}/reset-password (V27's activation_code). That leaves one
+-- credential flow rather than two, which is the §2.4 guarantee this repo has
+-- been converging on.
+--
+-- Dropped now rather than left as a harmless unused table: nothing references
+-- it any more, including PurgeQueryRepository's raw SQL, which was updated in
+-- the same change. An orphaned credential table is exactly the kind of thing a
+-- later session reconnects to something, and its absence is what makes the
+-- §8.2 claim structurally true rather than merely currently true.
+--
+-- The rows are not worth preserving. The table holds only short-lived
+-- single-use tokens, it was verified empty on the live server before this
+-- migration was written, and every row it could hold is a credential — there is
+-- nothing here to archive and a reason not to.
+DROP TABLE IF EXISTS password_reset_token;

@@ -302,20 +302,6 @@ class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public String resetPasswordWithToken(String userId, String newPassword) {
-        User user = findOrThrow(userId);
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
-        user.setFailedLoginAttempts(0);
-        user.setLockedUntil(null);
-        user.setUpdatedAt(Instant.now());
-
-        auditService.record(new AuditEntry(userId, null, "user.resetPassword", "user", user.getId(),
-                null, null, "FORGOT_PASSWORD_TOKEN"));
-        return user.getUsername();
-    }
-
-    @Override
-    @Transactional
     public void recordSuccessfulLogin(String userId) {
         User user = findOrThrow(userId);
         user.setFailedLoginAttempts(0);

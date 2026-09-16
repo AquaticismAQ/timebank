@@ -6,9 +6,7 @@ import cn.timebank.iam.application.AuthService;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.iam.application.dto.AuthDtos.ActivateAccountRequest;
 import cn.timebank.iam.application.dto.AuthDtos.ChangePasswordRequest;
-import cn.timebank.iam.application.dto.AuthDtos.ForgotPasswordRequest;
 import cn.timebank.iam.application.dto.AuthDtos.LoginRequest;
-import cn.timebank.iam.application.dto.AuthDtos.ResetPasswordRequest;
 import cn.timebank.iam.application.dto.AuthenticatedUserView;
 import cn.timebank.iam.application.dto.MeResponse;
 import cn.timebank.security.application.CookieSessionUserDetails;
@@ -131,20 +129,16 @@ public class AuthController {
         return ApiResponse.of(null);
     }
 
-    @PostMapping("/api/v1/auth/forgot-password")
-    @PreAuthorize("permitAll()")
-    public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        authService.forgotPassword(request.username());
-        return ApiResponse.of(null);
-    }
-
-    @PostMapping("/api/v1/auth/reset-password")
-    @PreAuthorize("permitAll()")
-    public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        String username = authService.resetPassword(request.token(), request.newPassword());
-        sessionRevocationService.revokeAllSessionsForUser(username);
-        return ApiResponse.of(null);
-    }
+    // There is deliberately no `/auth/forgot-password` or `/auth/reset-password`
+    // here, and no self-service recovery of any kind
+    // (Design/*/08-mlps-level1-security-design-guide.md §8.1/§8.2, issue 089).
+    // A forgotten password is handled offline: the user asks an administrator,
+    // who identifies them in person and issues an activation slip through
+    // `POST /users/{id}/reset-password`. An unauthenticated endpoint that mints
+    // a credential for whichever account a caller names is the attack surface
+    // that design avoids, and `/auth/activate` — which is unauthenticated for
+    // the same structural reason — is safe only because it is never told *which*
+    // account it is acting on: the code is its own lookup key.
 
     @PostMapping("/api/v1/me/change-password")
     @PreAuthorize("isAuthenticated()")

@@ -43,12 +43,12 @@ Authentication endpoints:
 | `POST` | `/auth/login` | Account-password login |
 | `POST` | `/auth/logout` | End current session |
 | `POST` | `/auth/refresh` | Refresh session |
-| `POST` | `/auth/forgot-password` | Initiate password reset |
-| `POST` | `/auth/reset-password` | Set new password with one-time token |
 | `POST` | `/auth/activate` | Redeem a first-time activation code and set the account's first password |
 | `GET` | `/me` | Current user, roles, permissions, data scope, and feature flags |
 | `PATCH` | `/me/profile` | Update self-service profile fields |
 | `POST` | `/me/change-password` | Change password |
+
+**There is no `/auth/forgot-password` and no `/auth/reset-password`, and no self-service password recovery of any kind** (`Design/*/08-mlps-level1-security-design-guide.md` §8.1/§8.2, issue 089). Both endpoints existed, were never called by any client, and were removed along with their storage. A forgotten password is recovered offline: the user contacts an administrator, who verifies their identity in person and issues an activation slip through `POST /users/{id}/reset-password` (§4.15). Do not add a client-side "forgot password" flow — the login page's *"Forgot password? Contact admin"* copy is the whole of the intended behaviour.
 
 Login response must at least return:
 

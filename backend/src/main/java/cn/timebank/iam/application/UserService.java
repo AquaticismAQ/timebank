@@ -82,8 +82,10 @@ public interface UserService {
 
     void changeOwnPassword(String userId, String currentPassword, String newPassword);
 
-    /** @return the affected user's username, so the caller can revoke live sessions */
-    String resetPasswordWithToken(String userId, String newPassword);
+    // No token-driven reset method here (issue 089). The only two ways a
+    // password is ever set are this one — by someone who proved they know the
+    // current password — and redeeming an activation code, which an
+    // administrator issued after identifying the person offline.
 
     void recordSuccessfulLogin(String userId);
 
