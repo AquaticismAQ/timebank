@@ -35,6 +35,18 @@ if [ ! -f "$ENV_FILE" ] || ! grep -q '^TIMEBANK_ALLOWED_ORIGINS=.\+' "$ENV_FILE"
   exit 1
 fi
 
+# 10-StudentIdentityAndOnboarding.md §2.9: the credential slip prints this URL
+# as the address a student is told to check before typing their activation
+# code, and builds the slip's QR deep link from it. A wrong or missing value
+# is worse than a broken request — it puts a domain the school does not own
+# onto paper handed to children. Same fail-fast treatment as the origins above.
+if ! grep -q '^TIMEBANK_SITE_ROOT_URL=.\+' "$ENV_FILE"; then
+  echo "deploy.sh: TIMEBANK_SITE_ROOT_URL is not set in $ENV_FILE — refusing to deploy." >&2
+  echo "deploy.sh: set it to this server's real public root URL, e.g.:" >&2
+  echo "deploy.sh:   echo 'TIMEBANK_SITE_ROOT_URL=https://<real-domain>' >> $ENV_FILE" >&2
+  exit 1
+fi
+
 mvn -q -DskipTests package
 chown -R timebank:timebank /opt/timebank-backend
 systemctl restart timebank-backend

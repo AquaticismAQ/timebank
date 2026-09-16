@@ -75,6 +75,29 @@ public interface UserService {
     Optional<String> findUserIdByStudentId(String studentId);
 
     /**
+     * 10-StudentIdentityAndOnboarding.md §3.4: the batch form of {@link
+     * #findUserIdByStudentId}, for assembling a class's credential slips
+     * without one round trip per child.
+     *
+     * <p>Returns the {@code status} as well as the ids, because §2.7's
+     * "regeneration spares activated students" is a <em>selection</em> rule the
+     * caller applies in Java — see {@code ActivationService.issueAll}, which
+     * deliberately applies no status filter of its own. Deciding it here, in
+     * SQL, would bury the rule where only an integration test could reach it
+     * and would also break §3.7's admin reset, which legitimately issues a code
+     * for an already-active account.</p>
+     *
+     * <p>Student ids with no account are silently absent, the same convention
+     * {@link #displayNamesOf} uses — callers use that to detect the roster rows
+     * that were never provisioned a login (see §5's {@code POST /students} gap).</p>
+     */
+    List<StudentAccount> studentAccountsOf(List<String> studentIds);
+
+    /** @param status a {@code UserStatus} name, e.g. {@code PENDING_ACTIVATION} */
+    record StudentAccount(String studentId, String userId, String username, String status) {
+    }
+
+    /**
      * B4: denormalizing `ownerName`/`proposedSupervisorName`-style fields on
      * `project`/`eventProposal` lists without N+1 — a batch lookup, same
      * cross-module-without-domain-reach-in shape as {@link

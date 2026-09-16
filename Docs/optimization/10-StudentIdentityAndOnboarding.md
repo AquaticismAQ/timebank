@@ -316,7 +316,7 @@ first-time entry described in §2.9 — wording identical to the slip's, in both
 | §3.1 Schema | Done — `V27__student_activation.sql` |
 | §3.2 Username generation | Done — `StudentUsernameGenerator` |
 | §3.3 Import creates pending accounts | Done — `ImportJobRunner.commitStudents` → `UserService.createPendingStudentAccount` |
-| §3.4 Credential document | Not started |
+| §3.4 Credential document | Done — `POST /users/activation-slips`, `CredentialSlipService`/`CredentialSlipDocument`/`QrCodeImage`, contract §4.15 in both languages. **No admin UI yet** (see below) |
 | §3.5 Activation endpoint | Done — `POST /auth/activate`, `ActivationService`/`ActivationCodeFormat`/`ActivationThrottle`, contract §2.2 in both languages |
 | §3.6 Expiry sweep | Done — `ActivationExpirySweep` (hourly, ShedLock-guarded) → `ActivationExpiryTransaction`, `ActivationExpiryRepository` |
 | §3.7 Password reset | Not started |
@@ -332,10 +332,27 @@ Java and tested, but no candidate query has run against a real
 IS NULL`, whose single-use guarantee rests on the row count MySQL actually
 returns.
 
-Until §3.4 lands there is no way to *deliver* a code to a student — the endpoint
-that redeems one exists, but nothing prints a slip — so an imported account
-remains unusable in practice. That is the intended interim state (§2.4), not a
-gap, but it does mean the next re-seed must wait for the credential document.
+**§3.4 now closes the delivery half.** `POST /users/activation-slips` takes a
+`classId` and a `slipsPerPage` of 1 or 2, issues one code per still-pending
+member of the class, and streams the batch back as a single
+`application/pdf` — never stored, and deliberately not through the evidence
+`FileStorage` path. What the slice settled, beyond restating §2:
+
+| Item | Resolution |
+| :--- | :--- |
+| QR library | `com.google.zxing:core` 3.5.3, Apache-2.0, pinned in `pom.xml`. Only `core`: zxing's `javase` module exists to bridge a `BitMatrix` to `java.awt.image`, which is the loop in `QrCodeImage`, and it drags in command-line tooling dependencies nothing here uses. Error correction `M` — the slip lives in a school bag, so a crease across the code is the normal case, while `H` would shrink each module below what a phone resolves at the two-per-page size |
+| `slipsPerPage` typing | A Jackson `@JsonValue`/`@JsonCreator` enum of `ONE(1)`/`TWO(2)` on the wire as the plain number. §2.8's point is that 1000 is *unrepresentable*, not that it is rejected: anything else fails deserialization and becomes `400 INVALID_REQUEST` before a single code is minted. Omitted means `ONE` |
+| Authorization | `@PreAuthorize("hasAuthority('users.manage')")` **plus** an explicit `admin`/`sysadmin` role-code check, resolved in the controller and passed into the service as a boolean — the same shape `PATCH /school/info` uses, which keeps the rule unit-testable. Permission alone would silently widen the moment a school defines a custom staff role holding `users.manage`, which is exactly the "second, wider population of accounts that can mint logins" §2.10 exists to prevent |
+| Selection | `ISSUABLE_STATUSES = {PENDING_ACTIVATION, ACTIVATION_EXPIRED}`, applied in `CredentialSlipServiceImpl`, not in `issueAll`. `LOCKED` and `INACTIVE` are excluded too — both already have a password, and an unlock and a reactivation are their respective answers, not a new slip |
+| New config | `timebank.auth.activation.site-root-url` (env `TIMEBANK_SITE_ROOT_URL`), under the existing activation prefix. **No default, fails fast at startup**, and `deploy.sh` refuses to deploy without it — §2.9 makes the printed URL a phishing anchor, so a placeholder would put a domain the school does not own onto paper handed to children, which no script-based check would ever notice (issue 027's lesson, with higher stakes) |
+| Slip language | **English labels only, for now.** Every label, the username, the code and the provenance line are real PDF text in Standard-14 fonts, so the document needs no embedded typeface — but Standard-14 is WinAnsi-encoded, so Chinese labels would require shipping and licensing a CJK font. The two *names* are exempt: they are drawn through AWT into an embedded image, because a roster of CJK names is the normal case here and substituting `?` the way `EvidenceWatermarker` does would leave a head teacher unable to tell thirty slips apart. Keeping the labels as text is also what lets the tests assert against extracted PDF text rather than the builder's own state. **Open**: a bilingual or Chinese slip needs a font decision this slice did not settle |
+| No admin UI | The endpoint is the deliverable; nothing in the Admin Portal calls it yet. `api/http.ts` unwraps the `data`/`meta` envelope on every response, so a PDF download needs a raw-fetch path beside it — small, but not this slice's scope. **Open** |
+
+Two things unit tests here cannot reach, matching the pattern above: the new
+`findByStudentIdIn` has not run against real MySQL, and no slip has been printed
+on paper or scanned with a real phone camera — the QR is decoded from a
+rasterised page by zxing, which proves the payload and the module size but not
+the ink.
 
 **§3.8's three open guesses are now closed by §3.5**, which adopted the
 frontend's assumed contract rather than changing it:
@@ -373,7 +390,10 @@ in-memory and therefore per-instance, the same trade-off
   one, because putting it in `StudentService.create` would make `student → iam`
   a module cycle (`iam` already depends on `student`). An admin adding a single
   student therefore gets a roster row with no login. §3.5 did not settle this —
-  it owns redemption, not provisioning — so it stays open for §3.4.
+  it owns redemption, not provisioning — and §3.4 did not either: a class's slip
+  batch skips a roster row with no account rather than failing, so one
+  hand-added student cannot stop a class printing, but that student still has
+  no way in. **Still open.**
 - **Activation codes are stored as unsalted SHA-256**, not bcrypt, because §2.5
   requires lookup *by* hash and a salted hash cannot be looked up. The tradeoff
   is acceptable — codes are single-use, expire in days, and protect an account
