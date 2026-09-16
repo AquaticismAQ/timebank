@@ -195,7 +195,7 @@ Web 前端提供中文与英文两种界面（默认 `zh-CN`）。本地化的�
 **年级与班级是上述字典行的刻意例外**（issue 010，见
 `Docs/issues/010-grade-class-raw-storage-and-abbreviated-format.md`）：两者其实都不是
 被翻译的内容。年级数字在每种语言下含义相同（只是格式不同——"G10" 对比"十年级"），而班级
-名称（如 "Mils"）是专有名词，从不翻译。`GET /grades` 仍下发服务端本地化的 `name`（未变
+名称（如 "Luna"）是专有名词，从不翻译。`GET /grades` 仍下发服务端本地化的 `name`（未变
 ——Project 的可报名年级展示、Reports/CSV 导出等确有跨模块依赖），但每个**与学生关联**的
 年级/班级字段（`StudentListItemDto`/`StudentDetailDto`/`StudentDirectoryEntryDto`/
 `ReviewQueueItemDto`）携带的是原始 `gradeLevel`（int，年级数字）与原始的、与语言无关的

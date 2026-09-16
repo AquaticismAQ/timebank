@@ -36,7 +36,7 @@ that.
 
 This also confirms class is a general string field (not a single character), matching
 the bug report's note and the separate request in
-[006](./006-mock-seed-data-corrections.md) to add a class like "Mils".
+[006](./006-mock-seed-data-corrections.md) to add a class like "Luna".
 
 ## Proposed fix
 

@@ -195,7 +195,7 @@ The web frontend ships in Chinese and English (default `zh-CN`). Localization is
 **Grades and classes are a deliberate exception to the dictionary row above** (issue
 010, `Docs/issues/010-grade-class-raw-storage-and-abbreviated-format.md`): neither is
 actually translated content. A grade number reads the same in every language (just
-formatted differently — "G10" vs. "十年级"), and a class label like "Mils" is a proper
+formatted differently — "G10" vs. "十年级"), and a class label like "Luna" is a proper
 noun, never translated at all. `GET /grades` still returns a server-localized `name`
 (unchanged — genuine cross-module consumers depend on it: Project's eligible-grades
 display, Reports/CSV export), but every **student-linked** grade/class field

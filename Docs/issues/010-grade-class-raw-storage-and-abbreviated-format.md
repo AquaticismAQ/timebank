@@ -5,18 +5,18 @@ Status: **Fixed and live-verified (2026-08-10)**
 ## Symptom
 
 Reported directly (not caught via live browser testing this session): the student
-grade/class display should read **"G10, Class A"** / **"G10, Class Mils"** in English and
-**"十年级, A班"** / **"十年级, Mils班"** in Chinese. The format shipped in issue 005
+grade/class display should read **"G10, Class A"** / **"G10, Class Luna"** in English and
+**"十年级, A班"** / **"十年级, Luna班"** in Chinese. The format shipped in issue 005
 (`formatGradeClass`) instead produces "Grade 10, Class A" (spelled-out grade, not
 abbreviated) and "十年级A班" (no comma separator between grade and class).
 
 Separately: the `class` table stores its display strings as **hardcoded, per-row
 translated text** (`name_zh`/`name_en`, e.g. `'A班'`/`'A'`) baked directly into
-`R__seed_base_data.sql`. That's not really translation — a class name like "Mils" is a
+`R__seed_base_data.sql`. That's not really translation — a class name like "Luna" is a
 proper noun, never actually translated between languages, and the "班" (class/homeroom)
 suffix baked into `name_zh` is UI decoration, not content. Storing it this way is what
 let issue 005 happen (a grade prefix baked into the same field) and is why the
-`class_10_mils` seed row is *still* inconsistent today — its `name_zh` is bare `'Mils'`
+`class_10_luna` seed row is *still* inconsistent today — its `name_zh` is bare `'Luna'`
 with no `班` suffix, unlike the `A`/`B` rows' `'A班'`/`'B班'` (nobody remembered to
 hand-add the suffix when issue 006 added a named class).
 
@@ -32,7 +32,7 @@ Two separate but related problems:
    (including the `班` suffix) rather than a single raw class label. Every future class
    name (a new named class, a new grade) requires hand-writing both a Chinese and an
    English "translation" of what is not actually translatable content, which is exactly
-   how the "Mils" row's `班` suffix got missed and how issue 005's grade-prefix bug
+   how the "Luna" row's `班` suffix got missed and how issue 005's grade-prefix bug
    happened in the first place. `grade.name_zh`/`name_en` have the same shape but were
    **deliberately left alone** in this fix — see "Scope decision" below.
 
@@ -44,7 +44,7 @@ module (`AcademicStructureService{,Impl}`, `AcademicStructureController`,
 consumer depends on a localized class name. Collapse `class.name_zh`/`name_en` into a
 single raw `class.name` column (`V16__class_raw_name.sql`, backfilled from the existing
 `name_en` values, which are already bare labels post-issue-005 — `'A'`, `'B'`,
-`'Mils'`). `ClassDto`/`SchoolClass` frontend type keep a `name` field, but it's now
+`'Luna'`). `ClassDto`/`SchoolClass` frontend type keep a `name` field, but it's now
 language-invariant raw data, never picked via `Accept-Language`. The `AcademicStructureService.listClasses()` /
 `GET /classes` cache key drops its `:language` suffix accordingly.
 
@@ -104,15 +104,15 @@ ever reported empty.
 - `tsc --noEmit` clean.
 - Live: Student List, Accounts, Audit Center, Dashboard, and the grade-bonding/
   co-organizer pickers (SystemAdmin, EventProposals) all show "G10, Class A"/"G10, Class
-  Mils" in English and "十年级, A班"/"十年级, Mils班" in Chinese, for a grade-10 A-class
-  student and a grade-10 Mils-class student, in both languages.
+  Luna" in English and "十年级, A班"/"十年级, Luna班" in Chinese, for a grade-10 A-class
+  student and a grade-10 Luna-class student, in both languages.
 
 ## Resolution
 
 - Backend: `V16__class_raw_name.sql` collapsed `class.name_zh`/`name_en` into a single
   raw `class.name` (backfilled from `name_en`, then dropped both columns) — applied
   cleanly to both a real-MySQL `timebank_it_*` IT schema and the live `timebank`
-  schema (confirmed via direct query post-deploy: `class.name` is `'A'`/`'B'`/`'Mils'`
+  schema (confirmed via direct query post-deploy: `class.name` is `'A'`/`'B'`/`'Luna'`
   everywhere, no `班` baked in). `grade.name_zh`/`name_en` deliberately left alone (see
   "Scope decision" above). `SchoolClass.java`/`ClassDto` updated; `AcademicStructureServiceImpl.listClasses()`
   dropped its `resolvedLanguage` param and cache-key language suffix.
@@ -127,7 +127,7 @@ ever reported empty.
   tests that pass it through for reasons unrelated to this bug.
 - `LocalizationIT` extended with `classesAreLanguageInvariant()` (proves `class.name`
   is now the same regardless of `Accept-Language`, including the two edge-case rows —
-  `class_10A` = `"A"`, `class_10_mils` = `"Mils"`); `StudentPrivacyIT` updated for the
+  `class_10A` = `"A"`, `class_10_luna` = `"Luna"`); `StudentPrivacyIT` updated for the
   `gradeLevel` rename. `mvn test` clean; `mvn verify -Dit.test=LocalizationIT,StudentPrivacyIT,ReviewQueueIT`
   clean against real MySQL (via an SSH tunnel to the shared test server) before
   deploying.
@@ -160,11 +160,11 @@ ever reported empty.
   (`frontend/scripts/deploy.sh`) to `https://tb.example.com/`.
 - Live-verified via Playwright as `admin001`/`teacher001` (Wei Chen): Student List
   table, its class filter dropdown, and the edit-student-modal header all show
-  "十年级, A班" (zh) / "G10, Class A" (en) for grade-10 A students and "十年级, Mils班" /
-  "G10, Class Mils" for the grade-10 Mils student (`Xu Ran`, `2024006`) in both
+  "十年级, A班" (zh) / "G10, Class A" (en) for grade-10 A students and "十年级, Luna班" /
+  "G10, Class Luna" for the grade-10 Luna student (`Xu Ran`, `2024006`) in both
   languages; Audit Center's table and grade filter dropdown ("G10"); Admin Dashboard's
   review-queue widget; the Create-User grade-bonding student-search picker (confirmed
-  "G10, Class Mils" sublabel searching for "Xu Ran"). Logged in as `student001` and
+  "G10, Class Luna" sublabel searching for "Xu Ran"). Logged in as `student001` and
   confirmed the self-view header/profile page now show "十年级, A班" (previously grade
   only, no class).
 - While verifying, found and separately logged (not fixed, out of scope for this
@@ -174,5 +174,5 @@ ever reported empty.
 
 ---
 *Live-verified 2026-08-10 against `https://tb.example.com/` via Playwright, both
-languages, admin/teacher and student personas, including the Mils-class edge case
+languages, admin/teacher and student personas, including the Luna-class edge case
 throughout.*

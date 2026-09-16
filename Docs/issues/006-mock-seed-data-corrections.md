@@ -70,8 +70,8 @@ so the Case Review page has representative data to review/action.
   root file, `R__seed_base_data.sql`).
 - All seeded classes today are exactly `A`/`B` two-letter-suffixed codes per grade
   (`R__seed_base_data.sql:19-31`, `mock-data.ts:94-103`) — no class uses a longer
-  string name like "Mils". Per the bug report, add at least one student whose class
-  is a non-single-letter string (e.g. "Mils") to prove the display and filter logic
+  string name like "Luna". Per the bug report, add at least one student whose class
+  is a non-single-letter string (e.g. "Luna") to prove the display and filter logic
   in [004](./004-grade-class-filter-scalability.md)/[005](./005-grade-class-display-duplication.md)
   handle arbitrary class-name strings, not just single letters.
 - `integration-test/STATUS.md:35-38` already logs other known caveats worth checking
@@ -132,7 +132,7 @@ so the Case Review page has representative data to review/action.
    only holds `cases.create`/`cases.read`, never `cases.decide` (`admin` only) —
    a case fixture "decided by teacher001" isn't actually reachable through the
    real permission set, so all case decisions route through `admin001`.
-5. **"Mils" class fixture**: added `class_10_mils` (`name_en`/`name_zh` = `'Mils'`)
+5. **"Luna" class fixture**: added `class_10_luna` (`name_en`/`name_zh` = `'Luna'`)
    to `R__seed_base_data.sql` — a real dictionary entry (schools legitimately
    sometimes name classes rather than letter them), not integration-test-only —
    plus a roster student in it (`mock-data.ts`, student `2024006`).
@@ -141,8 +141,8 @@ so the Case Review page has representative data to review/action.
 
 **Applying to the already-seeded live server**: `seed.ts` is first-run-only and
 refuses to run against a server whose users/students already exist, so the new
-`cases`/`class_10_mils`/student-2024006 fixtures couldn't be applied via a normal
-`npm run seed` re-run. Applied directly instead — the `class_10_mils` student via
+`cases`/`class_10_luna`/student-2024006 fixtures couldn't be applied via a normal
+`npm run seed` re-run. Applied directly instead — the `class_10_luna` student via
 one additive direct-SQL `INSERT` (same recipe `seed.ts`'s own student-insert phase
 uses), the 5 cases via the exact same real HTTP create→submit→decide calls
 `seed.ts`'s new Phase 6 would make, run by hand as `student001`/`student002`/
@@ -154,8 +154,8 @@ would now produce from the committed fixtures.
   `student001`/`student002` for `StudentList.tsx`'s new merge to pick up;
   `GET /cases` returns exactly 5 cases spanning `DRAFT`/`SUBMITTED`/
   `NEEDS_INFORMATION`/`RESOLVED`/`REJECTED`; `GET /students?filter[classId]=
-  class_10_mils` returns exactly the one `"Mils"`-class student with
-  `className: "Mils"` displaying correctly (see issue 004's/005's verification).
+  class_10_luna` returns exactly the one `"Luna"`-class student with
+  `className: "Luna"` displaying correctly (see issue 004's/005's verification).
 - No browser tool was available this session — Case Review's and Student List's
   actual rendered pages weren't screenshotted; verification is API-level
   (confirming the data these pages already fetch from is now correct and
