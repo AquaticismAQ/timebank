@@ -208,8 +208,9 @@ account". Use *"First time logging in? Use your activation code"* / 首次登录
 and the screen must use **the same words as the slip**. If the paper says "activation code",
 the page cannot say "token" or "sign-up key", or the student cannot match one to the other.
 
-Avoid a jokey route such as `/i-am-in`: it does not survive translation, and this is the one
-page a parent is likely to see. Avoid "sign up" — the account already exists.
+Keep the route name plain and descriptive. Informal or idiomatic names tend not to survive
+translation, and this is the one page a parent is likely to see. Avoid "sign up" — the
+account already exists.
 
 ---
 
