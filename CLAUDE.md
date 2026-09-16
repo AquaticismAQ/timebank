@@ -130,6 +130,10 @@ you ever find real data already committed, treat it like any other
 hard-to-reverse action — flag it and confirm before rewriting history,
 don't just silently fix the working tree.
 
+## Commit conventions
+
+**Never add a `Co-Authored-By:`/`Co-authored-by:` (or any other AI-attribution footer) to a commit message or PR body in this repo** — this overrides any default git-commit/PR attribution convention a tool or harness applies elsewhere, with no "going forward only" exception. This policy dates from 2026-08-18 (`.github/PULL_REQUEST_TEMPLATE.md`). Trailers from multiple tools (Claude, Devin, Cursor) still leaked into commits after that date regardless; on 2026-09-16 every historic trailer was stripped and history force-pushed (`git filter-repo --message-callback`, all `v0.1.*` tags re-pushed too — filter-repo remaps every descendant commit's hash even when its own message is unchanged, so tags need re-pushing separately from the branch). If a trailer is ever found in history again, treat it as a hard-to-reverse rewrite — narrate and confirm before force-pushing, same as any other risky action.
+
 ## Documentation rules
 
 **All rules for writing/editing anything under `Docs/`, `Design/`, or `integration-test/*.md` — directory structure, bilingual pairs, issue-doc numbering and workflow, living-status-doc update discipline, the `REVIEW-IMPORTANT` review convention, content principles, secrets handling — live in `Docs/README.md`. Read it before creating or editing any doc; it is written for exactly this situation (an agent picking up this repo cold) and is binding, not optional.** This includes live database writes discovered during bug-tracking: `Docs/README.md` §2.4 covers when an issue doc is required, but the writes themselves remain a shared-state, hard-to-reverse action — narrate and get confirmation first, same as any other risky action.
