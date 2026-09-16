@@ -10,7 +10,7 @@ import java.util.Set;
 /**
  * B5.10b: one row of the `students` roster import is {@code
  * studentNumber,displayName,gradeId,classId,enrollmentAcademicYearId,
- * graduationYear,joinedAt,email,guardianName,guardianContact} — the same
+ * graduationYear,joinedAt} — the same
  * fields {@code POST /students} (the single-student create path,
  * {@link cn.timebank.student.application.StudentService#create}) requires,
  * since a bulk row is just that request built from a CSV line instead of a
@@ -48,7 +48,7 @@ class StudentImportRowValidator {
         String[] parts = line.split(",", -1);
         if (parts.length < 7) {
             return new Invalid("row", "PARSE_ERROR",
-                    "Expected studentNumber/displayName/gradeId/classId/enrollmentAcademicYearId/graduationYear/joinedAt[/email/guardianName/guardianContact]");
+                    "Expected studentNumber/displayName/gradeId/classId/enrollmentAcademicYearId/graduationYear/joinedAt");
         }
         String studentNumber = parts[0].trim();
         String displayName = parts[1].trim();
@@ -57,9 +57,6 @@ class StudentImportRowValidator {
         String academicYearId = parts[4].trim();
         String graduationYearRaw = parts[5].trim();
         String joinedAtRaw = parts[6].trim();
-        String email = blankToNull(parts.length > 7 ? parts[7].trim() : "");
-        String guardianName = blankToNull(parts.length > 8 ? parts[8].trim() : "");
-        String guardianContact = blankToNull(parts.length > 9 ? parts[9].trim() : "");
 
         if (studentNumber.isEmpty()) {
             return new Invalid("studentNumber", "REQUIRED", "studentNumber is required");
@@ -106,11 +103,7 @@ class StudentImportRowValidator {
         }
 
         seenInFile.add(studentNumber);
-        return new Valid(new CreateStudentRequest(studentNumber, displayName, email, gradeId, classId,
-                academicYearId, graduationYear, joinedAt, guardianName, guardianContact));
-    }
-
-    private String blankToNull(String s) {
-        return s.isEmpty() ? null : s;
+        return new Valid(new CreateStudentRequest(studentNumber, displayName, gradeId, classId,
+                academicYearId, graduationYear, joinedAt));
     }
 }

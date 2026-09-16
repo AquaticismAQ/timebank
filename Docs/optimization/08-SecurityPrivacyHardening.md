@@ -80,8 +80,9 @@ Open choices:
   viewer's language, or fixed English for forensic consistency?
 - **Appearance.** Diagonal tiled text at low opacity is the usual choice — legible enough to
   deter, light enough to keep the evidence readable.
-- **Scope.** Admin/teacher portal only, or student self-view too? A student viewing their own
-  evidence arguably needs no watermark.
+- **Scope — decided: staff views only.** Admins and teachers viewing evidence get the
+  watermark, because that is the leak path the feature exists for. A student viewing
+  their own photo sees it clean; marking up their own material buys no traceability.
 
 ### 2.2 PDF watermarking — new dependency and removal-resistance
 
@@ -97,22 +98,27 @@ Two approaches, and the choice is a real trade-off:
 | Removal resistance | a determined party with tooling can strip the overlay | effectively baked in |
 | Cost | low | high (render every page per view) |
 
-**Recommended: overlay.** The watermark's purpose is traceability and deterrence, not
+**Decided 2026-09-16: PDFBox accepted, content-stream overlay.** The watermark's purpose is traceability and deterrence, not
 tamper-proofing; rasterizing destroys a genuinely useful property of scans for a threat this
 system is not trying to defeat.
 
 ### 2.3 Log retention target
 
-W-3 and W-4 need a number. Proposed **180 days**, configurable, applied to nginx access logs
+**Decided 2026-09-16: 180 days**, configurable, applied to nginx access logs
 and the journal. Disk headroom must be checked first: the box has 14G free and the journal
 alone is already at 1.9G under size-based eviction.
 
-### 2.4 Does dropping `student.email` need a data escape hatch?
+### 2.4 Does dropping `student.email` need a data escape hatch? — **RESOLVED: no**
 
-The column is unused by any screen, but it holds data on the live server. Confirm it can be
-dropped outright, or whether a one-off export should be handed to the school first. Note the
-students **export** already omits it (`id,studentNumber,displayName,gradeId,classId,status,graduationYear,joinedAt`),
-so nothing downstream breaks either way.
+Settled by checking rather than asking. On the **active** server all 50 students have
+`NULL` in all three columns — the rewritten seeder stopped populating them, so there is
+nothing to lose. On the **original** server 11 rows carry an email and 2 carry guardian
+details, but those are seeded placeholders (`@example-township-school.edu`,
+`Zhang Daqiang`), not real school data.
+
+Drop outright, no export. The students **export** already omits all three
+(`id,studentNumber,displayName,gradeId,classId,status,graduationYear,joinedAt`),
+so nothing downstream changes either.
 
 ### 2.5 CSP strictness
 
@@ -353,10 +359,10 @@ These are not style preferences; each one has bitten this project.
 
 | ID | Decision | Status |
 | :--- | :--- | :--- |
-| D-1 | Watermark content, appearance, and whether students see it on their own evidence (§2.1) | Open |
-| D-2 | Accept the Apache PDFBox dependency; overlay vs rasterize (§2.2) | Open — overlay recommended |
-| D-3 | Log retention target (§2.3) | Open — 180 days proposed |
-| D-4 | Whether `student.email` needs an export before being dropped (§2.4) | Open |
+| D-1 | Watermark content, appearance, and whether students see it on their own evidence (§2.1) | **Resolved 2026-09-16 — staff views only** |
+| D-2 | Accept the Apache PDFBox dependency; overlay vs rasterize (§2.2) | **Resolved 2026-09-16 — PDFBox accepted, content-stream overlay** |
+| D-3 | Log retention target (§2.3) | **Resolved 2026-09-16 — 180 days**, subject to a disk check first |
+| D-4 | Whether `student.email` needs an export before being dropped (§2.4) | **Resolved 2026-09-16 — no export needed**, settled by checking both servers |
 | D-5 | CSP style policy, pending browser verification (§2.5) | Open |
 
 ---

@@ -32,10 +32,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Contract §9's exit criterion, proven against real MySQL: list rows never
- * carry guardian/email fields, detail rows only carry them when the caller
- * is permitted, and that permitted access is itself audited. Also covers
- * §11 acceptance scenario 8's data-scope proof for the student resource
+ * Contract §9's exit criterion, proven against real MySQL. Guardian and
+ * roster-email fields no longer exist anywhere in the student model — V26
+ * dropped them under data minimization (`Docs/optimization/
+ * 08-SecurityPrivacyHardening.md` §3.1) — so the "list rows never carry them"
+ * half is now a compile-time guarantee rather than a runtime assertion. What
+ * is still asserted here is that claiming sensitive access is audited. Also
+ * covers §11 acceptance scenario 8's data-scope proof for the student resource
  * (issue 001: teacher grade scope was never enforced here).
  */
 class StudentPrivacyIT extends AbstractIntegrationTest {
@@ -137,23 +140,33 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
 
     private StudentDetailDto createStudentInGrade9(String studentNumber) {
         CreateStudentRequest request = new CreateStudentRequest(
-                studentNumber, "Test Student 9", null, "grade_9", "class_9A", "ay_2025_2026",
-                2026, LocalDate.of(2025, 9, 1), null, null);
+                studentNumber, "Test Student 9", "grade_9", "class_9A", "ay_2025_2026",
+                2026, LocalDate.of(2025, 9, 1));
         return studentService.create(request, ACTOR, "zh-CN");
     }
 
+    /**
+     * These two tests used to assert that {@code email}/{@code guardianName}/
+     * {@code guardianContact} were nulled for an unprivileged caller and returned
+     * for a privileged one. V26 dropped all three columns under data minimization
+     * (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1), so there is no
+     * longer any field for the flag to hide — the strongest guarantee is now the
+     * compile-time one, that {@code StudentDetailDto} has no such accessor at all.
+     *
+     * What remains testable, and is still real, is the audit half: the flag
+     * decides whether a {@code student.viewSensitive} entry is written. That is
+     * what these now cover. See the note in {@code StudentServiceImpl.toDetailDto}
+     * — the flag is vestigial and its removal is an open decision.
+     */
     @Test
-    void detailHidesSensitiveFieldsWhenNotPermittedAndDoesNotAudit() {
+    void detailDoesNotAuditWhenSensitiveAccessIsNotClaimed() {
         StudentDetailDto created = createStudent("stu_privacy_2");
 
         long auditCountBefore = auditLogRepository
                 .findByResourceTypeAndResourceId("student", created.id(), PageRequest.of(0, 50))
                 .getTotalElements();
 
-        StudentDetailDto unprivileged = studentService.getDetail(created.id(), false, ACTOR, "zh-CN");
-        assertThat(unprivileged.email()).isNull();
-        assertThat(unprivileged.guardianName()).isNull();
-        assertThat(unprivileged.guardianContact()).isNull();
+        studentService.getDetail(created.id(), false, ACTOR, "zh-CN");
 
         long auditCountAfter = auditLogRepository
                 .findByResourceTypeAndResourceId("student", created.id(), PageRequest.of(0, 50))
@@ -162,17 +175,14 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
     }
 
     @Test
-    void detailExposesSensitiveFieldsWhenPermittedAndAuditsTheAccess() {
+    void detailAuditsWhenSensitiveAccessIsClaimed() {
         StudentDetailDto created = createStudent("stu_privacy_3");
 
         long auditCountBefore = auditLogRepository
                 .findByResourceTypeAndResourceId("student", created.id(), PageRequest.of(0, 50))
                 .getTotalElements();
 
-        StudentDetailDto privileged = studentService.getDetail(created.id(), true, ACTOR, "zh-CN");
-        assertThat(privileged.email()).isEqualTo("stu3@example.com");
-        assertThat(privileged.guardianName()).isEqualTo("Guardian Three");
-        assertThat(privileged.guardianContact()).isEqualTo("13800000003");
+        studentService.getDetail(created.id(), true, ACTOR, "zh-CN");
 
         long auditCountAfter = auditLogRepository
                 .findByResourceTypeAndResourceId("student", created.id(), PageRequest.of(0, 50))
@@ -218,8 +228,8 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
 
     private StudentDetailDto createNumberedStudent(String studentNumber, String displayName) {
         CreateStudentRequest request = new CreateStudentRequest(
-                studentNumber, displayName, null, "grade_6", "class_6A", "ay_2025_2026",
-                2029, LocalDate.of(2025, 9, 1), null, null);
+                studentNumber, displayName, "grade_6", "class_6A", "ay_2025_2026",
+                2029, LocalDate.of(2025, 9, 1));
         return studentService.create(request, ACTOR, "zh-CN");
     }
 
@@ -228,18 +238,8 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
     private StudentDetailDto createStudent(String studentNumber) {
         int suffix = studentNumber.charAt(studentNumber.length() - 1) - '0';
         CreateStudentRequest request = new CreateStudentRequest(
-                studentNumber, "Test Student " + suffix, "stu" + suffix + "@example.com",
-                "grade_6", "class_6A", "ay_2025_2026", 2029, LocalDate.of(2025, 9, 1),
-                "Guardian " + guardianNameSuffix(suffix), "1380000000" + suffix);
+                studentNumber, "Test Student " + suffix,
+                "grade_6", "class_6A", "ay_2025_2026", 2029, LocalDate.of(2025, 9, 1));
         return studentService.create(request, ACTOR, "zh-CN");
-    }
-
-    private String guardianNameSuffix(int n) {
-        return switch (n) {
-            case 1 -> "One";
-            case 2 -> "Two";
-            case 3 -> "Three";
-            default -> "N";
-        };
     }
 }

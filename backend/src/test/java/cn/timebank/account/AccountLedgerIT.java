@@ -225,8 +225,8 @@ class AccountLedgerIT extends AbstractIntegrationTest {
     private String createStudent() {
         int n = SEQ.incrementAndGet();
         CreateStudentRequest request = new CreateStudentRequest(
-                "stu_ledger_" + n, "Ledger Student " + n, null, "grade_6", "class_6A", "ay_2025_2026",
-                2029, LocalDate.of(2025, 9, 1), null, null);
+                "stu_ledger_" + n, "Ledger Student " + n, "grade_6", "class_6A", "ay_2025_2026",
+                2029, LocalDate.of(2025, 9, 1));
         StudentDetailDto student = studentService.create(request, "usr_test_admin", "zh-CN");
         return student.id();
     }
@@ -234,8 +234,8 @@ class AccountLedgerIT extends AbstractIntegrationTest {
     private String createStudentInGrade9() {
         int n = SEQ.incrementAndGet();
         CreateStudentRequest request = new CreateStudentRequest(
-                "stu_ledger9_" + n, "Ledger Student " + n, null, "grade_9", "class_9A", "ay_2025_2026",
-                2026, LocalDate.of(2025, 9, 1), null, null);
+                "stu_ledger9_" + n, "Ledger Student " + n, "grade_9", "class_9A", "ay_2025_2026",
+                2026, LocalDate.of(2025, 9, 1));
         StudentDetailDto student = studentService.create(request, "usr_test_admin", "zh-CN");
         return student.id();
     }

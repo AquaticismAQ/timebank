@@ -633,6 +633,10 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 | `GET` | `/grades` | Authenticated | Grades |
 | `GET` | `/classes` | Authenticated | Classes |
 
+**Student records carry no guardian or roster-email fields.** `guardianName`, `guardianContact` and the student's own `email` were dropped in `V26` under data minimization (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1): no screen displayed them, so they were breach surface with no functional return. They are absent from `POST`/`PATCH /students` requests, from `GET /students/{id}`, and from the `students` import template, which is now seven columns (`studentNumber,displayName,gradeId,classId,enrollmentAcademicYearId,graduationYear,joinedAt`). `user.email` is unaffected — a different field on the login account, and the identifier the sign-in page accepts.
+
+A consequence worth knowing: a `supervisorKind: "student"` peer supervisor's contact now resolves through that student's **linked login account** rather than a roster email, so a roster-only student with no account fails `CONTACT_MISSING` as before.
+
 `directory.read` is deliberately narrower than `students.read`: it's the permission `role_student` holds (students otherwise have no way to look up another student's or teacher's id), and its response never carries `studentNumber`/`status`/`graduationYear`/contact fields the way `/students`'s own list response does. `search` is required and results are capped at a small page size (20) — this is a typeahead, not a directory browse.
 
 ### 4.10 Organizations & Service Categories
@@ -1107,7 +1111,7 @@ The mock client takes deliberate shortcuts that must not be read as contract beh
 | Lists return bare arrays | `{data, page, meta}` envelope (§2.5); the client unwraps `data` and exposes `page` where the UI paginates |
 | Approving a proposal only flips its status | Approval atomically creates the official project draft and backfills `approvedProjectId` (§4.3) |
 | `MOCK_USERS` carry a `password` field | Never present in any response |
-| Student list fixtures carry `guardianName` / `guardianContact` | Guardian and contact fields are omitted from list responses (§9) |
+| Student list fixtures carry `guardianName` / `guardianContact` | Superseded: the fields no longer exist anywhere, dropped in `V26` (§4.9) |
 | `EvidenceFile.url` is a permanent direct link | Short-lived URL issued by `GET /files/{id}` after a permission check, and audited (§4.6) |
 | Category names hold i18n keys (`mock.categories.cat_campus`) | Dictionary names are localized server-side; the client keys off `categoryId` (§2.10) |
 | Filtering and searching happen in the browser over the full array | Server-side `filter[...]` / `search` / `sort` with pagination (§2.7) |
@@ -1149,7 +1153,7 @@ Known differences between the frontend as built and this contract. The resolutio
 | 3 | Coin amounts | `balance: 6` meaning 6 coins | Contract wins: integer centi-coins on the wire, formatted for display (§2.1) | Frontend formatter |
 | 4 | Duration | `completedHours` etc. duplicated alongside minutes | Contract wins: minutes only on the wire; hours derived in the UI (§2.1) | Frontend |
 | 5 | Category names | Hold i18n keys | Contract wins: localized `name` from the server, keyed by `categoryId` (§2.10) | Frontend + fixtures |
-| 6 | Guardian fields in student lists | Present | Contract wins: omitted from lists (§9) | Frontend fixtures + backend |
+| 6 | Guardian fields in student lists | Present | Superseded: columns dropped entirely in `V26`, not merely hidden (§4.9) | Resolved |
 | 7 | Evidence URLs | Permanent direct links | Contract wins: short-lived, permission-checked (§4.6) | Frontend upload wiring |
 | 8 | List envelope / pagination | Bare arrays, client-side filtering | Contract wins (§2.5, §2.7) | Frontend client layer |
 | 9 | Display names alongside IDs (`projectTitle`, `studentName`, …) | Present throughout | **Frontend wins** — now codified as §2.11 | Contract (done) |

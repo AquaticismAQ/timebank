@@ -625,6 +625,10 @@ queued → running → succeeded
 | `GET` | `/grades` | 已登录 | 年级 |
 | `GET` | `/classes` | 已登录 | 班级 |
 
+**学生记录不再包含监护人与学籍邮箱字段。** `guardianName`、`guardianContact` 与学生自身的 `email` 已在 `V26` 中按数据最小化原则删除（`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1）：没有任何界面展示它们，因此只是徒增泄露面而无功能收益。它们不再出现在 `POST`/`PATCH /students` 请求、`GET /students/{id}` 响应，以及 `students` 导入模板中——模板现为七列（`studentNumber,displayName,gradeId,classId,enrollmentAcademicYearId,graduationYear,joinedAt`）。`user.email` 不受影响：那是登录账号上的另一个字段，也是登录页接受的标识符。
+
+一个需要知晓的连带影响：`supervisorKind: "student"` 的同伴主管，其联系方式现在通过该学生**关联的登录账号**解析，而非学籍邮箱；因此没有账号的纯名册学生仍会以 `CONTACT_MISSING` 失败，与此前行为一致。
+
 `directory.read` 刻意比 `students.read` 更窄：这是 `role_student` 持有的权限（学生原本没有任何方式查到其他学生或教师的 id），其响应从不携带 `/students` 列表响应中的 `studentNumber`/`status`/`graduationYear` 或联系方式字段。`search` 为必填参数，结果数量有上限（20 条）——这是一个联想搜索，不是目录浏览。
 
 ### 4.10 组织与服务类别
@@ -1086,7 +1090,7 @@ Mock Client 有意采取了若干捷径，不得被当作合约行为：
 | 列表直接返回数组 | `{data, page, meta}` 信封（§2.5）；Client 解包 `data`，在需要分页的界面暴露 `page` |
 | 提案批准只翻转状态 | 批准同一事务内生成正式项目草稿并回填 `approvedProjectId`（§4.3） |
 | `MOCK_USERS` 带 `password` 字段 | 任何响应中都不存在 |
-| 学生列表假数据带 `guardianName` / `guardianContact` | 列表响应不返回监护人与联系方式（§9） |
+| 学生列表假数据带 `guardianName` / `guardianContact` | 已失效：字段已在 `V26` 中整体删除，不再存在（§4.9） |
 | `EvidenceFile.url` 是永久直链 | 由 `GET /files/{id}` 校验权限后签发短时地址，并记录访问审计（§4.6） |
 | 类别名称里放的是 i18n key（`mock.categories.cat_campus`） | 字典名称由服务端本地化，客户端以 `categoryId` 为键（§2.10） |
 | 在浏览器内对全量数组做筛选与搜索 | 服务端 `filter[...]` / `search` / `sort` 加分页（§2.7） |
@@ -1128,7 +1132,7 @@ Mock Client 有意采取了若干捷径，不得被当作合约行为：
 | 3 | 时间币金额 | `balance: 6` 表示 6 时间币 | 合约为准：传输层为整数分币，展示时格式化（§2.1） | 前端格式化 |
 | 4 | 时长 | `completedHours` 等与分钟字段重复 | 合约为准：传输层只有分钟，小时在界面换算（§2.1） | 前端 |
 | 5 | 类别名称 | 存放 i18n key | 合约为准：由服务端下发本地化 `name`，以 `categoryId` 为键（§2.10） | 前端与假数据 |
-| 6 | 学生列表中的监护人字段 | 存在 | 合约为准：列表不返回（§9） | 前端假数据与后端 |
+| 6 | 学生列表中的监护人字段 | 存在 | 已失效：`V26` 整体删除该列，而非仅隐藏（§4.9） | 已解决 |
 | 7 | 证明材料地址 | 永久直链 | 合约为准：短时且校验权限（§4.6） | 前端上传接入 |
 | 8 | 列表信封与分页 | 裸数组、客户端筛选 | 合约为准（§2.5、§2.7） | 前端 Client 层 |
 | 9 | ID 旁的展示名称（`projectTitle`、`studentName` 等） | 全面存在 | **前端为准**——已固化为 §2.11 | 合约（已完成） |

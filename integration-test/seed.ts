@@ -292,10 +292,9 @@ async function main() {
   for (const s of students) {
     const id = genId('std');
     studentIdByNumber.set(s.studentNumber, id);
-    // `email`, `guardian_name` and `guardian_contact` are deliberately left
-    // unset: no screen uses them, and `Docs/optimization/08-SecurityPrivacyHardening.md`
-    // §3.1 drops the columns outright. Writing them now only to delete them
-    // later would be wasted work.
+    // The student table has no email/guardian_name/guardian_contact columns:
+    // dropped in V26 under data minimization
+    // (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1).
     studentInserts.push(
       `INSERT INTO student (id, student_number, display_name, grade_id, class_id, enrollment_academic_year_id, graduation_year, status, joined_at, version, created_at, updated_at) VALUES ` +
       `(${sqlString(id)}, ${sqlString(s.studentNumber)}, ${sqlString(s.displayName)}, ${sqlString(s.gradeId)}, ${sqlString(s.classId)}, 'ay_2025_2026', ${s.graduationYear}, 'ACTIVE', ${sqlString(dateFromNow(s.joinedAtOffsetDays))}, 1, ${now}, ${now});`

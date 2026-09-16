@@ -189,8 +189,8 @@ class FileServiceIT extends AbstractIntegrationTest {
     private StudentDetailDto createStudent() {
         int n = SEQ.incrementAndGet();
         CreateStudentRequest request = new CreateStudentRequest(
-                "stu_file_" + n, "File Student " + n, null, "grade_6", "class_6A", "ay_2025_2026",
-                2029, LocalDate.of(2025, 9, 1), null, null);
+                "stu_file_" + n, "File Student " + n, "grade_6", "class_6A", "ay_2025_2026",
+                2029, LocalDate.of(2025, 9, 1));
         return studentService.create(request, "usr_test_admin", "zh-CN");
     }
 

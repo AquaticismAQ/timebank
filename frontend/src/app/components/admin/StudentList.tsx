@@ -42,7 +42,6 @@ function ProgressBar({ value, max, color = 'bg-primary' }: { value: number; max:
 
 type EditForm = {
   name: string;
-  email: string;
   studentNumber: string;
   gradeId: string;
   classId: string;
@@ -189,7 +188,6 @@ export function StudentList() {
     setEditStudent(s);
     setEditForm({
       name: s.name,
-      email: s.email,
       studentNumber: s.studentNumber,
       gradeId: s.gradeId,
       classId: s.classId,
@@ -213,7 +211,7 @@ export function StudentList() {
       // value) — Docs/issues/037-*.md, this field used to be silently
       // dropped from the request entirely.
       const hasProfileChanges = editForm.studentNumber !== editStudent.studentNumber ||
-        editForm.name !== editStudent.name || editForm.email !== editStudent.email ||
+        editForm.name !== editStudent.name ||
         editForm.gradeId !== editStudent.gradeId || editForm.classId !== editStudent.classId;
 
       if (hasProfileChanges) {
@@ -225,7 +223,6 @@ export function StudentList() {
         await api.students.update(editStudent.id, {
           studentNumber: editForm.studentNumber,
           displayName: editForm.name,
-          email: editForm.email,
           gradeId: editForm.gradeId || editStudent.gradeId || undefined,
           classId: editForm.classId || editStudent.classId || undefined,
           version: editStudent.version ?? 1,
@@ -236,7 +233,6 @@ export function StudentList() {
         ...s,
         studentNumber: editForm.studentNumber,
         name: editForm.name,
-        email: editForm.email,
         gradeId: editForm.gradeId,
         grade: newGradeName,
         classId: editForm.classId,
@@ -505,13 +501,6 @@ export function StudentList() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.students.email')}</label>
-                <input type="email" value={editForm.email}
-                  onChange={e => setEditForm(f => f && ({ ...f, email: e.target.value }))}
-                  maxLength={255}
-                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
-              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -638,7 +627,6 @@ export function StudentList() {
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div className="space-y-1.5">
                       <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.studentNumber')}</span><span className="text-foreground">{student.studentNumber}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.email')}</span><span className="text-foreground text-xs truncate ml-2">{student.email}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.completedHours')}</span><span className="text-green-600 dark:text-green-400">{student.completedMinutes !== undefined ? `${minutesToHours(student.completedMinutes)}h` : '—'}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.pendingHours')}</span><span className="text-blue-500">{student.pendingMinutes !== undefined ? `${minutesToHours(student.pendingMinutes)}h` : '—'}</span></div>
                     </div>

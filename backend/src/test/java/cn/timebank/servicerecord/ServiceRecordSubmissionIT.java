@@ -365,8 +365,8 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
     private StudentDetailDto createStudentInGrade9() {
         int n = SEQ.incrementAndGet();
         CreateStudentRequest request = new CreateStudentRequest(
-                "stu_submit9_" + n, "Submit Student " + n, null, "grade_9", "class_9A", "ay_2025_2026",
-                2026, LocalDate.of(2025, 9, 1), null, null);
+                "stu_submit9_" + n, "Submit Student " + n, "grade_9", "class_9A", "ay_2025_2026",
+                2026, LocalDate.of(2025, 9, 1));
         return studentService.create(request, "usr_test_admin", "zh-CN");
     }
 
@@ -392,8 +392,8 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
     private StudentDetailDto createStudent() {
         int n = SEQ.incrementAndGet();
         CreateStudentRequest request = new CreateStudentRequest(
-                "stu_submit_" + n, "Submit Student " + n, null, "grade_6", "class_6A", "ay_2025_2026",
-                2029, LocalDate.of(2025, 9, 1), null, null);
+                "stu_submit_" + n, "Submit Student " + n, "grade_6", "class_6A", "ay_2025_2026",
+                2029, LocalDate.of(2025, 9, 1));
         return studentService.create(request, "usr_test_admin", "zh-CN");
     }
 

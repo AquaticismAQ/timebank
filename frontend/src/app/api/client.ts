@@ -51,7 +51,7 @@ interface StudentListItemDtoWire {
   id: string; studentNumber: string; displayName: string;
   gradeId: string; gradeLevel: number; classId: string; className: string;
   status: string; graduationYear: number; version: number;
-  email?: string; guardianName?: string; guardianContact?: string; joinedAt?: string;
+  joinedAt?: string;
 }
 /** Backend enum fields (status, sourceType, type, ...) arrive UPPER_SNAKE; the frontend renders/compares camelCase literals directly in JSX. Run every response through this for whichever fields the resource has. */
 function mapEnumFields<T extends object>(obj: T, fields: (keyof T)[]): T {
@@ -127,11 +127,8 @@ function fromStudentDto(dto: StudentListItemDtoWire): Student {
     gradeLevel: dto.gradeLevel,
     classId: dto.classId,
     className: dto.className,
-    email: dto.email ?? '',
     status: dto.status.toLowerCase() as Student['status'],
     joinedAt: dto.joinedAt ?? '',
-    guardianName: dto.guardianName,
-    guardianContact: dto.guardianContact,
     version: dto.version,
   };
 }
@@ -719,10 +716,10 @@ export const api = {
       return { data: page.data.map(fromStudentDto), page: page.page };
     },
     async get(id: string): Promise<Student> {
-      const dto = await http.get<StudentListItemDtoWire & { email?: string; guardianName?: string; guardianContact?: string; joinedAt: string }>(`/students/${id}`);
+      const dto = await http.get<StudentListItemDtoWire & { joinedAt: string }>(`/students/${id}`);
       return fromStudentDto(dto);
     },
-    async update(id: string, data: { studentNumber?: string; displayName?: string; email?: string; gradeId?: string; classId?: string; guardianName?: string; guardianContact?: string; version: number }): Promise<Student> {
+    async update(id: string, data: { studentNumber?: string; displayName?: string; gradeId?: string; classId?: string; version: number }): Promise<Student> {
       const dto = await http.patch<StudentListItemDtoWire>(`/students/${id}`, data);
       return fromStudentDto(dto);
     },

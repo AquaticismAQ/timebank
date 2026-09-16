@@ -104,6 +104,18 @@ class StudentServiceImpl implements StudentService {
         SchoolClass schoolClass = classRepository.findById(student.getClassId())
                 .orElseThrow(() -> new IllegalStateException("Student references a missing class"));
 
+        // VESTIGIAL AFTER V26 — flagged, not removed. This flag used to null out
+        // email/guardianName/guardianContact for callers without `students.manage`.
+        // All three columns were dropped under data minimization
+        // (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1), so nothing in
+        // StudentDetailDto is permission-gated any more and the flag now controls
+        // only whether this audit row is written. That means a `student.viewSensitive`
+        // entry can be recorded for a read that exposed nothing sensitive.
+        //
+        // Removing the flag and the event is a deliberate design decision (it touches
+        // the StudentService interface, StudentController, ProgressServiceImpl and
+        // ServiceRecordServiceImpl) and is out of §3.1's scope — left for a decision
+        // rather than silently gutted.
         if (includeSensitiveFields) {
             auditService.record(new AuditEntry(actorId, "students.manage", "student.viewSensitive",
                     "student", student.getId(), null, null, null));
@@ -111,12 +123,9 @@ class StudentServiceImpl implements StudentService {
 
         return new StudentDetailDto(
                 student.getId(), student.getStudentNumber(), student.getDisplayName(),
-                includeSensitiveFields ? student.getEmail() : null,
                 grade.getId(), grade.getSequence(),
                 schoolClass.getId(), schoolClass.getName(),
                 student.getStatus().name(), student.getGraduationYear(),
-                includeSensitiveFields ? student.getGuardianName() : null,
-                includeSensitiveFields ? student.getGuardianContact() : null,
                 student.getJoinedAt(), student.getVersion(), student.getCreatedAt(), student.getUpdatedAt());
     }
 
@@ -133,9 +142,6 @@ class StudentServiceImpl implements StudentService {
         Student student = new Student(OpaqueIds.generate("std"), request.studentNumber(), request.displayName(),
                 request.gradeId(), request.classId(), request.enrollmentAcademicYearId(), request.graduationYear(),
                 request.joinedAt(), now);
-        student.setEmail(request.email());
-        student.setGuardianName(request.guardianName());
-        student.setGuardianContact(request.guardianContact());
         studentRepository.save(student);
 
         auditService.record(new AuditEntry(actorId, "students.manage", "student.create", "student", student.getId(),
@@ -160,9 +166,6 @@ class StudentServiceImpl implements StudentService {
         if (request.displayName() != null) {
             student.setDisplayName(request.displayName());
         }
-        if (request.email() != null) {
-            student.setEmail(request.email());
-        }
         if (request.gradeId() != null) {
             requireGrade(request.gradeId());
             student.setGradeId(request.gradeId());
@@ -170,12 +173,6 @@ class StudentServiceImpl implements StudentService {
         if (request.classId() != null) {
             requireClass(request.classId());
             student.setClassId(request.classId());
-        }
-        if (request.guardianName() != null) {
-            student.setGuardianName(request.guardianName());
-        }
-        if (request.guardianContact() != null) {
-            student.setGuardianContact(request.guardianContact());
         }
         student.setUpdatedAt(Instant.now());
 

@@ -42,8 +42,8 @@ class AccountConcurrencyIT extends AbstractIntegrationTest {
     @Test
     void concurrentCreditsToTheSameAccountSerializeCorrectly() throws Exception {
         CreateStudentRequest request = new CreateStudentRequest(
-                "stu_concurrency_1", "Concurrency Student", null, "grade_6", "class_6A", "ay_2025_2026",
-                2029, LocalDate.of(2025, 9, 1), null, null);
+                "stu_concurrency_1", "Concurrency Student", "grade_6", "class_6A", "ay_2025_2026",
+                2029, LocalDate.of(2025, 9, 1));
         StudentDetailDto student = studentService.create(request, "usr_test_admin", "zh-CN");
 
         // Pre-create the account sequentially first — first-ever-credit account

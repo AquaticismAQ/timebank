@@ -57,8 +57,8 @@ class ImportServiceImpl implements ImportService {
             throw ApiException.notFound("Unknown import type: " + type);
         }
         if ("students".equals(type)) {
-            return "studentNumber,displayName,gradeId,classId,enrollmentAcademicYearId,graduationYear,joinedAt,email,guardianName,guardianContact\n"
-                    + "stu_1001,Zhang San,grade_6,class_6A,ay_2025_2026,2032,2026-09-01,,,\n";
+            return "studentNumber,displayName,gradeId,classId,enrollmentAcademicYearId,graduationYear,joinedAt\n"
+                    + "stu_1001,Example Student,grade_6,class_6A,ay_2025_2026,2032,2026-09-01\n";
         }
         return "studentNumber,serviceDate,durationMinutes,description\n"
                 + "stu_0001,2024-10-01,120,Community cleanup (paper ledger 2024 fall)\n";

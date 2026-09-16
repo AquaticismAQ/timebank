@@ -334,7 +334,6 @@ export interface Student {
   gradeLevel: number;
   classId: string;
   className: string;
-  email: string;
   status: 'active' | 'inactive' | 'graduated';
   completedMinutes?: number;
   pendingMinutes?: number;
@@ -342,8 +341,6 @@ export interface Student {
   stageRequiredMinutes?: number;
   timeCoinBalance?: number;
   joinedAt: string;
-  guardianName?: string;
-  guardianContact?: string;
   version?: number;
 }
 

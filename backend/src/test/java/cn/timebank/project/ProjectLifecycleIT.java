@@ -86,8 +86,8 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         assertThat(registrationOpen.status()).isEqualTo("REGISTRATION_OPEN");
 
         StudentDetailDto student = studentService.create(
-                new CreateStudentRequest("stu_has_reg_test", "Has Registrant Test Student", null, "grade_6", "class_6A",
-                        "ay_2025_2026", 2029, LocalDate.of(2025, 9, 1), null, null),
+                new CreateStudentRequest("stu_has_reg_test", "Has Registrant Test Student", "grade_6", "class_6A",
+                        "ay_2025_2026", 2029, LocalDate.of(2025, 9, 1)),
                 "usr_test_admin", "zh-CN");
         EnrollmentDto enrollment = enrollmentService.register(
                 registrationOpen.id(), new RegisterRequest(null), studentAuth(student.id()), "zh-CN");
@@ -135,8 +135,8 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         assertThat(registrationOpen.status()).isEqualTo("REGISTRATION_OPEN");
 
         StudentDetailDto student = studentService.create(
-                new CreateStudentRequest("stu_gate_test", "Gate Test Student", null, "grade_6", "class_6A",
-                        "ay_2025_2026", 2029, LocalDate.of(2025, 9, 1), null, null),
+                new CreateStudentRequest("stu_gate_test", "Gate Test Student", "grade_6", "class_6A",
+                        "ay_2025_2026", 2029, LocalDate.of(2025, 9, 1)),
                 "usr_test_admin", "zh-CN");
         EnrollmentDto enrollment = enrollmentService.register(
                 registrationOpen.id(), new RegisterRequest(null), studentAuth(student.id()), "zh-CN");

@@ -218,8 +218,8 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
 
     private StudentDetailDto createStudent(int n) {
         CreateStudentRequest request = new CreateStudentRequest(
-                "stu_capacity_" + n, "Capacity Student " + n, null, "grade_6", "class_6A", "ay_2025_2026",
-                2029, LocalDate.of(2025, 9, 1), null, null);
+                "stu_capacity_" + n, "Capacity Student " + n, "grade_6", "class_6A", "ay_2025_2026",
+                2029, LocalDate.of(2025, 9, 1));
         return studentService.create(request, "usr_test_admin", "zh-CN");
     }
 

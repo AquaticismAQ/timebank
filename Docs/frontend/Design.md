@@ -263,7 +263,7 @@ A student may file a **retroactive entry (supplement)** or an **appeal (reconsid
 
 - In-app notifications categorized by review, project, account, rules, and system.
 - Support read/unread and jump to related business detail.
-- Personal center displays basic profile, class and grade, guardian information, privacy authorization status, and security settings.
+- Personal center displays basic profile, class and grade, privacy authorization status, and security settings. (Guardian information is **not** held by the system — the columns were dropped in `V26` under data minimization, `Docs/optimization/08-SecurityPrivacyHardening.md` §3.1.)
 - Authoritative fields such as student ID and grade cannot be directly modified by students; contact administrator required.
 
 ---
@@ -361,7 +361,7 @@ Administrators include Student Development Center administrators and system admi
 
 ### 7.5 Students & Base Data
 
-- Student, class, grade, academic year, and guardian information management.
+- Student, class, grade and academic year management. (No guardian information — dropped in `V26`, see §3.1 of the hardening plan.)
 - Single-item maintenance and batch import.
 - Status changes: class transfer, grade promotion, graduation, deactivation.
 - Student account reset, unlock, and role check.

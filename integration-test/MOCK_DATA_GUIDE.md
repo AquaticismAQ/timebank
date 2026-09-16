@@ -55,7 +55,7 @@ Students are **generated**, not hand-listed — see "Curated vs generated data" 
 
 `gradeId`/`classId` must be real ids: `grade_6`..`grade_11` and `class_6A`/`6B`..`class_11A`/`11B` from `R__seed_base_data.sql`, plus `class_9_mars`/`class_10_luna` from `namedClasses`. `graduationYear` is a plain int (`@Min(2000)` on the real `CreateStudentRequest`).
 
-`email`, `guardianName` and `guardianContact` are **not set**: no screen uses them, and `Docs/optimization/08-SecurityPrivacyHardening.md` §3.1 drops the columns. Do not reintroduce them.
+There are no `email`, `guardianName` or `guardianContact` fields: the columns were dropped in `V26` under data minimization (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1) because no screen ever displayed them. Do not reintroduce them. `user.email` on the login account is unaffected.
 
 ## Adding a new project
 

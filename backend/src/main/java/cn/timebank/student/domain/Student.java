@@ -23,11 +23,11 @@ import java.time.LocalDate;
  * {@code graduationYear} is the purge key B6.3 depends on — present from
  * this entity's first migration, never retrofitted.
  *
- * {@code guardianName}/{@code guardianContact} exist as fields only (Q4:
- * no guardian accounts in Phase 2); {@code StudentDto} omits them from list
- * responses at the application layer (contract §9) — the exclusion is not
- * enforced here, since the entity legitimately needs to carry the data for
- * the detail-view/permission-gated case.
+ * This entity deliberately carries **no guardian name, guardian contact, or
+ * roster email**. They existed from V4 until V26 and were dropped under data
+ * minimization (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1): no
+ * screen ever rendered them, so they were pure breach surface. Do not
+ * reintroduce them without a real consumer.
  */
 @Entity
 @Table(name = "student")
@@ -48,10 +48,6 @@ public class Student extends VersionedEntity {
     private String displayName;
 
     @Setter
-    @Column(name = "email")
-    private String email;
-
-    @Setter
     @Column(name = "grade_id", length = 32, nullable = false)
     private String gradeId;
 
@@ -69,14 +65,6 @@ public class Student extends VersionedEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 16, nullable = false)
     private StudentStatus status;
-
-    @Setter
-    @Column(name = "guardian_name")
-    private String guardianName;
-
-    @Setter
-    @Column(name = "guardian_contact")
-    private String guardianContact;
 
     @Column(name = "joined_at", nullable = false, updatable = false)
     private LocalDate joinedAt;

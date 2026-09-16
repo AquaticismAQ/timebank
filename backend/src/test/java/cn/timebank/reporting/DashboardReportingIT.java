@@ -221,8 +221,8 @@ class DashboardReportingIT extends AbstractIntegrationTest {
     private StudentDetailDto createStudent(String gradeId, String classId) {
         int n = SEQ.incrementAndGet();
         CreateStudentRequest request = new CreateStudentRequest(
-                "stu_dash_" + n, "Dashboard Student " + n, null, gradeId, classId, "ay_2025_2026",
-                2029, LocalDate.of(2025, 9, 1), null, null);
+                "stu_dash_" + n, "Dashboard Student " + n, gradeId, classId, "ay_2025_2026",
+                2029, LocalDate.of(2025, 9, 1));
         return studentService.create(request, "usr_test_admin", "zh-CN");
     }
 

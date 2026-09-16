@@ -451,14 +451,28 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
                 record.setSupervisorContact(user.email());
             }
             case STUDENT -> {
-                // includeSensitiveFields=true: a legitimate contact-resolution read,
-                // audited the same as any other sensitive-field access (§6 rule 2).
-                StudentDetailDto peer = studentService.getDetail(requireSubjectId(subjectId), true, "system", "zh-CN");
-                requireContact(peer.email(), "supervisorSubjectId");
+                // A peer supervisor's contact used to come from `student.email`, which
+                // V26 dropped under data minimization (`Docs/optimization/
+                // 08-SecurityPrivacyHardening.md` §3.1). It now resolves through the
+                // student's linked login account instead — `user.email` is retained and
+                // is the address anyone would actually reach them on.
+                //
+                // A roster-only student (no login) therefore has no contact and fails
+                // the same CONTACT_MISSING validation as a student with no address on
+                // file used to. Behaviour is unchanged from the caller's point of view.
+                //
+                // includeSensitiveFields=false: nothing in StudentDetailDto is gated any
+                // more, so passing true would only record a `student.viewSensitive` audit
+                // entry for a read that exposes nothing sensitive.
+                StudentDetailDto peer = studentService.getDetail(requireSubjectId(subjectId), false, "system", "zh-CN");
+                String peerContact = userService.findUserIdByStudentId(peer.id())
+                        .map(userId -> userService.getById(userId).email())
+                        .orElse(null);
+                requireContact(peerContact, "supervisorSubjectId");
                 record.setSupervisorKind(SupervisorKind.STUDENT);
                 record.setSupervisorSubjectId(peer.id());
                 record.setSupervisorName(peer.displayName());
-                record.setSupervisorContact(peer.email());
+                record.setSupervisorContact(peerContact);
             }
             case EXTERNAL_MANUAL -> {
                 if (manualName == null || manualName.isBlank()) {
