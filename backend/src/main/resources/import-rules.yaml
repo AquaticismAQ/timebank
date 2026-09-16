@@ -1,0 +1,140 @@
+# Import validation rules (Docs/optimization/09-RuleBasedImportValidation.md).
+#
+# This file IS the validation. The engine (RuleEngine) only interprets what is
+# here — there is no hand-written branching left in the validators — and
+# `GET /imports/templates/{type}` is generated from the same column list, so
+# the template and the rules cannot drift apart.
+#
+# Decision D-1: rules live here, in the repo, rather than in a database table.
+# They change rarely and are closer to schema than to policy: a wrong rule
+# silently corrupts the roster, so review-before-deploy is a feature. The
+# loader sits behind RuleSetSource, so a database-backed source stays reachable
+# without touching the evaluator.
+#
+# Decision D-2: `type` must be one of the fixed RuleType catalogue. There is
+# deliberately no expression language — an evaluator that can run arbitrary
+# logic is a security surface of its own, in the one component whose entire job
+# is handling files someone else supplied.
+#
+# `code` values are PINNED to what the hand-written validators produced. They
+# are the stable machine contract for the error report and any client reading
+# it; ImportRuleParityTest fails if one changes.
+#
+# Messages carry both languages inline, matching how the rest of this codebase
+# does i18n (dictionary rows carry name_zh/name_en). There is no Spring
+# MessageSource in this project, so inventing one just for import errors would
+# have added infrastructure nobody else uses. `{value}` interpolates the cell.
+
+types:
+
+  students:
+    maxRows: 5000
+    maxBytes: 5242880          # 5 MiB
+    columns:
+      - name: studentNumber
+        sample: a45b9def
+        rules:
+          - { type: REQUIRED,        code: REQUIRED,
+              messages: { en: "studentNumber is required", zh-CN: "学号为必填项" } }
+          - { type: UNSAFE_CONTENT,  code: UNSAFE_CONTENT,
+              messages: { en: "studentNumber contains characters that are not allowed", zh-CN: "学号包含不允许的字符" } }
+          - { type: MAX_LENGTH,      code: INVALID_FORMAT, params: { max: "32" },
+              messages: { en: "studentNumber must be 32 characters or fewer", zh-CN: "学号长度不得超过 32 个字符" } }
+          # The school-issued stable hash agreed in the MLPS design doc §4.2.
+          - { type: REGEX,           code: INVALID_FORMAT, params: { pattern: "[0-9a-zA-Z_-]+" },
+              messages: { en: "studentNumber may contain only letters, digits, hyphen and underscore", zh-CN: "学号只能包含字母、数字、连字符和下划线" } }
+          - { type: UNIQUE_IN_FILE,  code: DUPLICATE_IN_FILE,
+              messages: { en: "studentNumber {value} appears more than once in this file", zh-CN: "学号 {value} 在本文件中重复出现" } }
+          - { type: UNIQUE_IN_DB,    code: STUDENT_NUMBER_TAKEN, params: { lookup: studentNumber },
+              messages: { en: "Student number {value} is already in use", zh-CN: "学号 {value} 已被使用" } }
+
+      - name: displayName
+        sample: Alex L.
+        rules:
+          - { type: REQUIRED,        code: REQUIRED,
+              messages: { en: "displayName is required", zh-CN: "姓名为必填项" } }
+          - { type: UNSAFE_CONTENT,  code: UNSAFE_CONTENT,
+              messages: { en: "displayName contains characters that are not allowed", zh-CN: "姓名包含不允许的字符" } }
+          - { type: MAX_LENGTH,      code: INVALID_FORMAT, params: { max: "100" },
+              messages: { en: "displayName must be 100 characters or fewer", zh-CN: "姓名长度不得超过 100 个字符" } }
+
+      - name: gradeId
+        sample: grade_6
+        rules:
+          - { type: UNSAFE_CONTENT,  code: UNSAFE_CONTENT,
+              messages: { en: "gradeId contains characters that are not allowed", zh-CN: "年级标识包含不允许的字符" } }
+          - { type: REFERENCE_EXISTS, code: UNKNOWN_GRADE, params: { lookup: grade },
+              messages: { en: "Unknown gradeId: {value}", zh-CN: "未知的年级标识：{value}" } }
+
+      - name: classId
+        sample: class_6A
+        rules:
+          - { type: UNSAFE_CONTENT,  code: UNSAFE_CONTENT,
+              messages: { en: "classId contains characters that are not allowed", zh-CN: "班级标识包含不允许的字符" } }
+          - { type: REFERENCE_EXISTS, code: UNKNOWN_CLASS, params: { lookup: class },
+              messages: { en: "Unknown classId: {value}", zh-CN: "未知的班级标识：{value}" } }
+          # Cross-field: the class's own grade must equal the gradeId column.
+          - { type: REFERENCE_CONSISTENT, code: CLASS_GRADE_MISMATCH, params: { lookup: classGrade, matches: gradeId },
+              messages: { en: "Class {value} does not belong to the stated grade", zh-CN: "班级 {value} 不属于所填写的年级" } }
+
+      - name: enrollmentAcademicYearId
+        sample: ay_2025_2026
+        rules:
+          - { type: UNSAFE_CONTENT,  code: UNSAFE_CONTENT,
+              messages: { en: "enrollmentAcademicYearId contains characters that are not allowed", zh-CN: "学年标识包含不允许的字符" } }
+          - { type: REFERENCE_EXISTS, code: UNKNOWN_ACADEMIC_YEAR, params: { lookup: academicYear },
+              messages: { en: "Unknown enrollmentAcademicYearId: {value}", zh-CN: "未知的学年标识：{value}" } }
+
+      - name: graduationYear
+        sample: "2032"
+        rules:
+          - { type: INT_RANGE,       code: INVALID_YEAR, params: { min: "2000" },
+              messages: { en: "graduationYear must be a number 2000 or later, got '{value}'", zh-CN: "毕业年份须为不早于 2000 的数字，实际为“{value}”" } }
+
+      - name: joinedAt
+        sample: "2026-09-01"
+        rules:
+          - { type: DATE_FORMAT,     code: INVALID_DATE,
+              messages: { en: "Expected yyyy-MM-dd format, got '{value}'", zh-CN: "日期格式应为 yyyy-MM-dd，实际为“{value}”" } }
+
+  serviceRecordsHistorical:
+    maxRows: 20000
+    maxBytes: 10485760         # 10 MiB
+    columns:
+      - name: studentNumber
+        sample: a45b9def
+        rules:
+          - { type: REQUIRED,        code: REQUIRED,
+              messages: { en: "studentNumber is required", zh-CN: "学号为必填项" } }
+          - { type: UNSAFE_CONTENT,  code: UNSAFE_CONTENT,
+              messages: { en: "studentNumber contains characters that are not allowed", zh-CN: "学号包含不允许的字符" } }
+          - { type: MAX_LENGTH,      code: INVALID_FORMAT, params: { max: "32" },
+              messages: { en: "studentNumber must be 32 characters or fewer", zh-CN: "学号长度不得超过 32 个字符" } }
+          # Existence and status in one rule: the roster row must be there AND
+          # be ACTIVE, reported with the two distinct codes the hand-written
+          # validator used.
+          - { type: MUST_EXIST_IN_DB, code: STUDENT_NOT_FOUND,
+              params: { status: ACTIVE, statusCode: STUDENT_INACTIVE },
+              messages: { en: "No student with number {value}", zh-CN: "不存在学号为 {value} 的学生",
+                          status.en: "Student {value} is not active", "status.zh-CN": "学生 {value} 不处于在读状态" } }
+
+      - name: serviceDate
+        sample: "2024-10-01"
+        rules:
+          - { type: DATE_FORMAT,     code: INVALID_DATE,
+              messages: { en: "Expected yyyy-MM-dd format, got '{value}'", zh-CN: "日期格式应为 yyyy-MM-dd，实际为“{value}”" } }
+
+      - name: durationMinutes
+        sample: "120"
+        rules:
+          - { type: INT_RANGE,       code: INVALID_DURATION, params: { min: "1" },
+              messages: { en: "Duration must be a positive number of minutes, got '{value}'", zh-CN: "时长须为正整数分钟，实际为“{value}”" } }
+
+      - name: description
+        sample: Community cleanup (paper ledger 2024 autumn)
+        optional: true
+        rules:
+          - { type: UNSAFE_CONTENT,  code: UNSAFE_CONTENT,
+              messages: { en: "description contains characters that are not allowed", zh-CN: "说明包含不允许的字符" } }
+          - { type: MAX_LENGTH,      code: INVALID_FORMAT, params: { max: "500" },
+              messages: { en: "description must be 500 characters or fewer", zh-CN: "说明长度不得超过 500 个字符" } }

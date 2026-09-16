@@ -76,11 +76,20 @@ public class FileController {
 
     @GetMapping("/{id}/content")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<InputStreamResource> download(@PathVariable String id, @RequestParam String token) {
-        DownloadResult result = fileService.downloadContent(token);
+    public ResponseEntity<InputStreamResource> download(
+            @PathVariable String id, @RequestParam String token, Authentication auth) {
+        DownloadResult result = fileService.downloadContent(token, auth);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(result.mimeType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + result.filename() + "\"")
+                // `no-store` on every evidence response, not just watermarked ones.
+                // A watermarked body is viewer-specific and must never be served
+                // from a shared cache to someone else (§3.6); an unwatermarked one
+                // is still a minor's photo behind a short-lived token, so caching
+                // it buys nothing worth the risk. Stated explicitly rather than
+                // relying on the token's 300s TTL to limit the damage.
+                .header(HttpHeaders.CACHE_CONTROL, "no-store, private, max-age=0")
+                .header(HttpHeaders.PRAGMA, "no-cache")
                 .body(new InputStreamResource(result.content()));
     }
 

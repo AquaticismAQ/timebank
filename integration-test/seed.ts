@@ -212,8 +212,39 @@ async function login(baseUrl: string, username: string, password: string): Promi
   return session;
 }
 
+/**
+ * A genuinely parseable one-page PDF, built with real object offsets and an
+ * xref table.
+ *
+ * It used to be `%PDF-1.4` plus a comment — enough for the magic-byte check
+ * and nothing more, as its own comment admitted. That went unnoticed for as
+ * long as nothing ever *parsed* the bytes. Evidence watermarking
+ * (`08-SecurityPrivacyHardening.md` §3.7) does parse them, so every seeded
+ * file became an unviewable 500, and PDF sanitization at upload would now
+ * reject the fake outright. Seed evidence has to be a real document.
+ */
+function minimalValidPdf(): Buffer {
+  const header = '%PDF-1.4\n';
+  const objects = [
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
+    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << >> >>\nendobj\n',
+  ];
+  let body = '';
+  const offsets: number[] = [];
+  for (const obj of objects) {
+    offsets.push(header.length + body.length);
+    body += obj;
+  }
+  const xrefOffset = header.length + body.length;
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) xref += `${String(off).padStart(10, '0')} 00000 n \n`;
+  const trailer = `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return Buffer.from(header + body + xref + trailer, 'latin1');
+}
+
 async function uploadEvidence(session: Session): Promise<string> {
-  const content = Buffer.from('%PDF-1.4\n% integration-test seed evidence file, not a structurally valid PDF beyond its signature\n');
+  const content = minimalValidPdf();
   const intent = await session.request('POST', '/api/v1/files/upload-intents', {
     filename: 'evidence.pdf', mimeType: 'application/pdf', sizeBytes: content.length, purpose: 'serviceRecordEvidence',
   });

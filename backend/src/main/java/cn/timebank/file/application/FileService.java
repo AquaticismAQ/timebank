@@ -21,7 +21,15 @@ public interface FileService {
 
     FileMetadataDto getMetadata(String fileId, Authentication auth);
 
-    DownloadResult downloadContent(String token);
+    /**
+     * {@code auth} is needed for the watermark, not for access control — the
+     * token already carries that, having been issued only after
+     * {@link #getMetadata} passed its scope check. Evidence delivered to staff
+     * is stamped with who they are and when they looked
+     * (08-SecurityPrivacyHardening.md §3.6, decision D-1); a student reading
+     * their own file gets it unmarked.
+     */
+    DownloadResult downloadContent(String token, Authentication auth);
 
     void delete(String fileId, Authentication auth);
 

@@ -1,38 +1,40 @@
 package cn.timebank.dataexchange.application;
 
-import cn.timebank.dataexchange.infrastructure.StudentLookupRepository;
+import cn.timebank.dataexchange.application.validation.ImportRuleSet;
+import cn.timebank.dataexchange.application.validation.Rfc4180Reader;
+import cn.timebank.dataexchange.application.validation.RowValidation;
+import cn.timebank.dataexchange.application.validation.RuleEngine;
+import cn.timebank.dataexchange.application.validation.RuleSetSource;
 import cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
-import java.util.Set;
+import java.util.List;
 
 /**
- * B5.10b: one row of the `students` roster import is {@code
- * studentNumber,displayName,gradeId,classId,enrollmentAcademicYearId,
- * graduationYear,joinedAt} — the same
- * fields {@code POST /students} (the single-student create path,
- * {@link cn.timebank.student.application.StudentService#create}) requires,
- * since a bulk row is just that request built from a CSV line instead of a
- * form. Shared by both the validate run and the commit run for the same
- * reason as {@link HistoricalImportRowValidator}: commit re-validates
- * rather than trusting a stored intermediate result.
+ * Turns one `students` roster row into a {@link CreateStudentRequest}.
  *
- * <p>{@code seenInFile} catches a student number repeated within the same
- * upload before either phase has persisted anything — the commit phase's
- * own row-by-row {@code studentNumberExists} check would eventually catch
- * a same-file duplicate too (the first occurrence gets persisted before
- * the second is checked), but only on the second occurrence, and only
- * during commit; without this, the read-only validate pass would wrongly
- * report both rows valid.</p>
+ * <p><b>This class no longer contains any validation logic.</b> Every rule
+ * lives in {@code import-rules.yaml} and is interpreted by {@link RuleEngine}
+ * (plan §3.6). What remains here is the part that genuinely is Java: mapping
+ * validated cells onto the typed request the commit path needs, which is the
+ * same shape {@code POST /students} takes, since a bulk row is just that
+ * request built from a CSV line instead of a form.</p>
+ *
+ * <p>The row is parsed with a real RFC 4180 reader rather than
+ * {@code split(",", -1)}, so a name containing a comma no longer shifts every
+ * column after it — see {@link Rfc4180Reader}.</p>
  */
 @Component
 class StudentImportRowValidator {
 
-    private final StudentLookupRepository studentLookupRepository;
+    static final String TYPE = "students";
 
-    StudentImportRowValidator(StudentLookupRepository studentLookupRepository) {
-        this.studentLookupRepository = studentLookupRepository;
+    private final RuleSetSource ruleSetSource;
+    private final RuleEngine ruleEngine;
+
+    StudentImportRowValidator(RuleSetSource ruleSetSource, RuleEngine ruleEngine) {
+        this.ruleSetSource = ruleSetSource;
+        this.ruleEngine = ruleEngine;
     }
 
     sealed interface Result permits Valid, Invalid {
@@ -44,66 +46,27 @@ class StudentImportRowValidator {
     record Invalid(String field, String code, String message) implements Result {
     }
 
-    Result validate(String line, Set<String> seenInFile) {
-        String[] parts = line.split(",", -1);
-        if (parts.length < 7) {
-            return new Invalid("row", "PARSE_ERROR",
-                    "Expected studentNumber/displayName/gradeId/classId/enrollmentAcademicYearId/graduationYear/joinedAt");
-        }
-        String studentNumber = parts[0].trim();
-        String displayName = parts[1].trim();
-        String gradeId = parts[2].trim();
-        String classId = parts[3].trim();
-        String academicYearId = parts[4].trim();
-        String graduationYearRaw = parts[5].trim();
-        String joinedAtRaw = parts[6].trim();
-
-        if (studentNumber.isEmpty()) {
-            return new Invalid("studentNumber", "REQUIRED", "studentNumber is required");
-        }
-        if (displayName.isEmpty()) {
-            return new Invalid("displayName", "REQUIRED", "displayName is required");
-        }
-        if (seenInFile.contains(studentNumber)) {
-            return new Invalid("studentNumber", "DUPLICATE_IN_FILE", "studentNumber " + studentNumber + " appears more than once in this file");
-        }
-        if (studentLookupRepository.studentNumberExists(studentNumber)) {
-            return new Invalid("studentNumber", "STUDENT_NUMBER_TAKEN", "Student number " + studentNumber + " is already in use");
-        }
-
-        if (gradeId.isEmpty() || !studentLookupRepository.gradeExists(gradeId)) {
-            return new Invalid("gradeId", "UNKNOWN_GRADE", "Unknown gradeId: " + gradeId);
-        }
-        var classGradeId = studentLookupRepository.classGradeId(classId);
-        if (classGradeId.isEmpty()) {
-            return new Invalid("classId", "UNKNOWN_CLASS", "Unknown classId: " + classId);
-        }
-        if (!classGradeId.get().equals(gradeId)) {
-            return new Invalid("classId", "CLASS_GRADE_MISMATCH", "Class " + classId + " does not belong to grade " + gradeId);
-        }
-        if (academicYearId.isEmpty() || !studentLookupRepository.academicYearExists(academicYearId)) {
-            return new Invalid("enrollmentAcademicYearId", "UNKNOWN_ACADEMIC_YEAR", "Unknown enrollmentAcademicYearId: " + academicYearId);
-        }
-
-        int graduationYear;
+    Result validate(String line, RuleEngine.Run run, String lang) {
+        ImportRuleSet ruleSet = ruleSetSource.forType(TYPE);
+        List<String> cells;
         try {
-            graduationYear = Integer.parseInt(graduationYearRaw);
-        } catch (NumberFormatException e) {
-            return new Invalid("graduationYear", "INVALID_YEAR", "Not a number: " + graduationYearRaw);
-        }
-        if (graduationYear < 2000) {
-            return new Invalid("graduationYear", "INVALID_YEAR", "graduationYear must be 2000 or later");
+            cells = Rfc4180Reader.parseLine(line);
+        } catch (Rfc4180Reader.MalformedCsvException e) {
+            return new Invalid("row", "PARSE_ERROR", e.getMessage());
         }
 
-        LocalDate joinedAt;
-        try {
-            joinedAt = LocalDate.parse(joinedAtRaw);
-        } catch (Exception e) {
-            return new Invalid("joinedAt", "INVALID_DATE", "Expected yyyy-MM-dd format, got '" + joinedAtRaw + "'");
+        RowValidation outcome = ruleEngine.validate(ruleSet, cells, run, lang);
+        if (outcome instanceof RowValidation.Invalid invalid) {
+            return new Invalid(invalid.field(), invalid.code(), invalid.message());
         }
-
-        seenInFile.add(studentNumber);
-        return new Valid(new CreateStudentRequest(studentNumber, displayName, gradeId, classId,
-                academicYearId, graduationYear, joinedAt));
+        RowValidation.Valid valid = (RowValidation.Valid) outcome;
+        return new Valid(new CreateStudentRequest(
+                valid.get("studentNumber"),
+                valid.get("displayName"),
+                valid.get("gradeId"),
+                valid.get("classId"),
+                valid.get("enrollmentAcademicYearId"),
+                valid.getInt("graduationYear"),
+                valid.getDate("joinedAt")));
     }
 }

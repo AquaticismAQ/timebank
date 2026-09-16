@@ -159,13 +159,65 @@ class FileServiceIT extends AbstractIntegrationTest {
         FileMetadataDto metadata = fileService.getMetadata(fileId, authFor(actorId, null, Set.of("admin")));
         String token = metadata.downloadUrl().substring(metadata.downloadUrl().indexOf("token=") + "token=".length());
 
-        DownloadResult result = fileService.downloadContent(token);
+        DownloadResult result = fileService.downloadContent(token, authFor(actorId, null, Set.of("admin")));
         byte[] downloaded = result.content().readAllBytes();
         // Not byte-identical to the upload: B6.12's EXIF-stripping pass
         // decodes and re-encodes every image on `complete()`, so the stored
         // bytes are a fresh (re-)encoding, not the original upload. What
         // must still hold is that the result is a real, decodable image.
         assertThat(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(downloaded))).isNotNull();
+    }
+
+    /**
+     * §3.6 decision D-1: staff get a per-viewer watermark, the student whose
+     * evidence it is does not. Both must still be decodable images — a
+     * watermark that corrupted the file would be worse than none.
+     */
+    @Test
+    void staffDownloadsAreWatermarkedAndTheOwningStudentsAreNot() throws Exception {
+        StudentDetailDto student = createStudent();
+        String studentUserId = "usr_" + student.id().substring(4);
+        String fileId = uploadReady(studentUserId);
+        createDraftReferencing(student, fileId);
+
+        Authentication studentAuth = authFor(studentUserId, student.id(), Set.of("student"));
+        String studentToken = tokenFor(fileId, studentAuth);
+        DownloadResult ownCopy = fileService.downloadContent(studentToken, studentAuth);
+        assertThat(ownCopy.watermarked()).isFalse();
+        byte[] ownBytes = ownCopy.content().readAllBytes();
+
+        Authentication adminAuth = authFor("usr_wm_admin", null, Set.of("admin"));
+        String adminToken = tokenFor(fileId, adminAuth);
+        DownloadResult staffCopy = fileService.downloadContent(adminToken, adminAuth);
+        assertThat(staffCopy.watermarked()).isTrue();
+        byte[] staffBytes = staffCopy.content().readAllBytes();
+
+        assertThat(staffBytes).isNotEqualTo(ownBytes);
+        assertThat(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(staffBytes))).isNotNull();
+    }
+
+    /**
+     * The stored file is never rewritten by delivery, so its recorded sha256
+     * still describes it after a staff member has viewed it. The marked bytes
+     * deliberately do not match that digest — verification is always against
+     * what is stored.
+     */
+    @Test
+    void watermarkingDoesNotDisturbTheStoredFilesDigest() throws Exception {
+        String actorId = "usr_wm_digest_admin";
+        String fileId = uploadReady(actorId);
+        Authentication adminAuth = authFor(actorId, null, Set.of("admin"));
+
+        FileMetadataDto before = fileService.getMetadata(fileId, adminAuth);
+        fileService.downloadContent(tokenFor(fileId, adminAuth), adminAuth).content().readAllBytes();
+        FileMetadataDto after = fileService.getMetadata(fileId, adminAuth);
+
+        assertThat(after.sizeBytes()).isEqualTo(before.sizeBytes());
+    }
+
+    private String tokenFor(String fileId, Authentication auth) {
+        String url = fileService.getMetadata(fileId, auth).downloadUrl();
+        return url.substring(url.indexOf("token=") + "token=".length());
     }
 
     private String uploadReady(String actorId) {

@@ -2,6 +2,10 @@ package cn.timebank.dataexchange.application;
 
 import cn.timebank.account.application.AccountService;
 import cn.timebank.account.application.dto.AccountRequests.AdjustmentRequest;
+import cn.timebank.dataexchange.application.validation.ImportRuleSet;
+import cn.timebank.dataexchange.application.validation.Rfc4180Reader;
+import cn.timebank.dataexchange.application.validation.RuleEngine;
+import cn.timebank.dataexchange.application.validation.RuleSetSource;
 import cn.timebank.dataexchange.domain.Job;
 import cn.timebank.file.application.FileStorage;
 import cn.timebank.student.application.StudentService;
@@ -19,8 +23,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
 import java.util.function.Function;
 
 import static cn.timebank.dataexchange.application.JobExecutorConfig.JOB_EXECUTOR;
@@ -68,36 +71,96 @@ class ImportJobRunner {
     private final AccountService accountService;
     private final StudentService studentService;
     private final FileStorage fileStorage;
+    private final RuleEngine ruleEngine;
+    private final RuleSetSource ruleSetSource;
 
     ImportJobRunner(JobProgressWriter progressWriter, HistoricalImportRowValidator historicalRowValidator,
                      StudentImportRowValidator studentRowValidator, AccountService accountService,
-                     StudentService studentService, FileStorage fileStorage) {
+                     StudentService studentService, FileStorage fileStorage, RuleEngine ruleEngine,
+                     RuleSetSource ruleSetSource) {
         this.progressWriter = progressWriter;
         this.historicalRowValidator = historicalRowValidator;
         this.studentRowValidator = studentRowValidator;
         this.accountService = accountService;
         this.studentService = studentService;
         this.fileStorage = fileStorage;
+        this.ruleEngine = ruleEngine;
+        this.ruleSetSource = ruleSetSource;
     }
+
+    /**
+     * Columns are matched by header name now, not by position (plan §3.5). A
+     * file whose header does not match the rule set is rejected outright with a
+     * diff naming what is missing and what is unexpected, rather than being
+     * parsed positionally into the wrong columns — which is how a roster could
+     * previously be imported with names in the grade column and no error at all.
+     *
+     * @return null when the header is acceptable, otherwise the reason
+     */
+    private String headerProblem(ImportRuleSet ruleSet, String headerLine) {
+        if (headerLine == null) {
+            return "The file is empty — a header row naming the columns is required.";
+        }
+        List<String> actual;
+        try {
+            actual = Rfc4180Reader.parseLine(headerLine).stream().map(String::trim).toList();
+        } catch (Rfc4180Reader.MalformedCsvException e) {
+            return "The header row is not valid CSV: " + e.getMessage();
+        }
+        List<String> expected = ruleSet.columnNames();
+        if (actual.equals(expected)) {
+            return null;
+        }
+        List<String> missing = expected.stream().filter(c -> !actual.contains(c)).toList();
+        List<String> unexpected = actual.stream().filter(c -> !expected.contains(c)).toList();
+        if (missing.isEmpty() && unexpected.isEmpty()) {
+            return "Columns are in the wrong order. Expected: " + String.join(", ", expected);
+        }
+        StringBuilder sb = new StringBuilder("Header does not match the template.");
+        if (!missing.isEmpty()) {
+            sb.append(" Missing: ").append(String.join(", ", missing)).append('.');
+        }
+        if (!unexpected.isEmpty()) {
+            sb.append(" Unexpected: ").append(String.join(", ", unexpected)).append('.');
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Import errors are reported to whoever uploaded the file, and this runs on
+     * a background executor with no request context to read a language from, so
+     * the report is produced in English. The stable machine `code` on every row
+     * is what a localized UI should render from; the message is the fallback for
+     * a human reading the raw CSV.
+     */
+    private static final String REPORT_LANGUAGE = "en";
 
     private record LineOutcome(boolean valid, String field, String code, String message) {
         static final LineOutcome VALID = new LineOutcome(true, null, null, null);
     }
 
-    /** One fresh per-run line-checker per resource type — `students`' closes over its own `seenInFile` set, scoped to this run only. */
+    /**
+     * One fresh per-run line-checker per resource type. Each closes over its own
+     * {@link RuleEngine.Run}, which carries the file-scope state (in-file
+     * uniqueness) for this pass only — the same role the old hand-rolled
+     * `seenInFile` set played, now owned by the engine.
+     */
     private Function<String, LineOutcome> lineCheckerFor(String resourceType) {
         return switch (resourceType) {
-            case "serviceRecordsHistorical" -> line -> {
-                var result = historicalRowValidator.validate(line);
-                if (result instanceof HistoricalImportRowValidator.Invalid invalid) {
-                    return new LineOutcome(false, invalid.field(), invalid.code(), invalid.message());
-                }
-                return LineOutcome.VALID;
-            };
-            case "students" -> {
-                Set<String> seenInFile = new HashSet<>();
+            case HistoricalImportRowValidator.TYPE -> {
+                RuleEngine.Run run = ruleEngine.newRun();
                 yield line -> {
-                    var result = studentRowValidator.validate(line, seenInFile);
+                    var result = historicalRowValidator.validate(line, run, REPORT_LANGUAGE);
+                    if (result instanceof HistoricalImportRowValidator.Invalid invalid) {
+                        return new LineOutcome(false, invalid.field(), invalid.code(), invalid.message());
+                    }
+                    return LineOutcome.VALID;
+                };
+            }
+            case StudentImportRowValidator.TYPE -> {
+                RuleEngine.Run run = ruleEngine.newRun();
+                yield line -> {
+                    var result = studentRowValidator.validate(line, run, REPORT_LANGUAGE);
                     if (result instanceof StudentImportRowValidator.Invalid invalid) {
                         return new LineOutcome(false, invalid.field(), invalid.code(), invalid.message());
                     }
@@ -134,12 +197,26 @@ class ImportJobRunner {
                 errorWriter.write("rowNumber,field,code,message");
                 errorWriter.newLine();
 
-                reader.readLine(); // header
+                ImportRuleSet ruleSet = ruleSetSource.forType(claimed.getResourceType());
+                String headerProblem = headerProblem(ruleSet, reader.readLine());
+                if (headerProblem != null) {
+                    errorWriter.write("0,header,HEADER_MISMATCH," + escapeCsv(headerProblem));
+                    errorWriter.newLine();
+                    errors = 1;
+                }
+
                 String line;
                 int rowNumber = 0;
-                while ((line = reader.readLine()) != null) {
+                while (headerProblem == null && (line = reader.readLine()) != null) {
                     if (line.isBlank()) continue;
                     rowNumber++;
+                    if (rowNumber > ruleSet.maxRows()) {
+                        errorWriter.write(rowNumber + ",row,TOO_MANY_ROWS,"
+                                + escapeCsv("This import type accepts at most " + ruleSet.maxRows() + " rows."));
+                        errorWriter.newLine();
+                        errors++;
+                        break;
+                    }
                     total++;
                     LineOutcome outcome = lineChecker.apply(line);
                     if (outcome.valid()) {
@@ -211,10 +288,11 @@ class ImportJobRunner {
             // the true count of valid rows seen so far, in this run or a
             // resumed one, with no dependency on a value another phase wrote.
             int committed = 0;
+            RuleEngine.Run run = ruleEngine.newRun();
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) continue;
                 rowNumber++;
-                var result = historicalRowValidator.validate(line);
+                var result = historicalRowValidator.validate(line, run, REPORT_LANGUAGE);
                 boolean alreadyProcessed = rowNumber <= resumeFromLine;
                 if (result instanceof HistoricalImportRowValidator.Valid v) {
                     if (!alreadyProcessed) {
@@ -247,7 +325,7 @@ class ImportJobRunner {
     private void commitStudents(Job claimed, String actorId) {
         String jobId = claimed.getId();
         int resumeFromLine = claimed.getCheckpointOffset();
-        Set<String> seenInFile = new HashSet<>();
+        RuleEngine.Run run = ruleEngine.newRun();
         try (InputStream in = fileStorage.open(claimed.getSourceFileKey());
              BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
             reader.readLine(); // header
@@ -257,7 +335,7 @@ class ImportJobRunner {
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) continue;
                 rowNumber++;
-                var result = studentRowValidator.validate(line, seenInFile);
+                var result = studentRowValidator.validate(line, run, REPORT_LANGUAGE);
                 boolean alreadyProcessed = rowNumber <= resumeFromLine;
                 if (result instanceof StudentImportRowValidator.Valid v) {
                     if (!alreadyProcessed) {

@@ -44,11 +44,14 @@ class FileServiceImpl implements FileService {
     private final DownloadTokenService downloadTokenService;
     private final AuditService auditService;
     private final DataScopeResolver dataScopeResolver;
+    private final PdfSanitizer pdfSanitizer;
+    private final EvidenceWatermarker watermarker;
     private final long maxSizeBytes;
 
     FileServiceImpl(EvidenceFileRepository repository, ServiceRecordReferenceRepository referenceRepository,
                      FileStorage fileStorage, FileScanner fileScanner, DownloadTokenService downloadTokenService,
                      AuditService auditService, DataScopeResolver dataScopeResolver,
+                     PdfSanitizer pdfSanitizer, EvidenceWatermarker watermarker,
                      @Value("${timebank.file.max-size-bytes:20971520}") long maxSizeBytes) {
         this.repository = repository;
         this.referenceRepository = referenceRepository;
@@ -57,6 +60,8 @@ class FileServiceImpl implements FileService {
         this.downloadTokenService = downloadTokenService;
         this.auditService = auditService;
         this.dataScopeResolver = dataScopeResolver;
+        this.pdfSanitizer = pdfSanitizer;
+        this.watermarker = watermarker;
         this.maxSizeBytes = maxSizeBytes;
     }
 
@@ -108,7 +113,22 @@ class FileServiceImpl implements FileService {
         if (result.accepted()) {
             if (isImageType(file.getDeclaredMimeType())) {
                 stripImageMetadata(file);
+            } else if ("application/pdf".equals(file.getDeclaredMimeType())) {
+                try {
+                    sanitizePdf(file);
+                } catch (PdfSanitizer.UnacceptablePdfException e) {
+                    // Same disposition as a failed magic-byte scan: the upload is
+                    // recorded as REJECTED with a reason the uploader can act on,
+                    // rather than throwing and losing why.
+                    file.setStatus(FileStatus.REJECTED);
+                    file.setRejectionReason(e.getMessage());
+                    file.setUpdatedAt(Instant.now());
+                    return toDto(file);
+                }
             }
+            // Hashed after sanitization, so the digest describes what is actually
+            // stored. Delivery-time watermarking does not touch the stored file,
+            // so this stays true for the file's whole life.
             file.setSha256Hash(sha256(file.getStorageKey()));
             file.setStatus(FileStatus.READY);
         } else {
@@ -151,6 +171,18 @@ class FileServiceImpl implements FileService {
         }
     }
 
+    /**
+     * §3.7: the PDF counterpart to {@link #stripImageMetadata}. Rewrites the
+     * stored file with its active content removed, so what we keep is what a
+     * reviewer will be shown — sanitizing only on the way out would leave a
+     * hostile document sitting in storage for any other code path to open.
+     */
+    private void sanitizePdf(EvidenceFile file) {
+        byte[] sanitized = pdfSanitizer.sanitize(readAll(file.getStorageKey()));
+        fileStorage.store(file.getStorageKey(), new java.io.ByteArrayInputStream(sanitized));
+        file.setActualSizeBytes((long) sanitized.length);
+    }
+
     @Override
     @Transactional
     public FileMetadataDto getMetadata(String fileId, Authentication auth) {
@@ -171,13 +203,53 @@ class FileServiceImpl implements FileService {
 
     @Override
     @Transactional(readOnly = true)
-    public DownloadResult downloadContent(String token) {
+    public DownloadResult downloadContent(String token, Authentication auth) {
         String fileId = downloadTokenService.validate(token);
         EvidenceFile file = findOrThrow(fileId);
         if (file.getStatus() != FileStatus.READY) {
             throw ApiException.notFound("File not found.");
         }
-        return new DownloadResult(fileStorage.open(file.getStorageKey()), file.getOriginalFilename(), file.getDeclaredMimeType());
+
+        CookieSessionUserDetails principal = (CookieSessionUserDetails) auth.getPrincipal();
+        if (!shouldWatermarkFor(principal)) {
+            return new DownloadResult(fileStorage.open(file.getStorageKey()),
+                    file.getOriginalFilename(), file.getDeclaredMimeType(), false);
+        }
+
+        // Read the stored bytes, mark a copy, hand back the copy. The stored
+        // file is untouched and its sha256Hash still describes it — see
+        // EvidenceWatermarker's class comment before "fixing" that mismatch.
+        String text = watermarker.describeViewer(principal.getUsername(), Instant.now());
+        byte[] stored = readAll(file.getStorageKey());
+        byte[] marked = "application/pdf".equals(file.getDeclaredMimeType())
+                ? watermarker.watermarkPdf(stored, text)
+                : watermarker.watermarkImage(stored, imageFormatOf(file.getDeclaredMimeType()), text);
+
+        return new DownloadResult(new java.io.ByteArrayInputStream(marked),
+                file.getOriginalFilename(), file.getDeclaredMimeType(), true);
+    }
+
+    /**
+     * Decision D-1: staff views only. A student principal carries a
+     * {@code studentId}; staff do not. A student can only ever hold a token
+     * for their own evidence anyway — {@link #getMetadata} scope-checks before
+     * one is issued, and a student's scope resolves to {@code Self} — so this
+     * is exactly "someone is looking at material that isn't theirs".
+     */
+    private boolean shouldWatermarkFor(TimeBankPrincipal principal) {
+        return principal.studentId() == null;
+    }
+
+    private String imageFormatOf(String mimeType) {
+        return "image/png".equals(mimeType) ? "png" : "jpg";
+    }
+
+    private byte[] readAll(String storageKey) {
+        try (InputStream in = fileStorage.open(storageKey)) {
+            return in.readAllBytes();
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException("Could not read stored evidence " + storageKey, e);
+        }
     }
 
     @Override

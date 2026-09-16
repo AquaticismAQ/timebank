@@ -207,11 +207,43 @@ class ExportJobRunner {
         return report.topProjects().size();
     }
 
-    private String csvLine(String... fields) {
+    /**
+     * Characters that make a spreadsheet treat a cell as a formula rather than
+     * text. {@code -} is included because {@code -1+1} parses as an expression,
+     * and tab/CR because they are stripped as leading whitespace before the
+     * next character is evaluated.
+     */
+    private static final String FORMULA_TRIGGERS = "=+-@\t\r";
+
+    /**
+     * CWE-1236. Student names and descriptions reach this file from user input,
+     * and an admin opening the export in Excel or LibreOffice executes whatever
+     * a cell starting with one of {@link #FORMULA_TRIGGERS} contains —
+     * {@code =HYPERLINK(...)} to phish, or a call out to an attacker's host.
+     *
+     * <p>RFC 4180 quoting does <strong>not</strong> prevent this: the quotes are
+     * part of the CSV envelope and are stripped before the cell's contents are
+     * parsed, so {@code "=cmd"} is still a formula. Prefixing an apostrophe is
+     * what actually neutralises it — spreadsheets treat the rest as literal text
+     * and do not display the apostrophe itself.</p>
+     *
+     * <p>Applied to every export type, not just students, because the same
+     * helper writes all of them.</p>
+     */
+    static String neutralizeFormulaInjection(String field) {
+        if (!field.isEmpty() && FORMULA_TRIGGERS.indexOf(field.charAt(0)) >= 0) {
+            return "'" + field;
+        }
+        return field;
+    }
+
+    /** Package-private and static so the escaping above is unit-testable without running a job. */
+    static String csvLine(String... fields) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < fields.length; i++) {
             if (i > 0) sb.append(',');
             String f = fields[i] == null ? "" : fields[i];
+            f = neutralizeFormulaInjection(f);
             if (f.contains(",") || f.contains("\"")) {
                 sb.append('"').append(f.replace("\"", "\"\"")).append('"');
             } else {

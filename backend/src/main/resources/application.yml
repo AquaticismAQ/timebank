@@ -116,3 +116,9 @@ timebank:
     max-size-bytes: ${TIMEBANK_FILE_MAX_SIZE_BYTES:20971520}
     # No default: a download-token signing secret must never be guessable.
     token-secret: ${TIMEBANK_FILE_TOKEN_SECRET:?TIMEBANK_FILE_TOKEN_SECRET must be set}
+    pdf:
+      # 08-SecurityPrivacyHardening.md §3.7. A cap, not a quality judgement:
+      # the per-viewer watermark walks every page on every view, so an
+      # absurdly long document is a cheap way to make one request expensive
+      # on a 1 vCPU box. Evidence scans are a handful of pages.
+      max-pages: ${TIMEBANK_FILE_PDF_MAX_PAGES:100}

@@ -7,6 +7,8 @@ import cn.timebank.dataexchange.application.dto.ImportErrorReportDto;
 import cn.timebank.dataexchange.application.dto.JobDto;
 import cn.timebank.dataexchange.domain.Job;
 import cn.timebank.dataexchange.domain.JobKind;
+import cn.timebank.dataexchange.application.validation.ImportRuleSet;
+import cn.timebank.dataexchange.application.validation.RuleSetSource;
 import cn.timebank.dataexchange.infrastructure.JobRepository;
 import cn.timebank.file.application.FileStorage;
 import cn.timebank.security.application.CookieSessionUserDetails;
@@ -35,43 +37,76 @@ import java.util.Set;
 @Service
 class ImportServiceImpl implements ImportService {
 
-    static final Set<String> SUPPORTED_TYPES = Set.of("serviceRecordsHistorical", "students");
     private static final Set<String> RESUMABLE_COMMIT_STATUSES = Set.of("VALIDATED", "COMMIT_FAILED");
 
     private final JobRepository jobRepository;
     private final ImportJobRunner importJobRunner;
     private final FileStorage fileStorage;
     private final IdempotencyService idempotencyService;
+    private final RuleSetSource ruleSetSource;
 
     ImportServiceImpl(JobRepository jobRepository, ImportJobRunner importJobRunner, FileStorage fileStorage,
-                       IdempotencyService idempotencyService) {
+                       IdempotencyService idempotencyService, RuleSetSource ruleSetSource) {
         this.jobRepository = jobRepository;
         this.importJobRunner = importJobRunner;
         this.fileStorage = fileStorage;
         this.idempotencyService = idempotencyService;
+        this.ruleSetSource = ruleSetSource;
     }
 
+    /**
+     * The rule set is the single authority for which import types exist — the
+     * API accepts exactly what `import-rules.yaml` declares, so adding a type
+     * cannot leave the endpoint and the validator disagreeing.
+     */
+    private boolean isSupported(String type) {
+        return ruleSetSource.supportedTypes().contains(type);
+    }
+
+    /**
+     * Generated from the rule set rather than written out by hand (plan §3.5).
+     * The template and the validation now cannot drift apart: a column added to
+     * `import-rules.yaml` appears here automatically, and one removed disappears
+     * from both at once. Previously the two were authored separately, so a
+     * template could advertise a column the validator did not read.
+     */
     @Override
     public String template(String type) {
-        if (!SUPPORTED_TYPES.contains(type)) {
+        if (!isSupported(type)) {
             throw ApiException.notFound("Unknown import type: " + type);
         }
-        if ("students".equals(type)) {
-            return "studentNumber,displayName,gradeId,classId,enrollmentAcademicYearId,graduationYear,joinedAt\n"
-                    + "stu_1001,Example Student,grade_6,class_6A,ay_2025_2026,2032,2026-09-01\n";
-        }
-        return "studentNumber,serviceDate,durationMinutes,description\n"
-                + "stu_0001,2024-10-01,120,Community cleanup (paper ledger 2024 fall)\n";
+        ImportRuleSet ruleSet = ruleSetSource.forType(type);
+        String header = String.join(",", ruleSet.columnNames());
+        String sample = ruleSet.columns().stream()
+                .map(ImportRuleSet.ColumnSpec::sample)
+                .map(ImportServiceImpl::csvCell)
+                .collect(java.util.stream.Collectors.joining(","));
+        return header + "\n" + sample + "\n";
+    }
+
+    /** Quote a sample value the same way the exporter would, so the template round-trips through the reader. */
+    private static String csvCell(String value) {
+        return value.contains(",") || value.contains("\"")
+                ? '"' + value.replace("\"", "\"\"") + '"'
+                : value;
     }
 
     @Override
     @Transactional
     public JobDto create(String type, MultipartFile file, String actorId) {
-        if (!SUPPORTED_TYPES.contains(type)) {
+        if (!isSupported(type)) {
             throw ApiException.invalidRequest("Unknown import type: " + type);
         }
         if (file == null || file.isEmpty()) {
             throw ApiException.invalidRequest("An import file is required.");
+        }
+        // File-level cap (plan §3.4, gap G-6), rejected before a byte is parsed
+        // so an oversized upload cannot exhaust memory on the way to finding out
+        // it was too big.
+        ImportRuleSet ruleSet = ruleSetSource.forType(type);
+        if (file.getSize() > ruleSet.maxBytes()) {
+            throw ApiException.invalidRequest(
+                    "Import file is larger than the " + (ruleSet.maxBytes() / (1024 * 1024)) + " MiB limit for this type.");
         }
 
         String jobId = OpaqueIds.generate("job");
