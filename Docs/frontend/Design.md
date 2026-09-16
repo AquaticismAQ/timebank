@@ -76,12 +76,21 @@ There is no portal-selection page and no workspace switching — a role determin
 
 The unified login page provides:
 
-- Student ID / Employee ID / school email or system account input.
+- **Username** input, and nothing else. Students receive a system-generated 8-digit username; staff keep named accounts such as `teacher001`. Student number, employee ID and email are deliberately **not** accepted — a typed value could match one person's username and a different person's student number, and resolving that by precedence risks logging somebody into the wrong account (`Docs/optimization/10-StudentIdentityAndOnboarding.md` §2.1–2.2). Comparison is case-insensitive.
 - Password input with show/hide toggle.
+- **First-time entry**: *"First time logging in? Use your activation code"*, leading to the activation page (§3.2.1). This wording is fixed and must match the printed credential slip word for word — a student has to be able to match paper to screen (plan §2.9).
 - "Remember this device" option.
-- Forgot password link.
+- Forgot-password entry. For students this leads to guidance, not a self-service reset: an administrator reissues an activation code and a fresh slip, so no password is ever generated server-side (plan §2.4, §3.7).
 - Privacy policy, terms of use, and minor's information processing notice.
 - Login failure, account lockout, password expiration, and system maintenance status prompts.
+
+### 3.2.1 First-time activation page
+
+A public page at `/activate`, reachable two ways: by tapping the login page's first-time entry, or by scanning the QR code on a printed credential slip, which deep-links as `/activate?code=…` with the code prefilled.
+
+It takes the activation code and the password the student chooses, in one step. The code input normalizes as the student types — uppercasing, dropping the printed separator, and folding Crockford's ambiguous characters (`I`/`L` to `1`, `O` to `0`) so a misread slip still works.
+
+Because an imported account has **no password at all** until it is activated, no account is usable before its slip reaches the student. Codes are single-use and expire (default 7 days, configurable and printed on the slip); an account whose window closes unused moves to a distinct expired state, never to "locked", so an administrator can tell an uncollected slip from a brute-force lockout.
 
 Phase 2 does not offer WeChat scan or other IM login. School unified identity authentication may be added as an optional capability later, but must not affect the independent availability of account-password login.
 

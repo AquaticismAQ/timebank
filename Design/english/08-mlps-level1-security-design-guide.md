@@ -370,8 +370,8 @@ and the student chooses their own password during activation.
 
 | Measure | Detail |
 | :--- | :--- |
-| **No password means no login** | An unactivated account has no password hash and is structurally impossible to log into. No account can be used before its credential slip reaches the student — the guarantee holds by data structure, not by process discipline |
-| **Activation codes stored hashed** | Codes are stored hashed and looked up by hash, exactly as passwords are. No plaintext is held, so a database leak yields no directly usable codes |
+| **No password means no login** | An unactivated account has no password hash and is structurally impossible to log into. No account can be used before its credential slip reaches the student — the guarantee holds by data structure, not by process discipline. The pre-authentication check requires *both* an enabled status **and** a stored password hash, so setting an account to enabled by hand still does not make it usable |
+| **Activation codes stored as a digest** | Codes are stored as a **SHA-256 digest** and looked up by that digest; no plaintext is held. bcrypt is **deliberately not used** here: by the §2.5 design the code is its own lookup key (a student redeems it without typing a username), and a salted hash cannot be looked up. The protection therefore does not come from the digest algorithm but from **single use + a short validity window + the account holding no data yet** — a different mechanism from the one protecting passwords, and not to be read as equivalent to it |
 | **Single use** | A code is invalidated the moment it is successfully redeemed |
 | **Time-limited** | Expires 7 days after issue by default; the school configures the window, and it is **printed on the credential slip** |
 | **Expiry is its own state** | An account that expires unactivated enters a distinct "expired" state rather than reusing "locked" — otherwise an administrator cannot tell an account locked by brute force from one whose slip was never collected, and the two need different responses |
@@ -577,8 +577,8 @@ by the implementer.
 | A-04 | Login accepts a username only, with no fallback to student number or staff ID; comparison is case-insensitive | [ ] |
 | A-05 | Student usernames are eight random digits, no leading zeros, stored as strings, unique database-wide | [ ] |
 | A-06 | The server generates no initial password at any point | [ ] |
-| A-07 | Unactivated accounts have no password hash and cannot be logged into | [ ] |
-| A-08 | Activation codes stored hashed, single-use, time-limited; the window is configurable and printed on the slip | [ ] |
+| A-07 | Unactivated accounts have no password hash and cannot be logged into; the pre-authentication check verifies both an enabled status and a stored hash | [ ] |
+| A-08 | Activation codes stored as a SHA-256 digest, single-use, time-limited; the window is configurable and printed on the slip | [ ] |
 | A-09 | Accounts that expire unactivated enter a distinct "expired" state, distinguishable from "locked" | [ ] |
 | A-10 | The activation endpoint enforces both per-IP rate limiting and a system-wide failure budget | [ ] |
 | A-11 | Reissue covers only still-unactivated students, leaving those who set a password untouched | [ ] |
