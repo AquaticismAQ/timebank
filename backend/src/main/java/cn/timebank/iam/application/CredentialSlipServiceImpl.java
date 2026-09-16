@@ -152,7 +152,11 @@ class CredentialSlipServiceImpl implements CredentialSlipService {
         }
 
         SlipsPerPage slipsPerPage = request.resolvedSlipsPerPage();
-        byte[] pdf = CredentialSlipDocument.render(slips, slipsPerPage);
+        // §2.9: the paper and the screen must use one vocabulary, so the slip is
+        // printed in the same language the admin is working in — the same
+        // resolved value already used for the roster read above, not a second
+        // resolution with its own fallback.
+        byte[] pdf = CredentialSlipDocument.render(slips, slipsPerPage, resolvedLanguage);
 
         // §3.4: "audited — who generated slips for which class, and when".
         // `when` is the audit row's own timestamp. The summary carries the ids
