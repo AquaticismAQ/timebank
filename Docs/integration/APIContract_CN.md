@@ -43,12 +43,12 @@ Web 推荐使用 Secure、HttpOnly、SameSite Cookie 管理会话；如采用访
 | `POST` | `/auth/login` | 账号密码登录 |
 | `POST` | `/auth/logout` | 注销当前会话 |
 | `POST` | `/auth/refresh` | 刷新会话 |
-| `POST` | `/auth/forgot-password` | 发起密码重置 |
-| `POST` | `/auth/reset-password` | 使用一次性令牌设置新密码 |
 | `POST` | `/auth/activate` | 兑换首次激活码并设置账号的首个密码 |
 | `GET` | `/me` | 当前用户、角色、权限、数据范围与功能开关 |
 | `PATCH` | `/me/profile` | 修改允许自助维护的资料 |
 | `POST` | `/me/change-password` | 修改密码 |
+
+**不存在 `/auth/forgot-password` 与 `/auth/reset-password`，系统亦不提供任何形式的自助密码找回**（见 `Design/*/08-mlps-level1-security-design-guide.md` §8.1／§8.2，issue 089）。这两个端点曾经存在，从未被任何客户端调用，现已连同其存储一并移除。忘记密码须线下处置：用户联系管理员，由管理员当面核实身份后经 `POST /users/{id}/reset-password`（见 §4.15）签发激活凭条。**请勿**在前端新增"忘记密码"流程——登录页"忘记密码？请联系管理员"的文案即是预期行为的全部。
 
 登录响应至少返回：
 

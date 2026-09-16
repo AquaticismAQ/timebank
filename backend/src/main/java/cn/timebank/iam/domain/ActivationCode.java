@@ -15,9 +15,12 @@ import java.time.Instant;
  * §2.4/§2.5, table added in V27). The student redeems it by choosing their own
  * password; no password is ever generated server-side.
  *
- * <p><b>Only the SHA-256 hash is stored, and lookup is by that hash</b> — the
- * same shape as {@link PasswordResetToken}, and for the same reason: the code
- * is its own lookup key, so redeeming it needs no username. The plaintext
+ * <p><b>Only the SHA-256 hash is stored, and lookup is by that hash</b>, because
+ * the code is its own lookup key: redeeming it needs no username. That is also
+ * why this is now the <em>only</em> credential of its kind in the system — the
+ * older {@code password_reset_token} shared the shape but was reached by naming
+ * an account to an unauthenticated endpoint, and was removed with the
+ * self-service recovery flow it backed (V28, issue 089). The plaintext
  * exists exactly twice — at generation, on its way to the printed slip, and in
  * the redeem request — and nowhere at rest. There is deliberately no field,
  * getter or constructor argument on this class that could hold it.</p>

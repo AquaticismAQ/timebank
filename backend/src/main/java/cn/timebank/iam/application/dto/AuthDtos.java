@@ -16,13 +16,6 @@ public final class AuthDtos {
                                          @NotBlank @Size(min = 8, max = 128) String newPassword) {
     }
 
-    public record ForgotPasswordRequest(@NotBlank String username) {
-    }
-
-    public record ResetPasswordRequest(@NotBlank String token,
-                                        @NotBlank @Size(min = 8, max = 128) String newPassword) {
-    }
-
     /**
      * First-time activation (10-StudentIdentityAndOnboarding.md §2.4/§3.5).
      * No username: the code is its own lookup key, so there is nothing else to
@@ -49,6 +42,16 @@ public final class AuthDtos {
         }
     }
 
+    // There are deliberately no forgot-password or reset-password request types
+    // here any more, because there are no such endpoints
+    // (Design/*/08-mlps-level1-security-design-guide.md §8.1/§8.2, issue 089).
+    // The system has no self-service password recovery: a forgotten password is
+    // recovered offline, through an administrator who identifies the person and
+    // issues an activation slip. A `ResetPasswordRequest(token, newPassword)`
+    // shape only exists to serve an unauthenticated endpoint that mints a
+    // credential for an account it was told about, which is the thing §8.2
+    // promises schools does not exist here.
+    //
     // There is deliberately no admin-reset *response* type here any more
     // (10-StudentIdentityAndOnboarding.md §3.7). The admin reset used to
     // generate a temporary password server-side and hand the plaintext back in

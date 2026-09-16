@@ -11,12 +11,10 @@ import cn.timebank.common.error.ApiException;
 import cn.timebank.iam.application.CredentialSlipService.ResetSlip;
 import cn.timebank.iam.application.CredentialSlipService.SlipActor;
 import cn.timebank.iam.domain.ActivationCode;
-import cn.timebank.iam.domain.PasswordResetToken;
 import cn.timebank.iam.domain.Role;
 import cn.timebank.iam.domain.User;
 import cn.timebank.iam.domain.UserStatus;
 import cn.timebank.iam.infrastructure.ActivationCodeRepository;
-import cn.timebank.iam.infrastructure.PasswordResetTokenRepository;
 import cn.timebank.iam.infrastructure.RoleRepository;
 import cn.timebank.iam.infrastructure.UserRepository;
 import cn.timebank.organization.application.FeatureFlagService;
@@ -33,7 +31,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -65,7 +62,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -126,10 +122,7 @@ class AdminCredentialResetTest {
     private final Map<String, ActivationCode> codesById = new HashMap<>();
     private final Map<String, Instant> redeemedInDatabase = new HashMap<>();
 
-    private final PasswordResetTokenRepository resetTokenRepository = mock(PasswordResetTokenRepository.class);
-
     private UserServiceImpl userService;
-    private AuthServiceImpl authService;
     private ActivationServiceImpl activationService;
     private CredentialSlipServiceImpl slipService;
 
@@ -185,8 +178,6 @@ class AdminCredentialResetTest {
                 new StudentUsernameGenerator(userRepository, () -> 10000001), 5, 15, 480);
         activationService = new ActivationServiceImpl(codeRepository, userRepository, passwordEncoder,
                 auditService, new ActivationThrottle(1_000, 1_000), 7);
-        authService = new AuthServiceImpl(mock(AuthenticationManager.class), userService,
-                mock(LoginLogService.class), resetTokenRepository);
         slipService = new CredentialSlipServiceImpl(mock(StudentService.class),
                 mock(AcademicStructureService.class), userService, activationService, auditService, ROOT);
 
@@ -392,32 +383,16 @@ class AdminCredentialResetTest {
         assertThat(target.getStatus()).isEqualTo(UserStatus.ACTIVE);
     }
 
-    /**
-     * The one interaction §3.7 creates with the <em>other</em> credential
-     * mechanism still in the codebase, {@code password_reset_token} (contract
-     * §2.2, recommended for removal in the plan doc's §5). Without the guard in
-     * {@code AuthServiceImpl.forgotPassword}, a token minted for a just-reset
-     * account would set a password on it and leave it {@code
-     * PENDING_ACTIVATION} <em>with</em> a hash: unable to log in either way,
-     * invisible to §3.6's sweep — which reads a stored hash as proof of
-     * activation — and having bypassed the slip that was the point.
-     *
-     * <p>Silent, like the unknown-username branch beside it, so the endpoint
-     * still reveals nothing. The control is what separates "refused" from
-     * "this endpoint never mints anything".</p>
-     */
-    @Test
-    void a_reset_account_cannot_be_recovered_with_a_forgot_password_token() {
-        slipService.issueForReset(TARGET_ID, ADMIN, "en");
-
-        authService.forgotPassword(target.getUsername());
-        verify(resetTokenRepository, never()).save(any(PasswordResetToken.class));
-
-        // Control: an account that still has a password does get a token, so
-        // the assertion above is about the cleared credential specifically.
-        authService.forgotPassword(control.getUsername());
-        verify(resetTokenRepository).save(any(PasswordResetToken.class));
-    }
+    // The companion test that used to sit here is gone with its subject. It
+    // guarded the one interaction §3.7 created with the *other* credential
+    // mechanism, {@code password_reset_token}: a token minted for a just-reset
+    // account would have set a password on it while leaving it {@code
+    // PENDING_ACTIVATION}, unable to log in either way and invisible to §3.6's
+    // sweep. That mechanism no longer exists (issue 089), so the guard it
+    // tested no longer exists either — the hazard is closed by removal rather
+    // than by a branch, which is the stronger form. That there is now exactly
+    // one way to set a password is asserted directly, on the shipped source, by
+    // {@code cn.timebank.architecture.NoSelfServicePasswordRecoveryTest}.
 
     // --------------------------------------------------------- the refusals
 

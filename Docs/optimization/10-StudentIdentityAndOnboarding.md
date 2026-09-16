@@ -319,7 +319,7 @@ first-time entry described in §2.9 — wording identical to the slip's, in both
 | §3.4 Credential document | Done — `POST /users/activation-slips`, `CredentialSlipService`/`CredentialSlipDocument`/`SlipFont`/`SlipCopy`/`QrCodeImage`, contract §4.15 in both languages, slip text bilingual and in an embedded font (issue 087). **No admin UI yet** (see below) |
 | §3.5 Activation endpoint | Done — `POST /auth/activate`, `ActivationService`/`ActivationCodeFormat`/`ActivationThrottle`, contract §2.2 in both languages |
 | §3.6 Expiry sweep | Done — `ActivationExpirySweep` (hourly, ShedLock-guarded) → `ActivationExpiryTransaction`, `ActivationExpiryRepository` |
-| §3.7 Password reset | Done — `POST /users/{id}/reset-password` now clears the password and streams a one-slip document (`CredentialSlipService.issueForReset` → `UserService.resetToPendingActivation` + `ActivationService.issue`), contract §4.15 in both languages. Closes the §2.4 contradiction (issue 088). The older `password_reset_token` mechanism is **still present and recommended for removal** — see below |
+| §3.7 Password reset | Done — `POST /users/{id}/reset-password` now clears the password and streams a one-slip document (`CredentialSlipService.issueForReset` → `UserService.resetToPendingActivation` + `ActivationService.issue`), contract §4.15 in both languages. Closes the §2.4 contradiction (issue 088). The older `password_reset_token` mechanism was **removed outright** on 2026-09-17, code and schema (V28, issue 089) — see below |
 | §3.8 Login copy and first-time entry | Done — `ActivationPage`, `/activate`, login copy in both languages |
 
 Everything above is covered by **unit tests only** (`mvn test`). No integration
@@ -421,35 +421,55 @@ in a toast. Filed and fixed as `Docs/issues/088-*.md`. What the slice settled:
 | Session revocation | Preserved, in the controller, after the transaction commits. Clearing a password does not end a session: a cookie session carries its own authenticated principal and never presents a password again |
 
 **Recommendation: remove the `password_reset_token` mechanism (code now,
-schema later).** §2.4's point is that there should be *one* credential flow, and
-after this slice there are still two. The older one is `POST
+schema later). — DONE, 2026-09-17, code *and* schema together
+(`Docs/issues/089-*.md`).** §2.4's point is that there should be *one* credential
+flow, and after §3.7 there were still two. The older one was `POST
 /auth/forgot-password` → `POST /auth/reset-password`, backed by V3's
 `password_reset_token` table, `PasswordResetToken`,
 `PasswordResetTokenRepository`, `AuthService.forgotPassword`/`resetPassword` and
-`UserService.resetPasswordWithToken`. It is:
+`UserService.resetPasswordWithToken`. It was:
 
-- **Unreachable from the frontend.** Nothing calls either endpoint; the login
+- **Unreachable from the frontend.** Nothing called either endpoint; the login
   page's "forgot password" line is static copy reading *"Forgot password?
-  Contact admin"*, which now points at exactly the flow §3.7 rebuilt.
+  Contact admin"*, which points at exactly the flow §3.7 rebuilt. That copy was
+  left untouched by the removal — it was already the policy.
 - **Non-functional by design as deployed.** With no mail infrastructure,
-  `forgotPassword` *logs the token as a warning* for an operator to relay by
+  `forgotPassword` *logged the token as a warning* for an operator to relay by
   hand — a live credential written to the server log, which is precisely what
-  the rest of this plan is careful never to do.
+  the rest of this plan is careful never to do, and which the six-month log
+  retention then kept.
 - **Actively hazardous next to §3.7.** A token minted for a just-reset account
   would set a password on it while leaving it `PENDING_ACTIVATION`: unable to
   log in either way, invisible to §3.6's sweep (which reads a stored hash as
-  proof of activation), and having bypassed the slip. This slice closed that
-  with a one-line guard — `forgotPassword` is silently a no-op for an account
-  with no stored password — but the guard is a patch on a mechanism that should
-  not be there.
+  proof of activation), and having bypassed the slip. §3.7 closed that with a
+  one-line guard — `forgotPassword` was silently a no-op for an account with no
+  stored password — but the guard was a patch on a mechanism that should not
+  have been there, and it is gone with its subject.
 
-A removal would delete the two endpoints and their DTOs, the two `AuthService`
-methods, `UserService.resetPasswordWithToken`, the entity and the repository —
-roughly 120 lines, no caller left behind. **A migration dropping the table is
-warranted but is a separate decision**, and not urgent: the table holds
-short-lived rows, `PurgeQueryRepository` already deletes from it by user id with
-raw SQL that needs no entity, and an unused table costs nothing. Dropping it
-should wait until the code removal has been live for a release, so the rollback
-path is a redeploy rather than a restore. **Not done in this slice** — removing
-a public authentication endpoint from a deployed system wants an explicit yes,
-not a "while I was in here".
+The removal deleted the two endpoints and their DTOs, the two `AuthService`
+methods, `UserService.resetPasswordWithToken`, the entity and the repository, on
+the explicit product/security decision this slice said it needed. No caller was
+left behind.
+
+**The schema went in the same change after all**, reversing this slice's "wait a
+release" reasoning on one fact it did not have: the table was verified to hold
+**zero rows on the live server**, so there is nothing a rollback would need to
+restore and the staged approach bought nothing. `PurgeQueryRepository`'s raw
+`delete from password_reset_token` went with it in the same commit — it needs no
+entity, which is exactly why it would have survived a code-only removal
+silently and then failed at runtime against a dropped table.
+
+**What this settles beyond the removal itself.** The decision is not merely "that
+code was dead"; it is that **the system has no self-service password recovery,
+deliberately**, and that this is now a compliance statement made to schools in
+`Design/*/08-mlps-level1-security-design-guide.md` §8.1/§8.2 rather than an
+implementation detail. The urgent part was §5's second bullet: `forgotPassword`
+wrote the live token to the server log at WARN for manual relay, and the logging
+policy retains those logs for six months — a working credential for any account,
+readable by anyone with log access, for half a year. The reasoning is recorded in
+§8.2 of both design twins (no unauthenticated endpoint may mint a credential for
+an account a caller names; delivering one would require the student contact
+details §4.3 refuses to collect; there should be one credential mechanism, not
+two), and enforced by `NoSelfServicePasswordRecoveryTest` plus
+`AuthControllerRoutingTest` so a reintroduction fails the build rather than
+review.

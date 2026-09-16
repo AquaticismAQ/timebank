@@ -116,6 +116,11 @@ response, same reason for being a POST.
 
 ## The other mechanism
 
+> **Resolved 2026-09-17 by `Docs/issues/089-*.md`.** The recommendation below was
+> acted on in full — code *and* schema, on an explicit product/security decision:
+> the system has no self-service password recovery. This section is left as
+> written, as the record of what was known at the time.
+
 §2.4's point is that there should be **one** credential flow. After this fix
 there are still two: `POST /auth/forgot-password` → `POST /auth/reset-password`,
 backed by V3's `password_reset_token` table, `PasswordResetToken`,

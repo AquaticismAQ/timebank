@@ -133,7 +133,12 @@ public class PurgeQueryRepository {
             MapSqlParameterSource up = new MapSqlParameterSource("userId", linkedUserId);
             total += update("delete from notification where recipient_user_id = :userId", up);
             total += update("delete from user_role where user_id = :userId", up);
-            total += update("delete from password_reset_token where user_id = :userId", up);
+            // No `password_reset_token` delete: the table is gone (V28, issue
+            // 089) along with the self-service recovery flow it backed. This
+            // line had to go in the same change as the drop — it is raw SQL, so
+            // nothing would have failed to compile, and the first symptom would
+            // have been a purge blowing up against a table that no longer
+            // exists.
             total += update("delete from teacher_scope_assignment where user_id = :userId", up);
             total += update("delete from user where id = :userId", up);
         }
