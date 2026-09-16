@@ -293,4 +293,20 @@ an admin may be the bottleneck that makes people photograph slips instead.
 
 ## 5. Implementation status
 
-Not started.
+| Section | Status |
+| :--- | :--- |
+| §3.1 Schema | Done — `V27__student_activation.sql` |
+| §3.2 Username generation | Done — `StudentUsernameGenerator` |
+| §3.3 Import creates pending accounts | Done — `ImportJobRunner.commitStudents` → `UserService.createPendingStudentAccount` |
+| §3.4 Credential document | Not started |
+| §3.5 Activation endpoint | Not started |
+| §3.6 Expiry sweep | Not started |
+| §3.7 Password reset | Not started |
+| §3.8 Login copy and first-time entry | Not started |
+
+§3.1–§3.3 are covered by unit tests only (`mvn test`); no integration test or
+live-server verification has run against them yet, so the migration itself is
+unapplied and the import path is unproven end to end. Until §3.4/§3.5 land,
+an imported account is created and can never be logged into — which is the
+intended interim state (§2.4), not a gap, but it does mean the next re-seed
+must wait for the activation path.

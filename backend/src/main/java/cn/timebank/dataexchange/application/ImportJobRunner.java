@@ -8,6 +8,7 @@ import cn.timebank.dataexchange.application.validation.RuleEngine;
 import cn.timebank.dataexchange.application.validation.RuleSetSource;
 import cn.timebank.dataexchange.domain.Job;
 import cn.timebank.file.application.FileStorage;
+import cn.timebank.iam.application.UserService;
 import cn.timebank.student.application.StudentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,19 +71,21 @@ class ImportJobRunner {
     private final StudentImportRowValidator studentRowValidator;
     private final AccountService accountService;
     private final StudentService studentService;
+    private final UserService userService;
     private final FileStorage fileStorage;
     private final RuleEngine ruleEngine;
     private final RuleSetSource ruleSetSource;
 
     ImportJobRunner(JobProgressWriter progressWriter, HistoricalImportRowValidator historicalRowValidator,
                      StudentImportRowValidator studentRowValidator, AccountService accountService,
-                     StudentService studentService, FileStorage fileStorage, RuleEngine ruleEngine,
-                     RuleSetSource ruleSetSource) {
+                     StudentService studentService, UserService userService, FileStorage fileStorage,
+                     RuleEngine ruleEngine, RuleSetSource ruleSetSource) {
         this.progressWriter = progressWriter;
         this.historicalRowValidator = historicalRowValidator;
         this.studentRowValidator = studentRowValidator;
         this.accountService = accountService;
         this.studentService = studentService;
+        this.userService = userService;
         this.fileStorage = fileStorage;
         this.ruleEngine = ruleEngine;
         this.ruleSetSource = ruleSetSource;
@@ -341,7 +344,13 @@ class ImportJobRunner {
                     if (!alreadyProcessed) {
                         // resolvedLanguage only shapes the returned DTO's localized names, which this
                         // fire-and-forget path never reads — fixed default is fine, no request context exists here.
-                        studentService.create(v.request(), actorId, "zh-CN");
+                        var created = studentService.create(v.request(), actorId, "zh-CN");
+                        // 10-StudentIdentityAndOnboarding.md §3.3: the roster row on its own
+                        // answers nothing about how the student gets in. The account is created
+                        // here, in the same pass, with no password and PENDING_ACTIVATION status
+                        // — inert until the activation code on their slip is redeemed (§2.4).
+                        userService.createPendingStudentAccount(created.id(), created.displayName(),
+                                "zh-CN", actorId);
                     }
                     committed++;
                 }

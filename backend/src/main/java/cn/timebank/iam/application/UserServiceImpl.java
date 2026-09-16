@@ -59,6 +59,10 @@ class UserServiceImpl implements UserService {
     private final AuditService auditService;
     private final FeatureFlagService featureFlagService;
     private final StudentService studentService;
+    private final StudentUsernameGenerator studentUsernameGenerator;
+
+    /** The seeded role every imported student account is given (R__seed_permissions_and_roles.sql). */
+    private static final String STUDENT_ROLE_CODE = "student";
 
     private final int maxFailedAttempts;
     private final int lockoutDurationMinutes;
@@ -66,7 +70,7 @@ class UserServiceImpl implements UserService {
 
     UserServiceImpl(UserRepository userRepository, RoleRepository roleRepository,
                      PasswordEncoder passwordEncoder, AuditService auditService, FeatureFlagService featureFlagService,
-                     StudentService studentService,
+                     StudentService studentService, StudentUsernameGenerator studentUsernameGenerator,
                      @Value("${timebank.auth.lockout.max-failed-attempts:5}") int maxFailedAttempts,
                      @Value("${timebank.auth.lockout.duration-minutes:15}") int lockoutDurationMinutes,
                      @Value("${timebank.auth.session.default-timeout-minutes:480}") int defaultSessionTimeoutMinutes) {
@@ -76,6 +80,7 @@ class UserServiceImpl implements UserService {
         this.passwordEncoder = passwordEncoder;
         this.auditService = auditService;
         this.studentService = studentService;
+        this.studentUsernameGenerator = studentUsernameGenerator;
         this.maxFailedAttempts = maxFailedAttempts;
         this.lockoutDurationMinutes = lockoutDurationMinutes;
         this.defaultSessionTimeoutMinutes = defaultSessionTimeoutMinutes;
@@ -124,6 +129,33 @@ class UserServiceImpl implements UserService {
         auditService.record(new AuditEntry(actorId, "users.manage", "user.create", "user", user.getId(),
                 null, new UserSummaryForAudit(user), null));
         return toDto(user);
+    }
+
+    @Override
+    @Transactional
+    public PendingStudentAccount createPendingStudentAccount(String studentId, String displayName,
+                                                              String preferredLanguage, String actorId) {
+        // Idempotent by student, not by request: a resumed or re-run import
+        // commit must not mint a second login for somebody who already has one.
+        Optional<User> existing = userRepository.findByStudentId(studentId);
+        if (existing.isPresent()) {
+            return new PendingStudentAccount(existing.get().getId(), existing.get().getUsername());
+        }
+        Role role = resolveRole(STUDENT_ROLE_CODE);
+        Instant now = Instant.now();
+        User user = User.pendingActivation(OpaqueIds.generate("usr"), studentUsernameGenerator.generate(),
+                displayName, studentId, preferredLanguage != null ? preferredLanguage : "zh-CN", now);
+        user.addRole(role);
+        // Flushed here, not at transaction end: the username pre-check cannot
+        // see a concurrent import's uncommitted row, so uk_user_username is the
+        // real guarantee. Flushing makes a violation surface on this row, where
+        // the import runner reports it, instead of at commit time where it
+        // would fail the whole job with no indication of which student.
+        userRepository.saveAndFlush(user);
+
+        auditService.record(new AuditEntry(actorId, "users.manage", "user.createPending", "user", user.getId(),
+                null, new UserSummaryForAudit(user), null));
+        return new PendingStudentAccount(user.getId(), user.getUsername());
     }
 
     @Override
@@ -386,9 +418,17 @@ class UserServiceImpl implements UserService {
 
     private AuthenticatedUserView toAuthView(User user) {
         Set<String> roleCodes = user.getRoles().stream().map(Role::getCode).collect(Collectors.toCollection(LinkedHashSet::new));
+        // `active` is deliberately status AND a stored credential, not status
+        // alone (10-StudentIdentityAndOnboarding.md §2.4): a never-activated
+        // import has no password_hash, and an account that cannot satisfy a
+        // password check must be refused at the pre-authentication check
+        // rather than reaching the encoder with a null hash. This also means
+        // flipping such an account to ACTIVE by hand does not make it usable —
+        // activation is "the password was set" (§2.6), nothing less.
         return new AuthenticatedUserView(
                 user.getId(), user.getUsername(), user.getPasswordHash(), user.getDisplayName(),
-                user.getStatus() == UserStatus.ACTIVE, user.isLocked(), user.getPreferredLanguage(),
+                user.getStatus() == UserStatus.ACTIVE && user.hasUsableCredential(),
+                user.isLocked(), user.getPreferredLanguage(),
                 roleCodes, permissionCodesOf(user), user.getStudentId(),
                 user.sessionTimeoutMinutes(defaultSessionTimeoutMinutes));
     }
