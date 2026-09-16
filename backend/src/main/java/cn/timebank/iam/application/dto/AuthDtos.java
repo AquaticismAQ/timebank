@@ -49,14 +49,13 @@ public final class AuthDtos {
         }
     }
 
-    /**
-     * No mail/notification module exists until B5 — the admin-triggered
-     * reset (contract §4.15) therefore returns the generated temporary
-     * password once, in this response, for the admin to relay out of band.
-     * Revisit once B5's notification module can email a reset link instead.
-     * {@code username} is included so the caller can revoke live sessions
-     * without a second lookup (see {@code UserServiceImpl}'s module-boundary note).
-     */
-    public record AdminResetPasswordResponse(String username, String temporaryPassword) {
-    }
+    // There is deliberately no admin-reset *response* type here any more
+    // (10-StudentIdentityAndOnboarding.md §3.7). The admin reset used to
+    // generate a temporary password server-side and hand the plaintext back in
+    // this DTO, which falsified §2.4's "no password is ever generated
+    // server-side, so no password plaintext exists at any point" — a claim
+    // `Design/*/08-mlps-level1-security-design-guide.md` §8.2 repeats to
+    // schools (issue 088). A reset now issues an activation code and streams
+    // the same one-slip credential document §3.4 prints, so the response is a
+    // PDF and there is no password in it, or anywhere else, to model.
 }

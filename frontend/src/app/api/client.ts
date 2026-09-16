@@ -1112,8 +1112,38 @@ export const api = {
       const body = { ...data, status: data.status ? toBackendEnum(data.status) : undefined };
       await http.patch<void>(`/users/${id}`, body);
     },
-    async resetPassword(id: string): Promise<{ temporaryPassword: string }> {
-      return http.post<{ temporaryPassword: string }>(`/users/${id}/reset-password`);
+    /**
+     * An admin reset no longer produces a password to show
+     * (`Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.7): it clears
+     * the account's password, issues a single-use activation code and streams
+     * back the same printable credential slip a class batch prints, so the
+     * user sets their own password. There is nothing to display — the caller
+     * downloads the PDF.
+     *
+     * Raw `fetch`, not `http.post`: the response is `application/pdf`, not the
+     * `data`/`meta` envelope `http.ts` unwraps. Same manual CSRF attachment
+     * `files.uploadContent` and `imports.create` already use for their raw
+     * requests — POST is state-changing and 403s without it.
+     */
+    async resetPassword(id: string): Promise<{ blob: Blob; filename: string }> {
+      const csrfToken = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1];
+      const headers: Record<string, string> = {};
+      if (csrfToken) headers['X-XSRF-TOKEN'] = decodeURIComponent(csrfToken);
+      const response = await fetch(`/api/v1/users/${id}/reset-password`, {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+      });
+      if (!response.ok) {
+        // A failure happens before the document exists, so it still comes back
+        // as a normal error envelope — the content type is what tells them apart.
+        const text = await response.text();
+        const parsed = text ? JSON.parse(text) : {};
+        throw new ApiError(parsed.error ?? { code: 'RESET_FAILED', message: 'Password reset failed', requestId: '' });
+      }
+      const disposition = response.headers.get('Content-Disposition') ?? '';
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? 'activation-slip.pdf';
+      return { blob: await response.blob(), filename };
     },
     async unlock(id: string): Promise<void> {
       await http.post<void>(`/users/${id}/unlock`);

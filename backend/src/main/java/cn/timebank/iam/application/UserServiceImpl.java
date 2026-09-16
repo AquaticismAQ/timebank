@@ -5,7 +5,6 @@ import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
-import cn.timebank.iam.application.dto.AuthDtos;
 import cn.timebank.iam.application.dto.AuthenticatedUserView;
 import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.iam.application.dto.MeResponse;
@@ -29,7 +28,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashSet;
@@ -223,19 +221,69 @@ class UserServiceImpl implements UserService {
                 null, null, null));
     }
 
+    /**
+     * §3.7. <b>Clears</b> the credential rather than replacing it — there is no
+     * {@code generateTemporaryPassword} here any more, and that absence is the
+     * point (issue 088).
+     *
+     * <p>Two refusals, neither of them an edge case dressed up as one:</p>
+     *
+     * <ul>
+     *   <li><b>Self-reset.</b> Only an authenticated admin can reach this, so
+     *       an admin resetting their own account cannot be doing it because
+     *       they forgot the password — they just used it. What is left is "I
+     *       may be compromised", and {@code POST /me/change-password} answers
+     *       that better: it also revokes every session, and it leaves them
+     *       holding a working login. Allowing it instead would let the last
+     *       remaining admin clear their own password and depend on a PDF
+     *       download completing to ever get back in — and nobody else can
+     *       issue them a slip.</li>
+     *   <li><b>An {@code INACTIVE} account.</b> Deactivation is a deliberate
+     *       decision; moving the account to {@code PENDING_ACTIVATION} would
+     *       quietly undo it and hand a redeemable code to an account somebody
+     *       switched off. {@code ActivationServiceImpl.redeem} refuses
+     *       {@code INACTIVE} for the same reason, and {@code
+     *       CredentialSlipServiceImpl.ISSUABLE_STATUSES} excludes it from a
+     *       class batch. Reactivation first, then a reset.</li>
+     * </ul>
+     *
+     * <p>{@code LOCKED} is deliberately <em>not</em> refused: a brute-force
+     * lockout is the single most common reason a reset is requested at all, so
+     * the lock counters are cleared here the same way {@link #unlock} clears
+     * them.</p>
+     */
     @Override
     @Transactional
-    public AuthDtos.AdminResetPasswordResponse adminResetPassword(String id, String actorId) {
+    public ResetAccount resetToPendingActivation(String id, String actorId) {
         User user = findOrThrow(id);
-        String temporaryPassword = generateTemporaryPassword();
-        user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
+        if (user.getId().equals(actorId)) {
+            throw ApiException.stateConflict(
+                    "You cannot reset your own account. Change your own password instead, "
+                            + "or ask another administrator to reset it for you.");
+        }
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            throw ApiException.stateConflict(
+                    "This account is deactivated. Reactivate it first, then reset it.");
+        }
+
+        CredentialSummary before = new CredentialSummary(user);
+        user.setPasswordHash(null);
+        // The user chooses their own password at activation, so there is
+        // nothing for them to be forced to change afterwards.
+        user.setMustChangePassword(false);
+        user.setStatus(UserStatus.PENDING_ACTIVATION);
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
         user.setUpdatedAt(Instant.now());
 
-        auditService.record(new AuditEntry(actorId, "users.manage", "user.adminResetPassword", "user", user.getId(),
-                null, null, "ADMIN_RESET"));
-        return new AuthDtos.AdminResetPasswordResponse(user.getUsername(), temporaryPassword);
+        // The `after` summary is what makes this row readable a year later:
+        // hasPassword flipping true → false is the whole event, and it is
+        // stated rather than implied by the status. No credential material of
+        // any kind — there is none to leak now, and this row must not become
+        // the place one reappears.
+        auditService.record(new AuditEntry(actorId, "users.manage", "user.adminResetCredential", "user", user.getId(),
+                before, new CredentialSummary(user), "ADMIN_RESET"));
+        return new ResetAccount(user.getId(), user.getUsername(), user.getDisplayName());
     }
 
     @Override
@@ -362,16 +410,6 @@ class UserServiceImpl implements UserService {
         return workspaces;
     }
 
-    private String generateTemporaryPassword() {
-        SecureRandom random = new SecureRandom();
-        String alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#%";
-        StringBuilder sb = new StringBuilder(16);
-        for (int i = 0; i < 16; i++) {
-            sb.append(alphabet.charAt(random.nextInt(alphabet.length())));
-        }
-        return sb.toString();
-    }
-
     @Override
     @Transactional(readOnly = true)
     public Optional<String> findUserIdByStudentId(String studentId) {
@@ -456,6 +494,17 @@ class UserServiceImpl implements UserService {
     /** 07-RoleFinetune.md §2.5: every user holds exactly one role — {@code null} only for a not-yet-migrated account. */
     private String soleRoleCodeOf(User user) {
         return user.getRoles().stream().map(Role::getCode).findFirst().orElse(null);
+    }
+
+    /**
+     * §3.7's before/after pair. Two booleans and a status, never a hash and
+     * never a password — an audit row read by everyone holding
+     * {@code auditLogs.read} is the last place credential material belongs.
+     */
+    private record CredentialSummary(String status, boolean hasPassword, boolean mustChangePassword) {
+        CredentialSummary(User user) {
+            this(user.getStatus().name(), user.hasUsableCredential(), user.isMustChangePassword());
+        }
     }
 
     /** Compact before/after summary for audit rows — never the entity itself (Design.md §13). */

@@ -140,15 +140,7 @@ class CredentialSlipServiceImpl implements CredentialSlipService {
 
         List<Slip> slips = new ArrayList<>(codes.size());
         for (IssuedCode code : codes) {
-            slips.add(new Slip(
-                    displayNameByStudentId.get(studentIdByUserId.get(code.userId())),
-                    code.username(),
-                    code.code(),
-                    activationUrl(code.code()),
-                    siteRootUrl,
-                    actor.displayName(),
-                    code.issuedAt(),
-                    code.expiresAt()));
+            slips.add(slip(displayNameByStudentId.get(studentIdByUserId.get(code.userId())), code, actor));
         }
 
         SlipsPerPage slipsPerPage = request.resolvedSlipsPerPage();
@@ -170,6 +162,40 @@ class CredentialSlipServiceImpl implements CredentialSlipService {
                 null));
 
         return new SlipDocument(pdf, filename(schoolClass, codes.getFirst()), slips.size());
+    }
+
+    /**
+     * §3.7. The order is not incidental: the account is cleared <b>before</b>
+     * the code is minted, and both happen before the render, all inside the one
+     * transaction {@link #issueForClass} already argues for. A render that
+     * throws rolls back the cleared password too, so a failed download leaves
+     * the user with the login they had rather than with none.
+     *
+     * <p>The refusals that matter — self-reset, a deactivated account, an
+     * unknown user — live in {@code UserService.resetToPendingActivation}, next
+     * to the state they protect. The only rule enforced here is §2.10's, the
+     * same one {@link #issueForClass} enforces and for the same reason: this
+     * call mints a credential.</p>
+     */
+    @Override
+    @Transactional
+    public ResetSlip issueForReset(String userId, SlipActor actor, String resolvedLanguage) {
+        if (!actor.isAdmin()) {
+            throw ApiException.forbidden("Only an administrator can reset an account's credential.");
+        }
+
+        UserService.ResetAccount account = userService.resetToPendingActivation(userId, actor.userId());
+        IssuedCode code = activationService.issue(account.userId(), actor.userId());
+        byte[] pdf = CredentialSlipDocument.render(
+                List.of(slip(account.displayName(), code, actor)), SlipsPerPage.ONE, resolvedLanguage);
+
+        // No third audit row. The mutation is audited where it happens — the
+        // credential clear by `user.adminResetCredential` and the issuance by
+        // `user.issueActivationCode`, both against this user id and both by
+        // this actor. `user.issueCredentialSlips` exists for the batch because
+        // a batch's subject is a *class*, which nothing else records; a reset's
+        // subject is the account those two rows already name.
+        return new ResetSlip(new SlipDocument(pdf, resetFilename(code), 1), account.username());
     }
 
     private List<StudentListItemDto> roster(String classId, Authentication auth, String resolvedLanguage) {
@@ -207,6 +233,27 @@ class CredentialSlipServiceImpl implements CredentialSlipService {
             }
         }
         return issuable;
+    }
+
+    /**
+     * One printable slip. Shared by the batch and the reset so the two cannot
+     * drift into two layouts — §3.7's "one flow, one document format" is a
+     * property of this method having one caller-independent body, not of two
+     * call sites being written the same way today.
+     */
+    private Slip slip(String displayName, IssuedCode code, SlipActor actor) {
+        return new Slip(displayName, code.username(), code.code(), activationUrl(code.code()),
+                siteRootUrl, actor.displayName(), code.issuedAt(), code.expiresAt());
+    }
+
+    /**
+     * §2.8's filename rule applied to a batch of one: the class name that
+     * carries no personal information is not available here, and the account's
+     * own name, username or id must not take its place — a reset slip lands in
+     * the same Downloads folder and the same mail thread as a class batch.
+     */
+    private String resetFilename(IssuedCode code) {
+        return "activation-slip-" + FILENAME_DATE.format(code.issuedAt()) + ".pdf";
     }
 
     /**

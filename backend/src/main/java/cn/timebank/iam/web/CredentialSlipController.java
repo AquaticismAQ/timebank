@@ -1,17 +1,20 @@
 package cn.timebank.iam.web;
 
 import cn.timebank.iam.application.CredentialSlipService;
+import cn.timebank.iam.application.CredentialSlipService.ResetSlip;
 import cn.timebank.iam.application.CredentialSlipService.SlipActor;
 import cn.timebank.iam.application.CredentialSlipService.SlipDocument;
 import cn.timebank.iam.application.dto.CredentialSlipDtos.IssueSlipsRequest;
 import cn.timebank.organization.application.RequestLanguageService;
 import cn.timebank.security.application.CookieSessionUserDetails;
+import cn.timebank.security.application.SessionRevocationService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -21,10 +24,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Set;
 
 /**
- * Contract §4.15, 10-StudentIdentityAndOnboarding.md §3.4.
+ * Every path by which a credential slip is produced — a class batch (contract
+ * §4.15, 10-StudentIdentityAndOnboarding.md §3.4) and an admin password reset
+ * (§3.7). §3.7 folds the second into the first deliberately: "one flow, one
+ * document format, and still no server-generated password anywhere".
  *
  * <p><b>POST, not GET</b>, even though it downloads a file: the call mints a
- * fresh activation code for every student it prints, retiring whatever code
+ * fresh activation code for every account it prints, retiring whatever code
  * they held before. A GET that changes state would be retried by a proxy, a
  * prefetcher or a browser's back button, and each retry would invalidate the
  * slips just handed out.</p>
@@ -52,11 +58,14 @@ public class CredentialSlipController {
 
     private final CredentialSlipService credentialSlipService;
     private final RequestLanguageService requestLanguageService;
+    private final SessionRevocationService sessionRevocationService;
 
     public CredentialSlipController(CredentialSlipService credentialSlipService,
-                                     RequestLanguageService requestLanguageService) {
+                                     RequestLanguageService requestLanguageService,
+                                     SessionRevocationService sessionRevocationService) {
         this.credentialSlipService = credentialSlipService;
         this.requestLanguageService = requestLanguageService;
+        this.sessionRevocationService = sessionRevocationService;
     }
 
     @PostMapping(value = "/activation-slips", produces = MediaType.APPLICATION_PDF_VALUE)
@@ -66,11 +75,49 @@ public class CredentialSlipController {
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
         CookieSessionUserDetails principal = (CookieSessionUserDetails) auth.getPrincipal();
-        SlipActor actor = new SlipActor(principal.id(), principal.displayName(),
-                principal.roleCodes().stream().anyMatch(SLIP_ISSUING_ROLES::contains));
         String language = requestLanguageService.resolve(acceptLanguage, principal.preferredLanguage());
 
-        SlipDocument document = credentialSlipService.issueForClass(request, actor, auth, language);
+        return pdfDownload(credentialSlipService.issueForClass(request, actorOf(principal), auth, language));
+    }
+
+    /**
+     * Contract §4.15, 10-StudentIdentityAndOnboarding.md §3.7. <b>An admin
+     * reset issues an activation code and returns a slip — it does not
+     * generate a password</b>, which is what makes §2.4's "no password is ever
+     * generated server-side" true rather than merely intended (issue 088).
+     *
+     * <p>It lives beside the class batch rather than in {@code UserController}
+     * because it now <em>is</em> a slip issuance: same admin-only rule, same
+     * language resolution, same PDF response and the same reason for being a
+     * POST. Keeping it next to {@code PATCH /users/{id}} would have meant
+     * maintaining a second copy of all four.</p>
+     *
+     * <p>Revocation stays where it was, after the service returns: the account
+     * no longer has a password, but a session established before the reset
+     * carries its own authenticated principal and would otherwise stay usable.
+     * It runs after the transaction commits, so a rolled-back reset cannot sign
+     * anybody out.</p>
+     */
+    @PostMapping(value = "/{id}/reset-password", produces = MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasAuthority('users.manage')")
+    public ResponseEntity<byte[]> resetCredential(
+            @PathVariable String id,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            Authentication auth) {
+        CookieSessionUserDetails principal = (CookieSessionUserDetails) auth.getPrincipal();
+        String language = requestLanguageService.resolve(acceptLanguage, principal.preferredLanguage());
+
+        ResetSlip reset = credentialSlipService.issueForReset(id, actorOf(principal), language);
+        sessionRevocationService.revokeAllSessionsForUser(reset.username());
+        return pdfDownload(reset.document());
+    }
+
+    private SlipActor actorOf(CookieSessionUserDetails principal) {
+        return new SlipActor(principal.id(), principal.displayName(),
+                principal.roleCodes().stream().anyMatch(SLIP_ISSUING_ROLES::contains));
+    }
+
+    private ResponseEntity<byte[]> pdfDownload(SlipDocument document) {
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
