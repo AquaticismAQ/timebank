@@ -1,8 +1,10 @@
 package cn.timebank.iam.web;
 
 import cn.timebank.common.web.ApiResponse;
+import cn.timebank.iam.application.ActivationService;
 import cn.timebank.iam.application.AuthService;
 import cn.timebank.iam.application.UserService;
+import cn.timebank.iam.application.dto.AuthDtos.ActivateAccountRequest;
 import cn.timebank.iam.application.dto.AuthDtos.ChangePasswordRequest;
 import cn.timebank.iam.application.dto.AuthDtos.ForgotPasswordRequest;
 import cn.timebank.iam.application.dto.AuthDtos.LoginRequest;
@@ -42,15 +44,17 @@ import java.util.Set;
 public class AuthController {
 
     private final AuthService authService;
+    private final ActivationService activationService;
     private final UserService userService;
     private final SessionRevocationService sessionRevocationService;
     private final TeacherScopeAssignmentService teacherScopeAssignmentService;
     private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
-    public AuthController(AuthService authService, UserService userService,
+    public AuthController(AuthService authService, ActivationService activationService, UserService userService,
                            SessionRevocationService sessionRevocationService,
                            TeacherScopeAssignmentService teacherScopeAssignmentService) {
         this.authService = authService;
+        this.activationService = activationService;
         this.userService = userService;
         this.sessionRevocationService = sessionRevocationService;
         this.teacherScopeAssignmentService = teacherScopeAssignmentService;
@@ -98,6 +102,33 @@ public class AuthController {
         request.changeSessionId();
         request.getSession().setMaxInactiveInterval(principal.sessionTimeoutMinutes() * 60);
         return ApiResponse.of(withScopeGradeIds(userService.buildMeResponse(principal.id()), principal.id()));
+    }
+
+    /**
+     * First-time access (10-StudentIdentityAndOnboarding.md §2.4/§3.5).
+     *
+     * <p><b>Public and unauthenticated by necessity</b>, which until now only
+     * login was: the account this activates has no password to authenticate
+     * with yet. The compensating controls live in {@code ActivationService} and
+     * {@code ActivationThrottle} — single use, expiry, a per-IP attempt limit
+     * and §2.5's global failure budget — not here.</p>
+     *
+     * <p>No username parameter, deliberately: the code is its own lookup key
+     * (§2.5), so this endpoint never has to be told, and therefore never has to
+     * confirm, which student a code belongs to.</p>
+     *
+     * <p>Returns no body. There is nothing safe to return — echoing the
+     * username or display name would hand the holder of a found slip an
+     * identity lookup — and no session is established either: §2.6 defines
+     * activation as "the password was set", so the student then signs in
+     * through the ordinary login path with the password they just chose.</p>
+     */
+    @PostMapping("/api/v1/auth/activate")
+    @PreAuthorize("permitAll()")
+    public ApiResponse<Void> activate(@Valid @RequestBody ActivateAccountRequest request,
+                                       HttpServletRequest httpRequest) {
+        activationService.redeem(request.code(), request.newPassword(), clientIp(httpRequest));
+        return ApiResponse.of(null);
     }
 
     @PostMapping("/api/v1/auth/forgot-password")

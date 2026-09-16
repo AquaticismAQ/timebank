@@ -45,6 +45,7 @@ Web 推荐使用 Secure、HttpOnly、SameSite Cookie 管理会话；如采用访
 | `POST` | `/auth/refresh` | 刷新会话 |
 | `POST` | `/auth/forgot-password` | 发起密码重置 |
 | `POST` | `/auth/reset-password` | 使用一次性令牌设置新密码 |
+| `POST` | `/auth/activate` | 兑换首次激活码并设置账号的首个密码 |
 | `GET` | `/me` | 当前用户、角色、权限、数据范围与功能开关 |
 | `PATCH` | `/me/profile` | 修改允许自助维护的资料 |
 | `POST` | `/me/change-password` | 修改密码 |
@@ -76,6 +77,39 @@ Web 推荐使用 Secure、HttpOnly、SameSite Cookie 管理会话；如采用访
 `studentId`（2026-08-06 新增，见 `Docs/optimization/01-i3-partner-school-terminology.md`）对教职工账号（教师/管理员/系统管理员）为 `null`——它使前端无需额外请求即可在共同组织者搜索中排除"我自己"。
 
 `roles`/`workspaces` 在此处仍为数组格式（不同于 `/users` 的 `roleCode`，见 §4.15），但始终只含一个元素——每个用户始终且仅持有一个角色（见 07-RoleFinetune.md §2.5），因此也只有一个工作区；不存在多工作区账号，也不再有工作区选择页面。
+
+#### `POST /auth/activate` —— 首次激活
+
+学生通过批量名单导入建账，账号**没有密码**，因此根本无法登录（见 `Docs/optimization/10-StudentIdentityAndOnboarding.md` §2.4）。学生纸条上印有一次性激活码；兑换该码会在同一个事务内设置学生自己选择的密码并激活账号。服务端始终不生成任何密码。
+
+**出于必要而公开、免认证**——与 `/auth/login` 一起，是仅有的两个此类端点。与其他变更请求一样需要 CSRF Token。
+
+请求：
+
+```json
+{
+  "code": "HKTZ4-9QP2M",
+  "newPassword": "the-student-chooses-this"
+}
+```
+
+- `code` —— 共 10 位：9 位 Crockford base32 数据字符（`0123456789ABCDEFGHJKMNPQRSTVWXYZ`，不含 `I`/`L`/`O`/`U`）加 1 位校验字符；校验字符采用 Crockford 标准算法 `value mod 37`，取值于 37 位校验字母表（数据字母表加 `*~$=U`）。服务端会先归一化：忽略大小写，去除分隔符与空白，并将 `I`/`L` 折叠为 `1`、`O` 折叠为 `0`。纸条上的分组写法（`HKTZ4-9QP2M`）可直接提交。客户端应在本地校验该校验字符，使明显的输入错误无需往返即可发现。
+- `newPassword` —— 8–128 个字符。
+
+**不发送用户名，也不返回用户名。** 激活码本身就是查询键，因此该端点从不被告知、也从不确认某个码属于哪位学生。成功时返回 `{ "data": null }`，且**不建立会话**：学生随后用刚设置的密码走常规登录流程。
+
+所有失败均为 `422 VALIDATION_FAILED`，通过 `code` 字段上的 `fieldErrors[0].code` 区分：
+
+| `fieldErrors[0].code` | 含义 |
+| --- | --- |
+| `ACTIVATION_CODE_MALFORMED` | 长度不对、字符不在字母表内，或校验字符不匹配——即输入有误 |
+| `ACTIVATION_CODE_INVALID` | 不存在该激活码。刻意笼统：猜测得到的就是这个响应 |
+| `ACTIVATION_CODE_EXPIRED` | 该码存在，但有效期（默认 7 天，可配置）已过——学生需要重新补发纸条 |
+| `ACTIVATION_CODE_ALREADY_USED` | 一次性使用，且已被兑换 |
+
+后三者的区分是刻意的，其代价也是：`EXPIRED` 与 `ALREADY_USED` 确实会确认所提交的码存在。之所以接受，是因为处于这两种状态的码本就无法再兑换，攻击者由此得不到任何可利用的东西；而若把它们合并，持有过期纸条的学生就会一直重复输入一个正确的码。无论哪种情况都不会透露该码**属于哪个账号**，且四者共用同一 HTTP 状态码，仅凭状态码无法区分。
+
+也可能返回 `429 RATE_LIMITED`：该端点同时设有按 IP 的尝试限制与**全局失败额度**——全系统每小时仅允许几百次失败猜测——这正是按 IP 限流无法覆盖的分布式场景的应对手段（见方案 §2.5）。额度耗尽期间该端点对所有人拒绝服务，包括正常学生；成功兑换永远不消耗该额度。
 
 ### 2.3 CSRF 与来源保护
 

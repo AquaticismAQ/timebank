@@ -14,19 +14,22 @@ import { LanguageSwitcher } from '../LanguageSwitcher';
 // reaches this path by tapping that entry, or by scanning the QR, which deep
 // links here as `/activate?code=...` with the code prefilled.
 //
-// NOT WIRED TO A BACKEND YET: `api.auth.activate` posts to an endpoint that
-// does not exist (plan §3.5 is owned by another slice), so submitting shows the
-// generic failure message. Everything up to the request — normalisation, format
-// checks, password rules — is real.
+// Wired to `POST /api/v1/auth/activate` (backend `ActivationService`, plan
+// §3.5). The contract this file assumed — that path, `{ code, newPassword }` —
+// was adopted unchanged; what landed alongside it is the real checksum below
+// and the per-failure error codes this page now distinguishes.
 
 // §2.5: nine Crockford data characters plus one check character. Crockford
 // excludes I, L, O and U from the data alphabet precisely so a handwritten or
 // mistyped `O`/`l` can be folded back deterministically.
 const CROCKFORD_DATA = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-// Crockford's spec allows five extra symbols in the *check* position only. The
-// backend may or may not use them, so accept either rather than reject a valid
-// code on a guess.
+// Crockford's spec allows five extra symbols in the *check* position only,
+// which is what makes the check alphabet 37 symbols — and 37 prime, which is
+// the whole reason the checksum catches every transposition. The backend does
+// not *mint* codes whose check character lands on one of these five (they are
+// miserable to type on a phone), but it accepts them, so this does too.
 const CROCKFORD_CHECK_EXTRA = '*~$=U';
+const CROCKFORD_CHECK = CROCKFORD_DATA + CROCKFORD_CHECK_EXTRA;
 const CODE_LENGTH = 10;
 const MIN_PASSWORD_LENGTH = 8; // matches the backend's @Size(min = 8) on password fields
 
@@ -40,22 +43,66 @@ export function normalizeActivationCode(raw: string): string {
 }
 
 /**
- * Shape check only. The check *character* is not verified here — its algorithm
- * is defined by the generator (plan §2.5), which does not exist yet; validating
- * it against a guessed variant would reject real codes.
+ * Crockford's check symbol: the nine data characters read as a base-32
+ * integer, modulo 37. Mirrors `ActivationCodeFormat.checkSymbol` on the server
+ * exactly — the two must not drift, or this page starts rejecting real codes.
+ *
+ * Nine base-32 characters is 45 bits, which exceeds JavaScript's 53-bit-safe
+ * integer range only if accumulated naively, so the modulo is folded in on
+ * every step rather than at the end.
+ */
+function checkSymbolFor(data: string): string {
+  let value = 0;
+  for (const c of data) {
+    value = (value * CROCKFORD_DATA.length + CROCKFORD_DATA.indexOf(c)) % CROCKFORD_CHECK.length;
+  }
+  return CROCKFORD_CHECK[value];
+}
+
+/**
+ * §2.5's "the check character catches a mistyped or transposed character in the
+ * browser, so a child sees 'you mistyped that' rather than a round-trip and a
+ * bare invalid code". Because 37 is prime and coprime to both 32 and 31, this
+ * catches *every* single-character substitution and *every* adjacent
+ * transposition — not most of them.
  */
 export function isWellFormedActivationCode(code: string): boolean {
   if (code.length !== CODE_LENGTH) return false;
-  for (let i = 0; i < CODE_LENGTH - 1; i += 1) {
-    if (!CROCKFORD_DATA.includes(code[i])) return false;
+  const data = code.slice(0, CODE_LENGTH - 1);
+  for (const c of data) {
+    if (!CROCKFORD_DATA.includes(c)) return false;
   }
-  const check = code[CODE_LENGTH - 1];
-  return CROCKFORD_DATA.includes(check) || CROCKFORD_CHECK_EXTRA.includes(check);
+  return code[CODE_LENGTH - 1] === checkSymbolFor(data);
 }
 
 /** `HKTZ49QP2M` → `HKTZ4-9QP2M`, the grouping the slip prints. */
 function formatActivationCode(code: string): string {
   return code.length > 5 ? `${code.slice(0, 5)}-${code.slice(5)}` : code;
+}
+
+/**
+ * The backend distinguishes *why* a code failed via `fieldErrors[0].code` on a
+ * 422 (it deliberately does not spend a top-level error code on this; see
+ * `ActivationServiceImpl`). Translating them here rather than showing the
+ * server's English message is what keeps the wording in the student's own
+ * language — and §2.9 requires the screen to speak the same words as the paper.
+ *
+ * `ACTIVATION_CODE_INVALID` is intentionally the vaguest of the four: it is
+ * what a guess gets, and the server does not confirm whether such a code
+ * exists.
+ */
+const ACTIVATION_ERROR_KEYS: Record<string, string> = {
+  ACTIVATION_CODE_MALFORMED: 'auth.activation.codeFormat',
+  ACTIVATION_CODE_INVALID: 'auth.activation.codeInvalid',
+  ACTIVATION_CODE_EXPIRED: 'auth.activation.codeExpired',
+  ACTIVATION_CODE_ALREADY_USED: 'auth.activation.codeAlreadyUsed',
+};
+
+function messageFor(err: unknown, t: (key: string) => string): string {
+  if (!(err instanceof ApiError)) return t('auth.activation.failed');
+  if (err.code === 'RATE_LIMITED') return t('auth.activation.rateLimited');
+  const key = err.fieldErrors?.map(fe => ACTIVATION_ERROR_KEYS[fe.code]).find(Boolean);
+  return key ? t(key) : t('auth.activation.failed');
 }
 
 export function ActivationPage() {
@@ -92,7 +139,7 @@ export function ActivationPage() {
       toast.success(t('auth.activation.success'));
       navigate('/login');
     } catch (err) {
-      setError(err instanceof ApiError && err.message ? err.message : t('auth.activation.failed'));
+      setError(messageFor(err, t));
     } finally {
       setLoading(false);
     }
