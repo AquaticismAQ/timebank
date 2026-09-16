@@ -98,9 +98,47 @@ export function StudentList() {
     }).catch(() => {});
   }, [items]);
 
+  // `GET /students` carries no service hours either — the same
+  // StudentListItemDto gap as the balance above — so the Service Hours column
+  // and Annual Progress rendered "—" and 0% for every student regardless of
+  // their actual data, while the student's own portal showed the real figures
+  // from `/students/{id}/progress`. Merged in from that same endpoint here.
+  //
+  // There is no bulk progress endpoint, so this is one request per student.
+  // Concurrency is capped because a page can hold 100 students; a failed row
+  // is left blank rather than failing the whole list.
+  const [progressMap, setProgressMap] = useState<Record<string, { completedMinutes: number; annualRequiredMinutes: number }>>({});
   useEffect(() => {
-    setStudents(items.map(s => ({ ...s, timeCoinBalance: balanceMap[s.id] ?? s.timeCoinBalance })));
-  }, [items, balanceMap]);
+    if (items.length === 0) return;
+    let cancelled = false;
+    const queue = [...items];
+    const map: Record<string, { completedMinutes: number; annualRequiredMinutes: number }> = {};
+    const worker = async () => {
+      while (queue.length > 0 && !cancelled) {
+        const student = queue.shift();
+        if (!student) return;
+        try {
+          const p = await api.students.progressSummary(student.id);
+          map[student.id] = { completedMinutes: p.completedMinutes, annualRequiredMinutes: p.annualRequiredMinutes };
+        } catch {
+          // leave this row's hours blank
+        }
+      }
+    };
+    Promise.all(Array.from({ length: Math.min(6, items.length) }, worker))
+      .then(() => { if (!cancelled) setProgressMap(map); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [items]);
+
+  useEffect(() => {
+    setStudents(items.map(s => ({
+      ...s,
+      timeCoinBalance: balanceMap[s.id] ?? s.timeCoinBalance,
+      completedMinutes: progressMap[s.id]?.completedMinutes ?? s.completedMinutes,
+      annualRequiredMinutes: progressMap[s.id]?.annualRequiredMinutes ?? s.annualRequiredMinutes,
+    })));
+  }, [items, balanceMap, progressMap]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);

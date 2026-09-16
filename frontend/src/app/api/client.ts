@@ -726,6 +726,18 @@ export const api = {
       const dto = await http.patch<StudentListItemDtoWire>(`/students/${id}`, data);
       return fromStudentDto(dto);
     },
+    /**
+     * The raw `ProgressDto` only — no grade/academicYear backfill, so it costs
+     * one request instead of the three `progress()` below makes. Meant for
+     * callers that need progress for a whole page of students at once, where
+     * tripling the request count is not acceptable (`StudentList`'s hours
+     * column). Use `progress()` when you need the enriched view for one
+     * student.
+     */
+    async progressSummary(id: string): Promise<Pick<StudentProgress,
+      'studentId' | 'annualRequiredMinutes' | 'stageRequiredMinutes' | 'completedMinutes' | 'underReviewMinutes' | 'gapMinutes' | 'timeCoinBalance'>> {
+      return http.get(`/students/${id}/progress`);
+    },
     async progress(id: string): Promise<StudentProgress> {
       // Real ProgressDto (backend doc comment: "the `*Hours` convenience
       // fields... leave the wire") has no academicYear/grade/byCategory at

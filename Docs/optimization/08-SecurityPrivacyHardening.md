@@ -161,6 +161,13 @@ nginx-only; no application change.
   testing.
 - `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
   and frame protection (`frame-ancestors 'none'`).
+- **`Cache-Control: no-cache` on `index.html`**, leaving the content-hashed
+  assets immutable. nginx currently sends only `ETag`/`Last-Modified` for the
+  document, so browsers apply heuristic caching and can keep serving a stale
+  `index.html` — which pins them to the previous hashed bundle after a deploy.
+  This is not hypothetical: it made a verified-correct fix look broken during
+  issue 084, where the server was serving the new bundle while the browser ran
+  the old one.
 
 **Verification:** the site must be exercised in a real browser afterwards — a CSP that breaks
 the SPA fails silently from the server's point of view. Check the console for CSP violations
