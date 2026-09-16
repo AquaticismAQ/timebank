@@ -45,6 +45,7 @@ Authentication endpoints:
 | `POST` | `/auth/refresh` | Refresh session |
 | `POST` | `/auth/forgot-password` | Initiate password reset |
 | `POST` | `/auth/reset-password` | Set new password with one-time token |
+| `POST` | `/auth/activate` | Redeem a first-time activation code and set the account's first password |
 | `GET` | `/me` | Current user, roles, permissions, data scope, and feature flags |
 | `PATCH` | `/me/profile` | Update self-service profile fields |
 | `POST` | `/me/change-password` | Change password |
@@ -76,6 +77,39 @@ Login response must at least return:
 `studentId` (added 2026-08-06, `Docs/optimization/01-i3-partner-school-terminology.md`) is `null` for staff accounts (teacher/admin/sysadmin) — it's what lets the frontend exclude "myself" from a co-organizer search without a second round trip.
 
 `roles`/`workspaces` stay array-shaped here (unlike `/users`' `roleCode`, §4.15) but always carry exactly one element — every user holds exactly one role (07-RoleFinetune.md §2.5), so exactly one workspace; there is no multi-workspace account and no workspace picker.
+
+#### `POST /auth/activate` — first-time activation
+
+Students arrive by bulk roster import with an account that has **no password**, so it cannot be logged into at all (`Docs/optimization/10-StudentIdentityAndOnboarding.md` §2.4). The student's printed slip carries a single-use activation code; redeeming it sets their own chosen password and activates the account in one transaction. No password is ever generated server-side.
+
+**Public and unauthenticated by necessity** — together with `/auth/login` it is one of only two such endpoints. Requires a CSRF token like any other mutation.
+
+Request:
+
+```json
+{
+  "code": "HKTZ4-9QP2M",
+  "newPassword": "the-student-chooses-this"
+}
+```
+
+- `code` — 10 characters: 9 Crockford base32 data characters (`0123456789ABCDEFGHJKMNPQRSTVWXYZ`, no `I`/`L`/`O`/`U`) plus one check character, which is Crockford's standard `value mod 37` symbol over the 37-symbol check alphabet (the data alphabet plus `*~$=U`). The server normalizes before use: case is ignored, separators and whitespace are dropped, and `I`/`L` fold to `1` and `O` to `0`. The printed grouping (`HKTZ4-9QP2M`) is accepted as-is. Clients should verify the check character locally so an obvious mistype is caught without a round trip.
+- `newPassword` — 8–128 characters.
+
+**No username is sent, and none is returned.** The code is its own lookup key, so this endpoint is never told — and never confirms — which student a code belongs to. On success the response is `{ "data": null }` with **no session established**: the student then signs in normally with the password they just chose.
+
+Failures are all `422 VALIDATION_FAILED`, distinguished by `fieldErrors[0].code` on the `code` field:
+
+| `fieldErrors[0].code` | Meaning |
+| --- | --- |
+| `ACTIVATION_CODE_MALFORMED` | Wrong length, wrong alphabet, or the check character does not match — i.e. a mistype |
+| `ACTIVATION_CODE_INVALID` | No such code. Deliberately generic: this is what a guess gets |
+| `ACTIVATION_CODE_EXPIRED` | The code existed but its window (7 days by default, configurable) has closed — the student needs a reissued slip |
+| `ACTIVATION_CODE_ALREADY_USED` | Single-use, and already redeemed |
+
+The distinction between the last three is deliberate and so is its cost: `EXPIRED` and `ALREADY_USED` do confirm that a submitted code exists. That is accepted because a code in either state is already unusable, so it gains an attacker nothing actionable, whereas collapsing them would leave a student with an expired slip retyping a correct code forever. What is withheld in every case is *which account* the code belongs to, and all four share one HTTP status so status codes alone separate nothing.
+
+`429 RATE_LIMITED` is also possible: the endpoint carries a per-IP attempt limit and a **global failure budget** — a few hundred failed guesses per hour across the whole system — which is what closes the distributed case a per-IP limit cannot (§2.5 of the plan). While the budget is exhausted the endpoint refuses everyone, including legitimate students; a successful redemption never consumes it.
 
 ### 2.3 CSRF & Origin Protection
 

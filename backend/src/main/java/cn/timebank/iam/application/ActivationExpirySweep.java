@@ -50,7 +50,7 @@ class ActivationExpirySweep {
     private final int batchLimit;
 
     ActivationExpirySweep(ActivationExpiryTransaction expiryTransaction,
-                           @Value("${timebank.activation.expiry-sweep.batch-limit:500}") int batchLimit) {
+                           @Value("${timebank.auth.activation.expiry-sweep.batch-limit:500}") int batchLimit) {
         this.expiryTransaction = expiryTransaction;
         this.batchLimit = batchLimit;
     }
@@ -66,7 +66,7 @@ class ActivationExpirySweep {
      * rather than in one long transaction — oldest expiry first, so it drains
      * in a fixed order.</p>
      */
-    @Scheduled(cron = "${timebank.activation.expiry-sweep.cron:0 40 * * * *}")
+    @Scheduled(cron = "${timebank.auth.activation.expiry-sweep.cron:0 40 * * * *}")
     @SchedulerLock(name = "activationExpirySweep", lockAtMostFor = "PT5M", lockAtLeastFor = "PT10S")
     void sweep() {
         ActivationExpiryTransaction.SweepResult result = expiryTransaction.expireClosedWindows(Instant.now(), batchLimit);

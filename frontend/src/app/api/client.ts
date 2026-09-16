@@ -178,11 +178,12 @@ export const api = {
      * account has no password yet, and the code is itself the lookup key, so no
      * username is sent.
      *
-     * UNWIRED: the backend endpoint does not exist yet (§3.5 is a separate
-     * slice, and §3.1's migration has not landed). The path and body below are
-     * this client's provisional guess and must be reconciled with the backend
-     * implementation and APIContract.md before this can work — today the call
-     * 404s and the activation screen shows its generic failure message.
+     * The path and body below were this client's provisional guess and were
+     * adopted unchanged by §3.5's backend implementation; both are now in
+     * APIContract.md §2.2. Failures come back as `VALIDATION_FAILED` with a
+     * distinct `fieldErrors[0].code` (unknown / expired / already used /
+     * malformed), which `ActivationPage` translates — the response never says
+     * which account a code belongs to.
      */
     async activate(code: string, newPassword: string): Promise<void> {
       await http.get<void>('/auth/csrf');

@@ -107,6 +107,42 @@ timebank:
       duration-minutes: ${TIMEBANK_LOCKOUT_DURATION_MINUTES:15}
     session:
       default-timeout-minutes: ${TIMEBANK_SESSION_DEFAULT_TIMEOUT_MINUTES:480}
+    activation:
+      # 10-StudentIdentityAndOnboarding.md §2.6. Configurable because the
+      # tension belongs to the school: two days is too short (import Monday,
+      # print Wednesday, and the window is gone before a student sees the
+      # slip), but the expiry is precisely what makes emailing a class's
+      # slips tolerable, so it cannot be long either.
+      code-ttl-days: ${TIMEBANK_ACTIVATION_CODE_TTL_DAYS:7}
+      # §2.5's global failure budget: guesses per hour across the *entire*
+      # system, not per IP. This is the control that closes the distributed
+      # case — a botnet keeps every individual IP under its own limit while
+      # grinding the pool of outstanding codes, and §2.5 is explicit that the
+      # per-IP limit "cannot be relied on". Only a well-formed code matching
+      # no row is charged; see ActivationThrottle for why the other failure
+      # modes deliberately cost nothing. Raising this materially weakens
+      # §2.5's sizing table, which assumed a couple of hundred per hour.
+      failure-budget-per-hour: ${TIMEBANK_ACTIVATION_FAILURE_BUDGET_PER_HOUR:300}
+      # Per-IP attempt ceiling, charged on every attempt including successful
+      # ones. Sized against the real burst, not a guessed round number: a
+      # class activating together sits behind one school NAT, so ~30 requests
+      # arrive from a single address in one lesson. Anything near 20 would
+      # cut that off halfway through and look like a broken system. Its job
+      # is stopping one host from eating the whole shared budget above, not
+      # being the primary defence.
+      attempts-per-ip-per-hour: ${TIMEBANK_ACTIVATION_ATTEMPTS_PER_IP_PER_HOUR:60}
+      expiry-sweep:
+        # 10-StudentIdentityAndOnboarding.md §3.6. Hourly at :40 — off the hour,
+        # where the grade-summary materialisation already runs. Unlike every
+        # other scheduled job here, which hardcodes its cron, this one is
+        # configurable for a duller reason than the window above: its right
+        # frequency depends on how the school actually works.
+        cron: ${TIMEBANK_ACTIVATION_EXPIRY_SWEEP_CRON:0 40 * * * *}
+        # Accounts transitioned per run, bounding both the transaction and the
+        # single audit row's id list. A larger backlog drains over successive
+        # runs, oldest expiry first. A whole school's import lapsing at once is
+        # the case this exists for.
+        batch-limit: ${TIMEBANK_ACTIVATION_EXPIRY_SWEEP_BATCH_LIMIT:500}
   file:
     # B3.4, test-stage local-disk adapter (14-Backend-B3F-CloudFileStorage.md
     # tracks the move to a real S3-compatible store). Relative to the
@@ -122,18 +158,3 @@ timebank:
       # absurdly long document is a cheap way to make one request expensive
       # on a 1 vCPU box. Evidence scans are a handful of pages.
       max-pages: ${TIMEBANK_FILE_PDF_MAX_PAGES:100}
-  activation:
-    expiry-sweep:
-      # 10-StudentIdentityAndOnboarding.md §3.6. Hourly at :40 — off the hour,
-      # where the grade-summary materialisation already runs. §2.6 makes the
-      # activation window itself configurable because the tension between
-      # "long enough to reach the student" and "short enough that emailing a
-      # class's slips is tolerable" belongs to the school; the sweep that
-      # notices the window closed is configurable for the duller reason that
-      # its right frequency depends on how the school actually works.
-      cron: ${TIMEBANK_ACTIVATION_EXPIRY_SWEEP_CRON:0 40 * * * *}
-      # Accounts transitioned per run, bounding both the transaction and the
-      # single audit row's id list. A larger backlog drains over successive
-      # runs, oldest expiry first. A whole school's import lapsing at once is
-      # the case this exists for.
-      batch-limit: ${TIMEBANK_ACTIVATION_EXPIRY_SWEEP_BATCH_LIMIT:500}

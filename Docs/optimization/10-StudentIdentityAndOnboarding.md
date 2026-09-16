@@ -317,39 +317,63 @@ first-time entry described in §2.9 — wording identical to the slip's, in both
 | §3.2 Username generation | Done — `StudentUsernameGenerator` |
 | §3.3 Import creates pending accounts | Done — `ImportJobRunner.commitStudents` → `UserService.createPendingStudentAccount` |
 | §3.4 Credential document | Not started |
-| §3.5 Activation endpoint | Not started |
+| §3.5 Activation endpoint | Done — `POST /auth/activate`, `ActivationService`/`ActivationCodeFormat`/`ActivationThrottle`, contract §2.2 in both languages |
 | §3.6 Expiry sweep | Done — `ActivationExpirySweep` (hourly, ShedLock-guarded) → `ActivationExpiryTransaction`, `ActivationExpiryRepository` |
 | §3.7 Password reset | Not started |
 | §3.8 Login copy and first-time entry | Done — `ActivationPage`, `/activate`, login copy in both languages |
 
-§3.1–§3.3 and §3.6 are covered by unit tests only (`mvn test`); no integration
-test or live-server verification has run against them yet, so the migration
-itself is unapplied and the import path is unproven end to end. §3.6's two SQL
-reads are the specific thing unit tests cannot reach — the sweep's *decisions*
-are in Java and tested, but nothing has yet run the candidate query against a
-real `activation_code` table. Until §3.4/§3.5 land,
-an imported account is created and can never be logged into — which is the
-intended interim state (§2.4), not a gap, but it does mean the next re-seed
-must wait for the activation path.
+Everything above is covered by **unit tests only** (`mvn test`). No integration
+test and no live-server verification has run against any of it, so the migration
+is unapplied and neither the import path nor the activation path is proven end
+to end. Two specific things unit tests here cannot reach, both flagged by the
+slices that wrote them: §3.6's two SQL reads (the sweep's *decisions* are in
+Java and tested, but no candidate query has run against a real
+`activation_code` table), and §3.5's conditional `UPDATE ... WHERE redeemed_at
+IS NULL`, whose single-use guarantee rests on the row count MySQL actually
+returns.
 
-**§3.8 shipped ahead of its endpoint, and must not be deployed alone.** The
-activation screen exists and a student can reach it, but §3.5 does not, so a
-submit fails. Three things must be reconciled when §3.5 lands, all of them
-currently guesses on the frontend side:
+Until §3.4 lands there is no way to *deliver* a code to a student — the endpoint
+that redeems one exists, but nothing prints a slip — so an imported account
+remains unusable in practice. That is the intended interim state (§2.4), not a
+gap, but it does mean the next re-seed must wait for the credential document.
 
-| Item | Current frontend assumption | Owner |
-| :--- | :--- | :--- |
-| Endpoint | `POST /api/v1/auth/activate` with `{ code, newPassword }` | §3.5 must confirm, then add to `APIContract.md` **and** its `_CN` twin |
-| Check character | Shape validated; the checksum itself is **not** verified, so §2.5's "you mistyped that" is not yet delivered. `isWellFormedActivationCode` is the seam | §3.5, which owns the generator |
-| Error codes | Expired vs. already-redeemed vs. unknown all show one generic message | §3.5 |
+**§3.8's three open guesses are now closed by §3.5**, which adopted the
+frontend's assumed contract rather than changing it:
+
+| Item | Resolution |
+| :--- | :--- |
+| Endpoint | Adopted unchanged: `POST /api/v1/auth/activate` with `{ code, newPassword }`, no username, no session established on success. Now in `APIContract.md` §2.2 and its `_CN` twin |
+| Check character | Crockford's standard `value mod 37` symbol, implemented in `ActivationCodeFormat` and mirrored in `isWellFormedActivationCode`. 37 being prime and coprime to both 32 and 31 is what makes it catch *every* single-character substitution and *every* adjacent transposition, so §2.5's "you mistyped that" is now delivered in the browser. The generator never mints a code whose check character is one of Crockford's five check-only extras (`*~$=U`) — they are miserable to type on a phone — but both sides still accept them |
+| Error codes | Four distinct `fieldErrors[0].code` values on a shared `422`: `ACTIVATION_CODE_MALFORMED` / `_INVALID` / `_EXPIRED` / `_ALREADY_USED`, translated in both languages. `_INVALID` is deliberately the vaguest — it is what a guess gets |
+
+**The seam §3.4 and §3.7 build on** is `ActivationService`:
+`issue(userId, issuedByUserId)` and `issueAll(userIds, issuedByUserId)`, each
+returning the plaintext code **once** (`IssuedCode`, whose `toString()`
+redacts it) along with the username, issue time and expiry the slip's
+provenance line needs. Issuing retires any unredeemed code the user still
+holds, which is what §2.7 requires of a reissue — the lost slip has to stop
+working. `issueAll` deliberately applies no status filter: §2.7's "regeneration
+spares activated students" is a selection rule for the caller assembling the
+batch, because §3.7's admin reset legitimately issues a code for an already
+active account.
+
+**Where the failure budget's threshold lives.** `timebank.auth.activation.failure-budget-per-hour`
+(env `TIMEBANK_ACTIVATION_FAILURE_BUDGET_PER_HOUR`, default 300), alongside
+`attempts-per-ip-per-hour` (60) and `code-ttl-days` (§2.6's configurable
+window, 7). Only a well-formed code matching no row is charged against the
+shared budget; a failed checksum is not, or an attacker could empty it with
+garbage and lock the school out of activation, and neither is an expired or
+already-redeemed code, which are the legitimate recovery paths. It is
+in-memory and therefore per-instance, the same trade-off
+`common.web.RateLimitInterceptor` already documents.
 
 **Two gaps the foundation work surfaced, neither settled by this plan:**
 
 - **`POST /students` still creates no account.** Only the import path provisions
   one, because putting it in `StudentService.create` would make `student → iam`
   a module cycle (`iam` already depends on `student`). An admin adding a single
-  student therefore gets a roster row with no login. Decide in §3.4/§3.5 whether
-  that path needs an account too.
+  student therefore gets a roster row with no login. §3.5 did not settle this —
+  it owns redemption, not provisioning — so it stays open for §3.4.
 - **Activation codes are stored as unsalted SHA-256**, not bcrypt, because §2.5
   requires lookup *by* hash and a salted hash cannot be looked up. The tradeoff
   is acceptable — codes are single-use, expire in days, and protect an account
