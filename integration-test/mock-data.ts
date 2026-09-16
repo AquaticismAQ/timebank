@@ -46,9 +46,11 @@
 // ("Mars") — matching the shape R__seed_base_data.sql uses for class_10A
 // ("10A"/"A"). Short word names on purpose: they prove class handling isn't
 // hardcoded to single letters.
+// Only Mars is created here. `class_10_luna` ships in R__seed_base_data.sql,
+// where LocalizationIT needs a multi-character class name to assert against —
+// inserting it here too would collide on the primary key.
 export const namedClasses = [
   { id: 'class_9_mars', code: '9-Mars', name: 'Mars', gradeId: 'grade_9' },
-  { id: 'class_10_luna', code: '10-Luna', name: 'Luna', gradeId: 'grade_10' },
 ];
 
 export interface SeedOrganization {

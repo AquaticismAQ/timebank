@@ -71,8 +71,8 @@ class LocalizationIT extends AbstractIntegrationTest {
         // Bare raw labels — no baked-in "班" suffix, no grade prefix (issue 005/010).
         ClassDto classA = classes.stream().filter(c -> c.id().equals("class_10A")).findFirst().orElseThrow();
         assertThat(classA.name()).isEqualTo("A");
-        ClassDto classMils = classes.stream().filter(c -> c.id().equals("class_10_mils")).findFirst().orElseThrow();
-        assertThat(classMils.name()).isEqualTo("Mils");
+        ClassDto namedClass = classes.stream().filter(c -> c.id().equals("class_10_luna")).findFirst().orElseThrow();
+        assertThat(namedClass.name()).isEqualTo("Luna");
     }
 
     @Test

@@ -34,11 +34,12 @@ INSERT IGNORE INTO class (id, code, name, grade_id, academic_year_id, created_at
     ('class_10B', '10B', 'B', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3)),
     ('class_11A', '11A', 'A', 'grade_11', 'ay_2025_2026', NOW(3), NOW(3)),
     ('class_11B', '11B', 'B', 'grade_11', 'ay_2025_2026', NOW(3), NOW(3)),
-    -- A named (not single-letter) class, same as some real schools use house/
-    -- program names instead of A/B — issue 006: nothing in seed data or the
+    -- A named (not single-letter) class, as some schools use house or
+    -- programme names instead of A/B — issue 006: nothing in seed data or the
     -- fixed-width UI assumptions had ever exercised a className longer than
-    -- one character before this.
-    ('class_10_mils', '10-Mils', 'Mils', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3));
+    -- one character before this. The name is deliberately invented; the
+    -- previous value here was a real school's class name.
+    ('class_10_luna', '10-Luna', 'Luna', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3));
 
 -- Service categories, matching the frontend mock's SERVICE_CATEGORIES.
 INSERT IGNORE INTO service_category (id, code, name_zh, name_en, active, created_at, updated_at) VALUES

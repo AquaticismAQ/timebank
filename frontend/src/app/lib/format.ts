@@ -15,7 +15,7 @@ const ZH_GRADE_NUMERALS: Record<number, string> = { 6: '六', 7: '七', 8: '八'
 /**
  * "G10, Class A" (en) / "十年级, A班" (zh). `gradeLevel`/`className` arrive
  * from the API as raw, language-invariant data (issue 010 — neither is
- * translated content: a grade number and a class label like "Mils" are the
+ * translated content: a grade number and a class label like "Luna" are the
  * same in every language) — this is where the localized display string is
  * assembled, so every display location shows the same format instead of
  * repeating inline template literals (issue 005).
