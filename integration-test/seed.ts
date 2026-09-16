@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
   organizations, users, students, projects, serviceRecords, eventProposals, cases,
+  namedClasses, expectedCoinsByUsername, reviewerForGrade, generatedStudents,
   type SeedProject, type SeedServiceRecord, type SeedEventProposal, type SeedCase,
 } from './mock-data.ts';
 
@@ -30,6 +31,25 @@ const SSH_TARGET = process.env.TIMEBANK_SSH_TARGET ?? 'root@tb.example.com';
 const BASE_URL = process.env.TIMEBANK_BASE_URL ?? 'https://tb.example.com';
 const DB_USERNAME = requireEnv('TIMEBANK_DB_USERNAME');
 const DB_PASSWORD = requireEnv('TIMEBANK_DB_PASSWORD');
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+/** Round-robin records across their owning students, preserving each student's own order. See the call site for why. */
+function interleaveByStudent<T extends { studentUsername: string }>(records: T[]): T[] {
+  const queues = new Map<string, T[]>();
+  for (const r of records) {
+    const q = queues.get(r.studentUsername);
+    if (q) q.push(r); else queues.set(r.studentUsername, [r]);
+  }
+  const lanes = [...queues.values()];
+  const out: T[] = [];
+  for (let round = 0; out.length < records.length; round++) {
+    for (const lane of lanes) {
+      if (round < lane.length) out.push(lane[round]);
+    }
+  }
+  return out;
+}
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -65,14 +85,33 @@ function shQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
+/**
+ * Retries on transient SSH failures. This is not defensive padding: the test
+ * server is continuously scanned by SSH brute-force bots, and when they
+ * saturate sshd's `MaxStartups` window it drops *our* connection too
+ * ("exited MaxStartups throttling, 1 connections dropped" in auth.log). That
+ * killed a seed run outright after the SQL phase had already started. Every
+ * SQL batch here is wrapped in START TRANSACTION/COMMIT, so a dropped
+ * connection rolls back and a retry is safe to repeat.
+ */
 function runSqlOnServer(sql: string): string {
   const cnf = `printf '[client]\\nuser=%s\\npassword=%s\\nhost=127.0.0.1\\nport=3306\\n' ${shQuote(DB_USERNAME)} ${shQuote(DB_PASSWORD)}`;
   const remoteCommand = `mysql --defaults-extra-file=<(${cnf}) timebank`;
-  const result = spawnSync('ssh', [SSH_TARGET, remoteCommand], { input: sql, encoding: 'utf8' });
-  if (result.status !== 0) {
-    throw new Error(`SQL phase failed (exit ${result.status}):\n${result.stderr}`);
+  const attempts = 4;
+  let lastError = '';
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const result = spawnSync('ssh', ['-o', 'ConnectTimeout=20', SSH_TARGET, remoteCommand], { input: sql, encoding: 'utf8' });
+    if (result.status === 0) return result.stdout;
+    lastError = `exit ${result.status}: ${result.stderr}`;
+    // 255 is ssh's own transport failure (refused, dropped, timed out) — a
+    // real SQL error exits non-zero with a different code and retrying it
+    // would just fail identically, so only transport failures are retried.
+    if (result.status !== 255 || attempt === attempts) break;
+    const backoffMs = 3000 * attempt;
+    console.warn(`  SSH transport failure (attempt ${attempt}/${attempts}), retrying in ${backoffMs / 1000}s...`);
+    spawnSync('sleep', [String(backoffMs / 1000)]);
   }
-  return result.stdout;
+  throw new Error(`SQL phase failed (${lastError})`);
 }
 
 function sqlString(s: string | undefined | null): string {
@@ -240,14 +279,26 @@ async function main() {
     );
   }
 
+  // Named test classes (Mars, Luna) are created here rather than in
+  // R__seed_base_data.sql: base data ships to every real deployment, and a
+  // test fixture does not belong in it.
+  const classInserts: string[] = namedClasses.map(c =>
+    `INSERT INTO class (id, code, name, grade_id, academic_year_id, created_at, updated_at) VALUES ` +
+    `(${sqlString(c.id)}, ${sqlString(c.code)}, ${sqlString(c.name)}, ${sqlString(c.gradeId)}, 'ay_2025_2026', ${now}, ${now});`
+  );
+
   const studentIdByNumber = new Map<string, string>();
   const studentInserts: string[] = [];
   for (const s of students) {
     const id = genId('std');
     studentIdByNumber.set(s.studentNumber, id);
+    // `email`, `guardian_name` and `guardian_contact` are deliberately left
+    // unset: no screen uses them, and `Docs/optimization/08-SecurityPrivacyHardening.md`
+    // §3.1 drops the columns outright. Writing them now only to delete them
+    // later would be wasted work.
     studentInserts.push(
-      `INSERT INTO student (id, student_number, display_name, email, grade_id, class_id, enrollment_academic_year_id, graduation_year, status, guardian_name, guardian_contact, joined_at, version, created_at, updated_at) VALUES ` +
-      `(${sqlString(id)}, ${sqlString(s.studentNumber)}, ${sqlString(s.displayName)}, ${sqlString(s.email)}, ${sqlString(s.gradeId)}, ${sqlString(s.classId)}, 'ay_2025_2026', ${s.graduationYear}, 'ACTIVE', ${sqlString(s.guardianName)}, ${sqlString(s.guardianContact)}, ${sqlString(dateFromNow(s.joinedAtOffsetDays))}, 1, ${now}, ${now});`
+      `INSERT INTO student (id, student_number, display_name, grade_id, class_id, enrollment_academic_year_id, graduation_year, status, joined_at, version, created_at, updated_at) VALUES ` +
+      `(${sqlString(id)}, ${sqlString(s.studentNumber)}, ${sqlString(s.displayName)}, ${sqlString(s.gradeId)}, ${sqlString(s.classId)}, 'ay_2025_2026', ${s.graduationYear}, 'ACTIVE', ${sqlString(dateFromNow(s.joinedAtOffsetDays))}, 1, ${now}, ${now});`
     );
   }
 
@@ -283,14 +334,38 @@ async function main() {
     }
   }
 
-  runSqlOnServer(['START TRANSACTION;', ...orgInserts, ...studentInserts, ...userInserts, ...roleInserts, ...scopeInserts, 'COMMIT;'].join('\n'));
+  runSqlOnServer(['START TRANSACTION;', ...classInserts, ...orgInserts, ...studentInserts, ...userInserts, ...roleInserts, ...scopeInserts, 'COMMIT;'].join('\n'));
   console.log(`Inserted ${organizations.length} organizations, ${students.length} students, ${users.length} users.`);
 
-  console.log('== Phase 2: API — logging in as each persona ==');
+  console.log(`== Phase 2: API — logging in as ${users.length} personas ==`);
+  // nginx rate-limits /api/v1/auth/login to 10r/m per IP with burst 5, and
+  // every student must log in as themselves because there is no
+  // create-a-record-on-behalf path. Without pacing, everything past the
+  // burst gets 429'd. 6.5s keeps us just under the sustained rate; expect
+  // this phase to take roughly `users.length * 6.5` seconds.
+  const LOGIN_INTERVAL_MS = 6_500;
   const sessions = new Map<string, Session>();
+  let loginIndex = 0;
   for (const u of users) {
-    sessions.set(u.username, await login(BASE_URL, u.username, passwordByUsername[u.username]));
-    console.log(`  logged in as ${u.username} (${u.displayName})`);
+    if (loginIndex >= 5) await sleep(LOGIN_INTERVAL_MS); // first 5 ride the burst allowance
+    loginIndex++;
+    // Even paced under the limit, a 429 can still land if anything else is
+    // talking to /auth/login from this IP. Back off and retry rather than
+    // losing the whole run at minute four.
+    let session: Session | undefined;
+    for (let attempt = 1; attempt <= 3 && !session; attempt++) {
+      try {
+        session = await login(BASE_URL, u.username, passwordByUsername[u.username]);
+      } catch (err) {
+        if (attempt === 3 || !String(err).includes('429')) throw err;
+        console.warn(`  login rate-limited for ${u.username}, backing off ${15 * attempt}s...`);
+        await sleep(15_000 * attempt);
+      }
+    }
+    sessions.set(u.username, session!);
+    if (loginIndex % 10 === 0 || loginIndex === users.length) {
+      console.log(`  logged in ${loginIndex}/${users.length}`);
+    }
   }
   const session = (username: string): Session => {
     const s = sessions.get(username);
@@ -342,9 +417,17 @@ async function main() {
     console.log(`Inserted ${enrollmentInserts.length} CONFIRMED enrollments.`);
   }
 
-  console.log('== Phase 4: API — service records ==');
+  console.log(`== Phase 4: API — ${serviceRecords.length} service records ==`);
   const serviceRecordIdByKey = new Map<string, string>();
-  for (const r of serviceRecords as SeedServiceRecord[]) {
+  let draftCount = 0;
+  let submittedCount = 0;
+  const decidedCount: Record<string, number> = {};
+  // `RateLimitInterceptor` allows 20 upload-intents per minute keyed by
+  // *principal*, so a student with thirty-odd records exhausts their own
+  // budget if we create them back-to-back. Round-robining across students
+  // spends one request per student per round instead, which stays far under
+  // the limit without slowing anything down or touching server config.
+  for (const r of interleaveByStudent(serviceRecords as SeedServiceRecord[])) {
     const student = session(r.studentUsername);
     const evidenceFileIds = r.targetStatus === 'draft' ? [] : [await uploadEvidence(student)];
     const created = await student.request('POST', '/api/v1/service-records', {
@@ -358,21 +441,29 @@ async function main() {
     });
     if (r.key) serviceRecordIdByKey.set(r.key, created.id);
     if (r.targetStatus === 'draft') {
-      console.log(`  service record for ${r.studentUsername} -> draft`);
+      draftCount++;
       continue;
     }
     const submitted = await student.request('POST', `/api/v1/service-records/${created.id}/submit`, undefined, randomUUID());
     if (r.targetStatus === 'submitted') {
-      console.log(`  service record for ${r.studentUsername} -> submitted`);
+      submittedCount++;
       continue;
     }
     const reviewer = session(r.reviewerUsername!);
-    const decision = r.targetStatus === 'approved' ? 'approve' : 'returnForChanges';
+    // The reviewer must hold scope over this student's grade, or the record
+    // 404s rather than 403s (B1.7's no-existence-leak). mock-data routes every
+    // decision through `reviewerForGrade` for exactly that reason.
+    const decision = r.targetStatus === 'approved' ? 'APPROVE'
+      : r.targetStatus === 'returned' ? 'RETURN_FOR_CHANGES'
+      : r.targetStatus === 'rejected' ? 'REJECT'
+      : 'ESCALATE'; // underReview
     await reviewer.request('POST', `/api/v1/service-records/${created.id}/reviews`, {
       decision, reasonCode: r.reasonCode, comment: r.comment, recordVersion: submitted.version,
     }, randomUUID());
-    console.log(`  service record for ${r.studentUsername} -> ${r.targetStatus} (by ${r.reviewerUsername})`);
+    decidedCount[r.targetStatus] = (decidedCount[r.targetStatus] ?? 0) + 1;
   }
+  console.log(`  ${draftCount} draft, ${submittedCount} submitted, ` +
+    Object.entries(decidedCount).map(([k, v]) => `${v} ${k}`).join(', '));
 
   console.log('== Phase 5: API — event proposals ==');
   for (const p of eventProposals as SeedEventProposal[]) {
@@ -447,6 +538,42 @@ async function main() {
     }, randomUUID());
     console.log(`  case "${c.title}" -> ${c.targetStatus} (by ${c.reviewerUsername})`);
   }
+
+  // ── Phase 7: consistency check ──────────────────────────────────────────
+  // The whole point of driving records through the real API is that balances
+  // are *derived*. This verifies that actually happened: every student's live
+  // coin balance must equal the hours of their approved records, at 1 coin per
+  // hour under rule_default_2025 (30-minute rounding, 60 min/unit, 100
+  // centi-coins/unit). A mismatch means either the rounding assumption broke
+  // or something credited the ledger outside the record flow — both of which
+  // would leave a number on screen nobody can explain.
+  console.log('== Phase 7: verifying balances are consistent with approved records ==');
+  const admin = session('admin001');
+  const mismatches: string[] = [];
+  let checked = 0;
+  for (const s of generatedStudents) {
+    if (!s.username) continue;
+    const studentId = studentIdByNumber.get(s.studentNumber)!;
+    const expectedCoins = expectedCoinsByUsername[s.username] ?? 0;
+    const accounts = await admin.request('GET', `/api/v1/accounts?filter%5BstudentId%5D=${studentId}`);
+    // `/accounts` is paginated, so `data` is the array itself; the fallbacks
+    // cover the envelope shapes without assuming which one it is.
+    const rows = Array.isArray(accounts) ? accounts : (accounts?.items ?? accounts?.content ?? []);
+    // AccountDto.balance is an int in centi-coins (the same unit
+    // adjustForStudent credits), not a decimal coin count.
+    const actualCenti = rows[0]?.balance ?? 0;
+    const expectedCenti = Math.round(expectedCoins * 100);
+    checked++;
+    if (actualCenti !== expectedCenti) {
+      mismatches.push(`${s.username}: expected ${expectedCenti} centi-coins (${expectedCoins}h approved), got ${actualCenti}`);
+    }
+  }
+  if (mismatches.length > 0) {
+    console.error(`\nBalance verification FAILED for ${mismatches.length}/${checked} students:`);
+    for (const m of mismatches.slice(0, 10)) console.error(`  ${m}`);
+    throw new Error('Seeded balances do not match approved service records — refusing to report success.');
+  }
+  console.log(`  ${checked} students checked, every balance matches its approved records.`);
 
   console.log('\n== Done ==');
   console.log('Accounts created (see Docs/TestAccounts.md for the committed record):');

@@ -6,6 +6,35 @@
 
 Every date field is an **offset in days relative to whenever `seed.ts` runs**, never an absolute date. `ProjectStatusTarget`'s `registrationOpen`/`inProgress`/`completed` are computed by the real backend from "is this timestamp before/after now" (`ProjectServiceImpl`'s lazy time-based status sync) — a hardcoded absolute date would be correct on the day it was written and silently wrong every day after.
 
+## Curated vs generated data
+
+Two kinds of fixture live in this file, and they are edited differently:
+
+- **Curated** — organizations, staff accounts, projects, event proposals, cases, and the `narrativeRecords` array. Each of these carries a specific narrative that some screen or workflow needs, so they are written out by hand. Edit them directly.
+- **Generated** — the 50 students and the ~230 approved service records backing their balances, produced by the builders at the bottom of the file from a **fixed PRNG seed**. Hand-writing them would make this file unreviewable. Do not paste generated rows in by hand; change the builder or its inputs instead.
+
+Because the PRNG seed is fixed, every run produces byte-identical data. A re-seed is reproducible, and any difference you see between two runs is a real change, not noise.
+
+## Two consistency rules you must not break
+
+**1. Durations are whole multiples of 30 minutes.** The active rule (`rule_default_2025`) rounds half-up to 30 minutes, converts 60 minutes to one unit, and pays 100 centi-coins per unit — so **one approved hour is exactly 1.00 coin**. Keeping every `endHour - startHour` on a 30-minute boundary makes the rounding a no-op, so the hours a student sees served always equal the coins they see credited. A 1h47m record would round to 2h and credit 2.00 coins, which reads as a bug to anyone looking at the screen. Half hours (`.5`) are fine and are deliberately used in places to exercise the fractional display path.
+
+**2. Balances are never written directly.** Coins exist only because an approved record credited the ledger. `GeneratedStudent.targetCoins` is the figure the builder *composes approved records to reach*; it is not stored anywhere. There is no balance field, and adding one would break the invariant the whole ledger design rests on. `seed.ts`'s final phase re-reads every student's live balance through the API and fails the run if it does not equal the sum of that student's approved record hours.
+
+## Names, student numbers, and classes
+
+Student names follow the masking convention from `Design/english/08-mlps-level1-security-design-guide.md` §4.1 — `Alex L.(李*红)`: English given name plus surname initial, Chinese name with its middle character hidden, so both halves carry the same masking strength. Student numbers are opaque 8-character hashes (`a45b9def`), not sequential roll numbers.
+
+These are fictional fixtures, so the masking protects nobody. The point is to exercise the **real format** in the UI — CJK plus parentheses inside column widths, search, sort, and truncation behaviour, and an opaque hash where a readable number used to sit.
+
+`namedClasses` adds `9-Mars` and `10-Luna` via `seed.ts`'s SQL phase rather than to `R__seed_base_data.sql`. Base data ships to every real deployment and test fixtures do not belong in it. Short word class names are deliberate: they prove class handling is not hardcoded to single letters.
+
+## Teachers and review scope
+
+There are five teachers, and `reviewerForGrade` maps each grade to the one that holds scope over it. Between them they cover all six grades with no overlap, which is what makes cross-scope isolation testable — a grade-6 record must be invisible to the grade-11 teacher.
+
+**Always route a review through `reviewerForGrade`.** A teacher without scope over the student's grade gets a `404`, not a `403` (B1.7's deliberate no-existence-leak), so a mis-routed decision fails in a way that looks like missing data rather than a permission error. Admins bypass scope entirely via `grantAll`.
+
 ## Adding a new organization
 
 Add to `organizations`. `type` must be one of `SCHOOL`/`NONPROFIT`/`COMMUNITY`/`GOVERNMENT`/`OTHER` (the real `Organization.Type` enum, `cn.timebank.organization.domain.Organization`) — nothing else validates it, so a typo silently inserts an organization with a type the frontend's `mapEnumFields` won't recognize.
@@ -22,7 +51,11 @@ If a **teacher** persona needs to review (`serviceRecords`/`eventProposals`) a s
 
 ## Adding a new student (roster row, no login)
 
-Add to `students`. `gradeId`/`classId` must be real ids already seeded by Flyway (`grade_6`..`grade_11`, `class_6A`/`6B`..`class_11A`/`11B` — see `R__seed_base_data.sql`), not display names like "Grade 10". `graduationYear` is a plain int (matches `@Min(2000)` on the real `CreateStudentRequest`).
+Students are **generated**, not hand-listed — see "Curated vs generated data" above. To change the roster, edit `buildStudents()`: `STUDENT_COUNT` (50) sets the roster size and `STUDENTS_WITH_LOGIN` (30) how many get a portal account, with the rest roster-only. That split is realistic — most schools issue accounts to a subset first — and it also keeps re-seeding affordable, because nginx rate-limits `/api/v1/auth/login` to 10/min per IP and every student must log in as themselves.
+
+`gradeId`/`classId` must be real ids: `grade_6`..`grade_11` and `class_6A`/`6B`..`class_11A`/`11B` from `R__seed_base_data.sql`, plus `class_9_mars`/`class_10_luna` from `namedClasses`. `graduationYear` is a plain int (`@Min(2000)` on the real `CreateStudentRequest`).
+
+`email`, `guardianName` and `guardianContact` are **not set**: no screen uses them, and `Docs/optimization/08-SecurityPrivacyHardening.md` §3.1 drops the columns. Do not reintroduce them.
 
 ## Adding a new project
 
@@ -51,7 +84,9 @@ A record cannot reach any status past `draft` without at least one evidence file
 `targetStatus`:
 - `draft` — create only.
 - `submitted` — create, upload evidence, `submit`. Lands in the real review queue, left undecided — decide it manually during testing, or add `reviewerUsername`/`reasonCode`/`comment` to move it further.
-- `approved`/`returned` — create, upload evidence, submit, then `reviewerUsername` decides (`approve` credits the real ledger and sends a real notification; `returnForChanges` sends a different real notification). `reviewerUsername` must hold `reviews.decide` (`teacher` or `admin`) and should not be the same user as `studentUsername`.
+- `approved`/`returned`/`rejected`/`underReview` — create, upload evidence, submit, then `reviewerUsername` decides. The wire values are `APPROVE`, `RETURN_FOR_CHANGES`, `REJECT` and `ESCALATE` (`underReview` is reached by escalating; it is a real resting state, unlike the proposal and case statuses removed in issues 080/082). `approve` credits the real ledger and sends a real notification. `reviewerUsername` must hold `reviews.decide` (`teacher` or `admin`), must not be the student, and **must hold scope over the student's grade** — use `reviewerForGrade`.
+
+Remember the 30-minute rule when choosing `startHour`/`endHour`: the difference must be a whole or half hour, or the credited coins will not match the hours shown.
 
 ## Adding a new event proposal
 
