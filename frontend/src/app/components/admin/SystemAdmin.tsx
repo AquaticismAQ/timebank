@@ -516,7 +516,9 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
     if (needsStaffId && !form.staffId.trim()) { toast.error(t('admin.system.errorStaffIdRequired')); return; }
     if (mode === 'create') {
       if (!form.password) { toast.error(t('admin.system.errorPasswordRequired')); return; }
-      if (form.password.length < 6) { toast.error(t('admin.system.errorPasswordTooShort')); return; }
+      // 8, not 6: matches the backend's @Size(min = 8) on CreateUserRequest.initialPassword
+      // (issue 086 — the UI used to instruct 6 and the server then rejected it).
+      if (form.password.length < 8) { toast.error(t('admin.system.errorPasswordTooShort')); return; }
       if (form.password !== form.confirmPassword) { toast.error(t('admin.system.errorPasswordMismatch')); return; }
     }
     onSave(form);
