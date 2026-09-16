@@ -46,9 +46,26 @@ public class User extends VersionedEntity {
     @Column(name = "username", length = 64, nullable = false, updatable = false)
     private String username;
 
+    /**
+     * Nullable since V27 (10-StudentIdentityAndOnboarding.md §2.4/F-5), and
+     * null is a meaningful state rather than an absent optional: an imported
+     * student has no password until they choose one at activation, and "no
+     * password stored" is precisely what makes the account impossible to log
+     * into in the meantime. Never set from a server-generated password —
+     * §2.4 removes server-side password generation for students entirely.
+     */
     @Setter
-    @Column(name = "password_hash", length = 100, nullable = false)
+    @Column(name = "password_hash", length = 100)
     private String passwordHash;
+
+    /**
+     * §3.1/F-7. Written by the activation and admin-reset paths (§3.5/§3.7);
+     * false for an account that chose its own password, which is every
+     * account that existed before V27.
+     */
+    @Setter
+    @Column(name = "must_change_password", nullable = false)
+    private boolean mustChangePassword;
 
     @Setter
     @Column(name = "display_name", length = 100, nullable = false)
@@ -69,7 +86,7 @@ public class User extends VersionedEntity {
 
     @Setter
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", length = 16, nullable = false)
+    @Column(name = "status", length = 32, nullable = false)
     private UserStatus status;
 
     @Setter
@@ -109,6 +126,30 @@ public class User extends VersionedEntity {
         this.failedLoginAttempts = 0;
         this.createdAt = now;
         this.updatedAt = now;
+    }
+
+    /**
+     * A freshly imported student's account (§3.3): no password, and pending
+     * until the activation code on their printed slip is redeemed. Inert by
+     * construction rather than by a status check someone can forget —
+     * there is no credential to present.
+     */
+    public static User pendingActivation(String id, String username, String displayName,
+                                         String studentId, String preferredLanguage, Instant now) {
+        User user = new User(id, username, null, displayName, null, preferredLanguage, now);
+        user.status = UserStatus.PENDING_ACTIVATION;
+        user.studentId = studentId;
+        return user;
+    }
+
+    /**
+     * Whether this account can ever satisfy a password check. False for a
+     * never-activated import and for anything else without a stored hash —
+     * the authentication path must treat those as unusable rather than
+     * reaching the encoder with a null hash.
+     */
+    public boolean hasUsableCredential() {
+        return passwordHash != null;
     }
 
     public void addRole(Role role) {

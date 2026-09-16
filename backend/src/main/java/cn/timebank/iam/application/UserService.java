@@ -26,6 +26,26 @@ public interface UserService {
 
     UserDto create(CreateUserRequest request, String actorId);
 
+    /**
+     * 10-StudentIdentityAndOnboarding.md §3.3: the account a bulk roster
+     * import creates alongside the student row — an 8-digit username (§2.1),
+     * no password, and {@code PENDING_ACTIVATION} status.
+     *
+     * <p>The account is <b>inert</b>: it cannot be logged into until the
+     * student redeems the activation code on their printed slip and chooses
+     * a password (§2.4). That is true by construction rather than by policy —
+     * there is no stored credential to present.</p>
+     *
+     * <p>Idempotent per student: a re-run commit that reaches an already
+     * provisioned student returns the existing account instead of minting a
+     * second login for the same person.</p>
+     */
+    PendingStudentAccount createPendingStudentAccount(String studentId, String displayName,
+                                                       String preferredLanguage, String actorId);
+
+    record PendingStudentAccount(String userId, String username) {
+    }
+
     UserDto update(String id, UpdateUserRequest request, String actorId);
 
     UserDto updateProfile(String id, UpdateProfileRequest request);
