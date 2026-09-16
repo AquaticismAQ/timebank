@@ -182,6 +182,35 @@ Each slip carries the student's name, their username, the QR, the typed code, an
 provenance line: *issued by, at, valid before*. **Provenance goes on every slip, not once
 per page** — the sheet may be cut, and a page-level mark survives on exactly one piece.
 
+
+### 2.9 The slip prints the root URL; the login page carries the activation entry
+
+The QR encodes a deep link with the code embedded, so scanning is one tap and lands on the
+activation page ready to go. The **typed** path is different: the slip prints the site's
+**root URL**, and the login page carries a prominent first-time entry.
+
+**Rejected — printing a deep link (`…/activation`) for typing.** It teaches a URL used
+exactly once, while the login page is used for years; a student who remembers the activation
+address may keep returning to it next term. The root URL is also shorter to type, which
+matters on the fallback path — and the fallback path is by definition the one where
+something already went wrong (no camera, a shared classroom computer, a parent's phone that
+will not scan).
+
+**The printed URL is a phishing anchor, not merely an address.** This design teaches children
+to scan a code and then type a credential into whatever page appears, which is precisely the
+behaviour phishing exploits. Printing the real domain in text beside the QR gives them
+something to check the address bar against. That alone justifies printing it, independently
+of whether anyone types it.
+
+**Wording must match the paper, and match the student's mental model.** A twelve-year-old
+holding a slip is thinking "I need to get in for the first time", not "I must activate my
+account". Use *"First time logging in? Use your activation code"* / 首次登录？使用激活码 —
+and the screen must use **the same words as the slip**. If the paper says "activation code",
+the page cannot say "token" or "sign-up key", or the student cannot match one to the other.
+
+Avoid a jokey route such as `/i-am-in`: it does not survive translation, and this is the one
+page a parent is likely to see. Avoid "sign up" — the account already exists.
+
 ---
 
 ## 3. Implementation plan
@@ -232,9 +261,10 @@ reclaim sweep.
 An admin reset issues a fresh activation code and slip rather than a new password, so there
 is one flow, one document format, and still no server-generated password anywhere.
 
-### 3.8 Login copy
+### 3.8 Login copy and the first-time entry
 
-Fix the placeholder in both `en.json` and `zh.json` to say username (F-1).
+Fix the placeholder in both `en.json` and `zh.json` to say username (F-1), and add the
+first-time entry described in §2.9 — wording identical to the slip's, in both languages.
 
 ---
 
@@ -250,6 +280,7 @@ Fix the placeholder in both `en.json` and `zh.json` to say username (F-1).
 | D-6 | 7-day default expiry, configurable; distinct expired state (§2.6) | Settled |
 | D-7 | Regeneration spares activated students (§2.7) | Settled |
 | D-8 | One PDF, `slipsPerPage` ∈ {1,2} on the request, default 1 (§2.8) | Settled |
+| D-8a | Slip prints the root URL; login page carries the first-time entry (§2.9) | Settled |
 | D-9 | **Who may generate slips** — admin only, or teachers for their own class? | **Open** |
 | D-10 | **Are teachers scoped to their own class** for regeneration and reset? | **Open** |
 
