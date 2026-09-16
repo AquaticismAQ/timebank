@@ -47,11 +47,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * 404 here cannot be a 404 produced by an access rule, and nothing is being
  * mistaken for security that is really just authorization.</p>
  *
- * <p>{@code GlobalExceptionHandler} is excluded for a narrower reason: its
- * catch-all {@code @ExceptionHandler(Exception.class)} maps an unmapped path's
- * {@code NoResourceFoundException} to 500, which would hide the very status
- * this test is about. Without it, Spring MVC's own {@code
- * DefaultHandlerExceptionResolver} returns the 404 the framework means.</p>
+ * <p>{@code GlobalExceptionHandler} is deliberately <em>included</em>. It used
+ * to be excluded, because its catch-all {@code @ExceptionHandler(Exception.class)}
+ * turned an unmapped path's {@code NoResourceFoundException} into a 500 and hid
+ * the very status this test is about. Excluding it made the test pass while the
+ * deployed application answered 500 — the test asserted a 404 that production
+ * did not produce, which was confirmed by probing the live server. The handler
+ * now maps that exception to 404 explicitly (issue 091), so this test runs
+ * through the same handler the real application uses, and would fail again if
+ * that branch were removed.</p>
  *
  * <p>Each case asserts the resolved handler as well as the status. The handler
  * is deliberately <em>not</em> asserted to be null: an unmapped path falls
@@ -72,9 +76,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * body (400), which is a mapping existing.</p>
  */
 @WebMvcTest(controllers = AuthController.class,
-        excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class},
-        excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
-                classes = GlobalExceptionHandler.class))
+        excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class})
 class AuthControllerRoutingTest {
 
     /** Both halves of the removed flow: the request for a token, and its redemption. */
@@ -133,8 +135,12 @@ class AuthControllerRoutingTest {
     /**
      * The control that makes the two tests above mean something: sibling paths
      * on the very same controller, in the very same slice, with the very same
-     * unreadable body. These reach a handler and fail on the body (400); the
-     * removed ones never reach one (404).
+     * unreadable body. These reach a handler and fail on the body (422 —
+     * {@code VALIDATION_FAILED} per contract §2.6); the removed ones never
+     * reach one (404). The 422 is the application's real answer: before
+     * {@code GlobalExceptionHandler} was included here this read 400, which
+     * was only ever Spring's un-handled default and not what the deployed
+     * server returns.
      */
     @Test
     void the_surviving_auth_paths_are_routed_in_this_same_slice() throws Exception {
@@ -148,8 +154,9 @@ class AuthControllerRoutingTest {
                             + "about the removed paths and not about this slice mapping nothing", surviving)
                     .isInstanceOf(HandlerMethod.class);
             assertThat(result.getResponse().getStatus())
-                    .as("%s reaches its handler and rejects the empty body", surviving)
-                    .isEqualTo(400);
+                    .as("%s reaches its handler and rejects the empty body through the real "
+                            + "exception handler, so it is not a 404 and not a framework default", surviving)
+                    .isEqualTo(422);
         }
     }
 }

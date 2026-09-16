@@ -13,6 +13,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 
@@ -78,6 +79,30 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiErrorResponse> handleForbidden(AccessDeniedException ex) {
         return build(ApiErrorCode.FORBIDDEN, "You do not have permission to perform this action.", List.of());
+    }
+
+    /**
+     * A request for a path that maps to nothing. Spring resolves an unmatched
+     * URL against the static-resource handler last, so "no such endpoint"
+     * arrives here as {@link NoResourceFoundException} rather than as a
+     * routing failure.
+     *
+     * <p>Without this branch it fell through to {@link #handleUnexpected} and
+     * became a <b>500</b> — wrong twice over. It told a caller the server had
+     * broken when the caller had simply asked for something that does not
+     * exist, and it wrote an ERROR line with a stack trace for every such
+     * request. Anything scanning {@code /api/v1/auth/**} (which is
+     * {@code permitAll}, so unmatched paths get this far instead of being
+     * refused with a 401) could therefore manufacture unlimited ERROR noise in
+     * a log retained six months for §10, burying real faults in it.</p>
+     *
+     * <p>Logged at DEBUG, not ERROR: a 404 is a statement about the request,
+     * not about the server's health.</p>
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleNoResource(NoResourceFoundException ex) {
+        log.debug("No handler for {} {}", ex.getHttpMethod(), ex.getResourcePath());
+        return build(ApiErrorCode.RESOURCE_NOT_FOUND, "No such endpoint.", List.of());
     }
 
     @ExceptionHandler(Exception.class)
