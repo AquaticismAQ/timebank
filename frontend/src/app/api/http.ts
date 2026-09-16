@@ -164,6 +164,69 @@ export async function getWithEtag<T>(path: string, previousEtag: string | undefi
   return { data: parsed.data as T, etag: response.headers.get('ETag') ?? undefined };
 }
 
+/** What {@link postPdf} hands back: the document bytes plus the name the server asked the browser to save them under. */
+export interface PdfDownload {
+  blob: Blob;
+  filename: string;
+}
+
+/**
+ * The credential-slip transport (APIContract.md §4.15). Two endpoints answer
+ * with `application/pdf` instead of §2.5's `data`/`meta` envelope — `POST
+ * /users/activation-slips` and `POST /users/{id}/reset-password` — and
+ * `request()` above parses every response as JSON and returns `parsed.data`,
+ * which turns those bytes into a `SyntaxError`. Hence a path of its own.
+ *
+ * Only the *success* side differs. A failure happens before the document
+ * exists and still arrives as a normal error envelope, so it is classified
+ * exactly as everywhere else (`ApiError`, `mapApiError`, the shared 401
+ * handler) and the content type is what tells the two apart.
+ *
+ * `Accept-Language` is sent for the same reason every other call sends it, and
+ * one more: the server prints the slip's labels in the language it resolves
+ * from this header, and 10-StudentIdentityAndOnboarding.md §2.9 requires the
+ * paper and the screen to use the same words.
+ */
+export async function postPdf(path: string, body?: unknown, fallbackFilename = 'download.pdf'): Promise<PdfDownload> {
+  const headers: Record<string, string> = { 'Accept-Language': i18n.language === 'zh' ? 'zh-CN' : 'en' };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const csrfToken = readCookie('XSRF-TOKEN');
+  if (csrfToken) headers['X-XSRF-TOKEN'] = csrfToken;
+
+  const response = await fetch(buildUrl(path), {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    let errBody: ApiErrorBody | undefined;
+    try {
+      errBody = text ? JSON.parse(text).error : undefined;
+    } catch {
+      // A gateway that never reached the app answers with HTML, not an
+      // envelope — a parse failure here must not replace the real failure
+      // with a SyntaxError the caller cannot classify.
+      errBody = undefined;
+    }
+    const resolved: ApiErrorBody = errBody ?? {
+      code: 'INTERNAL_ERROR',
+      message: response.statusText || 'Request failed.',
+      requestId: '',
+    };
+    notifyIfUnauthorized(resolved.code);
+    throw new ApiError(resolved);
+  }
+
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  return {
+    blob: await response.blob(),
+    filename: disposition.match(/filename="([^"]+)"/)?.[1] ?? fallbackFilename,
+  };
+}
+
 export const http = {
   get: <T>(path: string, query?: RequestOptions['query']) => request<T>(path, { method: 'GET', query }),
   getPage: <T>(path: string, query?: RequestOptions['query']) => requestPage<T>(path, { method: 'GET', query }),

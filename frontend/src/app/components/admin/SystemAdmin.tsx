@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useAuth, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
+import { ActivationSlips } from './ActivationSlips';
 import { OrganizationManagement } from './OrganizationManagement';
 import { RoleManagement } from './RoleManagement';
 import { ServiceCategoryManagement } from './ServiceCategoryManagement';
@@ -12,6 +13,7 @@ import { GradePicker } from '../GradePicker';
 import { useDictionaries } from '../../api/useDictionaries';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { formatGradeClass, minutesToHours } from '../../lib/format';
+import { downloadBlob } from '../../lib/download';
 import { localDateTimeToISO } from '../../lib/datetime';
 import { STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import type { RoleSummary, AuditLogEntry, SchoolInfo, RuleVersion, RuleDraftFields, RuleValidationResult } from '../../api/types';
@@ -77,20 +79,6 @@ const DEFAULT_DRAFT_FIELDS: RuleDraftFields = {
 /** Hours value for a minutes-based input — rounded to 2dp to avoid float noise from non-exact-hour minute values. */
 function minutesToHourInputValue(minutes: number): number {
   return Math.round((minutes / 60) * 100) / 100;
-}
-
-/**
- * Hands a fetched file to the browser as a download. Shared by the import
- * template and the activation slip a password reset returns — the slip's bytes
- * are a live credential, so they are revoked from the object URL immediately
- * rather than left addressable for the life of the page.
- */
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
 function ruleStatusBadgeClass(status: RuleVersion['status']): string {
@@ -769,6 +757,17 @@ export function SystemAdmin() {
   // management (enforced server-side too; this only hides the buttons
   // that would otherwise 403).
   const canManageTemplates = canManageRoles && (user?.roles.includes('admin') || user?.roles.includes('sysadmin')) === true;
+  /**
+   * 10-StudentIdentityAndOnboarding.md §2.10 (D-9/D-10): issuing credential
+   * slips is `users.manage` **plus** the `admin`/`sysadmin` role code — the
+   * same pair the backend's `CredentialSlipController` checks, and narrower
+   * than `users.manage` alone so a school-defined staff role holding that
+   * permission does not quietly become able to mint student logins. Teachers
+   * get no slip path at all, including for their own class, and this tab is
+   * otherwise visible to them. Hiding it here is a courtesy; the control is
+   * the server's check, not this one.
+   */
+  const canIssueSlips = canManageUsers && (user?.roles.includes('admin') || user?.roles.includes('sysadmin')) === true;
   // Deliberately narrower than the admin/sysadmin pattern above: school info
   // is editable by sysadmin only, not admin, even though the two hold
   // identical permission grants post-role-merge — hardcoded role-code check
@@ -1313,6 +1312,12 @@ export function SystemAdmin() {
                 </button>
               </div>
             </div>
+
+            {/* Directly under the roster import, because that is the moment
+                this is needed: the import creates the pending accounts
+                (10-StudentIdentityAndOnboarding.md §3.3) and this turns them
+                into something a student can hold. */}
+            {canIssueSlips && <ActivationSlips />}
 
             <div className="bg-card border border-border rounded-2xl p-5 sm:col-span-2">
               <Download className="w-8 h-8 text-green-500 mb-3" />

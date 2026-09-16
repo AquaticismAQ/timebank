@@ -403,10 +403,31 @@ Administrators include Student Development Center administrators and system admi
 ### 7.9 Data & System Management
 
 - Historical ledger import: upload, field mapping, pre-validation, error download, confirm import, and result audit.
+- Student roster import, and the activation slips that follow it (§7.9.1).
 - Data export and academic year archiving.
 - Users, roles, permissions, and data scopes.
 - Login logs, operation logs, exception logs.
 - System parameters, in-app notification templates, and maintenance mode.
+
+### 7.9.1 Activation slips
+
+Administrators only (plan §2.10). The screen sits directly under the roster import,
+because that is the moment it is needed: the import creates the pending accounts and this
+is what turns them into something a student can hold. Teachers have no slip path, not even
+for their own class, so the control is not placed in a page teachers also use.
+
+Choosing a class states how many slips it will produce **before** anything is issued,
+broken down into never-activated, activation-window-expired, already-activated (skipped)
+and roster rows with no account (skipped). A thirty-student class producing four slips is
+correct behaviour rather than a bug, and the breakdown is what says so.
+
+Issuing is destructive and is presented as such: it mints a new code for every student
+counted, which retires the code that student holds now, so any slip already printed and
+handed out for that class stops working. That consequence appears inline before the button
+is ever pressed, and again in a confirm step that names the class and the count and cannot
+be dismissed by tapping the backdrop. Slips per page is offered as the closed choice it is
+— 1 or 2, default 1 (plan §2.8) — and the screen says codes expire and must be handed out
+promptly (plan §2.6).
 
 ---
 

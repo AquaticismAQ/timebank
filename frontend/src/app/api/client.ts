@@ -36,7 +36,7 @@ import type {
   RoleSummary,
   RoleTemplateSummary,
 } from './types';
-import { http, ApiError, buildListQuery, getWithEtag, withVersion, type PageResult } from './http';
+import { http, ApiError, buildListQuery, getWithEtag, postPdf, withVersion, type PageResult, type PdfDownload } from './http';
 import { toBackendEnum, fromBackendEnum, type ListParams } from '../lib/pagination';
 import { localDateTimeToISO, isoToLocalDateTime } from '../lib/datetime';
 import { formatGradeClass } from '../lib/format';
@@ -1120,30 +1120,33 @@ export const api = {
      * user sets their own password. There is nothing to display — the caller
      * downloads the PDF.
      *
-     * Raw `fetch`, not `http.post`: the response is `application/pdf`, not the
-     * `data`/`meta` envelope `http.ts` unwraps. Same manual CSRF attachment
-     * `files.uploadContent` and `imports.create` already use for their raw
-     * requests — POST is state-changing and 403s without it.
+     * `postPdf`, not `http.post`: the response is `application/pdf`, not the
+     * `data`/`meta` envelope `http.ts` unwraps. That path used to be inlined
+     * here and is now shared with the class batch below — the two are the same
+     * document produced two ways, and the slip's language comes off the
+     * `Accept-Language` header `postPdf` sends (§2.9).
      */
-    async resetPassword(id: string): Promise<{ blob: Blob; filename: string }> {
-      const csrfToken = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1];
-      const headers: Record<string, string> = {};
-      if (csrfToken) headers['X-XSRF-TOKEN'] = decodeURIComponent(csrfToken);
-      const response = await fetch(`/api/v1/users/${id}/reset-password`, {
-        method: 'POST',
-        credentials: 'include',
-        headers,
-      });
-      if (!response.ok) {
-        // A failure happens before the document exists, so it still comes back
-        // as a normal error envelope — the content type is what tells them apart.
-        const text = await response.text();
-        const parsed = text ? JSON.parse(text) : {};
-        throw new ApiError(parsed.error ?? { code: 'RESET_FAILED', message: 'Password reset failed', requestId: '' });
-      }
-      const disposition = response.headers.get('Content-Disposition') ?? '';
-      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? 'activation-slip.pdf';
-      return { blob: await response.blob(), filename };
+    async resetPassword(id: string): Promise<PdfDownload> {
+      return postPdf(`/users/${id}/reset-password`, undefined, 'activation-slip.pdf');
+    },
+    /**
+     * Contract §4.15 / plan 10 §3.4: one PDF holding one printable activation
+     * slip per still-pending student in `classId`.
+     *
+     * **This retires codes.** Every slip it prints carries a freshly minted
+     * code, and minting one retires whatever code that student held before
+     * (§2.7 — a lost slip has to stop working), so paper already handed out for
+     * this class stops working the moment this resolves. Callers must confirm
+     * before calling, not after.
+     *
+     * Students who have already chosen a password are skipped server-side, so
+     * the PDF legitimately holds fewer slips than the class has students; a
+     * class where everyone has activated is a `409`, not an empty document.
+     * `slipsPerPage` is 1 or 2 and nothing else (§2.8, D-8) — the union type is
+     * the whole rule, matching the backend's closed enum.
+     */
+    async issueActivationSlips(classId: string, slipsPerPage: 1 | 2): Promise<PdfDownload> {
+      return postPdf('/users/activation-slips', { classId, slipsPerPage }, 'activation-slips.pdf');
     },
     async unlock(id: string): Promise<void> {
       await http.post<void>(`/users/${id}/unlock`);
