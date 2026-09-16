@@ -320,7 +320,7 @@ first-time entry described in §2.9 — wording identical to the slip's, in both
 | §3.5 Activation endpoint | Not started |
 | §3.6 Expiry sweep | Not started |
 | §3.7 Password reset | Not started |
-| §3.8 Login copy and first-time entry | Not started |
+| §3.8 Login copy and first-time entry | Done — `ActivationPage`, `/activate`, login copy in both languages |
 
 §3.1–§3.3 are covered by unit tests only (`mvn test`); no integration test or
 live-server verification has run against them yet, so the migration itself is
@@ -328,3 +328,28 @@ unapplied and the import path is unproven end to end. Until §3.4/§3.5 land,
 an imported account is created and can never be logged into — which is the
 intended interim state (§2.4), not a gap, but it does mean the next re-seed
 must wait for the activation path.
+
+**§3.8 shipped ahead of its endpoint, and must not be deployed alone.** The
+activation screen exists and a student can reach it, but §3.5 does not, so a
+submit fails. Three things must be reconciled when §3.5 lands, all of them
+currently guesses on the frontend side:
+
+| Item | Current frontend assumption | Owner |
+| :--- | :--- | :--- |
+| Endpoint | `POST /api/v1/auth/activate` with `{ code, newPassword }` | §3.5 must confirm, then add to `APIContract.md` **and** its `_CN` twin |
+| Check character | Shape validated; the checksum itself is **not** verified, so §2.5's "you mistyped that" is not yet delivered. `isWellFormedActivationCode` is the seam | §3.5, which owns the generator |
+| Error codes | Expired vs. already-redeemed vs. unknown all show one generic message | §3.5 |
+
+**Two gaps the foundation work surfaced, neither settled by this plan:**
+
+- **`POST /students` still creates no account.** Only the import path provisions
+  one, because putting it in `StudentService.create` would make `student → iam`
+  a module cycle (`iam` already depends on `student`). An admin adding a single
+  student therefore gets a roster row with no login. Decide in §3.4/§3.5 whether
+  that path needs an account too.
+- **Activation codes are stored as unsalted SHA-256**, not bcrypt, because §2.5
+  requires lookup *by* hash and a salted hash cannot be looked up. The tradeoff
+  is acceptable — codes are single-use, expire in days, and protect an account
+  holding no data yet — but it is a weaker primitive than the one protecting
+  passwords, and `Design/*/08-mlps-level1-security-design-guide.md` §8.2 should
+  not be read as claiming otherwise.
