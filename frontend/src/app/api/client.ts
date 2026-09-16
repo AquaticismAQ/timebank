@@ -171,6 +171,23 @@ export const api = {
       const user: User = meResponseToUser(me, username);
       return { user };
     },
+    /**
+     * First-time activation (Docs/optimization/10-StudentIdentityAndOnboarding.md
+     * §2.4/§3.5): redeems a single-use activation code and sets the account's
+     * first password in one call. Public/unauthenticated by necessity — the
+     * account has no password yet, and the code is itself the lookup key, so no
+     * username is sent.
+     *
+     * UNWIRED: the backend endpoint does not exist yet (§3.5 is a separate
+     * slice, and §3.1's migration has not landed). The path and body below are
+     * this client's provisional guess and must be reconciled with the backend
+     * implementation and APIContract.md before this can work — today the call
+     * 404s and the activation screen shows its generic failure message.
+     */
+    async activate(code: string, newPassword: string): Promise<void> {
+      await http.get<void>('/auth/csrf');
+      await http.post<void>('/auth/activate', { code, newPassword });
+    },
     async me(): Promise<User | MeResponse> {
       return http.get<MeResponse>('/me');
     },

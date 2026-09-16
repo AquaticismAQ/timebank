@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Navigate } from 'react-router';
-import { Eye, EyeOff, Clock, Sun, Moon, Monitor } from 'lucide-react';
+import { useNavigate, Navigate, Link } from 'react-router';
+import { Eye, EyeOff, Clock, KeyRound, Sun, Moon, Monitor } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth, useTheme } from '../../App';
 import { toast } from 'sonner';
@@ -164,6 +164,24 @@ export function LoginPage() {
               </a>
             </div>
           </form>
+
+          {/* First-time entry (10-StudentIdentityAndOnboarding.md §2.9): the slip
+              prints the site's root URL, so this is the only signposted way in
+              for a student who has never logged in. It is deliberately a
+              full-width block, not a footnote link, and its wording is verbatim
+              what the printed slip says — a child has to match paper to screen. */}
+          <div className="mt-6 pt-6 border-t border-border">
+            <Link
+              to="/activate"
+              className="w-full py-3 px-4 rounded-xl border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 transition-colors flex items-center justify-center gap-2 text-sm font-medium text-center"
+            >
+              <KeyRound className="w-4 h-4 shrink-0" />
+              {t('auth.login.firstTimeEntry')}
+            </Link>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              {t('auth.login.firstTimeHint')}
+            </p>
+          </div>
         </div>
 
         <div className="text-center text-xs text-muted-foreground mt-6 space-y-1">

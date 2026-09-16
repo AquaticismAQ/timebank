@@ -7,6 +7,7 @@ import { setUnauthorizedHandler, resetUnauthorizedState } from './api/http';
 import i18n from '../i18n';
 
 import { LoginPage } from './components/auth/LoginPage';
+import { ActivationPage } from './components/auth/ActivationPage';
 import { StudentLayout } from './components/layout/StudentLayout';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { StudentHome } from './components/student/StudentHome';
@@ -187,6 +188,10 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            {/* First-time access, 10-StudentIdentityAndOnboarding.md §2.9. Public
+                by necessity: the account exists but has no password yet. The QR on
+                the credential slip deep links here as `/activate?code=...`. */}
+            <Route path="/activate" element={<ActivationPage />} />
 
             {/* Student portal */}
             <Route path="/student" element={
