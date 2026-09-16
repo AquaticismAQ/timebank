@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -92,6 +93,24 @@ class StudentServiceImpl implements StudentService {
         return toDetailDto(student, resolvedLanguage);
     }
 
+
+    /**
+     * Student numbers are stored in one canonical case.
+     *
+     * The database already prevents case-variant duplicates — the column's
+     * collation is case-insensitive, so inserting both HKTZ4HKV and hktz4hkv
+     * fails on the unique index. What it does not prevent is the two forms
+     * being stored by different imports, which would show a mixed-case column
+     * on screen and, worse, bake inconsistent casing into service record
+     * numbers, which embed the student number and are permanent once issued.
+     *
+     * Uppercase because Crockford base32 specifies uppercase for output.
+     * Locale.ROOT avoids the Turkish dotless-i trap.
+     */
+    private static String canonicalStudentNumber(String raw) {
+        return raw == null ? null : raw.trim().toUpperCase(Locale.ROOT);
+    }
+
     private StudentDetailDto toDetailDto(Student student, String resolvedLanguage) {
         Grade grade = gradeRepository.findById(student.getGradeId())
                 .orElseThrow(() -> new IllegalStateException("Student references a missing grade"));
@@ -109,14 +128,15 @@ class StudentServiceImpl implements StudentService {
     @Override
     @Transactional
     public StudentDetailDto create(CreateStudentRequest request, String actorId, String resolvedLanguage) {
-        if (studentRepository.existsByStudentNumber(request.studentNumber())) {
+        String studentNumber = canonicalStudentNumber(request.studentNumber());
+        if (studentRepository.existsByStudentNumber(studentNumber)) {
             throw ApiException.stateConflict("Student number is already in use.");
         }
         requireGrade(request.gradeId());
         requireClass(request.classId());
 
         Instant now = Instant.now();
-        Student student = new Student(OpaqueIds.generate("std"), request.studentNumber(), request.displayName(),
+        Student student = new Student(OpaqueIds.generate("std"), studentNumber, request.displayName(),
                 request.gradeId(), request.classId(), request.enrollmentAcademicYearId(), request.graduationYear(),
                 request.joinedAt(), now);
         studentRepository.save(student);
@@ -134,11 +154,18 @@ class StudentServiceImpl implements StudentService {
         ConcurrencyControl.checkVersion(student.getVersion(), request.version());
 
         StudentSummaryForAudit before = new StudentSummaryForAudit(student);
-        if (request.studentNumber() != null && !request.studentNumber().equals(student.getStudentNumber())) {
-            if (studentRepository.existsByStudentNumber(request.studentNumber())) {
-                throw ApiException.stateConflict("Student number is already in use.");
+        if (request.studentNumber() != null) {
+            String canonical = canonicalStudentNumber(request.studentNumber());
+            // Compared case-insensitively so that re-submitting the same number
+            // in a different case is a no-op rather than a self-conflict: the
+            // existsBy check below would otherwise match this very student's own
+            // row under the column's case-insensitive collation.
+            if (!canonical.equalsIgnoreCase(student.getStudentNumber())) {
+                if (studentRepository.existsByStudentNumber(canonical)) {
+                    throw ApiException.stateConflict("Student number is already in use.");
+                }
             }
-            student.setStudentNumber(request.studentNumber());
+            student.setStudentNumber(canonical);
         }
         if (request.displayName() != null) {
             student.setDisplayName(request.displayName());

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -129,7 +130,15 @@ public class RuleEngine {
             for (RuleSpec rule : column.rules()) {
                 switch (rule.type()) {
                     case UNIQUE_IN_FILE -> {
-                        if (!run.seen(column.name()).add(value)) {
+                        // Case-folded deliberately. This rule models a database
+                        // uniqueness constraint, and the column's collation
+                        // (utf8mb4_0900_ai_ci) is case-insensitive — so a file
+                        // holding both HKTZ4HKV and hktz4hkv would pass a
+                        // case-sensitive check here and then fail at INSERT
+                        // partway through commit, which is the half-loaded state
+                        // two-phase validation exists to prevent. Locale.ROOT
+                        // avoids the Turkish dotless-i trap.
+                        if (!run.seen(column.name()).add(value.toUpperCase(Locale.ROOT))) {
                             return invalid(column.name(), rule, lang, null, value);
                         }
                     }

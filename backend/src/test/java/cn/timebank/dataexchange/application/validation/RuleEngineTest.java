@@ -68,6 +68,27 @@ class RuleEngineTest {
         run = engine.newRun();
     }
 
+    /**
+     * The in-file uniqueness rule models a database constraint whose collation
+     * (utf8mb4_0900_ai_ci) is case-insensitive. If this check were
+     * case-sensitive the two would disagree: a file holding both cases would
+     * validate clean and then fail at INSERT partway through commit, which is
+     * exactly the half-loaded state two-phase validation exists to prevent.
+     */
+    @Test
+    void aStudentNumberRepeatedInADifferentCaseIsADuplicateWithinTheFile() {
+        List<String> first = new java.util.ArrayList<>(validRow());
+        first.set(0, "HKTZ4HKV");
+        assertThat(engine.validate(students, first, run, "en")).isInstanceOf(RowValidation.Valid.class);
+
+        List<String> second = new java.util.ArrayList<>(validRow());
+        second.set(0, "hktz4hkv");
+        RowValidation result = engine.validate(students, second, run, "en");
+
+        assertThat(result).isInstanceOf(RowValidation.Invalid.class);
+        assertThat(((RowValidation.Invalid) result).code()).isEqualTo("DUPLICATE_IN_FILE");
+    }
+
     /** A row that should pass every rule, used as the baseline the failures deviate from. */
     private List<String> validRow() {
         return List.of("a45b9def", "Alex L.", "grade_6", "class_6A", "ay_2025_2026", "2032", "2026-09-01");
