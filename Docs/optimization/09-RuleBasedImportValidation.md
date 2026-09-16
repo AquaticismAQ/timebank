@@ -208,7 +208,32 @@ should reject must be shown rejecting, with the specific code, against the live 
 
 ---
 
-## 5. Implementation status
+## 5. Execution
+
+**Run this as a single agent, sequentially.** The steps in §3 form a chain — the parser
+feeds the engine, the engine needs the catalogue, the catalogue must exist before either
+validator can migrate onto it, and the regression suite only means anything once the
+migration is done. Splitting it across agents would create more coordination cost than
+the parallelism is worth, and every step lands in the same module
+(`cn.timebank.dataexchange`).
+
+This plan is **blocked on `08-SecurityPrivacyHardening.md` §3.1 only**, not on that plan
+as a whole. Once the column drop lands, this work runs *in parallel with* Phase 1's
+remaining tracks — see that plan's §4.2, where it is scheduled as a Wave 2 track.
+
+Two boundaries with Phase 1, repeated here so this plan does not have to be read
+alongside it:
+
+- Phase 1 §3.1 makes a minimal edit to `StudentImportRowValidator`'s positional parsing.
+  §3.6 below deletes that code. Do not treat the Phase 1 version as a base to build on.
+- Phase 1 §3.5 escapes formula injection on **export**; §3.4 below rejects it on
+  **import**. Both are needed and neither is sufficient alone.
+
+The coordinator retains deploys, live browser verification, live database writes and
+commits, for the reasons set out in Phase 1 §4.3 — chiefly that there is one test server,
+one database, and a single shared browser session.
+
+## 6. Implementation status
 
 Not started. Blocked on `08-SecurityPrivacyHardening.md` §3.1, which changes the student
 import's column set.

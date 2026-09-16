@@ -262,7 +262,94 @@ verify what it contains and trim it to what the UI actually needs.
 
 ---
 
-## 4. Decision index
+## 4. Execution: parallel tracks
+
+### 4.1 Why this plan is not merged with Phase 2
+
+The two plans stay separate deliberately:
+
+- **Different risk and cadence.** Several steps here are configuration-only and
+  can land within an hour (TLS versions, response headers, log retention).
+  Phase 2 is a multi-day refactor of a subsystem. Merging would park a live
+  TLS 1.0/1.1 exposure behind a rule-engine rewrite.
+- **Different decisions.** This plan has five open decisions about watermarks,
+  PDF handling, retention and CSP; Phase 2 has five unrelated ones about rule
+  storage and expressiveness. A merged decision index would be ten unrelated
+  questions with no common reviewer.
+- **Different parallelism.** This plan decomposes into independent tracks
+  (below). Phase 2 is inherently sequential — parser, then engine, then
+  catalogue, then migration — and gains almost nothing from extra agents.
+
+**The seam between them, stated once so neither plan assumes the other:**
+
+- Phase 2 is blocked on **§3.1 only**, not on this plan as a whole. Once the
+  column drop lands, Phase 2 can start alongside the remaining steps here.
+- §3.1 edits `StudentImportRowValidator`'s positional parsing; Phase 2 §3.6
+  deletes that code entirely. **Keep the §3.1 edit minimal** — drop three
+  columns, change nothing else. Improving that parser is wasted work.
+- CWE-1236 is **split across both plans on purpose**: export-side escaping is
+  §3.5 here because it alone closes the exploitation path, and import-side
+  rejection is Phase 2 §3.4 as defence in depth. Neither is "the fix" alone.
+
+### 4.2 Track decomposition
+
+Ordered into two waves because one step is a shared-file bottleneck.
+
+**Wave 1 — one agent, alone:**
+
+| Track | Steps | Files owned |
+| :--- | :--- | :--- |
+| **C — Data minimization** | §3.1 | migration, `Student` entity, student DTOs, `StudentImportRowValidator`, import template, `client.ts`, `APIContract.md` + `_CN` twin, `mock-data.ts`, `seed.ts`, `MOCK_DATA_GUIDE.md` |
+
+C runs alone because it touches the most widely-shared files in the repo
+(the API client, the contract pair, the seed fixtures) and because everything
+in Phase 2 waits on it.
+
+**Wave 2 — parallel, after C lands:**
+
+| Track | Steps | Files owned | Notes |
+| :--- | :--- | :--- | :--- |
+| **A — Server/ops** | §3.2, §3.3, §3.8 | nginx config, logrotate, journald, MySQL keyring, `Docs/operations/Runbooks.md` | No application code at all |
+| **B — Evidence & PDF** | §3.6, §3.7 | `cn.timebank.file`, `pom.xml` (PDFBox) | Largest code track; must be one agent — both steps share watermark content and config |
+| **D — Isolated backend** | §3.4, §3.5 | `ExportJobRunner`, the storage-gate startup check | Two small, unrelated single-file changes |
+| **E — Frontend audit** | §3.9 | auth context / local storage | Smallest; can fold into C if agent count matters |
+| **Phase 2** | `09-*.md` | `cn.timebank.dataexchange` | Starts here, runs its own sequence |
+
+No two tracks own the same file. A and B never touch the same layer; D's
+`dataexchange` files are read by Phase 2 but Phase 2 does not start editing
+them until its own §3.6.
+
+### 4.3 What the coordinator keeps — do not delegate these
+
+These are not style preferences; each one has bitten this project.
+
+- **All deploys.** One test server, one database, one 1 vCPU build box.
+  Concurrent `mvn package` thrashes it, and two agents deploying at once means
+  neither knows what it verified against. Agents write code and stop.
+- **All live browser verification.** Playwright here is a *single shared
+  browser session*, not per-agent isolated — parallel agents driving it fight
+  over the same page and the same login. The coordinator drives it.
+- **All live database writes**, per `Docs/README.md` §2.4.
+- **All commits**, so one reviewer sees the whole change set.
+
+### 4.4 Hazards specific to running agents in parallel here
+
+- **Rate limiters will trip.** nginx allows 10 logins/min per IP;
+  `RateLimitInterceptor` allows 20 upload-intents/min **per principal**, 5
+  exports/min, 5 imports/min. Several agents exercising the API at once will
+  hit these and misread the 429s as bugs. Verification is serialised partly
+  for this reason.
+- **Use worktree isolation** for the code tracks so agents cannot collide in
+  one working tree.
+- **Seed state is shared.** Any agent that reseeds destroys every other
+  agent's fixtures and invalidates every password in `Docs/TestAccounts.md`.
+  Reseeding is a coordinator action.
+- **`deploy.sh` currently reports success while the backend crash-loops** — it
+  sleeps 5s then checks `systemctl is-active`, which returns `activating`
+  during restart backoff. Until that is fixed, "deploy succeeded" is not
+  evidence the app is running; check the health endpoint.
+
+## 5. Decision index
 
 | ID | Decision | Status |
 | :--- | :--- | :--- |
@@ -274,7 +361,7 @@ verify what it contains and trim it to what the UI actually needs.
 
 ---
 
-## 5. Implementation status
+## 6. Implementation status
 
 Not started. Update this section as steps land, following the convention used by the other
 plans in this directory.
