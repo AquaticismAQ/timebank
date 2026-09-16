@@ -288,6 +288,30 @@ class CredentialSlipServiceTest {
     }
 
     /**
+     * §2.9: "the screen must use the same words as the slip". The language the
+     * controller resolved for the request is the language the paper prints in,
+     * so an admin working in Chinese hands out Chinese slips.
+     *
+     * <p>Asserted at this level rather than only on the document builder
+     * because the plumbing is the part that can silently break: the service
+     * already had a {@code resolvedLanguage} parameter, used it for the roster
+     * read, and dropped it on the floor on the way to the renderer. Both
+     * directions are checked — a one-way test would pass against a renderer
+     * hard-wired to either language.</p>
+     */
+    @Test
+    void theSlipPrintsInTheLanguageTheRequestResolvedTo() throws IOException {
+        roster(student("std_1", "Pending One"));
+        accounts(account("std_1", UserStatus.PENDING_ACTIVATION));
+
+        String chinese = pdfText(service.issueForClass(request(SlipsPerPage.ONE), ADMIN, auth(), "zh-CN").pdf());
+        assertThat(chinese).contains("激活码").doesNotContain("Activation code");
+
+        String english = pdfText(service.issueForClass(request(SlipsPerPage.ONE), ADMIN, auth(), "en").pdf());
+        assertThat(english).contains("Activation code").doesNotContain("激活码");
+    }
+
+    /**
      * §2.8 rejected one file per student partly because "filenames would carry
      * student identifiers into the mail client, the Downloads folder and every
      * mail-server backup".
