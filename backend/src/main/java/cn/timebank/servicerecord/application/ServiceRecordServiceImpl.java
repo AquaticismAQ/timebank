@@ -137,7 +137,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
     @Transactional
     public ServiceRecordDto createDraft(CreateServiceRecordRequest request, String studentId, String actorId, String resolvedLanguage) {
         SourceType sourceType = parseSourceTypeForCreate(request.sourceType());
-        StudentDetailDto student = studentService.getDetail(studentId, false, actorId, resolvedLanguage);
+        StudentDetailDto student = studentService.getDetail(studentId, resolvedLanguage);
         int durationMinutes = (int) Duration.between(request.startAt(), request.endAt()).toMinutes();
 
         Instant now = Instant.now();
@@ -460,11 +460,7 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
                 // A roster-only student (no login) therefore has no contact and fails
                 // the same CONTACT_MISSING validation as a student with no address on
                 // file used to. Behaviour is unchanged from the caller's point of view.
-                //
-                // includeSensitiveFields=false: nothing in StudentDetailDto is gated any
-                // more, so passing true would only record a `student.viewSensitive` audit
-                // entry for a read that exposes nothing sensitive.
-                StudentDetailDto peer = studentService.getDetail(requireSubjectId(subjectId), false, "system", "zh-CN");
+                StudentDetailDto peer = studentService.getDetail(requireSubjectId(subjectId), "zh-CN");
                 String peerContact = userService.findUserIdByStudentId(peer.id())
                         .map(userId -> userService.getById(userId).email())
                         .orElse(null);

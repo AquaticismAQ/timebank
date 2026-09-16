@@ -79,9 +79,7 @@ public class StudentController {
     public ApiResponse<StudentDetailDto> get(
             @PathVariable String id, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             Authentication auth) {
-        CookieSessionUserDetails principal = (CookieSessionUserDetails) auth.getPrincipal();
-        boolean sensitive = principal.hasPermission("students.manage") || id.equals(principal.studentId());
-        return ApiResponse.of(studentService.getDetail(id, auth, sensitive, principal.id(), resolveLanguage(acceptLanguage, auth)));
+        return ApiResponse.of(studentService.getDetail(id, auth, resolveLanguage(acceptLanguage, auth)));
     }
 
     @PostMapping

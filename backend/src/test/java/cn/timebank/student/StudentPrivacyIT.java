@@ -106,9 +106,9 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
 
         Authentication teacherAuth = teacherScopedToGrade6();
 
-        assertThat(studentService.getDetail(inScopeStudent.id(), teacherAuth, false, ACTOR, "zh-CN").id())
+        assertThat(studentService.getDetail(inScopeStudent.id(), teacherAuth, "zh-CN").id())
                 .isEqualTo(inScopeStudent.id());
-        assertThatThrownBy(() -> studentService.getDetail(outOfScopeStudent.id(), teacherAuth, false, ACTOR, "zh-CN"))
+        assertThatThrownBy(() -> studentService.getDetail(outOfScopeStudent.id(), teacherAuth, "zh-CN"))
                 .isInstanceOf(ApiException.class);
 
         Page<StudentListItemDto> list = studentService.list(PageRequest.of(0, 20), teacherAuth, null, null, null, null, "zh-CN");
@@ -146,48 +146,31 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
     }
 
     /**
-     * These two tests used to assert that {@code email}/{@code guardianName}/
-     * {@code guardianContact} were nulled for an unprivileged caller and returned
-     * for a privileged one. V26 dropped all three columns under data minimization
-     * (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1), so there is no
-     * longer any field for the flag to hide — the strongest guarantee is now the
-     * compile-time one, that {@code StudentDetailDto} has no such accessor at all.
+     * `GET /students/{id}` writes **no** audit row. It used to: an
+     * {@code includeSensitiveFields} flag gated {@code email}/{@code guardianName}/
+     * {@code guardianContact} and recorded {@code student.viewSensitive} whenever
+     * they were shown. V26 dropped those columns, and issue 085 removed the flag
+     * and the event — a plain read of non-sensitive fields is not an auditable
+     * event, and on the original server that one action had grown to half of
+     * every audit row, mostly students reading their own profile.
      *
-     * What remains testable, and is still real, is the audit half: the flag
-     * decides whether a {@code student.viewSensitive} entry is written. That is
-     * what these now cover. See the note in {@code StudentServiceImpl.toDetailDto}
-     * — the flag is vestigial and its removal is an open decision.
+     * This asserts the absence, because the failure mode being guarded against is
+     * a well-meaning re-introduction of read auditing.
      */
     @Test
-    void detailDoesNotAuditWhenSensitiveAccessIsNotClaimed() {
+    void readingAStudentWritesNoAuditRow() {
         StudentDetailDto created = createStudent("stu_privacy_2");
 
-        long auditCountBefore = auditLogRepository
+        long before = auditLogRepository
                 .findByResourceTypeAndResourceId("student", created.id(), PageRequest.of(0, 50))
                 .getTotalElements();
 
-        studentService.getDetail(created.id(), false, ACTOR, "zh-CN");
+        studentService.getDetail(created.id(), "zh-CN");
 
-        long auditCountAfter = auditLogRepository
+        long after = auditLogRepository
                 .findByResourceTypeAndResourceId("student", created.id(), PageRequest.of(0, 50))
                 .getTotalElements();
-        assertThat(auditCountAfter).isEqualTo(auditCountBefore);
-    }
-
-    @Test
-    void detailAuditsWhenSensitiveAccessIsClaimed() {
-        StudentDetailDto created = createStudent("stu_privacy_3");
-
-        long auditCountBefore = auditLogRepository
-                .findByResourceTypeAndResourceId("student", created.id(), PageRequest.of(0, 50))
-                .getTotalElements();
-
-        studentService.getDetail(created.id(), true, ACTOR, "zh-CN");
-
-        long auditCountAfter = auditLogRepository
-                .findByResourceTypeAndResourceId("student", created.id(), PageRequest.of(0, 50))
-                .getTotalElements();
-        assertThat(auditCountAfter).isEqualTo(auditCountBefore + 1);
+        assertThat(after).isEqualTo(before);
     }
 
     /**

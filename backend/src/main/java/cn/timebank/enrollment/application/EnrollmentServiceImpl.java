@@ -237,7 +237,7 @@ class EnrollmentServiceImpl implements EnrollmentService {
         Map<String, String> names = new java.util.HashMap<>();
         for (String studentId : enrollments.stream().map(Enrollment::getStudentId).distinct().toList()) {
             try {
-                names.put(studentId, studentService.getDetail(studentId, false, "system", resolvedLanguage).displayName());
+                names.put(studentId, studentService.getDetail(studentId, resolvedLanguage).displayName());
             } catch (ApiException e) {
                 names.put(studentId, "");
             }

@@ -58,10 +58,8 @@ class ProgressServiceImpl implements ProgressService {
         AcademicYearDto currentYear = academicStructureService.listAcademicYears().stream()
                 .filter(AcademicYearDto::current).findFirst()
                 .orElseThrow(() -> new IllegalStateException("No academic year is marked current"));
-        // includeSensitiveFields=false: only gradeLevel is needed here, so this
-        // neither exposes guardian data nor fires the student.viewSensitive audit
-        // entry; resolvedLanguage is unused for a raw gradeLevel int (issue 010).
-        int gradeLevel = studentService.getDetail(studentId, false, null, "en").gradeLevel();
+        // resolvedLanguage is unused for a raw gradeLevel int (issue 010).
+        int gradeLevel = studentService.getDetail(studentId, "en").gradeLevel();
         int annualRequiredMinutes = currentRule.annualRequiredMinutesForGradeLevel(gradeLevel);
         int stageRequiredMinutes = currentRule.stageRequiredMinutesForGradeLevel(gradeLevel);
 

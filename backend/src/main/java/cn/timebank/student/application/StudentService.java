@@ -45,15 +45,10 @@ public interface StudentService {
      * record/proposal/case resolving a student's name for a record it
      * already has its own, independently-scoped right to read/write) — not
      * for anything a teacher can reach directly by supplying an arbitrary
-     * id. {@link #getDetail(String, Authentication, boolean, String, String)}
-     * is the scope-checked entry point for that.
-     *
-     * @param includeSensitiveFields whether the caller has permission to see
-     *                               email/guardian data — the service, not
-     *                               the caller, decides what "sensitive"
-     *                               excludes, and audits when it's shown
+     * id. {@link #getDetail(String, Authentication, String)} is the
+     * scope-checked entry point for that.
      */
-    StudentDetailDto getDetail(String id, boolean includeSensitiveFields, String actorId, String resolvedLanguage);
+    StudentDetailDto getDetail(String id, String resolvedLanguage);
 
     /**
      * Scope-checked — {@code auth} resolves the caller's data scope (B1.7)
@@ -61,8 +56,7 @@ public interface StudentService {
      * existence-hiding convention (B1.8). Used by {@code GET /students/{id}},
      * where the caller supplies an arbitrary id directly.
      */
-    StudentDetailDto getDetail(String id, Authentication auth, boolean includeSensitiveFields, String actorId,
-                                String resolvedLanguage);
+    StudentDetailDto getDetail(String id, Authentication auth, String resolvedLanguage);
 
     StudentDetailDto create(CreateStudentRequest request, String actorId, String resolvedLanguage);
 

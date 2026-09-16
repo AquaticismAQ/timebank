@@ -10,9 +10,10 @@ import java.time.LocalDate;
  * {@code guardianContact}, nulled out unless the caller held
  * `students.manage`. V26 dropped all three columns under data minimization
  * (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1), so **no field
- * here is permission-gated any more** — see {@code StudentService.getDetail}'s
- * {@code includeSensitiveFields} parameter, which now only governs whether the
- * access is audited.</p>
+ * here is permission-gated any more**. The {@code includeSensitiveFields}
+ * parameter that used to gate them, and the {@code student.viewSensitive}
+ * audit event it triggered, were removed with it — see
+ * `Docs/issues/085-*.md`.</p>
  */
 public record StudentDetailDto(
         String id,

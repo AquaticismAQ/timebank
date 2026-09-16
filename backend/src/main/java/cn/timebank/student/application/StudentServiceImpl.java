@@ -79,47 +79,24 @@ class StudentServiceImpl implements StudentService {
     }
 
     @Override
-    @Transactional
-    // Not readOnly: see the scoped overload below.
-    public StudentDetailDto getDetail(String id, boolean includeSensitiveFields, String actorId, String resolvedLanguage) {
+    @Transactional(readOnly = true)
+    public StudentDetailDto getDetail(String id, String resolvedLanguage) {
         Student student = studentRepository.findById(id).orElseThrow(() -> ApiException.notFound("Student not found."));
-        return toDetailDto(student, includeSensitiveFields, actorId, resolvedLanguage);
+        return toDetailDto(student, resolvedLanguage);
     }
 
     @Override
-    @Transactional
-    // Not readOnly: a sensitive-field read conditionally writes an audit row
-    // below, and that write must actually commit — a readOnly transaction
-    // silently drops it (caught live via StudentPrivacyIT on real MySQL).
-    public StudentDetailDto getDetail(String id, Authentication auth, boolean includeSensitiveFields, String actorId,
-                                       String resolvedLanguage) {
+    @Transactional(readOnly = true)
+    public StudentDetailDto getDetail(String id, Authentication auth, String resolvedLanguage) {
         Student student = findInScopeOrThrow(idEquals(id), auth);
-        return toDetailDto(student, includeSensitiveFields, actorId, resolvedLanguage);
+        return toDetailDto(student, resolvedLanguage);
     }
 
-    private StudentDetailDto toDetailDto(Student student, boolean includeSensitiveFields, String actorId,
-                                          String resolvedLanguage) {
+    private StudentDetailDto toDetailDto(Student student, String resolvedLanguage) {
         Grade grade = gradeRepository.findById(student.getGradeId())
                 .orElseThrow(() -> new IllegalStateException("Student references a missing grade"));
         SchoolClass schoolClass = classRepository.findById(student.getClassId())
                 .orElseThrow(() -> new IllegalStateException("Student references a missing class"));
-
-        // VESTIGIAL AFTER V26 — flagged, not removed. This flag used to null out
-        // email/guardianName/guardianContact for callers without `students.manage`.
-        // All three columns were dropped under data minimization
-        // (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1), so nothing in
-        // StudentDetailDto is permission-gated any more and the flag now controls
-        // only whether this audit row is written. That means a `student.viewSensitive`
-        // entry can be recorded for a read that exposed nothing sensitive.
-        //
-        // Removing the flag and the event is a deliberate design decision (it touches
-        // the StudentService interface, StudentController, ProgressServiceImpl and
-        // ServiceRecordServiceImpl) and is out of §3.1's scope — left for a decision
-        // rather than silently gutted.
-        if (includeSensitiveFields) {
-            auditService.record(new AuditEntry(actorId, "students.manage", "student.viewSensitive",
-                    "student", student.getId(), null, null, null));
-        }
 
         return new StudentDetailDto(
                 student.getId(), student.getStudentNumber(), student.getDisplayName(),
@@ -146,7 +123,7 @@ class StudentServiceImpl implements StudentService {
 
         auditService.record(new AuditEntry(actorId, "students.manage", "student.create", "student", student.getId(),
                 null, new StudentSummaryForAudit(student), null));
-        return toDetailDto(student, true, actorId, resolvedLanguage);
+        return toDetailDto(student, resolvedLanguage);
     }
 
     @Override
@@ -178,7 +155,7 @@ class StudentServiceImpl implements StudentService {
 
         auditService.record(new AuditEntry(actorId, "students.manage", "student.update", "student", student.getId(),
                 before, new StudentSummaryForAudit(student), null));
-        return toDetailDto(student, true, actorId, resolvedLanguage);
+        return toDetailDto(student, resolvedLanguage);
     }
 
     @Override

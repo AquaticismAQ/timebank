@@ -138,7 +138,7 @@ class CaseDecisionTransaction {
     private CaseDto toDto(Case c, String resolvedLanguage) {
         // Re-fetching via a lightweight inline mapper avoids a circular
         // dependency on CaseService (which depends on this bean).
-        String studentName = studentService.getDetail(c.getStudentId(), false, "system", resolvedLanguage).displayName();
+        String studentName = studentService.getDetail(c.getStudentId(), resolvedLanguage).displayName();
         String subjectLabel = c.getSubjectId() != null && "serviceRecord".equals(c.getSubjectType())
                 ? serviceRecordService.recordLabel(c.getSubjectId()).orElse(null) : null;
         int gradeLevel = academicStructureService.listGrades(resolvedLanguage).stream()

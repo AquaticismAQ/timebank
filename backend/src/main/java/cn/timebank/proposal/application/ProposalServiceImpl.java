@@ -121,7 +121,7 @@ class ProposalServiceImpl implements ProposalService {
     @Transactional
     public ProposalDto createDraft(CreateProposalRequest request, String studentId, String actorId, String resolvedLanguage) {
         requireCategory(request.categoryId());
-        StudentDetailDto proposer = studentService.getDetail(studentId, false, actorId, resolvedLanguage);
+        StudentDetailDto proposer = studentService.getDetail(studentId, resolvedLanguage);
 
         List<FieldErrorDetail> errors = new ArrayList<>();
         String resolvedOrganizationId = resolveOrganizationId(request.organizationId(), request.newOrganizationName(), actorId, errors);
@@ -428,7 +428,7 @@ class ProposalServiceImpl implements ProposalService {
     private ProposalDto toDto(EventProposal p, String resolvedLanguage) {
         String categoryName = serviceCategoryService.list(resolvedLanguage).stream()
                 .filter(c -> c.id().equals(p.getCategoryId())).map(ServiceCategoryDto::name).findFirst().orElse("");
-        String proposerName = studentService.getDetail(p.getProposerStudentId(), false, "system", resolvedLanguage).displayName();
+        String proposerName = studentService.getDetail(p.getProposerStudentId(), resolvedLanguage).displayName();
         String supervisorName = userService.displayNamesOf(List.of(p.getProposedSupervisorId()))
                 .getOrDefault(p.getProposedSupervisorId(), "");
         String organizationName = p.getOrganizationId() != null

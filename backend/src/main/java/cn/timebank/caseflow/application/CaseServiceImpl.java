@@ -116,7 +116,7 @@ class CaseServiceImpl implements CaseService {
             throw ApiException.invalidRequest("studentId is required when the caller is not filing for themselves.");
         }
         CaseType type = parseType(request.type());
-        StudentDetailDto student = studentService.getDetail(studentId, false, principal.id(), resolvedLanguage);
+        StudentDetailDto student = studentService.getDetail(studentId, resolvedLanguage);
 
         Instant now = Instant.now();
         Case c = new Case(OpaqueIds.generate("case"), type, studentId, student.gradeId(), student.classId(),
@@ -319,7 +319,7 @@ class CaseServiceImpl implements CaseService {
     }
 
     private CaseDto toDto(Case c, String resolvedLanguage, Map<String, Integer> gradeSequenceById, Map<String, String> classNameById) {
-        String studentName = studentService.getDetail(c.getStudentId(), false, "system", resolvedLanguage).displayName();
+        String studentName = studentService.getDetail(c.getStudentId(), resolvedLanguage).displayName();
         return new CaseDto(c.getId(), c.getType().name(), c.getStudentId(), studentName, c.getGradeId(),
                 gradeSequenceById.getOrDefault(c.getGradeId(), 0), classNameById.getOrDefault(c.getClassId(), ""),
                 c.getSubjectType(), c.getSubjectId(), subjectLabel(c), c.getTitle(), c.getDescription(),
