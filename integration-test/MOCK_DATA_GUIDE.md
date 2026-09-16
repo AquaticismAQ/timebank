@@ -23,7 +23,7 @@ Because the PRNG seed is fixed, every run produces byte-identical data. A re-see
 
 ## Names, student numbers, and classes
 
-Student names follow the masking convention from `Design/english/08-mlps-level1-security-design-guide.md` §4.1 — `Alex L.(李*红)`: English given name plus surname initial, Chinese name with its middle character hidden, so both halves carry the same masking strength. Student numbers are opaque 8-character hashes (`a45b9def`), not sequential roll numbers.
+Student names follow the masking convention from `Design/english/08-mlps-level1-security-design-guide.md` §4.1 — `Alex L.(李*红)`: English given name plus surname initial, Chinese name with its middle character hidden, so both halves carry the same masking strength. Student numbers are opaque 8-character **Crockford base32** identifiers (`HKTZ4HKV`), not sequential roll numbers. That alphabet omits I, L, O and U so nothing can be misread as 1 or 0, and it is displayed uppercase.
 
 These are fictional fixtures, so the masking protects nobody. The point is to exercise the **real format** in the UI — CJK plus parentheses inside column widths, search, sort, and truncation behaviour, and an opaque hash where a readable number used to sit.
 

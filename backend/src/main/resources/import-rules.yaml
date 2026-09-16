@@ -32,7 +32,7 @@ types:
     maxBytes: 5242880          # 5 MiB
     columns:
       - name: studentNumber
-        sample: a45b9def
+        sample: HKTZ4HKV
         rules:
           - { type: REQUIRED,        code: REQUIRED,
               messages: { en: "studentNumber is required", zh-CN: "学号为必填项" } }
@@ -40,9 +40,13 @@ types:
               messages: { en: "studentNumber contains characters that are not allowed", zh-CN: "学号包含不允许的字符" } }
           - { type: MAX_LENGTH,      code: INVALID_FORMAT, params: { max: "32" },
               messages: { en: "studentNumber must be 32 characters or fewer", zh-CN: "学号长度不得超过 32 个字符" } }
-          # The school-issued stable hash agreed in the MLPS design doc §4.2.
-          - { type: REGEX,           code: INVALID_FORMAT, params: { pattern: "[0-9a-zA-Z_-]+" },
-              messages: { en: "studentNumber may contain only letters, digits, hyphen and underscore", zh-CN: "学号只能包含字母、数字、连字符和下划线" } }
+          # Crockford base32, the school-issued stable identifier agreed in the
+          # MLPS design doc §4.2. The alphabet omits I, L, O and U so nothing
+          # can be misread as 1 or 0. Both cases are accepted because the
+          # encoding decodes case-insensitively; hyphens are permitted as
+          # ignorable grouping separators.
+          - { type: REGEX,           code: INVALID_FORMAT, params: { pattern: "[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z-]+" },
+              messages: { en: "studentNumber must be Crockford base32 (digits and letters excluding I, L, O and U)", zh-CN: "学号必须为 Crockford base32 编码（数字与字母，不含 I、L、O、U）" } }
           - { type: UNIQUE_IN_FILE,  code: DUPLICATE_IN_FILE,
               messages: { en: "studentNumber {value} appears more than once in this file", zh-CN: "学号 {value} 在本文件中重复出现" } }
           - { type: UNIQUE_IN_DB,    code: STUDENT_NUMBER_TAKEN, params: { lookup: studentNumber },
@@ -102,7 +106,7 @@ types:
     maxBytes: 10485760         # 10 MiB
     columns:
       - name: studentNumber
-        sample: a45b9def
+        sample: HKTZ4HKV
         rules:
           - { type: REQUIRED,        code: REQUIRED,
               messages: { en: "studentNumber is required", zh-CN: "学号为必填项" } }

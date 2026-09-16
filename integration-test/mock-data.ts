@@ -465,6 +465,28 @@ const surnameInitialFor: Record<string, string> = {
   '林': 'L.', '何': 'H.', '高': 'G.', '罗': 'L.',
 };
 
+
+/**
+ * Crockford base32 — the alphabet deliberately omits I, L, O and U so that
+ * nothing can be confused with 1 or 0, which matters for a value teachers read
+ * off a screen, print on a card and type back in.
+ *
+ * Eight characters give 32^8 ≈ 1.1e12 — roughly 256x the space of the 8 hex
+ * digits this replaced, where a 5,000-student roster carried a ~1-in-344
+ * collision chance. Uppercase because the encoding specifies uppercase for
+ * output, and because uppercase alphanumerics are easier to tell apart in a
+ * random string.
+ */
+const CROCKFORD_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+function crockfordBase32(rnd: () => number, length: number): string {
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += CROCKFORD_ALPHABET[Math.floor(rnd() * CROCKFORD_ALPHABET.length)];
+  }
+  return out;
+}
+
 const gradeIds = ['grade_6', 'grade_7', 'grade_8', 'grade_9', 'grade_10', 'grade_11'];
 
 /** Classes available per grade, including the two named ones seed.ts creates. */
@@ -504,12 +526,12 @@ function buildStudents(): GeneratedStudent[] {
     const given = givenNames[i % givenNames.length];
     const displayName = `${given} ${surnameInitialFor[cn[0]]}(${cn})`;
 
-    // School-issued stable hash, per the design doc §4.2 — opaque, unique,
-    // and constant for a student. Generated from the fixed PRNG so it is
-    // stable across runs of this file.
+    // School-issued stable identifier, per the design doc §4.2 — opaque,
+    // unique, constant for a student, and generated from the fixed PRNG so it
+    // is stable across runs of this file.
     let studentNumber = '';
     do {
-      studentNumber = Math.floor(rnd() * 0xffffffff).toString(16).padStart(8, '0');
+      studentNumber = crockfordBase32(rnd, 8);
     } while (usedNumbers.has(studentNumber));
     usedNumbers.add(studentNumber);
 
