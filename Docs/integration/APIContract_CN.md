@@ -753,6 +753,7 @@ queued → running → succeeded
 | `PATCH` | `/users/{id}` | `users.manage` | 更新用户 |
 | `POST` | `/users/{id}/unlock` | `users.manage` | 解锁 |
 | `POST` | `/users/{id}/reset-password` | `users.manage` | 管理员触发重置 |
+| `POST` | `/users/activation-slips` | `users.manage` + `admin`/`sysadmin` 角色 | 生成整个班级的可打印激活凭条，合为一份 PDF（见 `Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.4） |
 | `GET` | `/roles` | `roles.read` | 角色列表 |
 | `POST` | `/roles` | `roles.manage` | 创建角色 |
 | `PATCH` | `/roles/{id}` | `roles.manage` | 更新角色名称/会话超时/权限 |
@@ -800,6 +801,50 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
   重复将返回 `409`。
 - 二者遵循与其他 `PATCH` 字段相同的部分更新约定：省略/`null` 表示"不修改"，提供值表示"整体替换"。
 - 这些必填规则在请求校验阶段强制执行，而非 bean 级 `@NotBlank`，因为每条规则都依赖于 `roleCode`。
+
+**`POST /users/activation-slips`——激活凭条文档**
+（2026-09-17 新增，见 `Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.4）。
+这是学生拿到首个凭据的唯一途径：为一个班级中所有仍处于待激活状态的成员各生成一个
+一次性激活码，并把可打印的凭条合为**一份 PDF** 返回。
+
+```json
+{ "classId": "cls_...", "slipsPerPage": 1 }
+```
+
+- **响应体就是 PDF 本身**，不套用 §2.5 的 `data`/`meta` 信封——
+  `200 application/pdf`，带 `Content-Disposition: attachment` 与
+  `Cache-Control: no-store, private, max-age=0`。这与 `GET /files/{id}/content`
+  已有的例外一致。若失败发生在文档生成**之前**，仍返回常规错误信封，客户端通过
+  content type 区分两者。文档为流式返回且**从不落盘**——刻意不走 `/files` 管线，
+  该管线用于对*证据*做净化与水印处理，会让凭据在短时效 URL 背后获得第二次生命。
+- **使用 `POST` 而非 `GET`，尽管它下载的是文件。** 该调用会签发新的激活码，并作废
+  这些学生此前持有的激活码；若用 `GET`，预取、代理重试或浏览器后退都会静默作废
+  已经发到学生手里的凭条。
+- **`slipsPerPage` 是只含 `1` 与 `2` 的封闭枚举，默认为 `1`**（§2.8，D-8）——
+  而非带范围校验的整数。其他取值会在反序列化阶段失败，在签发任何激活码之前返回
+  `400 INVALID_REQUEST`。
+- **仅限管理员**（§2.10，D-9/D-10）：需要 `users.manage` **且**持有 `admin` 或
+  `sysadmin` 角色码。这是一次普通的角色检查，而非数据范围解析器——教师完全没有凭条
+  签发路径，连"仅限本班"的受限路径也没有，因此不存在可能出错的"本班"分支。其他任何人
+  一律 `403`。之所以比单纯的 `users.manage` 更窄，理由与 `PATCH /school/info` 比
+  `settings.manage` 更窄相同（见 §4.16）。
+- **已激活的学生会被跳过**（§2.7）：只为状态为 `PENDING_ACTIVATION` 或
+  `ACTIVATION_EXPIRED` 的账号签发，因此丢了五张凭条后的重新生成不会重置另外
+  二十五名本来一切正常的学生。若全班都已激活，返回 `409` 而非一份空 PDF；未知
+  `classId` 返回 `404`；名册中尚无账号的学生会被跳过，而不会导致整批失败。
+- **每张凭条都载有**学生姓名、用户名、二维码、按打印分组显示的激活码
+  （`HKTZ4-9QP2M`），以及一行出处信息——*由谁签发、何时签发、有效期截止*——
+  且**每张凭条各印一次，而不是每页一次**，因为整页纸是要被剪开的。
+- **二维码编码的是同一个激活码**，包装为 `<站点根地址>/activate?code=...`
+  （§2.5 所说的"一个秘密，两种投递形式"），与 §2.2 所述 `/activate` 路由一致。
+  站点的**根地址**同时以文本形式印在二维码旁（§2.9）：它是一个反钓鱼锚点，给孩子
+  一个可以与地址栏核对的东西，仅此一点就足以支撑印出它，与是否有人手动输入无关。
+  深链接绝不以文本形式印出。
+- **激活码明文只出现在 PDF 里，别无他处**——不进审计记录、不进日志、不进错误信息。
+  审计记录（`schoolClass` 上的 `user.issueCredentialSlips`）记载由谁为哪个班级签发、
+  签发了多少张，以及有多少学生被跳过。
+- 服务端需设置 `TIMEBANK_SITE_ROOT_URL`（`timebank.auth.activation.site-root-url`）；
+  未设置时启动即失败，因为取值错误会把学校并不拥有的域名印到发给学生的纸上。
 
 ### 4.16 学校信息
 
@@ -863,6 +908,7 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
 | 规则管理 | 否 | 只读 | 是 | 系统参数为主 |
 | 导入/导出 | 本人数据不单独导出 | 范围内 | 全校 | 系统级 |
 | 用户/角色管理 | 否 | 否 | 部分用户 | 是 |
+| 生成激活凭条 | 否 | 否 | 是 | 是 |
 | 审计日志 | 本人时间线 | 范围内业务日志 | 全校业务日志 | 全部 |
 
 权限矩阵用于默认设计，最终以学校职责分工配置为准。

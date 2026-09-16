@@ -761,6 +761,7 @@ Imports must validate before commit. Duplicate imports are prevented by source f
 | `PATCH` | `/users/{id}` | `users.manage` | Update user |
 | `POST` | `/users/{id}/unlock` | `users.manage` | Unlock |
 | `POST` | `/users/{id}/reset-password` | `users.manage` | Admin-triggered reset |
+| `POST` | `/users/activation-slips` | `users.manage` + `admin`/`sysadmin` role | Generate a class's printable activation slips as one PDF (`Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.4) |
 | `GET` | `/roles` | `roles.read` | Role list |
 | `POST` | `/roles` | `roles.manage` | Create role |
 | `PATCH` | `/roles/{id}` | `roles.manage` | Update role name/session timeout/permissions |
@@ -821,6 +822,61 @@ accounts and the UI shows no grade picker for them.
   field: omitted/`null` means "don't touch," present means "replace."
 - These required-ness rules are enforced at request-validation time, not
   bean-level `@NotBlank`, since each is conditional on `roleCode`.
+
+**`POST /users/activation-slips` — the credential slip document**
+(added 2026-09-17, `Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.4).
+The only way a student ever receives their first credential: it mints one
+single-use activation code per still-pending member of a class and returns the
+printable slips as **one PDF**.
+
+```json
+{ "classId": "cls_...", "slipsPerPage": 1 }
+```
+
+- **Response is the PDF itself**, not §2.5's `data`/`meta` envelope —
+  `200 application/pdf` with `Content-Disposition: attachment` and
+  `Cache-Control: no-store, private, max-age=0`. This is the same exception
+  already made for `GET /files/{id}/content`. A failure *before* the document
+  exists still returns a normal error envelope, so clients tell the two apart by
+  content type. The document is streamed and **never stored** — deliberately not
+  through the `/files` pipeline, which sanitizes and watermarks *evidence* and
+  would give a credential a second life behind a short-lived URL.
+- **`POST`, not `GET`, even though it downloads a file.** The call mints fresh
+  codes and retires whatever codes those students held before, so a prefetch, a
+  proxy retry or a back button on a `GET` would silently invalidate slips that
+  were already handed out.
+- **`slipsPerPage` is a closed enum of `1` or `2`, defaulting to `1`** (§2.8,
+  D-8) — not a validated integer range. Any other value fails deserialization
+  and returns `400 INVALID_REQUEST` before anything is issued.
+- **Admin only** (§2.10, D-9/D-10): `users.manage` *and* the `admin` or
+  `sysadmin` role code. A plain role check, not a data-scope resolver — teachers
+  get no slip path at all, not even a scoped one for their own class, so there
+  is no "own class" branch to get wrong. Anyone else gets `403`. Narrower than
+  `users.manage` alone for the same reason `PATCH /school/info` is narrower than
+  `settings.manage` (§4.16).
+- **Already-activated students are spared** (§2.7): only accounts in
+  `PENDING_ACTIVATION` or `ACTIVATION_EXPIRED` are issued for, so a regeneration
+  after five lost slips does not reset the twenty-five students who were fine.
+  A class where everyone has activated is `409`, not an empty PDF. An unknown
+  `classId` is `404`. A roster row with no account at all is skipped rather than
+  failing the batch.
+- **Each slip carries** the student's display name, their username, a QR, the
+  typed activation code in its printed grouping (`HKTZ4-9QP2M`), and a
+  provenance line — *issued by, at, valid before* — **on every slip, not once
+  per page**, because the sheet gets cut.
+- **The QR encodes the same code**, wrapped as `<site root>/activate?code=...`
+  (§2.5's "one secret, two delivery forms"), matching the `/activate` route
+  described in §2.2. The site's **root** URL is also printed as text beside it
+  (§2.9): it is a phishing anchor giving a child something to check the address
+  bar against, which justifies printing it regardless of whether anyone types
+  it. The deep link is never printed as text.
+- **The plaintext code appears in the PDF and nowhere else** — not in the audit
+  row, not in a log line, not in an error message. The audit row
+  (`user.issueCredentialSlips` on `schoolClass`) records who issued for which
+  class, how many slips, and how many students were spared.
+- The server needs `TIMEBANK_SITE_ROOT_URL` set (`timebank.auth.activation.site-root-url`);
+  it fails fast at startup without it, since a wrong value would print a domain
+  the school does not own onto paper handed to students.
 
 ### 4.16 School Info
 
@@ -884,6 +940,7 @@ Example response:
 | Rule management | No | Read-only | Yes | System parameters primarily |
 | Import/export | Own data not exported separately | Within scope | School-wide | System-level |
 | User/role management | No | No | Partial users | Yes |
+| Generate activation slips | No | No | Yes | Yes |
 | Audit logs | Own timeline | In-scope business logs | School-wide business logs | All |
 
 The permission matrix is for default design; final configuration is determined by school role assignments.

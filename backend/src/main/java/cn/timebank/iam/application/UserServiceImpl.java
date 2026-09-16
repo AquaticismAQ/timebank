@@ -380,6 +380,17 @@ class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<StudentAccount> studentAccountsOf(List<String> studentIds) {
+        if (studentIds.isEmpty()) {
+            return List.of();
+        }
+        return userRepository.findByStudentIdIn(studentIds).stream()
+                .map(u -> new StudentAccount(u.getStudentId(), u.getId(), u.getUsername(), u.getStatus().name()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<String, String> displayNamesOf(List<String> userIds) {
         return userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, User::getDisplayName));
