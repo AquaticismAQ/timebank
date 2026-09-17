@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Pencil, Trash2, Lock, Building2, KeyRound, Check, Tags } from 'lucide-react';
+import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Pencil, Trash2, Lock, Building2, KeyRound, Check, Tags, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
@@ -14,7 +14,7 @@ import { useDictionaries } from '../../api/useDictionaries';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { PasswordStrength } from '../shared/PasswordStrength';
 import { isAcceptable } from '../../lib/passwordPolicy';
-import { formatGradeClass, minutesToHours } from '../../lib/format';
+import { formatGradeClass, formatClassName, minutesToHours } from '../../lib/format';
 import { downloadBlob } from '../../lib/download';
 import { localDateTimeToISO } from '../../lib/datetime';
 import { STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
@@ -372,7 +372,32 @@ function SchoolInfoEditModal({ initial, onClose, onSaved }: SchoolInfoEditModalP
 }
 
 type Tab = 'users' | 'roles' | 'rules' | 'import' | 'logs' | 'categories' | 'organizations' | 'settings';
-type UserStatus = 'active' | 'inactive';
+/**
+ * The five real `UserStatus` values (backend `cn.timebank.iam.domain.UserStatus`),
+ * camelCased by `fromBackendEnum`. This used to be `'active' | 'inactive'` only,
+ * which was harmless while the list had no status filter and silently labelled a
+ * never-activated account "Inactive" — once you can *filter* by status (issue 094)
+ * that mislabelling becomes a result set that contradicts the filter that produced it.
+ */
+type UserStatus = 'active' | 'inactive' | 'locked' | 'pendingActivation' | 'activationExpired';
+
+const USER_STATUSES: UserStatus[] = ['active', 'inactive', 'locked', 'pendingActivation', 'activationExpired'];
+
+const USER_STATUS_LABEL_KEYS: Record<UserStatus, string> = {
+  active: 'admin.system.active',
+  inactive: 'admin.system.inactive',
+  locked: 'admin.system.statusLocked',
+  pendingActivation: 'admin.system.statusPendingActivation',
+  activationExpired: 'admin.system.statusActivationExpired',
+};
+
+const USER_STATUS_COLORS: Record<UserStatus, string> = {
+  active: 'green',
+  inactive: 'gray',
+  locked: 'red',
+  pendingActivation: 'yellow',
+  activationExpired: 'gray',
+};
 
 interface AdminUser {
   id: string;
@@ -382,9 +407,14 @@ interface AdminUser {
   status: UserStatus;
   lastLogin: string;
   version: number;
+  /** A **staff** account's grade bond — never a student's own grade (issue 094). Empty means school-wide. */
   scopeGradeIds: string[];
   studentId?: string;
   staffId?: string;
+  /** The linked **student's** own placement — undefined for every staff account. */
+  gradeLevel?: number;
+  classId?: string;
+  className?: string;
 }
 
 /**
@@ -403,6 +433,18 @@ const HIDDEN_ROLE_CODES = new Set(['sysadmin']);
  * free without any extra configuration.
  */
 const NO_GRADE_SCOPE_ROLES = new Set(['admin', 'student', 'sysadmin']);
+
+const STUDENT_ROLE_CODE = 'student';
+
+/** Issue 094: the Users tab's three sort options (05-SearchFilterSortConsistency.md §2.1 — one button per field). */
+type UserSortKey = 'name' | 'grade' | 'class';
+
+/** Sort keys are `UserDto` field names on the wire; `UserController.SORTABLE` rejects anything else with a 422. */
+const USER_SORT_WIRE_KEY: Record<UserSortKey, string> = {
+  name: 'displayName',
+  grade: 'gradeLevel',
+  class: 'className',
+};
 
 /** The three built-in, non-hidden roles keep their bilingual i18n labels; any custom role's `name` (as typed by whoever created it) is shown as-is — there's no per-locale name column to translate a custom role into. */
 const KNOWN_ROLE_LABEL_KEYS: Record<string, string> = {
@@ -824,6 +866,7 @@ export function SystemAdmin() {
   const [activeTab, setActiveTab] = useState<Tab>('users');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<RoleSummary[]>([]);
+  const { grades: allGrades, classes: allClasses } = useDictionaries();
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
   const rulesApi = usePagedApi<RuleVersion>(api.rules.list, { sort: '-createdAt', pageSize: 20 });
@@ -849,18 +892,137 @@ export function SystemAdmin() {
     loadRoles();
   }, []);
 
+  /**
+   * Issue 094: one page of users at a time, with search/filter/sort resolved
+   * server-side — the tab used to call `api.users.list()` with no arguments
+   * inside a `useEffect` and keep the entire account table in component state.
+   * `users` below is now just the current page, projected from `usersApi.items`
+   * into the shape the table and the edit modal already expect.
+   */
+  const usersApi = usePagedApi(api.users.list, { sort: 'displayName', pageSize: 20 });
+  const [userSearch, setUserSearch] = useState('');
+  const [filterRole, setFilterRole] = useState('all');
+  const [filterUserStatus, setFilterUserStatus] = useState('all');
+  const [filterUserGrade, setFilterUserGrade] = useState('all');
+  const [filterUserClass, setFilterUserClass] = useState('all');
+  const [userSortKey, setUserSortKey] = useState<UserSortKey>('name');
+  const [userSortDesc, setUserSortDesc] = useState(false);
+
   useEffect(() => {
-    api.users.list().then(result => {
-      setUsers(result.data.map(u => ({
-        id: u.id, name: u.displayName, email: u.email,
-        roleCode: u.roleCode,
-        status: (u.status as UserStatus) || 'active',
-        lastLogin: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : '—',
-        version: u.version, scopeGradeIds: u.scopeGradeIds,
-        studentId: u.studentId, staffId: u.staffId,
-      })));
-    }).catch(() => {});
-  }, []);
+    setUsers(usersApi.items.map(u => ({
+      id: u.id, name: u.displayName, email: u.email,
+      roleCode: u.roleCode,
+      status: (u.status as UserStatus) || 'active',
+      lastLogin: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : '—',
+      version: u.version, scopeGradeIds: u.scopeGradeIds,
+      studentId: u.studentId, staffId: u.staffId,
+      gradeLevel: u.gradeLevel, classId: u.classId, className: u.className,
+    })));
+  }, [usersApi.items]);
+
+  /**
+   * Class only narrows students — no other role has one — so the filter is
+   * offered only while the role filter is `student`, and class sorting is
+   * disabled outside that same condition. Both read from this one flag so
+   * they can never disagree.
+   */
+  const classFilterApplies = filterRole === STUDENT_ROLE_CODE;
+
+  const handleUserSearch = (value: string) => {
+    setUserSearch(value);
+    usersApi.setSearch(value);
+  };
+
+  const handleRoleFilter = (value: string) => {
+    setFilterRole(value);
+    usersApi.setFilter('role', value === 'all' ? undefined : value);
+    if (value !== STUDENT_ROLE_CODE) {
+      // Leaving the student role takes the class filter away with it; a class
+      // constraint that no visible control can clear would silently hide rows.
+      setFilterUserClass('all');
+      usersApi.setFilter('classId', undefined);
+      if (userSortKey === 'class') {
+        setUserSortKey('name');
+        setUserSortDesc(false);
+        usersApi.setSort('displayName');
+      }
+    }
+  };
+
+  const handleUserStatusFilter = (value: string) => {
+    setFilterUserStatus(value);
+    usersApi.setFilter('status', value === 'all' ? undefined : value);
+  };
+
+  const handleUserGradeFilter = (value: string) => {
+    setFilterUserGrade(value);
+    usersApi.setFilter('gradeId', value === 'all' ? undefined : value);
+    // A class belongs to exactly one grade (StudentList.tsx does the same) —
+    // a class picked under the previous grade is invalid once the grade changes.
+    setFilterUserClass('all');
+    usersApi.setFilter('classId', undefined);
+  };
+
+  const handleUserClassFilter = (value: string) => {
+    setFilterUserClass(value);
+    usersApi.setFilter('classId', value === 'all' ? undefined : value);
+  };
+
+  const handleUserSortClick = (key: UserSortKey) => {
+    if (key === 'class' && !classFilterApplies) return;
+    const nextDesc = userSortKey === key ? !userSortDesc : false;
+    setUserSortKey(key);
+    setUserSortDesc(nextDesc);
+    const wireKey = USER_SORT_WIRE_KEY[key];
+    usersApi.setSort(nextDesc ? `-${wireKey}` : wireKey);
+  };
+
+  // A scoped teacher's dropdown only offers the grades they're bonded to
+  // (issue 001/004, the same rule StudentList.tsx applies) — an admin, or a
+  // teacher with no bond yet, sees every grade.
+  const userGradeOptions = user && user.roles.includes('teacher') && !user.roles.includes('admin') && user.scopeGradeIds.length > 0
+    ? allGrades.filter(g => user.scopeGradeIds.includes(g.id))
+    : allGrades;
+  const userClassOptions = allClasses.filter(c =>
+    (filterUserGrade === 'all' ? userGradeOptions.some(g => g.id === c.gradeId) : c.gradeId === filterUserGrade));
+  const userFiltersActive = userSearch !== '' || filterRole !== 'all' || filterUserStatus !== 'all'
+    || filterUserGrade !== 'all' || filterUserClass !== 'all';
+
+  const clearUserFilters = () => {
+    setUserSearch('');
+    setFilterRole('all');
+    setFilterUserStatus('all');
+    setFilterUserGrade('all');
+    setFilterUserClass('all');
+    usersApi.setSearch('');
+    usersApi.setFilter('role', undefined);
+    usersApi.setFilter('status', undefined);
+    usersApi.setFilter('gradeId', undefined);
+    usersApi.setFilter('classId', undefined);
+  };
+
+  /**
+   * The Grade column means two different things and both are correct: a
+   * student's own grade, versus a staff account's *scope* — which is every
+   * grade when the account has no bond at all (admin/sysadmin, or a teacher
+   * nobody has bonded yet). Never fall back from one to the other.
+   */
+  const gradeCellFor = (u: AdminUser): string => {
+    if (u.roleCode === STUDENT_ROLE_CODE) {
+      return u.gradeLevel === undefined ? '—' : formatGradeClass(u.gradeLevel, '');
+    }
+    if (u.scopeGradeIds.length === 0) return t('common.all');
+    return u.scopeGradeIds
+      .map(id => allGrades.find(g => g.id === id))
+      .filter((g): g is NonNullable<typeof g> => g !== undefined)
+      .sort((a, b) => a.sequence - b.sequence)
+      .map(g => formatGradeClass(g.sequence, ''))
+      .join(', ');
+  };
+
+  /** Students only — a staff account has no class, and an empty cell would read as missing data rather than not-applicable. */
+  const classCellFor = (u: AdminUser): string =>
+    u.roleCode === STUDENT_ROLE_CODE && u.className ? formatClassName(u.className) : '—';
 
   const roleName = (code: string): string => {
     const role = roles.find(r => r.code === code);
@@ -920,7 +1082,7 @@ export function SystemAdmin() {
       const needsGradeScope = form.roleCode !== '' && !NO_GRADE_SCOPE_ROLES.has(form.roleCode);
       const isStudent = form.roleCode === 'student';
       const needsStaffId = form.roleCode !== '' && !isStudent;
-      const result = await api.users.create({
+      await api.users.create({
         username: form.email.split('@')[0],
         initialPassword: form.password,
         displayName: form.name.trim(),
@@ -930,13 +1092,11 @@ export function SystemAdmin() {
         studentId: isStudent ? form.studentId : undefined,
         staffId: needsStaffId ? form.staffId.trim() : undefined,
       });
-      setUsers(prev => [...prev, {
-        id: result.id, name: form.name.trim(), email: form.email.trim(),
-        roleCode: form.roleCode, status: 'active', lastLogin: '—', version: 1,
-        scopeGradeIds: needsGradeScope ? form.scopeGradeIds : [],
-        studentId: isStudent ? form.studentId : undefined,
-        staffId: needsStaffId ? form.staffId.trim() : undefined,
-      }]);
+      // Refetch rather than append: `users` is one server-sorted, server-filtered
+      // page now, and a locally appended row would sit at the bottom of it
+      // regardless of where the sort actually puts the new account — or be
+      // excluded by the active filter altogether.
+      usersApi.refetch();
       setCreateOpen(false);
       toast.success(t('admin.system.userCreated', { name: form.name.trim() }));
     } catch (err) {
@@ -971,13 +1131,9 @@ export function SystemAdmin() {
         downloadBlob(blob, filename);
         toast.success(t('admin.system.passwordReset'));
       }
-      setUsers(prev => prev.map(u => u.id === editTarget.id
-        ? { ...u, name: form.name.trim(), email: form.email.trim(), roleCode: form.roleCode, status: form.status, version: u.version + 1,
-            scopeGradeIds: needsGradeScope ? form.scopeGradeIds : [],
-            studentId: isStudent ? form.studentId : undefined,
-            staffId: needsStaffId ? form.staffId.trim() : undefined }
-        : u
-      ));
+      // Same reason as handleCreate: a role change can move the row across the
+      // active filter, and grade/class come from the server's join, not this form.
+      usersApi.refetch();
       setEditTarget(null);
       toast.success(t('admin.system.userUpdated'));
     } catch (err) {
@@ -993,7 +1149,7 @@ export function SystemAdmin() {
     setSaving(true);
     try {
       await api.users.update(editTarget.id, { status: 'inactive', version: editTarget.version });
-      setUsers(prev => prev.map(u => u.id === editTarget.id ? { ...u, status: 'inactive' as UserStatus, version: u.version + 1 } : u));
+      usersApi.refetch();
       setEditTarget(null);
       toast.success(t('admin.system.userDeleted', { name: editTarget.name }));
     } catch (err) {
@@ -1136,7 +1292,9 @@ export function SystemAdmin() {
       {activeTab === 'users' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">{t('admin.system.userCount', { count: users.length })}</p>
+            <p className="text-xs text-muted-foreground">
+              {t('admin.system.userCount', { count: usersApi.page?.totalItems ?? users.length })}
+            </p>
             {canManageUsers && (
             <button onClick={() => setCreateOpen(true)}
               className="flex items-center gap-1.5 px-4 py-2 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90 transition-opacity">
@@ -1145,12 +1303,79 @@ export function SystemAdmin() {
             )}
           </div>
 
+          {/* Search & filters — 05-SearchFilterSortConsistency.md §2.4: search alone below lg:,
+              filters as an Nx1 grid alongside it, merged into one row at lg: and up. N is 4 only
+              while the class filter is offered (role = student), 3 otherwise. */}
+          <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
+            <div className="relative lg:flex-1 lg:min-w-40">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input type="text" value={userSearch} onChange={e => handleUserSearch(e.target.value)}
+                placeholder={t('admin.system.searchPlaceholder')}
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+            </div>
+            <div className={`grid ${classFilterApplies ? 'grid-cols-4' : 'grid-cols-3'} gap-2 lg:contents`}>
+              <select value={filterRole} onChange={e => handleRoleFilter(e.target.value)}
+                className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+                <option value="all">{t('admin.system.allRoles')}</option>
+                {roles.map(r => <option key={r.code} value={r.code}>{roleDisplayName(r, t)}</option>)}
+              </select>
+              <select value={filterUserStatus} onChange={e => handleUserStatusFilter(e.target.value)}
+                className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+                <option value="all">{t('admin.system.allStatuses')}</option>
+                {USER_STATUSES.map(s => <option key={s} value={s}>{t(USER_STATUS_LABEL_KEYS[s])}</option>)}
+              </select>
+              <select value={filterUserGrade} onChange={e => handleUserGradeFilter(e.target.value)}
+                className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+                <option value="all">{t('admin.system.allGrades')}</option>
+                {userGradeOptions.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+              {/* Only students have a class, so this control exists only while the role filter is `student`. */}
+              {classFilterApplies && (
+                <select value={filterUserClass} onChange={e => handleUserClassFilter(e.target.value)}
+                  className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+                  <option value="all">{t('admin.system.allClasses')}</option>
+                  {userClassOptions.map(c => <option key={c.id} value={c.id}>{formatClassName(c.name)}</option>)}
+                </select>
+              )}
+            </div>
+          </div>
+
+          {/* Sort controls: one button per field (§2.1), always an Nx1 grid (§2.5). Class sorting is
+              disabled outside the student role for the same reason the class filter is hidden there. */}
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { key: 'name', label: t('admin.system.sortName') },
+              { key: 'grade', label: t('admin.system.sortGrade') },
+              { key: 'class', label: t('admin.system.sortClass') },
+            ] as { key: UserSortKey; label: string }[]).map(({ key, label }) => {
+              const disabled = key === 'class' && !classFilterApplies;
+              return (
+                <button key={key} onClick={() => handleUserSortClick(key)} disabled={disabled}
+                  title={disabled ? t('admin.system.sortClassRequiresStudent') : undefined}
+                  className={`px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors ${
+                    disabled ? 'bg-muted text-muted-foreground/50 cursor-not-allowed'
+                      : userSortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
+                      : 'bg-muted text-muted-foreground hover:bg-accent'
+                  }`}>
+                  {label}
+                  {!disabled && userSortKey === key && (userSortDesc ? ' ↓' : ' ↑')}
+                </button>
+              );
+            })}
+          </div>
+
+          <ListStateBanner error={usersApi.error} empty={!usersApi.loading && users.length === 0}
+            emptyLabel={t('admin.system.noUsers')} hasActiveFilters={userFiltersActive}
+            onClearFilters={clearUserFilters} />
+
           {/* Desktop table */}
           <div className="hidden sm:block bg-card border border-border rounded-2xl overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  {[t('admin.system.colName'), t('admin.system.colEmail'), t('admin.system.colRoles'), t('admin.system.colStatus'), t('admin.system.colLastLogin'), t('admin.system.colActions')].map(h => (
+                  {[t('admin.system.colName'), t('admin.system.colEmail'), t('admin.system.colRoles'),
+                    t('admin.system.colGrade'), t('admin.system.colClass'),
+                    t('admin.system.colStatus'), t('admin.system.colLastLogin'), t('admin.system.colActions')].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs text-muted-foreground font-medium">{h}</th>
                   ))}
                 </tr>
@@ -1163,9 +1388,11 @@ export function SystemAdmin() {
                     <td className="px-4 py-3">
                       <span className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(u.roleCode)}`}>{roleName(u.roleCode)}</span>
                     </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{gradeCellFor(u)}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{classCellFor(u)}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[u.status === 'active' ? 'green' : 'gray']}`}>
-                        {u.status === 'active' ? t('admin.system.active') : t('admin.system.inactive')}
+                      <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[USER_STATUS_COLORS[u.status] ?? 'gray']}`}>
+                        {t(USER_STATUS_LABEL_KEYS[u.status] ?? 'admin.system.inactive')}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{u.lastLogin}</td>
@@ -1180,6 +1407,10 @@ export function SystemAdmin() {
                 ))}
               </tbody>
             </table>
+            <div className="px-4 pb-4">
+              <PageControls page={usersApi.page} onPageChange={usersApi.setPage}
+                pageSize={usersApi.params.pageSize ?? 20} onPageSizeChange={usersApi.setPageSize} />
+            </div>
           </div>
 
           {/* Mobile cards */}
@@ -1188,14 +1419,19 @@ export function SystemAdmin() {
               <div key={u.id} className="bg-card border border-border rounded-2xl p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-sm text-foreground font-medium">{u.name}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[u.status === 'active' ? 'green' : 'gray']}`}>
-                        {u.status === 'active' ? t('admin.system.active') : t('admin.system.inactive')}
+                      <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[USER_STATUS_COLORS[u.status] ?? 'gray']}`}>
+                        {t(USER_STATUS_LABEL_KEYS[u.status] ?? 'admin.system.inactive')}
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground mb-2">{u.email}</div>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(u.roleCode)}`}>{roleName(u.roleCode)}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(u.roleCode)}`}>{roleName(u.roleCode)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {gradeCellFor(u)}{classCellFor(u) !== '—' ? ` · ${classCellFor(u)}` : ''}
+                      </span>
+                    </div>
                   </div>
                   {canManageUsers && (
                   <button onClick={() => setEditTarget(u)} className={`${ACTION_BTN_BLUE} shrink-0`}>
@@ -1205,6 +1441,8 @@ export function SystemAdmin() {
                 </div>
               </div>
             ))}
+            <PageControls page={usersApi.page} onPageChange={usersApi.setPage}
+              pageSize={usersApi.params.pageSize ?? 20} onPageSizeChange={usersApi.setPageSize} />
           </div>
         </div>
       )}

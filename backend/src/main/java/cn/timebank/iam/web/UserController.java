@@ -10,6 +10,7 @@ import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.iam.application.dto.UpdateUserRequest;
 import cn.timebank.iam.application.dto.UserDirectoryEntryDto;
 import cn.timebank.iam.application.dto.UserDto;
+import cn.timebank.iam.application.dto.UserListFilter;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.SessionRevocationService;
 import cn.timebank.security.application.TeacherScopeAssignmentService;
@@ -40,7 +41,14 @@ import java.util.Set;
 @RequestMapping("/api/v1/users")
 public class UserController {
 
-    private static final Set<String> SORTABLE = Set.of("id", "username", "displayName", "createdAt");
+    /**
+     * {@code gradeLevel}/{@code className} added by issue 094 — both resolve
+     * against the linked student's row inside {@code UserListQueryRepository},
+     * whose {@code SORT_COLUMNS} must stay key-for-key identical to this set
+     * (an entry here with no column there throws rather than sorting wrongly).
+     */
+    public static final Set<String> SORTABLE =
+            Set.of("id", "username", "displayName", "createdAt", "gradeLevel", "className");
     private static final String STUDENT_ROLE = "student";
     /**
      * 07-RoleFinetune.md §2.6.2: grade assignment is required for every role
@@ -63,11 +71,20 @@ public class UserController {
         this.teacherScopeAssignmentService = teacherScopeAssignmentService;
     }
 
+    /**
+     * Issue 094: {@code search} plus {@code filter[role]}, {@code
+     * filter[status]}, {@code filter[gradeId]} and {@code filter[classId]},
+     * mirroring what {@code GET /students} has accepted since B2. The two
+     * placement filters match on the <em>linked student's</em> grade/class, so
+     * they never return a staff account — see {@code UserListFilter}.
+     */
     @GetMapping
     @PreAuthorize("hasAuthority('users.read')")
     public ApiResponse<List<UserDto>> list(PageQuery query) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
-        Page<UserDto> page = userService.list(pageable).map(this::withScopeGradeIds);
+        UserListFilter filter = new UserListFilter(query.search(), query.filter("role"), query.filter("status"),
+                query.filter("gradeId"), query.filter("classId"));
+        Page<UserDto> page = userService.list(pageable, filter).map(this::withScopeGradeIds);
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

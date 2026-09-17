@@ -16,6 +16,7 @@ import cn.timebank.iam.domain.User;
 import cn.timebank.iam.domain.UserStatus;
 import cn.timebank.iam.infrastructure.ActivationCodeRepository;
 import cn.timebank.iam.infrastructure.RoleRepository;
+import cn.timebank.iam.infrastructure.UserListQueryRepository;
 import cn.timebank.iam.infrastructure.UserRepository;
 import cn.timebank.organization.application.FeatureFlagService;
 import cn.timebank.student.application.AcademicStructureService;
@@ -173,7 +174,7 @@ class AdminCredentialResetTest {
             return 1;
         });
 
-        userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, auditService,
+        userService = new UserServiceImpl(userRepository, mock(UserListQueryRepository.class), roleRepository, passwordEncoder, auditService,
                 mock(FeatureFlagService.class), mock(StudentService.class),
                 new StudentUsernameGenerator(userRepository, () -> 10000001), 5, 15, 480);
         activationService = new ActivationServiceImpl(codeRepository, userRepository, passwordEncoder,

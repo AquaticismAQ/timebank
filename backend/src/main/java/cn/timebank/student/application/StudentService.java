@@ -84,4 +84,24 @@ public interface StudentService {
      * detect ids that don't correspond to a real student.
      */
     Map<String, String> displayNamesOf(List<String> studentIds);
+
+    /**
+     * Issue 094: batch studentId -> grade/class placement, for callers that
+     * hold a student id and need to show where that student sits without
+     * reaching into {@code student.domain} (Design.md §6). {@code
+     * UserServiceImpl} uses it to fill {@code UserDto}'s grade/class on the
+     * single-user paths ({@code GET /users/{id}}, create, update); the
+     * {@code GET /users} list gets the same three columns from a read-model
+     * join instead, because sorting a page by grade or class has to happen
+     * in SQL.
+     *
+     * <p>Ids absent from the result are silently omitted, the same
+     * convention {@link #displayNamesOf} uses — a staff account's {@code
+     * studentId} is null, and a null id simply has no entry.</p>
+     */
+    Map<String, StudentPlacement> placementsOf(List<String> studentIds);
+
+    /** {@code gradeLevel} is the grade's {@code sequence} (6..11), never a parsed id. */
+    record StudentPlacement(String studentId, String gradeId, int gradeLevel, String classId, String className) {
+    }
 }

@@ -7,6 +7,7 @@ import cn.timebank.iam.domain.Role;
 import cn.timebank.iam.domain.User;
 import cn.timebank.iam.domain.UserStatus;
 import cn.timebank.iam.infrastructure.RoleRepository;
+import cn.timebank.iam.infrastructure.UserListQueryRepository;
 import cn.timebank.iam.infrastructure.UserRepository;
 import cn.timebank.organization.application.FeatureFlagService;
 import cn.timebank.security.application.CookieSessionUserDetails;
@@ -57,7 +58,7 @@ class PendingStudentAccountTest {
         Role studentRole = new Role("role_student", "student", "Student", 720, Instant.now());
         when(roleRepository.findByCodeAndIsTemplateFalse("student")).thenReturn(Optional.of(studentRole));
         StudentUsernameGenerator generator = new StudentUsernameGenerator(userRepository, () -> drawnUsername);
-        return new UserServiceImpl(userRepository, roleRepository, passwordEncoder, auditService,
+        return new UserServiceImpl(userRepository, mock(UserListQueryRepository.class), roleRepository, passwordEncoder, auditService,
                 mock(FeatureFlagService.class), mock(StudentService.class), generator,
                 5, 15, 480);
     }

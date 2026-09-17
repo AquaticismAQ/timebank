@@ -764,7 +764,7 @@ queued → running → succeeded
 
 | Method | Path | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/users` | `users.read` | 用户列表 |
+| `GET` | `/users` | `users.read` | 用户列表——支持 `search`（按姓名）、`filter[role]`、`filter[status]`、`filter[gradeId]`、`filter[classId]`，以及按 `displayName`/`gradeLevel`/`className`/`username`/`createdAt` 的 `sort`（2026-09-17 新增，issue 094；此前该端点仅支持分页） |
 | `POST` | `/users` | `users.manage` | 创建用户 |
 | `PATCH` | `/users/{id}` | `users.manage` | 更新用户 |
 | `POST` | `/users/{id}/unlock` | `users.manage` | 解锁 |
@@ -802,6 +802,25 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
 改为非 `teacher`，该绑定会自动清空。`admin`/`sysadmin` 角色不需要此字段——其全量数据访问是权限层面
 的绕过（`hasFullDataScope()`，授予所有非 `student` 角色），而非数据范围记录，因此非 `teacher`
 账号的 `scopeGradeIds` 始终为空，界面上也不展示年级选择器。
+
+**`scopeGradeIds` 不是年级**（2026-09-17 新增，issue 094）。`GET /users`、
+`POST /users`、`PATCH /users/{id}` 另外携带 `gradeId: string | null`、
+`gradeLevel: number | null`、`classId: string | null` 与
+`className: string | null`——这是**所关联学生本人的编班信息**，取自 `studentId`
+指向的 `Student` 记录（见 §4.9）。两组字段回答的是不同的问题，任何一方都不能充当
+另一方的兜底：
+
+- `student` 角色账号携带这四个字段，且 `scopeGradeIds` 为空。
+- 所有教职工账号这四个字段均为 `null`，其年级覆盖范围由 `scopeGradeIds` 表达——
+  为空即表示覆盖全校。
+
+`filter[gradeId]`/`filter[classId]` 按学生编班信息匹配，因此永远不会返回教职工账号；
+`filter[role]` 匹配账号唯一的 `roleCode`，`filter[status]` 匹配 `UserStatus` 名称
+（`ACTIVE`、`INACTIVE`、`LOCKED`、`PENDING_ACTIVATION`、`ACTIVATION_EXPIRED`）——
+无法识别的取值返回空页而非报错，与 §2.7 在其他端点上的一贯约定一致。
+`sort=gradeLevel` 按年级的 sequence（6…11）排序，而非按 `gradeId`——后者会把
+`grade_10` 排在 `grade_6` 之前；没有年级的账号按 SQL `NULL` 排序（升序在前、降序在后）。
+`search` 仅匹配 `displayName`，不匹配用户名或邮箱。
 
 `POST /users`、`PATCH /users/{id}` 还携带 `studentId: string | null` 与
 `staffId: string | null`（2026-08-10 新增，issue 003），并在 `GET /users` 及
