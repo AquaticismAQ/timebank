@@ -1102,15 +1102,30 @@ export const api = {
      * was swallowed by a stray `.catch(() => {})`, leaving SystemAdmin.tsx
      * stuck on its hardcoded mock fallback. Confirm live in Phase 6.
      */
-    async list(params?: ListParams): Promise<PageResult<{ id: string; username: string; displayName: string; email: string; roleCode: string; status: string; lastLoginAt?: string; version: number; scopeGradeIds: string[]; studentId?: string; staffId?: string }>> {
-      type UserDtoWire = { id: string; username: string; displayName: string; email: string; roleCode: string; status: string; lastLoginAt?: string; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string };
-      const page = await http.getPage<UserDtoWire>('/users', buildListQuery(params));
+    /**
+     * Issue 094: `search` (display name) and `filter[role]`/`filter[status]`/
+     * `filter[gradeId]`/`filter[classId]` are all server-side now, as is
+     * sorting by `displayName`/`gradeLevel`/`className`. Nothing here filters
+     * client-side — the caller pages this endpoint like every other admin list.
+     *
+     * `gradeLevel`/`classId`/`className` are the linked **student's** own
+     * placement and are null for every staff account; `scopeGradeIds` is a
+     * staff account's grade bond and is empty for a student. They answer
+     * different questions and neither substitutes for the other.
+     */
+    async list(params?: ListParams): Promise<PageResult<{ id: string; username: string; displayName: string; email: string; roleCode: string; status: string; lastLoginAt?: string; version: number; scopeGradeIds: string[]; studentId?: string; staffId?: string; gradeId?: string; gradeLevel?: number; classId?: string; className?: string }>> {
+      type UserDtoWire = { id: string; username: string; displayName: string; email: string; roleCode: string; status: string; lastLoginAt?: string; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string; gradeId?: string | null; gradeLevel?: number | null; classId?: string | null; className?: string | null };
+      const filter = { ...params?.filter };
+      if (filter.status) filter.status = toBackendEnum(filter.status);
+      const page = await http.getPage<UserDtoWire>('/users', buildListQuery({ ...params, filter }));
       return {
         data: page.data.map(u => ({
           id: u.id, username: u.username, displayName: u.displayName, email: u.email,
           roleCode: u.roleCode, status: fromBackendEnum(u.status),
           lastLoginAt: u.lastLoginAt, version: u.version, scopeGradeIds: u.scopeGradeIds ?? [],
           studentId: u.studentId, staffId: u.staffId,
+          gradeId: u.gradeId ?? undefined, gradeLevel: u.gradeLevel ?? undefined,
+          classId: u.classId ?? undefined, className: u.className ?? undefined,
         })),
         page: page.page,
       };

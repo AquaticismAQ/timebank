@@ -772,7 +772,7 @@ Imports must validate before commit. Duplicate imports are prevented by source f
 
 | Method | Path | Permission | Description |
 | --- | --- | --- | --- |
-| `GET` | `/users` | `users.read` | User list |
+| `GET` | `/users` | `users.read` | User list — `search` (display name), `filter[role]`, `filter[status]`, `filter[gradeId]`, `filter[classId]`, and `sort` by `displayName`/`gradeLevel`/`className`/`username`/`createdAt` (added 2026-09-17, issue 094; the endpoint previously accepted paging only) |
 | `POST` | `/users` | `users.manage` | Create user |
 | `PATCH` | `/users/{id}` | `users.manage` | Update user |
 | `POST` | `/users/{id}/unlock` | `users.manage` | Unlock |
@@ -817,6 +817,27 @@ Not required for `admin`/`sysadmin` — their unrestricted data-scope access is
 a permission-level bypass (`hasFullDataScope()`, granted to every non-`student`
 role), not scope data, so `scopeGradeIds` is always empty for non-`teacher`
 accounts and the UI shows no grade picker for them.
+
+**`scopeGradeIds` is not a grade** (added 2026-09-17, issue 094). `GET /users`,
+`POST /users` and `PATCH /users/{id}` also carry `gradeId: string | null`,
+`gradeLevel: number | null`, `classId: string | null` and
+`className: string | null` — the **linked student's own placement**, read from
+the `Student` row `studentId` points at (§4.9). The two sets of fields answer
+different questions and neither is a fallback for the other:
+
+- A `student`-role account carries all four, and an empty `scopeGradeIds`.
+- Every staff account carries all four as `null`, and expresses its grade reach
+  through `scopeGradeIds` instead — empty meaning school-wide.
+
+`filter[gradeId]`/`filter[classId]` match on the student placement, so they
+never return a staff account; `filter[role]` matches the account's single
+`roleCode`, and `filter[status]` a `UserStatus` name (`ACTIVE`, `INACTIVE`,
+`LOCKED`, `PENDING_ACTIVATION`, `ACTIVATION_EXPIRED`) — an unrecognized value
+yields an empty page rather than an error, matching §2.7's convention
+everywhere else. `sort=gradeLevel` orders by the grade's sequence (6…11), not
+by `gradeId`, which would sort `grade_10` ahead of `grade_6`; accounts with no
+grade sort as SQL `NULL` (first ascending, last descending). `search` matches
+`displayName` only — not username or email.
 
 `POST /users` / `PATCH /users/{id}` also carry `studentId: string | null` and
 `staffId: string | null` (added 2026-08-10, issue 003), both surfaced back in

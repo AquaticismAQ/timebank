@@ -7,6 +7,7 @@ import cn.timebank.iam.application.dto.UpdateProfileRequest;
 import cn.timebank.iam.application.dto.UpdateUserRequest;
 import cn.timebank.iam.application.dto.UserDirectoryEntryDto;
 import cn.timebank.iam.application.dto.UserDto;
+import cn.timebank.iam.application.dto.UserListFilter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -21,7 +22,15 @@ public interface UserService {
 
     UserDto getById(String id);
 
-    Page<UserDto> list(Pageable pageable);
+    /**
+     * Issue 094. {@code filter} narrows by display name, role code, account
+     * status, and the linked student's grade/class; {@code pageable}'s sort
+     * is restricted to {@code UserController.SORTABLE}, which includes
+     * {@code gradeLevel} and {@code className}. Every row carries the
+     * student's own grade/class placement (null for staff) — never the
+     * account's {@code scopeGradeIds}, which the web layer adds separately.
+     */
+    Page<UserDto> list(Pageable pageable, UserListFilter filter);
 
     UserDto create(CreateUserRequest request, String actorId);
 

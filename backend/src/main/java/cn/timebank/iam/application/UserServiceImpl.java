@@ -12,17 +12,20 @@ import cn.timebank.iam.application.dto.UpdateProfileRequest;
 import cn.timebank.iam.application.dto.UpdateUserRequest;
 import cn.timebank.iam.application.dto.UserDirectoryEntryDto;
 import cn.timebank.iam.application.dto.UserDto;
+import cn.timebank.iam.application.dto.UserListFilter;
 import cn.timebank.iam.domain.PasswordPolicy;
 import cn.timebank.iam.domain.Role;
 import cn.timebank.iam.domain.User;
 import cn.timebank.iam.domain.UserStatus;
 import cn.timebank.iam.infrastructure.RoleRepository;
+import cn.timebank.iam.infrastructure.UserListQueryRepository;
 import cn.timebank.iam.infrastructure.UserRepository;
 import cn.timebank.organization.application.FeatureFlagService;
 import cn.timebank.organization.application.dto.FeatureFlagsDto;
 import cn.timebank.student.application.StudentService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -53,6 +56,7 @@ import java.util.stream.Collectors;
 class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final UserListQueryRepository userListQueryRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
@@ -67,7 +71,8 @@ class UserServiceImpl implements UserService {
     private final int lockoutDurationMinutes;
     private final int defaultSessionTimeoutMinutes;
 
-    UserServiceImpl(UserRepository userRepository, RoleRepository roleRepository,
+    UserServiceImpl(UserRepository userRepository, UserListQueryRepository userListQueryRepository,
+                     RoleRepository roleRepository,
                      PasswordEncoder passwordEncoder, AuditService auditService, FeatureFlagService featureFlagService,
                      StudentService studentService, StudentUsernameGenerator studentUsernameGenerator,
                      @Value("${timebank.auth.lockout.max-failed-attempts:5}") int maxFailedAttempts,
@@ -75,6 +80,7 @@ class UserServiceImpl implements UserService {
                      @Value("${timebank.auth.session.default-timeout-minutes:480}") int defaultSessionTimeoutMinutes) {
         this.featureFlagService = featureFlagService;
         this.userRepository = userRepository;
+        this.userListQueryRepository = userListQueryRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditService = auditService;
@@ -97,10 +103,20 @@ class UserServiceImpl implements UserService {
         return toDto(findOrThrow(id));
     }
 
+    /**
+     * Issue 094. Delegates to the read-model query rather than {@code
+     * userRepository.findAll} because the list is filterable and sortable by
+     * the linked student's grade and class, which live in another module's
+     * table — see {@link UserListQueryRepository}'s class Javadoc. The rows it
+     * returns already carry grade/class, so no {@link #withPlacement}
+     * enrichment is needed (and no per-row student lookup happens).
+     */
     @Override
     @Transactional(readOnly = true)
-    public Page<UserDto> list(Pageable pageable) {
-        return userRepository.findAll(pageable).map(this::toDto);
+    public Page<UserDto> list(Pageable pageable, UserListFilter filter) {
+        UserListFilter effective = filter != null ? filter : UserListFilter.NONE;
+        List<UserDto> rows = userListQueryRepository.queryPage(effective, pageable);
+        return new PageImpl<>(rows, pageable, userListQueryRepository.countMatching(effective));
     }
 
     @Override
@@ -473,11 +489,38 @@ class UserServiceImpl implements UserService {
 
     // scopeGradeIds is always empty here — this module can't reach security.application
     // (see UserDto.withScopeGradeIds); the web layer fills it in.
+    //
+    // Grade/class are a different story and are filled in right here: `student`
+    // has no dependency on `iam` in any layer, so calling StudentService from
+    // this module adds no cycle — this class already holds one for
+    // requireUnlinkedStudent.
     private UserDto toDto(User user) {
         String roleCode = soleRoleCodeOf(user);
-        return new UserDto(user.getId(), user.getUsername(), user.getDisplayName(), user.getEmail(),
+        UserDto dto = new UserDto(user.getId(), user.getUsername(), user.getDisplayName(), user.getEmail(),
                 user.getStudentId(), user.getStaffId(), user.getStatus().name(), user.getPreferredLanguage(), roleCode,
-                user.getVersion(), user.getCreatedAt(), user.getUpdatedAt(), Set.of());
+                user.getVersion(), user.getCreatedAt(), user.getUpdatedAt(), Set.of(),
+                null, null, null, null);
+        return withPlacement(dto, user.getStudentId());
+    }
+
+    /**
+     * Issue 094: a student-role account shows the grade/class of the student
+     * it is linked to. A staff account has no {@code studentId} and keeps all
+     * four fields null — its grade bond is {@code scopeGradeIds}, a different
+     * field with a different meaning (see {@code UserDto}).
+     */
+    private UserDto withPlacement(UserDto dto, String studentId) {
+        if (studentId == null || studentId.isBlank()) {
+            return dto;
+        }
+        StudentService.StudentPlacement placement = studentService.placementsOf(List.of(studentId)).get(studentId);
+        if (placement == null) {
+            return dto;
+        }
+        return new UserDto(dto.id(), dto.username(), dto.displayName(), dto.email(), dto.studentId(), dto.staffId(),
+                dto.status(), dto.preferredLanguage(), dto.roleCode(), dto.version(), dto.createdAt(), dto.updatedAt(),
+                dto.scopeGradeIds(), placement.gradeId(), placement.gradeLevel(), placement.classId(),
+                placement.className());
     }
 
     /** 07-RoleFinetune.md §2.5: every user holds exactly one role — {@code null} only for a not-yet-migrated account. */

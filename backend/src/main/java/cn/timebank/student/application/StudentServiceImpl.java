@@ -230,6 +230,25 @@ class StudentServiceImpl implements StudentService {
                 .collect(Collectors.toMap(Student::getId, Student::getDisplayName));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, StudentPlacement> placementsOf(List<String> studentIds) {
+        List<String> ids = studentIds.stream().filter(java.util.Objects::nonNull).toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        List<Student> students = studentRepository.findAllById(ids);
+        if (students.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Grade> grades = gradeRepository.findAll().stream()
+                .collect(Collectors.toMap(Grade::getId, Function.identity()));
+        Map<String, SchoolClass> classes = classRepository.findAll().stream()
+                .collect(Collectors.toMap(SchoolClass::getId, Function.identity()));
+        return students.stream().collect(Collectors.toMap(Student::getId, s -> new StudentPlacement(
+                s.getId(), s.getGradeId(), gradeLevelOf(s, grades), s.getClassId(), classNameOf(s, classes))));
+    }
+
     private int gradeLevelOf(Student s, Map<String, Grade> grades) {
         Grade grade = grades.get(s.getGradeId());
         return grade != null ? grade.getSequence() : 0;
