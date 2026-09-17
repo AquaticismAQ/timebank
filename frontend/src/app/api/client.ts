@@ -959,15 +959,24 @@ export const api = {
     // I1.6: composes the real report endpoints in parallel (contract §4.13)
     // — field names/units differ from ReportData's shape (gradeName not
     // grade, totalMinutes not totalHours), mapped here.
-    async data(): Promise<ReportData> {
+    /**
+     * `academicYearId` is optional and goes to every one of the four
+     * endpoints (issue 093 §1). Omitting it is not "all years": the server
+     * scopes to the academic year currently marked current. An id no
+     * academic year has is a 404, so a bad selection surfaces instead of
+     * quietly returning a different year's numbers.
+     */
+    async data(academicYearId?: string): Promise<ReportData> {
+      const query = { academicYearId };
       const [participation, completion, serviceHours, topProjects] = await Promise.all([
-        http.get<{ generatedAt: string; byGrade: { gradeName: string; totalStudents: number; participatedStudents: number; participationRate: number }[] }>('/reports/participation'),
-        http.get<{ byGrade: { gradeName: string; totalStudents: number; completedStudents: number; completionRate: number }[] }>('/reports/completion'),
-        http.get<{ byMonth: { month: string; hours: number }[] }>('/reports/service-hours'),
-        http.get<{ topProjects: { title: string; participants: number; totalMinutes: number }[] }>('/reports/top-projects'),
+        http.get<{ generatedAt: string; academicYearId: string; byGrade: { gradeName: string; totalStudents: number; participatedStudents: number; participationRate: number }[] }>('/reports/participation', query),
+        http.get<{ byGrade: { gradeName: string; totalStudents: number; completedStudents: number; completionRate: number }[] }>('/reports/completion', query),
+        http.get<{ byMonth: { month: string; hours: number }[] }>('/reports/service-hours', query),
+        http.get<{ topProjects: { title: string; participants: number; totalMinutes: number }[] }>('/reports/top-projects', query),
       ]);
       return {
         generatedAt: participation.generatedAt,
+        academicYearId: participation.academicYearId,
         participationByGrade: participation.byGrade.map(g => ({ grade: g.gradeName, total: g.totalStudents, participated: g.participatedStudents, rate: g.participationRate })),
         completionByGrade: completion.byGrade.map(g => ({ grade: g.gradeName, total: g.totalStudents, completed: g.completedStudents, rate: g.completionRate })),
         serviceHoursByMonth: serviceHours.byMonth,

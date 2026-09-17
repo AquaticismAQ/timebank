@@ -1359,8 +1359,6 @@
     "reports": {
       "title": "Reports",
       "dataUpdate": "Data updated: 2026-07-27 08:00",
-      "yearFilter": "2025-2026 Academic Year",
-      "yearFilterAlt": "2024-2025 Academic Year",
       "export": "Export",
       "exportToast": "Report export task created; you will be notified when ready for download",
       "totalHours": "Total Service Hours",

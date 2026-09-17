@@ -520,6 +520,8 @@ export interface ReportData {
   /** When the server computed these figures. The page used to print a fixed
    *  date instead (issue 093), which was wrong the moment it shipped. */
   generatedAt: string;
+  /** The academic year the server actually scoped these figures to — echoed back so the page never has to assume its own selection was honoured (issue 093 §1). */
+  academicYearId: string;
   participationByGrade: { grade: string; total: number; participated: number; rate: number }[];
   completionByGrade: { grade: string; total: number; completed: number; rate: number }[];
   serviceHoursByMonth: { month: string; hours: number }[];

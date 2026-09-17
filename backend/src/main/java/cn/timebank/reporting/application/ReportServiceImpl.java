@@ -16,6 +16,9 @@ import cn.timebank.student.application.dto.GradeDto;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,22 +31,22 @@ class ReportServiceImpl implements ReportService {
     private final AcademicStructureService academicStructureService;
     private final RuleResolutionService ruleResolutionService;
     private final UserService userService;
-    private final CurrentAcademicYearResolver currentAcademicYearResolver;
+    private final ReportAcademicYearResolver academicYearResolver;
 
     ReportServiceImpl(ReportQueryRepository queryRepository, SummaryRepository summaryRepository,
                        AcademicStructureService academicStructureService, RuleResolutionService ruleResolutionService,
-                       UserService userService, CurrentAcademicYearResolver currentAcademicYearResolver) {
+                       UserService userService, ReportAcademicYearResolver academicYearResolver) {
         this.queryRepository = queryRepository;
         this.summaryRepository = summaryRepository;
         this.academicStructureService = academicStructureService;
         this.ruleResolutionService = ruleResolutionService;
         this.userService = userService;
-        this.currentAcademicYearResolver = currentAcademicYearResolver;
+        this.academicYearResolver = academicYearResolver;
     }
 
     @Override
-    public ParticipationReportDto participation(String resolvedLanguage) {
-        AcademicYearDto year = currentAcademicYearResolver.resolve();
+    public ParticipationReportDto participation(String resolvedLanguage, String academicYearId) {
+        AcademicYearDto year = academicYearResolver.resolve(academicYearId);
         Map<String, GradeDto> grades = gradesByIdInOrder(resolvedLanguage);
 
         List<SummaryRepository.ParticipationSummaryRow> materialized = summaryRepository.participationForYear(year.id());
@@ -70,8 +73,8 @@ class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public CompletionReportDto completion(String resolvedLanguage) {
-        AcademicYearDto year = currentAcademicYearResolver.resolve();
+    public CompletionReportDto completion(String resolvedLanguage, String academicYearId) {
+        AcademicYearDto year = academicYearResolver.resolve(academicYearId);
         Map<String, GradeDto> grades = gradesByIdInOrder(resolvedLanguage);
 
         List<SummaryRepository.ComplianceSummaryRow> materialized = summaryRepository.complianceForYear(year.id());
@@ -88,8 +91,7 @@ class ReportServiceImpl implements ReportService {
             });
         } else {
             generatedAt = Instant.now();
-            EffectiveRule rule = ruleResolutionService.resolveEffectiveAt(Instant.now())
-                    .orElseThrow(() -> new IllegalStateException("No rule is currently in effect"));
+            EffectiveRule rule = ruleInEffectDuring(year);
             requiredMinutesByGrade = new LinkedHashMap<>();
             grades.values().forEach(g -> requiredMinutesByGrade.put(g.id(), rule.annualRequiredMinutesForGradeLevel(g.sequence())));
             figuresByGrade = computeCompletionFigures(year, rule, grades);
@@ -103,6 +105,26 @@ class ReportServiceImpl implements ReportService {
                     return new CompletionReportDto.GradeFigure(g.id(), g.name(), f[0], f[1], rate, required);
                 }).toList();
         return new CompletionReportDto(generatedAt, year.id(), byGrade);
+    }
+
+    /**
+     * The annual requirement a year is judged against is the one that was in
+     * force <em>during that year</em>, not the one in force today (invariant
+     * 8/R7: a rule published this term must not restate what last term's
+     * cohort was required to do). For the current or a future year that is
+     * still "now"; for a year that has already ended it is the rule effective
+     * at its end date. Falls back to today's rule only if no rule resolves
+     * for that past date at all — a year that predates the first published
+     * rule version is better reported against something than 500'd.
+     */
+    private EffectiveRule ruleInEffectDuring(AcademicYearDto year) {
+        Instant now = Instant.now();
+        Instant asOf = year.endDate().isBefore(LocalDate.now())
+                ? year.endDate().atTime(LocalTime.NOON).toInstant(ZoneOffset.UTC)
+                : now;
+        return ruleResolutionService.resolveEffectiveAt(asOf)
+                .or(() -> ruleResolutionService.resolveEffectiveAt(now))
+                .orElseThrow(() -> new IllegalStateException("No rule is in effect for academic year " + year.id()));
     }
 
     /** Bounded by active-student count (≤5,000), aggregated once in SQL — the threshold comparison below is arithmetic over an already-grouped result set, not a query per student. */
@@ -123,16 +145,16 @@ class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public ServiceHoursReportDto serviceHours() {
-        AcademicYearDto year = currentAcademicYearResolver.resolve();
+    public ServiceHoursReportDto serviceHours(String academicYearId) {
+        AcademicYearDto year = academicYearResolver.resolve(academicYearId);
         List<ServiceHoursReportDto.MonthFigure> byMonth = queryRepository.serviceMinutesByMonth(year.startDate(), year.endDate())
                 .stream().map(r -> new ServiceHoursReportDto.MonthFigure(r.month(), r.minutes() / 60)).toList();
         return new ServiceHoursReportDto(Instant.now(), year.id(), byMonth);
     }
 
     @Override
-    public ReviewEfficiencyReportDto reviewEfficiency() {
-        AcademicYearDto year = currentAcademicYearResolver.resolve();
+    public ReviewEfficiencyReportDto reviewEfficiency(String academicYearId) {
+        AcademicYearDto year = academicYearResolver.resolve(academicYearId);
         List<ReportQueryRepository.ReviewerFigureRow> rows = queryRepository.reviewEfficiencyByReviewer(year.startDate(), year.endDate());
 
         long totalDecisions = rows.stream().mapToLong(ReportQueryRepository.ReviewerFigureRow::decisions).sum();
@@ -143,15 +165,17 @@ class ReportServiceImpl implements ReportService {
                 .map(r -> new ReviewEfficiencyReportDto.ReviewerFigure(
                         r.reviewerId(), reviewerName(r.reviewerId()), r.decisions(), r.avgHours()))
                 .toList();
-        return new ReviewEfficiencyReportDto(Instant.now(), totalDecisions, overallAvg, byReviewer);
+        return new ReviewEfficiencyReportDto(Instant.now(), year.id(), totalDecisions, overallAvg, byReviewer);
     }
 
     @Override
-    public TopProjectsReportDto topProjects() {
-        List<TopProjectsReportDto.ProjectFigure> figures = queryRepository.topProjects(10).stream()
+    public TopProjectsReportDto topProjects(String academicYearId) {
+        AcademicYearDto year = academicYearResolver.resolve(academicYearId);
+        List<TopProjectsReportDto.ProjectFigure> figures =
+                queryRepository.topProjects(10, year.startDate(), year.endDate()).stream()
                 .map(r -> new TopProjectsReportDto.ProjectFigure(r.projectId(), r.title(), r.participants(), r.totalMinutes()))
                 .toList();
-        return new TopProjectsReportDto(Instant.now(), figures);
+        return new TopProjectsReportDto(Instant.now(), year.id(), figures);
     }
 
     private String reviewerName(String reviewerId) {

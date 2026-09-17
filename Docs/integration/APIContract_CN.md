@@ -730,6 +730,22 @@ queued → running → succeeded
 
 仪表盘端点只做首页聚合；业务详情仍通过资源端点获取，不能把所有页面数据集中到单一“大接口”。
 
+**五个报表端点的学年范围。** 每个端点都接受可选的 `?academicYearId=`（取 `GET /academic-years` 返回的 `id`，不是 `code`）。不传或传空表示当前标记为 current 的学年——绝不表示“全部学年”。若 `academicYearId` 不匹配任何学年，返回 `RESOURCE_NOT_FOUND`（404），而不是悄悄回退到当前学年。每个报表都在响应体中以 `academicYearId` 回显实际生效的学年，客户端据此确认拿到的范围就是请求的范围。
+
+“按学年限定”对五个端点含义并不相同，因为数据模型并未给学生或服务记录打上学年标记：
+
+| 端点 | 限定依据 |
+| --- | --- |
+| `/reports/participation` | 服务**日期**落在该学年内的记录。统计人群：当前在籍、且在该学年结束前已入学的学生。 |
+| `/reports/completion` | 同参与率，另加该学年**当时生效**的年度必修分钟数——不是今天的规则。 |
+| `/reports/service-hours` | 服务**日期**落在该学年内的已通过记录，按月分桶。 |
+| `/reports/review-efficiency` | 在该学年内**作出**的审核决定（以审核人决定的时间计，不以服务发生时间计）。 |
+| `/reports/top-projects` | **排期**落在该学年内的项目（`startAt`），时长取服务日期落在该学年内的已通过记录。 |
+
+有两条限制属于固有约束，不必当作缺陷上报：已离校的学生不会出现在过去学年的统计人群中，因为学生状态是“当下”的事实，系统不保留历史花名册；`POST /exports` 的导出任务本身不带周期，因此报表导出始终是当前学年的。
+
+仪表盘端点不接受 `academicYearId`：它们描述学校的当下状态，其中带周期的指标已在字段名中写明自己的周期（`approvedThisMonth`、`totalServiceHoursThisYear`）。
+
 ### 4.14 导入
 
 | Method | Path | 权限 | 说明 |
@@ -1175,7 +1191,7 @@ TypeScript 类型（如 `Project`、`ServiceRecord`、`Account`）目前从 `../
 | `notifications.unreadCount` | `GET /notifications/unread-count` | 是 |
 | `notifications.markRead` / `markAllRead` | `PATCH /notifications/{id}` / `POST /notifications/read-all` | 是 |
 | `dashboards.student` / `admin` | `GET /dashboards/student` / `/admin` | 是 |
-| `reports.data` | 组合 `GET /reports/participation`、`/completion`、`/service-hours`、`/top-projects` | 是 |
+| `reports.data(academicYearId?)` | 组合 `GET /reports/participation`、`/completion`、`/service-hours`、`/top-projects`，并把同一个可选的 `academicYearId` 传给每一个 | 是 |
 | `users.list` | `GET /users` | 否 |
 
 `api.accounts.get(studentId)` 传入的是学生 ID，而账户端点以账户 ID 为键。该差异在 Client 内解决——先按 `studentId` 过滤，再用返回的 `accountId`——而不是新增以学生为键的账户端点。

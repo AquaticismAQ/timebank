@@ -1,6 +1,6 @@
 # 093 — Reports page shows placeholder and empty figures
 
-**Status:** In progress. Findings 2–8 fixed and live-verified; 1 (year filter) in progress.
+**Status:** All eight findings fixed. 1 implemented but not yet live-verified; 2-8 live-verified.
 **Reported:** 2026-09-17 by the user, as five symptoms on the Reports page.
 
 Filed as one document rather than five: they arrived as one report about one
@@ -22,10 +22,50 @@ Underneath that, **no report endpoint accepts an academic year at all** —
 wiring the existing control up; the filter has no server-side counterpart to
 call.
 
-**Not fixed — needs a decision**, because the options differ a lot in size:
-implement year scoping across five endpoints and their queries, or remove the
-control until it is implemented. A dropdown that silently does nothing is the
-worst of the three, so it should not stay as it is either way.
+**Decided: implement it**, rather than removing the control. Every report
+endpoint now takes an optional `academicYearId`, and the dropdown is populated
+from `GET /academic-years` with the current year selected on load.
+
+**What "scoped to a year" means is not the same for all five.** Nothing in the
+schema tags a student or a service record with an academic year, so each report
+is bounded by the nearest thing it actually has (contract §4.13 carries the same
+table):
+
+| Report | Bounded by |
+| :--- | :--- |
+| participation | service records **dated** in the year; population = active students already enrolled by the end of it |
+| completion | same, judged against the required minutes in effect **during** that year, not today's rule |
+| service-hours | approved records **dated** in the year, by month |
+| review-efficiency | decisions **taken** in the year — when the reviewer decided, not when the service happened |
+| top-projects | projects **scheduled** in the year (`project.start_at`), hours from records dated in it |
+
+Two things could not be done honestly and are not faked. A past year's
+population is "students active *now* who had enrolled by then":
+`student.status` is a present-tense fact and there is no historical roster, so
+anyone who has since left is missing from it. (The enrolment side *is*
+corrected — `student.enrollment_academic_year_id` keeps a cohort that started
+after the year out of its denominator, where it would otherwise sit as a
+guaranteed non-participant.) And export jobs carry no period, so a report export
+stays current-year until `POST /exports` grows a field for it.
+
+**Default when no year is given: the current one** — not "all years", and not a
+404. Four of the five endpoints already resolved the current year internally, so
+for them this is the behaviour that was already there, now merely nameable. For
+`/reports/top-projects` it is a **change**: it had no period at all and ranked
+every project ever run, under a page header naming a single year. It is now the
+current academic year like the rest, so callers of that endpoint (including the
+System Admin `topProjects` export) will see fewer projects than before. An
+`academicYearId` that matches no year is a 404 rather than a quiet fall back to
+the current year — otherwise a caller with a bad id gets real-looking numbers
+for a year it never asked about, which is this same bug wearing a different hat.
+
+One more card had to move with it: "Total Service Hours" read
+`stats.totalServiceHours` from `GET /dashboards/admin`, which is computed for
+the current year and takes no year parameter — it would have kept showing this
+year's figure under another year's header. It is now summed from the year-scoped
+trend the page already loads. "Active Projects" and "Approved This Month" are
+left as they are: both name their own period and are deliberately "right now"
+figures.
 
 ## 2. The Participation Rate card always shows `—`
 
