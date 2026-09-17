@@ -11,8 +11,16 @@ INSERT IGNORE INTO grade (id, code, name_zh, name_en, sequence) VALUES
     ('grade_10', 'grade_10', '十年级', 'Grade 10', 10),
     ('grade_11', 'grade_11', '十一年级', 'Grade 11', 11);
 
--- One current academic year, matching the frontend mock's dates.
+-- Academic years. The current one carries every seeded student and record; the
+-- prior year is deliberately left empty.
+--
+-- Issue 093 §1: the reports' academic-year filter cannot be *tested* against a
+-- single year. With only one row here, a filter that is accepted and silently
+-- ignored looks identical to one that works — which is the exact bug §1 was.
+-- An empty prior year gives every check something to distinguish: scoped to it
+-- the reports return nothing, against a populated current year.
 INSERT IGNORE INTO academic_year (id, code, start_date, end_date, is_current, created_at, updated_at) VALUES
+    ('ay_2024_2025', '2024-2025', '2024-09-01', '2025-08-31', 0, NOW(3), NOW(3)),
     ('ay_2025_2026', '2025-2026', '2025-09-01', '2026-08-31', 1, NOW(3), NOW(3));
 
 -- Two classes (A/B) per grade for the current academic year. `name` is the raw
