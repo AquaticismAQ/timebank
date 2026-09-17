@@ -56,7 +56,7 @@ export function StudentHome() {
     api.cases.list({ pageSize: 100 }).then(res => setCases(res.data)).catch(() => {});
   }, [user?.studentId]);
 
-  if (!progress || !account) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
+  if (!progress || !account) return <div className="p-4 lg:p-6 text-muted-foreground">{t('common.loading')}</div>;
 
   const annualPercent = progress.completedMinutes / progress.annualRequiredMinutes;
   const totalEarnedCoins = account.totalEarned / 100;

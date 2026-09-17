@@ -12,11 +12,14 @@ export function StudentLayout() {
   const { user } = useAuth();
   const [progress, setProgress] = useState<StudentProgress | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
+  const [accountLoaded, setAccountLoaded] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     api.students.progress(user?.studentId || 'std_001').then(setProgress).catch(() => {});
-    api.accounts.get(user?.studentId || 'std_001').then(setAccount).catch(() => {});
+    // `getOrNull`: no account row is a zero balance, not an error (issue 099).
+    api.accounts.getOrNull(user?.studentId || 'std_001')
+      .then(setAccount).catch(() => setAccount(null)).finally(() => setAccountLoaded(true));
     api.notifications.unreadCount().then(setUnreadCount).catch(() => {});
   }, [user?.studentId]);
 
@@ -47,7 +50,10 @@ export function StudentLayout() {
         <div className="text-sidebar-foreground/50 text-xs">{t('layout.student.completed')}</div>
       </div>
       <div className="bg-sidebar-accent rounded-lg p-2 text-center">
-        <div className="text-sidebar-accent-foreground font-semibold text-sm">{account ? formatCoins(account.balance) : '--'}</div>
+        {/* `--` only while the request is in flight. A student with no account
+                row has a balance of zero, and showing them a dash forever reads
+                as "unknown" for a figure that is known exactly (issue 099). */}
+            <div className="text-sidebar-accent-foreground font-semibold text-sm">{accountLoaded ? formatCoins(account?.balance ?? 0) : '--'}</div>
         <div className="text-sidebar-foreground/50 text-xs">{t('layout.student.timeCoins')}</div>
       </div>
     </div>

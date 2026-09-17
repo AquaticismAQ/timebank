@@ -51,14 +51,26 @@ export function AccountPage() {
   const { t } = useTranslation();
   const txDescription = useTxDescription();
   const { user } = useAuth();
-  const [account, setAccount] = useState<Account | null>(null);
+  const [loadedAccount, setAccount] = useState<Account | null>(null);
+  const [loadingAccount, setLoadingAccount] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // `getOrNull`, not `get`: a student with no approved record yet has no
+  // account row, which is a zero balance rather than a failure (issue 099).
+  // `loadingAccount` is tracked separately so the guard below can tell "still
+  // fetching" from "fetched, and there is nothing" — when the two were the
+  // same flag, a permanent null looked exactly like a slow network.
   useEffect(() => {
-    api.accounts.get(user?.studentId || 'std_001').then(setAccount).catch(() => {});
+    let cancelled = false;
+    setLoadingAccount(true);
+    api.accounts.getOrNull(user?.studentId || 'std_001')
+      .then(a => { if (!cancelled) setAccount(a); })
+      .catch(() => { if (!cancelled) setAccount(null); })
+      .finally(() => { if (!cancelled) setLoadingAccount(false); });
+    return () => { cancelled = true; };
   }, [user?.studentId]);
 
-  const accountId = account?.id;
+  const accountId = loadedAccount?.id;
 
   const fetchTransactions = useCallback(
     (params: ListParams) => {
@@ -82,7 +94,11 @@ export function AccountPage() {
     if (accountId) refetch();
   }, [accountId, refetch]);
 
-  if (!account) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
+  if (loadingAccount) return <div className="p-4 lg:p-6 text-muted-foreground">{t('common.loading')}</div>;
+
+  // No row means no transactions means zero — the page renders normally and
+  // shows the student a balance of 0, which is the true answer.
+  const account = loadedAccount ?? api.accounts.zeroAccount(user?.studentId ?? '');
 
   const totalEarnedCoins = account.totalEarned / 100;
   const currentLevel = RECOGNITION_LEVELS.find((l, i) =>

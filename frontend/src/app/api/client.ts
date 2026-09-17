@@ -704,10 +704,38 @@ export const api = {
       // frozen-amount like the frontend's `frozen: number` — approximated
       // as "whole balance" when frozen, since freezing blocks all new
       // credits rather than freezing a partial amount. See `fromAccountDto`.
+      const account = await this.getOrNull(studentId);
+      if (!account) throw new Error('Account not found');
+      return account;
+    },
+    /**
+     * `null` when the student has no account row yet, rather than throwing
+     * (issue 099).
+     *
+     * **That is not an error state.** `AccountServiceImpl` creates the row on
+     * the first credit, and balances are transaction-derived, so a student who
+     * has never had a record approved has no row and a balance of exactly zero
+     * — the state *every* student is in from enrolment until their first
+     * approval, and 23 of the 50 students on the test server right now.
+     * Treating it as a failure left the Account and Profile pages permanently
+     * stuck on their loading guard.
+     *
+     * `get` above still throws, deliberately: the admin screens call it right
+     * before `adjust`/`freeze`, which need a real account id, and handing those
+     * a zero placeholder would be worse than an error.
+     */
+    async getOrNull(studentId: string): Promise<Account | null> {
       const page = await http.getPage<AccountDtoWire>('/accounts', buildListQuery({ filter: { studentId } }));
       const dto = page.data[0];
-      if (!dto) throw new Error('Account not found');
-      return fromAccountDto(dto);
+      return dto ? fromAccountDto(dto) : null;
+    },
+    /**
+     * What a student with no account row has: zero of everything. Used for
+     * display only — `id` is empty precisely so nothing can mistake it for a
+     * real account and send it to a mutation endpoint.
+     */
+    zeroAccount(studentId: string): Account {
+      return { id: '', studentId, balance: 0, totalEarned: 0, totalRedeemed: 0, frozen: 0, borrowed: 0, updatedAt: '' };
     },
     async transactions(accountId: string, params?: ListParams): Promise<PageResult<AccountTransaction>> {
       // Real AccountTransactionDto has no balanceBefore (derivable:

@@ -17,13 +17,24 @@ export function ProfilePage() {
   const navigate = useNavigate();
 
   const [progress, setProgress] = useState<StudentProgress | null>(null);
-  const [account, setAccount] = useState<Account | null>(null);
+  const [loadedAccount, setAccount] = useState<Account | null>(null);
   const [schoolInfo, setSchoolInfo] = useState<SchoolInfo | null>(null);
+  const [loadingAccount, setLoadingAccount] = useState(true);
 
+  // `getOrNull`, not `get`: a student with no approved record yet has no
+  // account row, which is a zero balance rather than a failure (issue 099).
+  // Loading is tracked separately from the value so the guard below can tell
+  // "still fetching" from "fetched, and there is nothing".
   useEffect(() => {
+    let cancelled = false;
+    setLoadingAccount(true);
     api.students.progress(user?.studentId || 'std_001').then(setProgress).catch(() => {});
-    api.accounts.get(user?.studentId || 'std_001').then(setAccount).catch(() => {});
+    api.accounts.getOrNull(user?.studentId || 'std_001')
+      .then(a => { if (!cancelled) setAccount(a); })
+      .catch(() => { if (!cancelled) setAccount(null); })
+      .finally(() => { if (!cancelled) setLoadingAccount(false); });
     api.school.getInfo().then(setSchoolInfo).catch(() => {});
+    return () => { cancelled = true; };
   }, [user?.studentId]);
 
   const [notifEnabled, setNotifEnabled] = useState<Record<string, boolean>>({
@@ -100,7 +111,12 @@ export function ProfilePage() {
     changeLanguage(code as 'zh' | 'en');
   };
 
-  if (!progress || !account) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
+  if (!progress || loadingAccount) {
+    return <div className="p-4 lg:p-6 text-muted-foreground">{t('common.loading')}</div>;
+  }
+
+  // No row means no transactions means zero — see AccountPage.
+  const account = loadedAccount ?? api.accounts.zeroAccount(user?.studentId ?? '');
 
   return (
     <div className="p-4 lg:p-6 space-y-5">

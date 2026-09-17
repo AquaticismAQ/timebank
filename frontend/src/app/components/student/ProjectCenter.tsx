@@ -162,7 +162,7 @@ export function ProjectCenter() {
     });
   }, [items, sortKey, sortDesc]);
 
-  if (loading && items.length === 0) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
+  if (loading && items.length === 0) return <div className="p-4 lg:p-6 text-muted-foreground">{t('common.loading')}</div>;
 
   return (
     <div className="p-4 lg:p-6 space-y-4">

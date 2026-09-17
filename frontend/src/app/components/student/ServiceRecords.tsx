@@ -920,7 +920,7 @@ export function ServiceRecords() {
     );
   }
 
-  if (loading && records.length === 0) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
+  if (loading && records.length === 0) return <div className="p-4 lg:p-6 text-muted-foreground">{t('common.loading')}</div>;
 
   // Docs/optimization/05-SearchFilterSortConsistency.md's admin-page convention, reused here
   // (issue 053/054): `params.sort`-derived active sort key/direction, one button per field.

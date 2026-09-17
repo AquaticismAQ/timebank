@@ -49,7 +49,7 @@ export function ProgressPage() {
     api.students.progress(user?.studentId || 'std_001').then(setProgress).catch(() => {});
   }, [user?.studentId]);
 
-  if (!progress) return <div className="p-4 lg:p-6">{t('common.appName')}</div>;
+  if (!progress) return <div className="p-4 lg:p-6 text-muted-foreground">{t('common.loading')}</div>;
 
   // Minutes-only on the wire (APIContract.md §2.1) — raw hours kept as numbers
   // for proportion/comparison math (CircleProgress/ProgressBar percentages,
