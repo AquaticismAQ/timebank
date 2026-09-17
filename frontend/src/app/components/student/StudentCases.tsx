@@ -234,7 +234,7 @@ export function StudentCases() {
 
       {deleting && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !saving && setDeleting(null)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div className="relative bg-card w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-xl p-5 space-y-4">
             <h3 className="text-foreground font-medium">{t('student.cases.deleteTitle')}</h3>
             <p className="text-sm text-muted-foreground">{t('student.cases.deleteWarning')}</p>
@@ -252,7 +252,7 @@ export function StudentCases() {
 
       {responding && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setResponding(null)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl p-5 space-y-4">
             <h3 className="text-sm font-medium text-foreground">{t('student.cases.respondTitle')}</h3>
             {latestRequest(timeline) && (

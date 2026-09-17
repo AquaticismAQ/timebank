@@ -289,7 +289,6 @@ export function ProposalReview() {
             // 3 decision buttons now fit alongside Cancel in a clean 2x2 grid on mobile
             // (was 4 + a separate mobile-only header X before recommendApproval's removal) —
             // same unified footer pattern CaseReview.tsx already uses.
-            closeButton="none"
             footer={
               <div className={`grid gap-3 ${showDecisions ? 'grid-cols-2 sm:flex' : ''}`}>
                 <button onClick={() => setDetailId(null)}

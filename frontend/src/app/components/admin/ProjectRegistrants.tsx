@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Check, XCircle, CheckSquare } from 'lucide-react';
+import { Check, XCircle, CheckSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError } from '../../api/http';
@@ -89,7 +89,7 @@ export function ProjectRegistrants({ projectId, projectTitle, onClose }: { proje
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
       <div className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 mb-4 sm:mb-0 z-50 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
@@ -97,7 +97,6 @@ export function ProjectRegistrants({ projectId, projectTitle, onClose }: { proje
             <h3 className="text-foreground">{t('admin.projects.registrants')}</h3>
             <p className="text-xs text-muted-foreground">{projectTitle}</p>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
         </div>
 
         {canManage && selected.size > 0 && (
@@ -140,6 +139,15 @@ export function ProjectRegistrants({ projectId, projectTitle, onClose }: { proje
         </div>
 
         <PageControls page={page} onPageChange={setPage} />
+
+        {/* The only way out. This panel had no footer before issue 102 — its
+            header X was the whole exit — so the rule required adding one. */}
+        <div className="mt-4 pt-3 border-t border-border flex justify-end">
+          <button type="button" onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-border text-foreground hover:bg-accent text-sm transition-colors">
+            {t('common.close')}
+          </button>
+        </div>
       </div>
     </div>
   );

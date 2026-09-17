@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Edit, Trash2, X, Tags, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Trash2, Tags, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, type ErrorUiMapping } from '../../api/http';
@@ -232,12 +232,11 @@ export function ServiceCategoryManagement() {
       {/* Create modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !createSaving && setShowForm(false)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div className="relative bg-card w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[90vh]">
             <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
               <Tags className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
               <h3 className="text-foreground leading-tight flex-1">{t('admin.categories.newCategory')}</h3>
-              <button onClick={() => setShowForm(false)} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground"><X className="w-4 h-4" /></button>
             </div>
             <div className="overflow-y-auto px-5 py-5 space-y-3 text-sm">
               <CategoryNameFields form={createForm} onChange={patch => setCreateForm(f => ({ ...f, ...patch }))}
@@ -256,7 +255,7 @@ export function ServiceCategoryManagement() {
       {/* Edit modal — the code is immutable (it is what every stored record references). */}
       {editCategory && editForm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !editSaving && setEditCategory(null)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div className="relative bg-card w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[90vh]">
             <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
               <Edit className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
@@ -264,7 +263,6 @@ export function ServiceCategoryManagement() {
                 <h3 className="text-foreground leading-tight">{t('admin.categories.edit')}</h3>
                 <p className="text-xs text-muted-foreground truncate font-mono">{editCategory.code}</p>
               </div>
-              <button onClick={() => setEditCategory(null)} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground"><X className="w-4 h-4" /></button>
             </div>
             <div className="overflow-y-auto px-5 py-5 space-y-3 text-sm">
               <CategoryNameFields form={editForm} onChange={patch => setEditForm(f => f && ({ ...f, ...patch }))}
@@ -288,7 +286,7 @@ export function ServiceCategoryManagement() {
       {/* Duplicate-name refusal — the answer to the Create/Save press. */}
       {duplicateOf && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDuplicateOf(null)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div className="relative bg-card w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-xl p-5 space-y-4">
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
@@ -311,7 +309,7 @@ export function ServiceCategoryManagement() {
       {/* Delete confirmation */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !deleteSaving && setDeleteTarget(null)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div className="relative bg-card w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-xl p-5 space-y-4">
             <div className="flex items-center gap-3">
               <Trash2 className="w-5 h-5 text-red-600 shrink-0" />

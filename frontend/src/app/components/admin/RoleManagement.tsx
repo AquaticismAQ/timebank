@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, X, Search, Lock, Pencil, Eye, Trash2, KeyRound, AlertTriangle, LayoutTemplate } from 'lucide-react';
+import { Plus, Search, Lock, Pencil, Eye, Trash2, KeyRound, AlertTriangle, LayoutTemplate } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError } from '../../api/http';
@@ -242,7 +242,7 @@ function RoleFormModal({ mode, role, permissions, templates, onClose, onSave }: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative bg-card w-full h-full sm:h-auto sm:max-w-2xl sm:max-h-[90vh] sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col">
 
         {/* Header */}
@@ -251,9 +251,6 @@ function RoleFormModal({ mode, role, permissions, templates, onClose, onSave }: 
           <h3 className="flex-1 text-foreground">
             {mode === 'create' ? t('admin.roles.createRole') : isProtected ? t('admin.roles.viewRole') : t('admin.roles.editRole')}
           </h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
         {/* Body */}
@@ -377,15 +374,12 @@ function RoleTemplateFormModal({ mode, template, permissions, onClose, onSave }:
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative bg-card w-full h-full sm:h-auto sm:max-w-2xl sm:max-h-[90vh] sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col">
 
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
           <LayoutTemplate className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
           <h3 className="flex-1 text-foreground">{mode === 'create' ? t('admin.roles.createTemplate') : t('admin.roles.editTemplate')}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 text-sm">

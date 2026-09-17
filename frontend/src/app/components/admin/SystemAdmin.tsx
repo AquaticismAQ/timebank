@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, ChevronUp, ChevronDown, AlertTriangle, Plus, X, Pencil, Trash2, Lock, Building2, KeyRound, Check, Tags, Search } from 'lucide-react';
+import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, ChevronUp, ChevronDown, AlertTriangle, Plus, Pencil, Trash2, Lock, Building2, KeyRound, Check, Tags, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
@@ -144,15 +144,12 @@ function RuleFormModal({ mode, initial, onClose, onSaved }: RuleFormModalProps) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative bg-card w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
 
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
           <Shield className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
           <h3 className="flex-1 text-foreground text-sm">{t(mode === 'create' ? 'admin.system.rules.createDraft' : 'admin.system.rules.editDraft')}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
         <div className="mx-5 mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 flex gap-2.5">
@@ -238,14 +235,11 @@ function PublishRuleModal({ rule, onClose, onPublished }: PublishRuleModalProps)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
           <Shield className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
           <h3 className="flex-1 text-foreground text-sm">{t('admin.system.rules.publishTitle')}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
         <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
@@ -323,14 +317,11 @@ function SchoolInfoEditModal({ initial, onClose, onSaved }: SchoolInfoEditModalP
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
           <Building2 className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
           <h3 className="flex-1 text-foreground text-sm">{t('admin.system.editSchoolInfo')}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
         <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
@@ -699,16 +690,13 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete, onUnlock }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
 
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
           <Users className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
           <h3 className="flex-1 text-foreground">{mode === 'create' ? t('admin.system.createUser') : t('admin.system.editUser')}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground">
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
         {/* Body */}

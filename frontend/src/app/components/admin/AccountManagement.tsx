@@ -282,7 +282,8 @@ export function AccountManagement() {
       {/* Adjust modal */}
       {showAdjust && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={() => setShowAdjust(false)} />
+          {/* Decorative only — an accidental outside click must not discard a part-typed adjustment (issue 102). */}
+          <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-md mx-4 mb-4 sm:mb-0 z-50">
             <h3 className="text-foreground mb-4">{t('admin.accounts.adjustTitle')}</h3>
             <div className="space-y-3">

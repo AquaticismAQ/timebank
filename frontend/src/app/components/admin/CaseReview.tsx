@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, XCircle, HelpCircle, X, MoreHorizontal } from 'lucide-react';
+import { CheckCircle, XCircle, HelpCircle, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
@@ -287,7 +287,6 @@ export function CaseReview() {
             tabs={tabs}
             activeTab={detailTab}
             onTabChange={setDetailTab}
-            closeButton="none"
             footer={
               <div className={`grid gap-3 ${showDecisions ? 'grid-cols-2 sm:flex' : ''}`}>
                 <button onClick={() => setDetailId(null)}
@@ -321,7 +320,6 @@ export function CaseReview() {
           <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-foreground">{t(`admin.cases.${decisionModal.decision === 'resolve' ? 'resolve' : decisionModal.decision === 'reject' ? 'rejectCase' : 'requestInfo'}`)}</h3>
-              <button onClick={() => setDecisionModal(null)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
             </div>
             <p className="text-xs text-muted-foreground mb-3">{decisionModal.item.title}</p>
             <textarea rows={3} value={comment} onChange={e => setComment(e.target.value)}

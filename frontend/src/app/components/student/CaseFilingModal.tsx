@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X } from 'lucide-react';
+import {  } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
@@ -114,7 +114,6 @@ export function CaseFilingModal({
       <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-foreground">{t(titleKey)}</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
         </div>
 
         {record && (

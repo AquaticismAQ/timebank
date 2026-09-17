@@ -453,7 +453,6 @@ export function AuditCenter() {
             tabs={tabs}
             activeTab={detailTab}
             onTabChange={setDetailTab}
-            closeButton="none"
             footer={
               // Cancel replaces the removed header X; grid-cols-2 gives a 2x2 layout on mobile
               // for the 4-button case (Cancel + 3 decisions), sm:flex returns it to a row on desktop.

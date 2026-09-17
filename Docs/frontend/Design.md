@@ -572,6 +572,29 @@ Specific breakpoints use Tailwind CSS unified configuration; business pages must
 - Empty states, skeleton screens, error states, and retry.
 - In-app notifications, toast, and global task progress.
 
+### 11.2.1 Modal Dialogs — Dismissal
+
+**A modal dialog closes only through the buttons in its own footer** (issue 102).
+Three rules, no exceptions:
+
+1. **No `X` in the header.** The corner is where a pointer drifts to.
+2. **The backdrop does not close it.** Render it as decoration, with no
+   `onClick`.
+3. **`Escape` does not close it.** Deliberate, and a knowing trade against the
+   ARIA practice — see issue 102 §5 for the argument and how to reverse it.
+
+Every dialog is a form or a decision, and all three of the removed paths fire
+*by accident*, discarding whatever was typed with no undo.
+
+**A dialog must therefore have a footer, and that footer must contain a
+Cancel/Close.** Adding one is part of building the dialog, not an afterthought:
+three dialogs were left with no exit at all when the `X` came out, because the
+`X` had been the only one.
+
+This applies to modal **dialogs**. A navigation drawer (`AppShell`'s mobile
+sidebar) and a dropdown menu still dismiss on an outside click — nothing is
+being edited in them, and that gesture is what users expect there.
+
 ### 11.3 Unified Status Language
 
 The same business status uses unified names, colors, and descriptions across all pages. Pages must not create synonymous statuses like "processing" or "under review" on their own; status definitions are governed by `APIContract.md`.

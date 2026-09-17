@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, X, FileText } from 'lucide-react';
+import { Download, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { type FileMetadata } from '../../api/types';
@@ -42,11 +42,9 @@ export function EvidenceViewerDialog({ fileId, meta, name, onClose }: {
   const isImage = meta.mimeType.startsWith('image/');
   const isPdf = meta.mimeType === 'application/pdf';
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // No Escape handler, and no backdrop click: this dialog closes only from the
+  // Close button in its footer (issue 102). The trade is deliberate and recorded
+  // there — every dismissal should be one the viewer meant.
 
   // Fresh URL on open, rather than trusting the one the tile minted.
   useEffect(() => {
@@ -104,17 +102,13 @@ export function EvidenceViewerDialog({ fileId, meta, name, onClose }: {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative bg-card w-full max-w-4xl h-[85vh] rounded-2xl shadow-xl flex flex-col overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border shrink-0">
           <h3 className="text-sm font-medium text-foreground truncate flex-1" title={name}>{name}</h3>
           <button type="button" onClick={handleDownload} disabled={downloading}
             className="text-xs px-3 py-1.5 rounded-lg border border-border text-foreground hover:bg-accent transition-colors flex items-center gap-1.5 shrink-0 disabled:opacity-50">
             <Download className="w-3.5 h-3.5" /> {t('common.download')}
-          </button>
-          <button type="button" onClick={onClose} title={t('common.close')}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0">
-            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -138,6 +132,16 @@ export function EvidenceViewerDialog({ fileId, meta, name, onClose }: {
               <p className="text-sm">{t('common.evidenceNoPreview')}</p>
             </div>
           )}
+        </div>
+
+        {/* The only way out. This dialog had none of its own before issue 102 —
+            its header X was it — so the rule "close from the bottom buttons"
+            required giving it bottom buttons first. */}
+        <div className="px-5 py-3 border-t border-border shrink-0 flex justify-end">
+          <button type="button" onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-border text-foreground hover:bg-accent text-sm transition-colors">
+            {t('common.close')}
+          </button>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { api } from '../../api/client';
 import { ApiError, mapApiError } from '../../api/http';
 import { type ServiceRecord, type TimelineEntry } from '../../api/types';
@@ -71,7 +71,7 @@ export function ServiceRecordDetail({ recordId, onClose }: { recordId: string; o
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative bg-card w-full sm:max-w-2xl sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
           <div className="flex-1 min-w-0">
@@ -83,10 +83,6 @@ export function ServiceRecordDetail({ recordId, onClose }: { recordId: string; o
               {t(statusInfo.label)}
             </span>
           )}
-          <button type="button" onClick={onClose} title={t('common.close')}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
@@ -162,6 +158,16 @@ export function ServiceRecordDetail({ recordId, onClose }: { recordId: string; o
               </div>
             </>
           )}
+        </div>
+
+        {/* The only way out. Removing the header X (issue 102) left this
+            read-only detail view with no exit, so it needs bottom buttons
+            before the "close from the bottom" rule can apply to it. */}
+        <div className="px-5 py-3 border-t border-border shrink-0 flex justify-end">
+          <button type="button" onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-border text-foreground hover:bg-accent text-sm transition-colors">
+            {t('common.close')}
+          </button>
         </div>
       </div>
     </div>

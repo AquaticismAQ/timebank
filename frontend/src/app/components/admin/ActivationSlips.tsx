@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, KeyRound, Printer, X } from 'lucide-react';
+import { AlertTriangle, KeyRound, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError } from '../../api/http';
@@ -375,10 +375,6 @@ export function ActivationSlips() {
             <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
               <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
               <h3 className="flex-1 text-foreground text-sm">{t('admin.system.slips.confirmTitle')}</h3>
-              <button type="button" onClick={() => setConfirmOpen(false)} disabled={generating}
-                className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground disabled:opacity-40">
-                <X className="w-4 h-4" />
-              </button>
             </div>
 
             <div className="overflow-y-auto px-5 py-4 space-y-3 text-sm">

@@ -45,7 +45,7 @@ export function OverlapBlockedDialog({ attempted, conflict, canDelete, onDelete,
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative bg-card w-full max-w-sm rounded-2xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 text-destructive" />

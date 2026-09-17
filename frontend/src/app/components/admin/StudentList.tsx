@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, ChevronDown, ChevronUp, Pencil, Bell, FileText, X, Save } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Pencil, Bell, FileText, Save } from 'lucide-react';
 import { type Student } from '../../api/types';
 import { formatCoins, minutesToHours, formatGradeClass, formatClassName } from '../../lib/format';
 import { STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
@@ -467,10 +467,6 @@ export function StudentList() {
                 <h3 className="text-foreground leading-tight">{t('admin.students.editTitle')}</h3>
                 <p className="text-xs text-muted-foreground">{editStudent.studentNumber} · {formatGradeClass(editStudent.gradeLevel, editStudent.className)}</p>
               </div>
-              <button onClick={() => setEditStudent(null)}
-                className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors">
-                <X className="w-4 h-4" />
-              </button>
             </div>
 
             {/* Form body */}

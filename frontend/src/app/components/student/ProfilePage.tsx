@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { LogOut, ChevronRight, Bell, Shield, HelpCircle, Moon, Sun, Monitor, Mail, FolderOpen, Wallet, Lightbulb, Clock, X, Lock, Eye, Database, UserCheck, Globe, Pencil } from 'lucide-react';
+import { LogOut, ChevronRight, Bell, Shield, HelpCircle, Moon, Sun, Monitor, Mail, FolderOpen, Wallet, Lightbulb, Clock, Lock, Eye, Database, UserCheck, Globe, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useAuth, useTheme } from '../../App';
@@ -334,7 +334,7 @@ export function ProfilePage() {
       {showPrivacyModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowPrivacyModal(false)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
 
           {/* Sheet / dialog */}
           <div className="relative bg-card w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[90vh]">
@@ -342,10 +342,6 @@ export function ProfilePage() {
             <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
               <Shield className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
               <h3 className="flex-1 text-foreground">{t('student.profile.privacyTitle')}</h3>
-              <button onClick={() => setShowPrivacyModal(false)}
-                className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-colors">
-                <X className="w-4 h-4" />
-              </button>
             </div>
 
             {/* Scrollable body */}
