@@ -12,6 +12,8 @@ import { ServiceCategoryManagement } from './ServiceCategoryManagement';
 import { GradePicker } from '../GradePicker';
 import { useDictionaries } from '../../api/useDictionaries';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
+import { PasswordStrength } from '../shared/PasswordStrength';
+import { isAcceptable } from '../../lib/passwordPolicy';
 import { formatGradeClass, minutesToHours } from '../../lib/format';
 import { downloadBlob } from '../../lib/download';
 import { localDateTimeToISO } from '../../lib/datetime';
@@ -509,6 +511,36 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
   const needsGradeScope = form.roleCode !== '' && !NO_GRADE_SCOPE_ROLES.has(form.roleCode);
   const needsStaffId = form.roleCode !== '' && !isStudent;
 
+  /**
+   * The username `handleCreate` will actually send, derived here too so the
+   * live check tests the password against the same string the server will.
+   * Derive it in one more place and the two quietly drift apart.
+   */
+  const derivedUsername = form.email.split('@')[0];
+
+  /**
+   * Create mode disables its own button until the form is genuinely
+   * submittable: every required field filled, the password meeting the
+   * policy, and the confirmation matching. The checklist under the password
+   * boxes is what keeps that from being a dead end — it names the outstanding
+   * requirement the whole time the button is grey. Edit mode keeps the
+   * toast-on-click validation it always had; it sets no password, and a
+   * silently disabled Save on an account already missing a field would be
+   * the hostile version of this.
+   */
+  const requiredFieldsFilled =
+    form.name.trim() !== ''
+    && form.email.trim() !== '' && form.email.includes('@')
+    && form.roleCode !== ''
+    && (!needsGradeScope || form.scopeGradeIds.length > 0)
+    && (!isStudent || !!form.studentId)
+    && (!needsStaffId || form.staffId.trim() !== '');
+  const canSave = mode !== 'create' || (
+    requiredFieldsFilled
+    && isAcceptable(form.password, derivedUsername)
+    && form.password === form.confirmPassword
+  );
+
   const handleSave = () => {
     if (!form.name.trim()) { toast.error(t('admin.system.errorNameRequired')); return; }
     if (!form.email.trim() || !form.email.includes('@')) { toast.error(t('admin.system.errorEmailInvalid')); return; }
@@ -518,9 +550,11 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
     if (needsStaffId && !form.staffId.trim()) { toast.error(t('admin.system.errorStaffIdRequired')); return; }
     if (mode === 'create') {
       if (!form.password) { toast.error(t('admin.system.errorPasswordRequired')); return; }
-      // 8, not 6: matches the backend's @Size(min = 8) on CreateUserRequest.initialPassword
-      // (issue 086 — the UI used to instruct 6 and the server then rejected it).
-      if (form.password.length < 8) { toast.error(t('admin.system.errorPasswordTooShort')); return; }
+      // The one rule, from `lib/passwordPolicy.ts`, which mirrors the
+      // backend's `PasswordPolicy`. This was a bare `length < 8` check, which
+      // let an admin create an account the server would refuse, or — worse,
+      // before the server had the rule — one that met nothing but a length.
+      if (!isAcceptable(form.password, derivedUsername)) { toast.error(t('admin.system.errorPasswordPolicy')); return; }
       if (form.password !== form.confirmPassword) { toast.error(t('admin.system.errorPasswordMismatch')); return; }
     }
     onSave(form);
@@ -666,6 +700,11 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
                   </button>
                 </div>
               </div>
+              {/* The same live checker the student sees at activation, against
+                  the same rule — including "must not contain your username",
+                  which here is the local part of the email, because that is
+                  what `handleCreate` sends as the username. */}
+              <PasswordStrength password={form.password} username={derivedUsername} confirm={form.confirmPassword} />
             </div>
           )}
 
@@ -729,8 +768,8 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
             className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent">
             {t('common.cancel')}
           </button>
-          <button type="button" onClick={handleSave}
-            className="flex-1 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity">
+          <button type="button" onClick={handleSave} disabled={!canSave}
+            className="flex-1 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">
             {mode === 'create' ? t('admin.system.createUser') : t('admin.system.saveChanges')}
           </button>
         </div>

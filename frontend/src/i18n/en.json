@@ -143,7 +143,7 @@
       "codePlaceholder": "XXXXX-XXXXX",
       "codeHint": "10 characters, printed in two groups of five.",
       "passwordLabel": "New password",
-      "passwordPlaceholder": "At least 8 characters",
+      "passwordPlaceholder": "At least 12 characters",
       "confirmLabel": "Confirm new password",
       "confirmPlaceholder": "Enter your new password again",
       "submit": "Activate and set password",
@@ -156,7 +156,7 @@
       "codeAlreadyUsed": "That activation code has already been used. Try logging in, or ask your teacher for a new slip.",
       "rateLimited": "Too many attempts right now. Please wait a little and try again.",
       "passwordRequired": "Please choose a password",
-      "passwordMinLength": "Password must be at least 8 characters",
+      "passwordPolicy": "Your password does not meet the requirements listed below yet",
       "passwordMismatch": "The two passwords do not match",
       "failed": "Activation failed. Check your code, or ask your teacher for a new slip.",
       "success": "Your account is ready. Please log in with your new password."
@@ -169,6 +169,36 @@
       "adminPortal": "Admin Portal",
       "adminPortalDesc": "Review service records, manage projects, and view reports",
       "logout": "Log Out"
+    }
+  },
+  "password": {
+    "requirement": {
+      "title": "Your password must:",
+      "length": "Be at least {{min}} characters long (at most {{max}})",
+      "classes": "Use at least {{classes}} of these four: lowercase letters, capital letters, a number, a symbol",
+      "notCommon": "Not be an easy-to-guess password, or a straight run like abcdefg or 123456",
+      "notUsername": "Not contain your username",
+      "met": "done",
+      "notMet": "not yet"
+    },
+    "strength": {
+      "label": "Strength",
+      "weak": "Not there yet",
+      "fair": "OK",
+      "good": "Good",
+      "strong": "Great"
+    },
+    "match": {
+      "ok": "Both boxes match",
+      "no": "The two boxes do not match yet"
+    },
+    "error": {
+      "required": "Please choose a password",
+      "tooShort": "Use at least {{min}} characters",
+      "tooLong": "Use at most {{max}} characters",
+      "tooSimple": "Use at least {{classes}} of these four: lowercase letters, capital letters, a number, a symbol",
+      "tooCommon": "That password is too easy to guess. Please pick a different one.",
+      "containsUsername": "Your password must not contain your username"
     }
   },
   "student": {
@@ -1433,7 +1463,7 @@
       "accountStatus": "Account Status",
       "accountStatusDesc": "When disabled, this user cannot log in",
       "initialPassword": "Initial Password",
-      "passwordPlaceholder": "At least 8 characters",
+      "passwordPlaceholder": "At least 12 characters",
       "confirmPassword": "Confirm Password",
       "reenterPassword": "Re-enter password",
       "resetPassword": "Reset Password",
@@ -1451,7 +1481,7 @@
       "errorStudentLinkRequired": "Please link this account to a student",
       "errorStaffIdRequired": "Please enter a staff ID",
       "errorPasswordRequired": "Please set an initial password",
-      "errorPasswordTooShort": "Password must be at least 8 characters",
+      "errorPasswordPolicy": "The password does not meet the requirements listed below the password boxes",
       "errorPasswordMismatch": "Passwords do not match",
       "errorNewPasswordRequired": "Please enter a new password",
       "userCreated": "User \"{{name}}\" created",

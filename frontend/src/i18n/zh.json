@@ -143,7 +143,7 @@
       "codePlaceholder": "XXXXX-XXXXX",
       "codeHint": "共 10 位字符，分两组、每组 5 位。",
       "passwordLabel": "新密码",
-      "passwordPlaceholder": "至少 8 个字符",
+      "passwordPlaceholder": "至少 12 个字符",
       "confirmLabel": "确认新密码",
       "confirmPlaceholder": "请再次输入新密码",
       "submit": "激活并设置密码",
@@ -156,7 +156,7 @@
       "codeAlreadyUsed": "该激活码已被使用。请尝试直接登录，或向老师申请新的纸条。",
       "rateLimited": "尝试次数过多，请稍后再试。",
       "passwordRequired": "请设置密码",
-      "passwordMinLength": "密码至少需要 8 个字符",
+      "passwordPolicy": "密码还没有满足下面列出的要求",
       "passwordMismatch": "两次输入的密码不一致",
       "failed": "激活失败。请检查激活码，或向老师申请新的纸条。",
       "success": "账号已激活，请使用新密码登录。"
@@ -169,6 +169,36 @@
       "adminPortal": "管理入口",
       "adminPortalDesc": "审核服务记录、管理项目、查看统计报表",
       "logout": "退出登录"
+    }
+  },
+  "password": {
+    "requirement": {
+      "title": "你的密码需要做到：",
+      "length": "至少 {{min}} 个字符（最多 {{max}} 个）",
+      "classes": "小写字母、大写字母、数字、符号，这四样里至少用上 {{classes}} 样",
+      "notCommon": "不能是别人容易猜到的密码，也不要用 abcdefg、123456 这样连着的一串",
+      "notUsername": "不能包含你的登录账号",
+      "met": "已完成",
+      "notMet": "还没做到"
+    },
+    "strength": {
+      "label": "强度",
+      "weak": "还不行",
+      "fair": "可以",
+      "good": "不错",
+      "strong": "很棒"
+    },
+    "match": {
+      "ok": "两次输入一致",
+      "no": "两次输入的密码还不一样"
+    },
+    "error": {
+      "required": "请设置密码",
+      "tooShort": "密码至少需要 {{min}} 个字符",
+      "tooLong": "密码最多 {{max}} 个字符",
+      "tooSimple": "小写字母、大写字母、数字、符号，这四样里至少要用上 {{classes}} 样",
+      "tooCommon": "这个密码太容易被猜到了，换一个吧。",
+      "containsUsername": "密码里不能包含你的登录账号"
     }
   },
   "student": {
@@ -1433,7 +1463,7 @@
       "accountStatus": "账号状态",
       "accountStatusDesc": "停用后该用户将无法登录",
       "initialPassword": "初始密码",
-      "passwordPlaceholder": "至少 8 位",
+      "passwordPlaceholder": "至少 12 个字符",
       "confirmPassword": "确认密码",
       "reenterPassword": "再次输入密码",
       "resetPassword": "重置密码",
@@ -1451,7 +1481,7 @@
       "errorStudentLinkRequired": "请为该账号关联一名学生",
       "errorStaffIdRequired": "请填写工号",
       "errorPasswordRequired": "请设置初始密码",
-      "errorPasswordTooShort": "密码至少 8 位",
+      "errorPasswordPolicy": "密码不符合密码框下方列出的要求",
       "errorPasswordMismatch": "两次密码不一致",
       "errorNewPasswordRequired": "请填写新密码",
       "userCreated": "用户「{{name}}」已创建",

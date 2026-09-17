@@ -7,6 +7,8 @@ import { useAuth, useTheme } from '../../App';
 import { api } from '../../api/client';
 import { ApiError } from '../../api/http';
 import { LanguageSwitcher } from '../LanguageSwitcher';
+import { PasswordStrength, passwordFailureMessage } from '../shared/PasswordStrength';
+import { isAcceptable } from '../../lib/passwordPolicy';
 
 // First-time access screen (Docs/optimization/10-StudentIdentityAndOnboarding.md
 // §2.9, §3.8). The route is `/activate` because the printed slip carries the
@@ -31,7 +33,6 @@ const CROCKFORD_DATA = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const CROCKFORD_CHECK_EXTRA = '*~$=U';
 const CROCKFORD_CHECK = CROCKFORD_DATA + CROCKFORD_CHECK_EXTRA;
 const CODE_LENGTH = 10;
-const MIN_PASSWORD_LENGTH = 8; // matches the backend's @Size(min = 8) on password fields
 
 /** Uppercases, drops separators, and folds Crockford's ambiguous characters. */
 export function normalizeActivationCode(raw: string): string {
@@ -98,11 +99,19 @@ const ACTIVATION_ERROR_KEYS: Record<string, string> = {
   ACTIVATION_CODE_ALREADY_USED: 'auth.activation.codeAlreadyUsed',
 };
 
-function messageFor(err: unknown, t: (key: string) => string): string {
+function messageFor(err: unknown, t: (key: string, values?: object) => string): string {
   if (!(err instanceof ApiError)) return t('auth.activation.failed');
   if (err.code === 'RATE_LIMITED') return t('auth.activation.rateLimited');
   const key = err.fieldErrors?.map(fe => ACTIVATION_ERROR_KEYS[fe.code]).find(Boolean);
-  return key ? t(key) : t('auth.activation.failed');
+  if (key) return t(key);
+  // A password the live checker passed can still be refused by the server —
+  // most plausibly `PASSWORD_CONTAINS_USERNAME`, the one rule this screen
+  // cannot apply because the student holds a code, not a username. Render it
+  // through the checker's own copy so the two never contradict each other.
+  const password = err.fieldErrors
+    ?.map(fe => passwordFailureMessage(fe.code, t))
+    .find((message): message is string => message !== null);
+  return password ?? t('auth.activation.failed');
 }
 
 export function ActivationPage() {
@@ -124,12 +133,24 @@ export function ActivationPage() {
     return <Navigate to={user.workspaces[0] === 'student' ? '/student/home' : '/admin/dashboard'} replace />;
   }
 
+  /**
+   * What the Activate button waits for: a well-formed code, a password that
+   * satisfies the policy, and a confirmation that matches. The requirement
+   * list under the box is showing which of these is outstanding the whole
+   * time the button is grey — a disabled button with no explanation is just
+   * a dead end. The username is unknown here (see `PasswordStrength`), so
+   * the server owns the "not your username" half of the rule.
+   */
+  const passwordOk = isAcceptable(password, null);
+  const canSubmit =
+    isWellFormedActivationCode(code) && passwordOk && confirm.length > 0 && password === confirm;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code) return setError(t('auth.activation.codeRequired'));
     if (!isWellFormedActivationCode(code)) return setError(t('auth.activation.codeFormat'));
     if (!password) return setError(t('auth.activation.passwordRequired'));
-    if (password.length < MIN_PASSWORD_LENGTH) return setError(t('auth.activation.passwordMinLength'));
+    if (!passwordOk) return setError(t('auth.activation.passwordPolicy'));
     if (password !== confirm) return setError(t('auth.activation.passwordMismatch'));
 
     setError('');
@@ -255,6 +276,11 @@ export function ActivationPage() {
               />
             </div>
 
+            {/* One checker for both boxes, placed under the pair: the rules
+                and the "do these two match" row read as a single list rather
+                than as two messages in two different places. */}
+            <PasswordStrength password={password} confirm={confirm} />
+
             {error && (
               <div className="text-sm text-destructive bg-destructive/10 px-4 py-3 rounded-lg">
                 {error}
@@ -263,7 +289,7 @@ export function ActivationPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !canSubmit}
               className="w-full py-3 px-6 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
