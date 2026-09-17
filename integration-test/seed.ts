@@ -19,6 +19,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import {
   organizations, users, students, projects, serviceRecords, eventProposals, cases,
   namedClasses, expectedCoinsByUsername, reviewerForGrade, generatedStudents,
@@ -176,6 +177,30 @@ function sqlString(s: string | undefined | null): string {
 
 // ── bcrypt hashing on the server (Python's bcrypt module, already installed there) ──
 
+/**
+ * Hashes in-process, for direct-connection mode (issue 101).
+ *
+ * The server-side path runs Python's `bcrypt` over SSH, which is fine when
+ * there is a server and impossible when there is not — a local Docker stack has
+ * no SSH host, so without this the seeder reached Phase 1 and died on the
+ * hashing step even though every SQL statement would have worked.
+ *
+ * `bcryptjs` rather than the native `bcrypt`: pure JavaScript, so `npm install`
+ * needs no compiler on a contributor's machine. It emits `$2b$` where the
+ * Python path emits `$2a$`; Spring Security's `BCryptPasswordEncoder` accepts
+ * both, which is verified by the seeded accounts actually logging in at the end
+ * of a run rather than by reading its source.
+ */
+function bcryptHashLocal(passwordsByUsername: Record<string, string>): Record<string, string> {
+  const hashes: Record<string, string> = {};
+  for (const [username, password] of Object.entries(passwordsByUsername)) {
+    // Cost 12, matching the server-side path — a cheaper factor here would make
+    // locally seeded accounts weaker than seeded ones for no visible reason.
+    hashes[username] = bcrypt.hashSync(password, bcrypt.genSaltSync(12));
+  }
+  return hashes;
+}
+
 function bcryptHashOnServer(passwordsByUsername: Record<string, string>): Record<string, string> {
   const py = `
 import bcrypt
@@ -185,6 +210,7 @@ for u, p in passwords.items():
     h = bcrypt.hashpw(p.encode(), salt).decode()
     print(f'{u}:{h}')
 `;
+  if (USE_DIRECT_DB) return bcryptHashLocal(passwordsByUsername);
   const result = spawnSync('ssh', [SSH_TARGET, 'python3 -'], { input: py, encoding: 'utf8' });
   if (result.status !== 0) {
     throw new Error(`bcrypt hashing failed (exit ${result.status}):\n${result.stderr}`);
@@ -198,6 +224,9 @@ for u, p in passwords.items():
 }
 
 // ── HTTP session (cookie jar + CSRF, mirroring the app's own login flow) ──
+
+/** A `429` from the API — retryable, unlike every other failure here. */
+class RateLimitedError extends Error {}
 
 class Session {
   cookies = new Map<string, string>();
@@ -224,7 +253,38 @@ class Session {
     }
   }
 
+  /**
+   * Retries a `429` with backoff (issue 101).
+   *
+   * `RateLimitInterceptor` allows 20 upload-intents per *principal* per minute.
+   * Seeding 287 records round-robin across the students means one student can
+   * spend that budget in seconds — and does, against a local stack, where there
+   * is no network latency to pace the loop. The same script had been fine
+   * against the shared server only because the round trip to it was slow enough
+   * to stay under the limit by accident.
+   *
+   * Waiting is the correct response to a 429 and the limit is a real control,
+   * so this backs off rather than asking the server to allow more. The bucket
+   * refills greedily at 20/minute, so a few seconds restores capacity; the
+   * delay grows per attempt in case several students are queued behind the same
+   * refill.
+   */
   async request(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<any> {
+    const maxAttempts = 6;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.requestOnce(method, path, body, idempotencyKey);
+      } catch (err) {
+        const rateLimited = err instanceof RateLimitedError;
+        if (!rateLimited || attempt === maxAttempts) throw err;
+        const waitMs = 4000 * attempt;
+        process.stdout.write(`  rate limited on ${path}, waiting ${waitMs / 1000}s (attempt ${attempt}/${maxAttempts - 1})\n`);
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+      }
+    }
+  }
+
+  private async requestOnce(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<any> {
     const headers: Record<string, string> = {};
     if (this.cookies.size) headers['Cookie'] = this.cookieHeader();
     if (this.csrfToken && method !== 'GET') headers['X-XSRF-TOKEN'] = this.csrfToken;
@@ -241,7 +301,10 @@ class Session {
     if (!res.ok) {
       const fieldErrors = json?.error?.fieldErrors;
       const detail = fieldErrors ? ` ${JSON.stringify(fieldErrors)}` : '';
-      throw new Error(`${method} ${path} -> ${res.status}: ${json?.error?.message ?? text}${detail}`);
+      const message = `${method} ${path} -> ${res.status}: ${json?.error?.message ?? text}${detail}`;
+      // Distinguished by type, not by matching the message text, so the retry
+      // above cannot be defeated by a reworded error string.
+      throw res.status === 429 ? new RateLimitedError(message) : new Error(message);
     }
     return json?.data;
   }

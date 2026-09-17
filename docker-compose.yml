@@ -76,14 +76,29 @@ services:
       # All three fail startup when unset, deliberately (issue 027 and plan 10
       # §2.9). Local-only values, and none of them a secret worth protecting —
       # which is exactly why they must never be copied to a real deployment.
-      TIMEBANK_ALLOWED_ORIGINS: ${TIMEBANK_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:8080}
+      TIMEBANK_ALLOWED_ORIGINS: ${TIMEBANK_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:28080}
       TIMEBANK_SITE_ROOT_URL: ${TIMEBANK_SITE_ROOT_URL:-http://localhost:5173}
       TIMEBANK_FILE_TOKEN_SECRET: ${TIMEBANK_FILE_TOKEN_SECRET:-local-development-only-not-a-secret}
 
       TIMEBANK_ENVIRONMENT: ${TIMEBANK_ENVIRONMENT:-local}
       TIMEBANK_FILE_STORAGE_PATH: /app/data/evidence-storage
     ports:
-      - "${TIMEBANK_BACKEND_PORT:-8080}:8080"
+      # 28080 on the host, for the same reason MySQL is on 3307 — but the
+      # failure mode here is worse, so the number is chosen more defensively.
+      #
+      # On a VM-backed runtime (Colima/Lima, Rancher, Docker Desktop's own VM)
+      # the port forward is made by the VM's host agent, not by the container
+      # runtime, and **a clash does not fail `up`**. The stack reports healthy,
+      # `docker compose ps` shows the mapping, and the host silently reaches
+      # whatever else was already listening. Hit twice while verifying this
+      # file: 8080 answered with a stray Go server's "404 page not found", then
+      # 18080 answered with a Python http.server's "File not found" — both
+      # while the container itself returned {"status":"UP"}.
+      #
+      # 28080 is outside the ranges dev tooling reaches for. If it is taken on
+      # your machine, the symptom is a 404 that is not Spring's — see
+      # `Docs/operations/DockerDevelopment.md` §8.
+      - "${TIMEBANK_BACKEND_PORT:-28080}:8080"
     volumes:
       # Survives `docker compose down`. Only `down -v` removes it, which is the
       # documented way to start over.

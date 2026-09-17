@@ -44,7 +44,7 @@ not a signal you can seed against.
 Check it directly:
 
 ```bash
-curl -s localhost:8080/actuator/health/readiness
+curl -s localhost:28080/actuator/health/readiness
 # {"status":"UP",...}
 ```
 
@@ -52,8 +52,28 @@ curl -s localhost:8080/actuator/health/readiness
 
 | Service | Host | Why |
 | :--- | :--- | :--- |
-| Backend | `8080` | |
-| MySQL | **`3307`** | Not 3306. Anyone who has installed MySQL locally already has 3306 bound, and the failure looks like a broken container rather than a port clash |
+| Backend | **`28080`** | Not 8080. See below — a clash here is *silent* |
+| MySQL | **`3307`** | Not 3306. Anyone who has installed MySQL locally already has 3306 bound |
+
+**A port clash does not fail `docker compose up`.** On a VM-backed runtime
+(Colima, Lima, Rancher, Docker Desktop) the forward is made by the VM's host
+agent, so the stack comes up healthy, `docker compose ps` shows the mapping, and
+the host quietly reaches whatever was already listening. This was hit twice
+while verifying this file: 8080 answered with a stray Go server's
+`404 page not found`, then 18080 with a Python `http.server`'s `File not found`
+— both while the container itself returned `{"status":"UP"}`.
+
+If `curl localhost:28080/actuator/health/readiness` returns a 404 that is not
+Spring's, that is what happened:
+
+```bash
+lsof -nP -iTCP:28080 -sTCP:LISTEN          # who actually holds it
+docker compose exec backend curl -s localhost:8080/actuator/health/readiness
+```
+
+If the second command says `UP`, the app is fine and only the forward is lost.
+Change `TIMEBANK_BACKEND_PORT` in `.env` and add the new port to
+`TIMEBANK_ALLOWED_ORIGINS`.
 
 Both are overridable in `.env` (`TIMEBANK_BACKEND_PORT`, `TIMEBANK_DB_HOST_PORT`).
 
@@ -69,7 +89,7 @@ TIMEBANK_DB_HOST=127.0.0.1 \
 TIMEBANK_DB_PORT=3307 \
 TIMEBANK_DB_USERNAME=timebank_app \
 TIMEBANK_DB_PASSWORD=timebank-not-for-production \
-TIMEBANK_BASE_URL=http://localhost:8080 \
+TIMEBANK_BASE_URL=http://localhost:28080 \
 npm run seed
 ```
 
@@ -114,7 +134,7 @@ cp .env.example .env.local        # then set VITE_DEV_PROXY_TARGET
 pnpm dev                          # http://localhost:5173
 ```
 
-Set `VITE_DEV_PROXY_TARGET=http://localhost:8080` in `.env.local` so the dev
+Set `VITE_DEV_PROXY_TARGET=http://localhost:28080` in `.env.local` so the dev
 server proxies `/api` to the container.
 
 Containerising it would mean rebuilding an image on every edit and losing hot
@@ -160,4 +180,6 @@ provides the isolation the loopback bind provides on a host.
 | `docker compose up` says port is allocated | Something else holds 8080 or 3307. Change the port in `.env` |
 | Seeder: "Refusing to seed: these usernames already exist" | It is a first-run tool, not a reconciler. `docker compose down -v` and start over |
 | Seeder: "Could not run the mysql client" | No `mysql` on your PATH. `brew install mysql-client` |
+| Seeder pauses with "rate limited on /files/upload-intents" | Expected, not an error. The API allows 20 upload-intents per student per minute and the seeder is fast enough locally to hit it; it backs off and continues. A full run took ~9 of these |
+| 404 from `localhost:28080` that is not Spring's | Port clash — see §3 |
 | 403 from the API in the browser, nothing useful logged | The dev server's origin is not in `TIMEBANK_ALLOWED_ORIGINS` |

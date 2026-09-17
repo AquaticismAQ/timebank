@@ -1,7 +1,6 @@
 # 101 — Support running the stack locally with Docker
 
-**Status:** Implemented. **`docker compose up` was not executed** — no container
-runtime exists in the environment this was written in (§5).
+**Status:** Implemented and **verified end to end** — stack built, started, seeded and exercised (§5).
 **Raised:** 2026-09-18 by the user: not every contributor has a second machine
 to use as a test server, and running the backend in Docker is the ordinary way
 to avoid needing one.
@@ -96,32 +95,69 @@ there.
 | **…and that SSH is genuinely out of that path** | re-ran it with `TIMEBANK_SSH_TARGET=nobody@this-host-does-not-exist.invalid` and it behaved identically. Without this the run above could not distinguish direct mode from a silent fall back to SSH |
 | The academic-year query the seeder now runs (issue 100) | returns exactly one row plus a header, which its `.slice(1)` handles |
 
-## 5. What was **not** verified, and how to
+## 5. Verified by running it
 
-**`docker compose up --build` has not been run.** There is no container runtime
-on this machine — no `docker`, `podman`, `colima` or `nerdctl`, and no Docker
-Desktop or OrbStack installed — so the image has never been built and the stack
-has never started. Everything in §4 was verified some other way precisely
-because this could not be.
+A container runtime was installed for this (`brew install colima docker
+docker-compose`; Colima VM at 4 CPU / 6 GB / 20 GB disk, chosen small because
+the host had 20 GiB free). Everything below is an observed result.
 
-What that leaves genuinely unproven: that the Maven and JRE base images resolve,
-that `dependency:go-offline` succeeds in the build stage, that `apt-get install
-curl` works in the runtime image, that the healthchecks behave as written, and
-that the backend reaches `(healthy)` against the compose MySQL.
+| Step | Result |
+| :--- | :--- |
+| `docker compose build backend` | image built, 17 steps |
+| `docker compose up -d` | `db Healthy` → backend started → **`backend Up (healthy)` in ~20s** |
+| Readiness from the host | `{"status":"UP"}` on `localhost:28080` |
+| Flyway on a fresh schema | **31 migrations**, all successful |
+| **Issue 100, on a genuinely fresh database** | `ay_2026_2027` current and containing today; `ay_2025_2026` prior — the derived years work, not just the ones already on the shared server |
+| `npm run seed` in direct-DB mode | **exit 0, all 8 phases**, including Phase 7's balance-consistency check |
+| Seeded result | 37 users, 50 students, 287 records, 11 projects, 28 accounts, 1,211 audit rows |
+| Login + 5 list endpoints from the host | all 200: students 50, users 37, audit-logs 1,212, projects 11, service-records 287 |
+| Issue 098 on this stack | facets returns 14 actions / 6 types; `search=nonsense-xyzzy` → 0 |
+| Issue 100's `staff_id` | all seven staff accounts carry one |
 
-On a machine with Docker:
+## 6. Four things that only failed once it was actually run
+
+**The build context was 188 MB.** The blocklist `.dockerignore` was letting
+`backend/target` through. Rewritten as deny-all plus `!backend/pom.xml` /
+`!backend/src`, which is ~20 MB and, more importantly, cannot silently regrow
+when a directory is added.
+
+**Port 8080 was taken — silently.** The backend was healthy inside the
+container and `localhost:8080` answered `404 page not found` from an unrelated
+Go process. On a VM-backed runtime the forward is made by the VM's host agent,
+so a clash does **not** fail `up`: the stack reports healthy and the host
+reaches the squatter. Moved to 18080 — which on this machine was *also* taken,
+by a Python `http.server` — and finally 28080. The lesson is in the compose
+comment and §3 of the doc, because the next person will read a 404 as "the app
+is broken".
+
+**The seeder still shelled to SSH to hash passwords.** `runSqlOnServer` had a
+direct mode; `bcryptHashOnServer` did not, so Phase 1 died on a host that does
+not exist. Now hashes in-process with `bcryptjs` (pure JS, so `npm install`
+needs no compiler). It emits `$2b$` where the Python path emitted `$2a$` —
+which is *why* "37 personas logged in" above matters: it is what proves Spring
+accepts the prefix, rather than a claim that it does.
+
+**The API rate-limited the seeder.** `RateLimitInterceptor` allows 20
+upload-intents per principal per minute; against a local stack there is no
+network latency to pace the loop, so one student spends that in seconds. The
+same script had been fine against the shared server only because the round trip
+was slow enough by accident. The seeder now backs off and retries a `429`
+(typed, not string-matched, so a reworded message cannot defeat it) — the limit
+is a real control and waiting is the correct response to it. A full run took
+**9 backoffs** and completed.
+
+## 7. Reproducing it
 
 ```bash
 cp docker/.env.example .env
 docker compose up -d --build
-docker compose ps                                     # backend → (healthy)
-curl -s localhost:8080/actuator/health/readiness      # {"status":"UP"}
+docker compose ps                                      # backend → (healthy)
+curl -s localhost:28080/actuator/health/readiness       # {"status":"UP"}
 
 cd integration-test && npm install
 TIMEBANK_DB_HOST=127.0.0.1 TIMEBANK_DB_PORT=3307 \
 TIMEBANK_DB_USERNAME=timebank_app TIMEBANK_DB_PASSWORD=timebank-not-for-production \
-TIMEBANK_BASE_URL=http://localhost:8080 npm run seed
+TIMEBANK_BASE_URL=http://localhost:28080 npm run seed
 ```
 
-Then log in through `pnpm dev` with an account the seeder printed. If anything
-in that sequence needs a fix, it belongs on this issue.
+Full walkthrough: `Docs/operations/DockerDevelopment.md`.
