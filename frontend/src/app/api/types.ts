@@ -525,7 +525,9 @@ export interface ReportData {
   participationByGrade: { grade: string; total: number; participated: number; rate: number }[];
   completionByGrade: { grade: string; total: number; completed: number; rate: number }[];
   serviceHoursByMonth: { month: string; hours: number }[];
-  topProjects: { title: string; participants: number; totalHours: number }[];
+  /** Minutes on the wire; render with `minutesToHours`. Issue 093 §9: this was
+   *  `totalHours: Math.round(minutes / 60)`, which reported 150 minutes as 3h. */
+  topProjects: { title: string; participants: number; totalMinutes: number }[];
 }
 
 /** `underReview` removed 2026-09-16 (issue 080): unreachable since the two-tier review went away — a reviewer decides straight from `submitted`. */

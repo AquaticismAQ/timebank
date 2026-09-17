@@ -980,7 +980,7 @@ export const api = {
         participationByGrade: participation.byGrade.map(g => ({ grade: g.gradeName, total: g.totalStudents, participated: g.participatedStudents, rate: g.participationRate })),
         completionByGrade: completion.byGrade.map(g => ({ grade: g.gradeName, total: g.totalStudents, completed: g.completedStudents, rate: g.completionRate })),
         serviceHoursByMonth: serviceHours.byMonth,
-        topProjects: topProjects.topProjects.map(p => ({ title: p.title, participants: p.participants, totalHours: Math.round(p.totalMinutes / 60) })),
+        topProjects: topProjects.topProjects.map(p => ({ title: p.title, participants: p.participants, totalMinutes: p.totalMinutes })),
       };
     },
   },

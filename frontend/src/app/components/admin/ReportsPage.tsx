@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 const TOTAL_BAR_COLOR = '#94a3b8'; // slate-400 — visible in both light and dark
 import { api } from '../../api/client';
+import { minutesToHours } from '../../lib/format';
 import { useDictionaries } from '../../api/useDictionaries';
 import { ListStateBanner } from '../ListStateBanner';
 
@@ -340,9 +341,9 @@ export function ReportsPage() {
                       }`}>{i + 1}</div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-foreground truncate">{proj.title}</div>
-                        <div className="text-xs text-muted-foreground">{proj.participants} {t('admin.reports.people')} · {proj.totalHours}h {t('admin.reports.total')}</div>
+                        <div className="text-xs text-muted-foreground">{proj.participants} {t('admin.reports.people')} · {minutesToHours(proj.totalMinutes)}h {t('admin.reports.total')}</div>
                       </div>
-                      <div className="text-sm font-medium text-foreground">{proj.totalHours}h</div>
+                      <div className="text-sm font-medium text-foreground">{minutesToHours(proj.totalMinutes)}h</div>
                     </div>
                   ))}
                 </div>

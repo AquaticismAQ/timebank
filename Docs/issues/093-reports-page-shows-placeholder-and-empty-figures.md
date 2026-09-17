@@ -1,6 +1,6 @@
 # 093 — Reports page shows placeholder and empty figures
 
-**Status:** All eight findings fixed. 1 implemented but not yet live-verified; 2-8 live-verified.
+**Status:** Closed. All nine findings fixed, deployed, and verified in a browser against the live server (9/9).
 **Reported:** 2026-09-17 by the user, as five symptoms on the Reports page.
 
 Filed as one document rather than five: they arrived as one report about one
@@ -195,3 +195,41 @@ zero" is not the same as a report that is correct.
 can fan out, with `exists` preserving the original "projects that have
 registrants" filter. Verified live: the report now returns 150, matching the
 database.
+
+## 9. Top Projects rounded 150 minutes to "3h" — *found during browser verification*
+
+The browser pass reported §8 as passing while showing `3h` for a project holding
+150 minutes. 150 minutes is **2.5** hours; `Math.round(150/60)` is 3 — a 20%
+overstatement on a service-hours figure.
+
+The API client mapped `totalHours: Math.round(p.totalMinutes / 60)`, while the
+rest of the application formats durations with `lib/format.ts`'s
+`minutesToHours`, which yields `2.5`. `ReportData` now carries `totalMinutes`,
+matching the repo's stated "minutes on the wire, derive hours" convention, and
+the page formats with the shared helper.
+
+Worth noting how this was nearly missed: the check asserted the page showed
+`Math.round(minutes/60)` + `"h"` — it computed the expected value the *same
+wrong way* the code did, so it agreed with the bug. It now asserts the exact
+figure (`2.5h`).
+
+## Browser verification
+
+All nine verified against the live server with Playwright:
+
+| § | Check | Result |
+| :--- | :--- | :--- |
+| 1 | Year options come from the API; switching years changes the page | options `ay_2025_2026`, `ay_2024_2025`; switching changed the page |
+| 2 | Participation Rate is a number | `50%` |
+| 3 | Peak/lowest match the plotted series | `2026-07 · 194h` / `2026-01 · 7h`, matching series max/min |
+| 4 | Top Projects shows real hours | 150 min on one project |
+| 5 | Export removed from Reports | 0 occurrences of "Export" |
+| 6 | Data updated is live | a real timestamp, not `2026-07-27 08:00` |
+| 7 | Export labels honest | no "Export Audit Logs"; "Participation Report" present |
+| 8 | Hours not inflated | API 150 = DB 150 (was 600) |
+| 9 | Hours formatted correctly | renders `2.5h`, not `3h` |
+
+§1 needed a second academic year to be testable at all — with only one year
+seeded, the check could confirm the parameter was *sent* but not that it changed
+anything. `ay_2024_2025` was added to the live server for that: scoped to it the
+reports return 0 months / 0h, against 8 months / 560h for the current year.
