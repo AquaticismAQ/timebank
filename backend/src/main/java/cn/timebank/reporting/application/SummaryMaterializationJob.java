@@ -40,24 +40,24 @@ class SummaryMaterializationJob {
     private final AcademicStructureService academicStructureService;
     private final RuleResolutionService ruleResolutionService;
     private final ReportServiceImpl reportService;
-    private final CurrentAcademicYearResolver currentAcademicYearResolver;
+    private final ReportAcademicYearResolver academicYearResolver;
 
     SummaryMaterializationJob(ReportQueryRepository queryRepository, SummaryRepository summaryRepository,
                                AcademicStructureService academicStructureService, RuleResolutionService ruleResolutionService,
-                               ReportServiceImpl reportService, CurrentAcademicYearResolver currentAcademicYearResolver) {
+                               ReportServiceImpl reportService, ReportAcademicYearResolver academicYearResolver) {
         this.queryRepository = queryRepository;
         this.summaryRepository = summaryRepository;
         this.academicStructureService = academicStructureService;
         this.ruleResolutionService = ruleResolutionService;
         this.reportService = reportService;
-        this.currentAcademicYearResolver = currentAcademicYearResolver;
+        this.academicYearResolver = academicYearResolver;
     }
 
     @Scheduled(cron = "0 0 * * * *")
     @SchedulerLock(name = "gradeSummaryMaterialization", lockAtMostFor = "PT10M", lockAtLeastFor = "PT10S")
     void materialize() {
         Instant generatedAt = Instant.now();
-        AcademicYearDto year = currentAcademicYearResolver.resolve();
+        AcademicYearDto year = academicYearResolver.resolve();
         List<GradeDto> grades = academicStructureService.listGrades("zh-CN");
 
         Map<String, ReportQueryRepository.GradeParticipationRow> participation = new HashMap<>();

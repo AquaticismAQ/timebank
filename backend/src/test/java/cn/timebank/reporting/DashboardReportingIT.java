@@ -1,11 +1,20 @@
 package cn.timebank.reporting;
 
+import cn.timebank.common.cache.CacheConfig;
+import cn.timebank.common.error.ApiErrorCode;
+import cn.timebank.common.error.ApiException;
+import cn.timebank.enrollment.application.EnrollmentService;
+import cn.timebank.enrollment.application.dto.EnrollmentDto;
+import cn.timebank.enrollment.application.dto.EnrollmentRequests.RegisterRequest;
 import cn.timebank.file.application.FileService;
 import cn.timebank.file.application.dto.FileRequests.CreateUploadIntentRequest;
 import cn.timebank.file.application.dto.UploadIntentDto;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.iam.application.dto.AuthenticatedUserView;
 import cn.timebank.iam.application.dto.CreateUserRequest;
+import cn.timebank.project.application.ProjectService;
+import cn.timebank.project.application.dto.ProjectDto;
+import cn.timebank.project.application.dto.ProjectRequests.CreateProjectRequest;
 import cn.timebank.reporting.application.DashboardService;
 import cn.timebank.reporting.application.ReportService;
 import cn.timebank.reporting.application.dto.CompletionReportDto;
@@ -13,6 +22,8 @@ import cn.timebank.reporting.application.dto.DashboardAdminDto;
 import cn.timebank.reporting.application.dto.DashboardStudentDto;
 import cn.timebank.reporting.application.dto.DashboardTeacherDto;
 import cn.timebank.reporting.application.dto.ParticipationReportDto;
+import cn.timebank.reporting.application.dto.ServiceHoursReportDto;
+import cn.timebank.reporting.application.dto.TopProjectsReportDto;
 import cn.timebank.review.application.ReviewService;
 import cn.timebank.review.application.dto.ReviewRequests.DecideRequest;
 import cn.timebank.security.application.CookieSessionUserDetails;
@@ -27,18 +38,23 @@ import cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
 import java.io.ByteArrayInputStream;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * B5.7/B5.8's exit criteria: report figures for a seeded grade match a
@@ -64,6 +80,23 @@ class DashboardReportingIT extends AbstractIntegrationTest {
     private ReportService reportService;
     @Autowired
     private DashboardService dashboardService;
+    @Autowired
+    private ProjectService projectService;
+    @Autowired
+    private EnrollmentService enrollmentService;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private CacheManager cacheManager;
+
+    /** The academic year `R__seed_base_data.sql` seeds and marks current: 2025-09-01..2026-08-31. */
+    private static final String SEEDED_YEAR_ID = "ay_2025_2026";
+    private static final String LATER_YEAR_ID = "ay_it_later";
+    private static final String AROUND_NOW_YEAR_ID = "ay_it_around_now";
+    private static final String LONG_PAST_YEAR_ID = "ay_it_long_past";
+    /** Both in the past for good (a future service date is rejected) and each inside exactly one of the two years. */
+    private static final LocalDate IN_SEEDED_YEAR = LocalDate.of(2025, 10, 15);
+    private static final LocalDate IN_LATER_YEAR = LocalDate.of(2026, 9, 10);
 
     private static final byte[] VALID_JPEG = cn.timebank.testsupport.TestImages.validJpegBytes();
 
@@ -77,12 +110,17 @@ class DashboardReportingIT extends AbstractIntegrationTest {
         StudentDetailDto participant2 = createStudent("grade_10", "class_10A");
         StudentDetailDto participant3 = createStudent("grade_10", "class_10A");
         StudentDetailDto nonParticipant = createStudent("grade_10", "class_10A");
-        submitRecord(participant1, 60);
-        submitRecord(participant2, 60);
-        submitRecord(participant3, 60);
+        // Dated into the seeded academic year explicitly. These three calls used
+        // to say `LocalDate.now().minusDays(1)`, which silently stopped being
+        // inside the seeded window (..2026-08-31) once the wall clock passed it —
+        // the report would then correctly count nobody and this test would fail
+        // for a reason that has nothing to do with the report.
+        submitRecord(participant1, IN_SEEDED_YEAR, 60);
+        submitRecord(participant2, IN_SEEDED_YEAR, 60);
+        submitRecord(participant3, IN_SEEDED_YEAR, 60);
         // nonParticipant has no record at all.
 
-        ParticipationReportDto report = reportService.participation("zh-CN");
+        ParticipationReportDto report = reportService.participation("zh-CN", null);
 
         assertThat(report.generatedAt()).isNotNull();
         ParticipationReportDto.GradeFigure grade10 = report.byGrade().stream()
@@ -105,13 +143,13 @@ class DashboardReportingIT extends AbstractIntegrationTest {
     void completionReportUsesTheRightGradeBandsRequirement() {
         StudentDetailDto highCompliant = createStudent("grade_11", "class_11A");
         StudentDetailDto highShortfall = createStudent("grade_11", "class_11A");
-        submitAndApproveRecord(highCompliant, 5000);
-        submitAndApproveRecord(highShortfall, 1000);
+        submitAndApproveRecordOn(highCompliant, IN_SEEDED_YEAR, 5000);
+        submitAndApproveRecordOn(highShortfall, IN_SEEDED_YEAR, 1000);
 
         StudentDetailDto middleCompliant = createStudent("grade_7", "class_7A");
-        submitAndApproveRecord(middleCompliant, 2000); // above middle school's 1,500 but below high school's 4,500
+        submitAndApproveRecordOn(middleCompliant, IN_SEEDED_YEAR, 2000); // above middle school's 1,500 but below high school's 4,500
 
-        CompletionReportDto report = reportService.completion("zh-CN");
+        CompletionReportDto report = reportService.completion("zh-CN", null);
 
         assertThat(report.generatedAt()).isNotNull();
         CompletionReportDto.GradeFigure grade11 = report.byGrade().stream()
@@ -185,26 +223,138 @@ class DashboardReportingIT extends AbstractIntegrationTest {
         assertThat(adminDashboard.stats().totalStudents()).isGreaterThanOrEqualTo(1);
     }
 
-    private void submitRecord(StudentDetailDto student, int durationMinutes) {
-        Instant end = Instant.now().minus(1, ChronoUnit.DAYS);
-        Instant start = end.minus(durationMinutes, ChronoUnit.MINUTES);
-        CreateServiceRecordRequest request = new CreateServiceRecordRequest(
-                "SELF", null, null, null, LocalDate.now().minusDays(1), start, end,
-                "Somewhere", "cat_campus", "desc", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
-                List.of(readyFile()), false, null);
-        ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
-        serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-report-submit-" + draft.id(), "zh-CN");
+    /**
+     * Issue 093 §1, against the real SQL rather than the service wiring that
+     * {@code ReportYearScopeTest} covers. Two academic years, the same three
+     * students, and service dated into one year or the other — if the {@code
+     * between :start and :end} predicates stopped being fed the selected
+     * year's window, the two calls would agree and every assertion below
+     * would fail.
+     *
+     * <p>The dates are fixed literals, not offsets from {@code now()}: the
+     * seeded current year is itself a fixed window (2025-09-01..2026-08-31 in
+     * {@code R__seed_base_data.sql}), so a relative date would drift out of
+     * it. Both are in the past and stay there.</p>
+     */
+    @Test
+    void reportsScopedToDifferentAcademicYearsReturnDifferentFigures() {
+        insertAcademicYear(LATER_YEAR_ID, "IT-later", LocalDate.of(2026, 9, 1), LocalDate.of(2027, 8, 31));
+
+        // grade_9 is untouched by every other fixture in this class.
+        StudentDetailDto compliantInSeededYear = createStudent("grade_9", "class_9A");
+        StudentDetailDto shortfallInSeededYear = createStudent("grade_9", "class_9A");
+        StudentDetailDto servedInLaterYear = createStudent("grade_9", "class_9A");
+        submitAndApproveRecordOn(compliantInSeededYear, IN_SEEDED_YEAR, 5000); // grade_9 needs 4,500
+        submitAndApproveRecordOn(shortfallInSeededYear, IN_SEEDED_YEAR, 1000);
+        submitAndApproveRecordOn(servedInLaterYear, IN_LATER_YEAR, 1000);
+
+        ParticipationReportDto seededYear = reportService.participation("zh-CN", SEEDED_YEAR_ID);
+        ParticipationReportDto laterYear = reportService.participation("zh-CN", LATER_YEAR_ID);
+        assertThat(seededYear.academicYearId()).isEqualTo(SEEDED_YEAR_ID);
+        assertThat(laterYear.academicYearId()).isEqualTo(LATER_YEAR_ID);
+        // Same denominator — all three were already enrolled — different numerator.
+        assertThat(grade9(seededYear).totalStudents()).isEqualTo(3);
+        assertThat(grade9(laterYear).totalStudents()).isEqualTo(3);
+        assertThat(grade9(seededYear).participatedStudents()).isEqualTo(2);
+        assertThat(grade9(laterYear).participatedStudents()).isEqualTo(1);
+
+        CompletionReportDto seededCompletion = reportService.completion("zh-CN", SEEDED_YEAR_ID);
+        CompletionReportDto laterCompletion = reportService.completion("zh-CN", LATER_YEAR_ID);
+        assertThat(grade9Completion(seededCompletion).completedStudents()).isEqualTo(1);
+        assertThat(grade9Completion(laterCompletion).completedStudents()).isZero();
+
+        // School-wide, so other fixtures in this class contribute months too —
+        // asserted by which month appears in which year, not by exact totals.
+        ServiceHoursReportDto seededHours = reportService.serviceHours(SEEDED_YEAR_ID);
+        ServiceHoursReportDto laterHours = reportService.serviceHours(LATER_YEAR_ID);
+        assertThat(months(seededHours)).contains("2025-10").doesNotContain("2026-09");
+        assertThat(months(laterHours)).contains("2026-09").doesNotContain("2025-10");
     }
 
-    private void submitAndApproveRecord(StudentDetailDto student, int durationMinutes) {
-        Instant end = Instant.now().minus(1, ChronoUnit.DAYS);
+    /**
+     * Issue 093 §1: top-projects is the one report with no service date to
+     * bound — it is scoped by {@code project.start_at}, a predicate that
+     * exists nowhere else and so is worth proving against the real query.
+     * Both years here are relative to {@code now()} because a project's own
+     * schedule has to be in the future for it to be published and registered
+     * against.
+     */
+    @Test
+    void topProjectsListsOnlyProjectsScheduledInsideTheYearAsked() {
+        LocalDate today = LocalDate.now();
+        insertAcademicYear(AROUND_NOW_YEAR_ID, "IT-now", today.minusDays(30), today.plusDays(30));
+        insertAcademicYear(LONG_PAST_YEAR_ID, "IT-past", LocalDate.of(2020, 9, 1), LocalDate.of(2021, 8, 31));
+
+        Instant now = Instant.now();
+        CreateProjectRequest request = new CreateProjectRequest(
+                "Year Scope Test Project", "summary", "description", "cat_campus", null, null, "ON_CAMPUS",
+                now.plusSeconds(7200), now.plusSeconds(10800), "Hall", 5, 100, null, null,
+                now.minusSeconds(60), now.plusSeconds(3600));
+        ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto registrationOpen = projectService.getDetail(published.id(), authFor("usr_dash_admin", null, "admin"), "zh-CN");
+        // grade_8, not grade_9: the year-scoping test above asserts an exact grade_9
+        // head count, and test methods in a class share one schema.
+        StudentDetailDto student = createStudent("grade_8", "class_8A");
+        EnrollmentDto enrollment = enrollmentService.register(
+                registrationOpen.id(), new RegisterRequest(null), studentAuth(student.id()), "zh-CN");
+        assertThat(enrollment.status()).isEqualTo("CONFIRMED");
+
+        TopProjectsReportDto aroundNow = reportService.topProjects(AROUND_NOW_YEAR_ID);
+        TopProjectsReportDto longPast = reportService.topProjects(LONG_PAST_YEAR_ID);
+
+        assertThat(aroundNow.topProjects()).extracting(TopProjectsReportDto.ProjectFigure::projectId)
+                .contains(published.id());
+        assertThat(longPast.topProjects()).extracting(TopProjectsReportDto.ProjectFigure::projectId)
+                .doesNotContain(published.id());
+        assertThat(aroundNow.academicYearId()).isEqualTo(AROUND_NOW_YEAR_ID);
+        assertThat(longPast.academicYearId()).isEqualTo(LONG_PAST_YEAR_ID);
+    }
+
+    @Test
+    void anUnknownAcademicYearIsRejectedRatherThanScopedToTheCurrentOne() {
+        assertThatThrownBy(() -> reportService.participation("zh-CN", "ay_does_not_exist"))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).code()).isEqualTo(ApiErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private static ParticipationReportDto.GradeFigure grade9(ParticipationReportDto report) {
+        return report.byGrade().stream().filter(g -> g.gradeId().equals("grade_9")).findFirst().orElseThrow();
+    }
+
+    private static CompletionReportDto.GradeFigure grade9Completion(CompletionReportDto report) {
+        return report.byGrade().stream().filter(g -> g.gradeId().equals("grade_9")).findFirst().orElseThrow();
+    }
+
+    private static List<String> months(ServiceHoursReportDto report) {
+        return report.byMonth().stream().map(ServiceHoursReportDto.MonthFigure::month).toList();
+    }
+
+    /** Straight JDBC: {@code AcademicYear} is a read-only entity with no public constructor, and the dictionary read is cached. */
+    private void insertAcademicYear(String id, String code, LocalDate start, LocalDate end) {
+        jdbcTemplate.update("""
+                insert ignore into academic_year (id, code, start_date, end_date, is_current, created_at, updated_at)
+                values (?, ?, ?, ?, 0, now(3), now(3))
+                """, id, code, start, end);
+        Cache dictionaries = cacheManager.getCache(CacheConfig.DICTIONARIES);
+        if (dictionaries != null) {
+            dictionaries.clear();
+        }
+    }
+
+    private ServiceRecordDto submitRecord(StudentDetailDto student, LocalDate serviceDate, int durationMinutes) {
+        Instant end = serviceDate.atTime(12, 0).toInstant(ZoneOffset.UTC);
         Instant start = end.minus(durationMinutes, ChronoUnit.MINUTES);
         CreateServiceRecordRequest request = new CreateServiceRecordRequest(
-                "SELF", null, null, null, LocalDate.now().minusDays(1), start, end,
+                "SELF", null, null, null, serviceDate, start, end,
                 "Somewhere", "cat_campus", "desc", "EXTERNAL_MANUAL", null, "Test Supervisor", "test@example.com",
                 List.of(readyFile()), false, null);
         ServiceRecordDto draft = serviceRecordService.createDraft(request, student.id(), student.id(), "zh-CN");
-        ServiceRecordDto submitted = serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-report-submit-" + draft.id(), "zh-CN");
+        return serviceRecordService.submit(draft.id(), studentAuth(student.id()), "idem-report-submit-" + draft.id(), "zh-CN");
+    }
+
+    private void submitAndApproveRecordOn(StudentDetailDto student, LocalDate serviceDate, int durationMinutes) {
+        ServiceRecordDto submitted = submitRecord(student, serviceDate, durationMinutes);
         reviewService.decide(submitted.id(), new DecideRequest("APPROVE", "GOOD", null, submitted.version()),
                 authFor("usr_dash_admin", null, "admin"), "idem-report-decide-" + submitted.id(), "zh-CN");
     }

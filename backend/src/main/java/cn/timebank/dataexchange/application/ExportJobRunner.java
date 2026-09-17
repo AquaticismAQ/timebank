@@ -135,7 +135,17 @@ class ExportJobRunner {
         }
     }
 
-    /** The five aggregate reports are already bounded (grades, months, reviewers, top-N projects) — one small write, no chunking needed, still off the request thread. */
+    /**
+     * The five aggregate reports are already bounded (grades, months,
+     * reviewers, top-N projects) — one small write, no chunking needed, still
+     * off the request thread.
+     *
+     * <p>Every call below passes a {@code null} academic year, i.e. the
+     * current one (issue 093 §1). An export job request carries no period
+     * today, so there is nothing to pass; exporting an arbitrary year needs a
+     * field on the export request first, which is a separate contract
+     * change.</p>
+     */
     private int writeReportCsv(String reportType, Path tempFile) throws Exception {
         try (BufferedWriter writer = Files.newBufferedWriter(tempFile)) {
             int rows = switch (reportType) {
@@ -151,7 +161,7 @@ class ExportJobRunner {
     }
 
     private int writeParticipation(BufferedWriter writer) throws Exception {
-        ParticipationReportDto report = reportService.participation("zh-CN");
+        ParticipationReportDto report = reportService.participation("zh-CN", null);
         writer.write("gradeId,gradeName,totalStudents,participatedStudents,participationRate");
         writer.newLine();
         for (var g : report.byGrade()) {
@@ -163,7 +173,7 @@ class ExportJobRunner {
     }
 
     private int writeCompletion(BufferedWriter writer) throws Exception {
-        CompletionReportDto report = reportService.completion("zh-CN");
+        CompletionReportDto report = reportService.completion("zh-CN", null);
         writer.write("gradeId,gradeName,totalStudents,completedStudents,completionRate");
         writer.newLine();
         for (var g : report.byGrade()) {
@@ -175,7 +185,7 @@ class ExportJobRunner {
     }
 
     private int writeServiceHours(BufferedWriter writer) throws Exception {
-        ServiceHoursReportDto report = reportService.serviceHours();
+        ServiceHoursReportDto report = reportService.serviceHours(null);
         writer.write("month,hours");
         writer.newLine();
         for (var m : report.byMonth()) {
@@ -186,7 +196,7 @@ class ExportJobRunner {
     }
 
     private int writeReviewEfficiency(BufferedWriter writer) throws Exception {
-        ReviewEfficiencyReportDto report = reportService.reviewEfficiency();
+        ReviewEfficiencyReportDto report = reportService.reviewEfficiency(null);
         writer.write("reviewerId,reviewerName,decisions,avgHours");
         writer.newLine();
         for (var r : report.byReviewer()) {
@@ -197,7 +207,7 @@ class ExportJobRunner {
     }
 
     private int writeTopProjects(BufferedWriter writer) throws Exception {
-        TopProjectsReportDto report = reportService.topProjects();
+        TopProjectsReportDto report = reportService.topProjects(null);
         writer.write("projectId,title,participants,totalMinutes");
         writer.newLine();
         for (var p : report.topProjects()) {

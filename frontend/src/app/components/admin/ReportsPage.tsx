@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 const TOTAL_BAR_COLOR = '#94a3b8'; // slate-400 — visible in both light and dark
 import { api } from '../../api/client';
+import { useDictionaries } from '../../api/useDictionaries';
 import { ListStateBanner } from '../ListStateBanner';
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
@@ -16,10 +17,29 @@ export function ReportsPage() {
   const [participationSubTab, setParticipationSubTab] = useState<'participated' | 'completed'>('participated');
   const [data, setData] = useState<ReportData | null>(null);
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [yearFilter, setYearFilter] = useState('2025-2026');
+  // Issue 093 §1. `yearFilter` used to be a hardcoded '2025-2026' that nothing
+  // read: the fetch below had `[]` dependencies and `api.reports.data()` took
+  // no argument. The options now come from `/academic-years` and the selection
+  // is what the report endpoints are scoped by.
+  const { academicYears, loading: dictionariesLoading } = useDictionaries();
+  const [yearFilter, setYearFilter] = useState('');
+
+  // Most recent year first — `/academic-years` returns them unordered.
+  const yearOptions = [...academicYears].sort((a, b) => b.startDate.localeCompare(a.startDate));
+  // The current year is the default until the user picks one, derived rather
+  // than written into state on load: setting state from an effect would let the
+  // fetch below fire once unscoped and then again a render later.
+  const selectedYear = yearFilter || academicYears.find(y => y.current)?.id || '';
 
   useEffect(() => {
-    api.reports.data().then(setData).catch(() => {});
+    // Waits for the dictionary load so the first request already carries a year.
+    // A still-empty `selectedYear` past that point means the dictionary call
+    // failed — fetch anyway and let the server apply its own default.
+    if (dictionariesLoading) return;
+    api.reports.data(selectedYear || undefined).then(setData).catch(() => {});
+  }, [dictionariesLoading, selectedYear]);
+
+  useEffect(() => {
     api.dashboards.admin().then(d => setStats(d.stats)).catch(() => {});
   }, []);
 
@@ -56,6 +76,14 @@ export function ReportsPage() {
   // ("April · 620h"), left over from before the endpoint existed, so they
   // contradicted the curve drawn beside them. Derived from the plotted series.
   const monthsWithHours = data.serviceHoursByMonth.filter(m => typeof m.hours === 'number');
+  // Issue 093 §1. The card read `stats.totalServiceHours`, which
+  // `GET /dashboards/admin` computes for the *current* academic year and has no
+  // year parameter — so once the dropdown worked, a card labelled only "Total
+  // Service Hours" would have kept showing this year's figure under a header
+  // naming another. Summed from the year-scoped trend the page already loads.
+  // (Active Projects and Approved This Month below are deliberately left alone:
+  // both name their own period and are "right now" figures, not year figures.)
+  const totalServiceHours = monthsWithHours.reduce((sum, m) => sum + m.hours, 0);
   const peakMonth = monthsWithHours.length
     ? monthsWithHours.reduce((a, b) => (b.hours > a.hours ? b : a))
     : null;
@@ -78,10 +106,14 @@ export function ReportsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <select value={yearFilter} onChange={e => setYearFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
-            <option value="2025-2026">{t('admin.reports.academicYear', { year: '2025-2026' })}</option>
-            <option value="2024-2025">{t('admin.reports.academicYear', { year: '2024-2025' })}</option>
+          <select value={selectedYear} onChange={e => setYearFilter(e.target.value)}
+            disabled={yearOptions.length === 0}
+            className="px-3 py-2 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none disabled:opacity-60">
+            {yearOptions.map(year => (
+              <option key={year.id} value={year.id}>
+                {t('admin.reports.academicYear', { year: year.code })}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -89,7 +121,7 @@ export function ReportsPage() {
       {/* Key metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: t('admin.reports.totalServiceHours'), value: `${stats.totalServiceHours.toLocaleString()}h`, icon: Clock, color: 'text-blue-500 bg-blue-100 dark:bg-blue-900/30' },
+          { label: t('admin.reports.totalServiceHours'), value: `${totalServiceHours.toLocaleString()}h`, icon: Clock, color: 'text-blue-500 bg-blue-100 dark:bg-blue-900/30' },
           { label: t('admin.reports.participationRate'), value: participationRate != null ? `${Math.round(participationRate * 100)}%` : '—', icon: Users, color: 'text-green-500 bg-green-100 dark:bg-green-900/30' },
           { label: t('admin.reports.activeProjects'), value: stats.activeProjects, icon: BarChart2, color: 'text-purple-500 bg-purple-100 dark:bg-purple-900/30' },
           { label: t('admin.reports.approvedThisMonth'), value: stats.approvedThisMonth, icon: TrendingUp, color: 'text-orange-500 bg-orange-100 dark:bg-orange-900/30' },

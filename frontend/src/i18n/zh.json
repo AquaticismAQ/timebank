@@ -1359,8 +1359,6 @@
     "reports": {
       "title": "统计报表",
       "dataUpdate": "数据更新时间：2026-07-27 08:00",
-      "yearFilter": "2025-2026 学年",
-      "yearFilterAlt": "2024-2025 学年",
       "export": "导出",
       "exportToast": "报表导出任务已创建，完成后将通知您下载",
       "totalHours": "总服务时长",

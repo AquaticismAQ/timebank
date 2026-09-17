@@ -49,13 +49,13 @@ class DashboardServiceImpl implements DashboardService {
     private final ReportQueryRepository queryRepository;
     private final DataScopeResolver dataScopeResolver;
     private final ReportService reportService;
-    private final CurrentAcademicYearResolver currentAcademicYearResolver;
+    private final ReportAcademicYearResolver academicYearResolver;
 
     DashboardServiceImpl(ProgressService progressService, AccountService accountService,
                          ServiceRecordService serviceRecordService, ProjectService projectService,
                          NotificationService notificationService, ReviewService reviewService,
                          ReportQueryRepository queryRepository, DataScopeResolver dataScopeResolver,
-                         ReportService reportService, CurrentAcademicYearResolver currentAcademicYearResolver) {
+                         ReportService reportService, ReportAcademicYearResolver academicYearResolver) {
         this.progressService = progressService;
         this.accountService = accountService;
         this.serviceRecordService = serviceRecordService;
@@ -65,7 +65,7 @@ class DashboardServiceImpl implements DashboardService {
         this.queryRepository = queryRepository;
         this.dataScopeResolver = dataScopeResolver;
         this.reportService = reportService;
-        this.currentAcademicYearResolver = currentAcademicYearResolver;
+        this.academicYearResolver = academicYearResolver;
     }
 
     @Override
@@ -112,12 +112,14 @@ class DashboardServiceImpl implements DashboardService {
     @Override
     @Cacheable(value = CacheConfig.DASHBOARDS, key = "'admin:' + #auth.name")
     public DashboardAdminDto admin(Authentication auth, String resolvedLanguage) {
-        AcademicYearDto year = currentAcademicYearResolver.resolve();
+        AcademicYearDto year = academicYearResolver.resolve();
         LocalDate monthStart = YearMonth.now().atDay(1);
         LocalDate monthEnd = monthStart.plusMonths(1);
         ReportQueryRepository.AdminStatsRow row = queryRepository.adminStats(monthStart, monthEnd, year.startDate(), year.endDate());
         long pendingReviews = reviewService.summary(auth).pendingCount();
-        Double reviewAvgHours = reportService.reviewEfficiency().overallAvgHours();
+        // `null` = the current academic year: the dashboard is a "right now"
+        // view with no period selector of its own (issue 093 §1).
+        Double reviewAvgHours = reportService.reviewEfficiency(null).overallAvgHours();
 
         AdminStatsDto stats = new AdminStatsDto(row.totalStudents(), row.activeStudents(), row.totalProjects(),
                 row.activeProjects(), pendingReviews, row.approvedThisMonth(), row.totalServiceHoursThisYear(), reviewAvgHours);

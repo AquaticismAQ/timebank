@@ -28,12 +28,23 @@ public class ReportQueryRepository {
     public record GradeParticipationRow(String gradeId, int totalStudents, int participatedStudents) {
     }
 
+    /**
+     * Issue 093 §1: the population is every student who was {@code ACTIVE}
+     * and already enrolled by the end of the window — {@code
+     * student.enrollment_academic_year_id} is the year a student entered the
+     * school, so a cohort that enrolled <em>after</em> the year being asked
+     * about must not sit in its denominator as a guaranteed non-participant.
+     * The reverse correction is not available: `status` is a present-tense
+     * fact and the schema keeps no historical roster, so a student who has
+     * since left is missing from a past year's population entirely.
+     */
     public List<GradeParticipationRow> participationByGrade(LocalDate start, LocalDate end) {
         String sql = """
                 select s.grade_id as grade_id,
                        count(distinct s.id) as total,
                        count(distinct case when sr.id is not null then s.id end) as participated
                 from student s
+                join academic_year ay on ay.id = s.enrollment_academic_year_id and ay.start_date <= :end
                 left join service_record sr on sr.student_id = s.id and sr.status <> 'DRAFT'
                        and sr.service_date between :start and :end
                 where s.status = 'ACTIVE'
@@ -47,12 +58,13 @@ public class ReportQueryRepository {
     public record StudentCompletionRow(String gradeId, String studentId, int completedMinutes) {
     }
 
-    /** One row per active student — bounded by student count (≤5,000), not by record count; the threshold comparison happens in Java over this already-aggregated set. */
+    /** One row per active student — bounded by student count (≤5,000), not by record count; the threshold comparison happens in Java over this already-aggregated set. Same population rule as {@link #participationByGrade}. */
     public List<StudentCompletionRow> completedMinutesByStudent(LocalDate start, LocalDate end) {
         String sql = """
                 select s.grade_id as grade_id, s.id as student_id,
                        coalesce(sum(sr.duration_minutes), 0) as completed_minutes
                 from student s
+                join academic_year ay on ay.id = s.enrollment_academic_year_id and ay.start_date <= :end
                 left join service_record sr on sr.student_id = s.id and sr.status = 'APPROVED'
                        and sr.service_date between :start and :end
                 where s.status = 'ACTIVE'
@@ -108,7 +120,16 @@ public class ReportQueryRepository {
     public record TopProjectRow(String projectId, String title, long participants, long totalMinutes) {
     }
 
-    public List<TopProjectRow> topProjects(int limit) {
+    /**
+     * Issue 093 §1: the only report whose scoping key is the project itself,
+     * not a service date. A project belongs to the academic year its own
+     * schedule falls in (`project.start_at`) — `enrollment` carries no year
+     * and its `applied_at` would put a project registered in August into the
+     * previous year. The joined records are bounded separately by
+     * `service_date` so a project's hours never include service logged
+     * against it in a different year from the one being asked about.
+     */
+    public List<TopProjectRow> topProjects(int limit, LocalDate start, LocalDate end) {
         String sql = """
                 select p.id as project_id, p.title as title,
                        count(distinct e.student_id) as participants,
@@ -116,11 +137,15 @@ public class ReportQueryRepository {
                 from project p
                 join enrollment e on e.project_id = p.id and e.status in ('CONFIRMED', 'COMPLETED')
                 left join service_record sr on sr.project_id = p.id and sr.status = 'APPROVED'
+                       and sr.service_date between :start and :end
+                where p.start_at >= :startAt and p.start_at < :endAtExclusive
                 group by p.id, p.title
                 order by participants desc, total_minutes desc
                 limit :limit
                 """;
-        MapSqlParameterSource params = new MapSqlParameterSource().addValue("limit", limit);
+        MapSqlParameterSource params = new MapSqlParameterSource().addValue("limit", limit)
+                .addValue("start", start).addValue("end", end)
+                .addValue("startAt", start.atStartOfDay()).addValue("endAtExclusive", end.plusDays(1).atStartOfDay());
         return jdbcTemplate.query(sql, params, (rs, rowNum) ->
                 new TopProjectRow(rs.getString("project_id"), rs.getString("title"), rs.getLong("participants"), rs.getLong("total_minutes")));
     }

@@ -738,6 +738,22 @@ Effective rules cannot be modified in place; changes must create a new version.
 
 Dashboard endpoints are for homepage aggregation only; business details are still obtained through resource endpoints. All page data must not be concentrated into a single "mega endpoint."
 
+**Academic-year scope of the five report endpoints.** Each accepts an optional `?academicYearId=` (an `id` from `GET /academic-years`, never the `code`). Omitted or blank means the academic year currently marked current — never "all years". An `academicYearId` that matches no academic year returns `RESOURCE_NOT_FOUND` (404) rather than silently falling back to the current year. Every report echoes the year it applied as `academicYearId` in its response body, so a client can confirm the scope it got is the scope it asked for.
+
+What "scoped to a year" means is not the same for all five, because nothing in the data model tags a student or a service record with an academic year:
+
+| Endpoint | Scoped by |
+| --- | --- |
+| `/reports/participation` | Service records **dated** inside the year. Population: students who are active and had already enrolled by the end of that year. |
+| `/reports/completion` | As participation, plus the annual required minutes that were in effect **during** that year — not today's rule. |
+| `/reports/service-hours` | Approved records **dated** inside the year, bucketed by month. |
+| `/reports/review-efficiency` | Review decisions **taken** inside the year (when the reviewer decided, not when the service happened). |
+| `/reports/top-projects` | Projects **scheduled** inside the year (`startAt`), with hours from approved records dated inside it. |
+
+Two limits are inherent rather than bugs to report: a student who has since left the school is absent from a past year's population, because student status is a present-tense fact and no historical roster is kept; and the export jobs in `POST /exports` carry no period of their own, so a report export is always of the current academic year.
+
+Dashboard endpoints take no `academicYearId`: they describe the present state of the school, and their period-bearing figures already name their own period (`approvedThisMonth`, `totalServiceHoursThisYear`).
+
 ### 4.14 Imports
 
 | Method | Path | Permission | Description |
@@ -1214,7 +1230,7 @@ This section exists so the backend can be built against what the frontend actual
 | `notifications.unreadCount` | `GET /notifications/unread-count` | Yes |
 | `notifications.markRead` / `markAllRead` | `PATCH /notifications/{id}` / `POST /notifications/read-all` | Yes |
 | `dashboards.student` / `admin` | `GET /dashboards/student` / `/admin` | Yes |
-| `reports.data` | Composes `GET /reports/participation`, `/completion`, `/service-hours`, `/top-projects` | Yes |
+| `reports.data(academicYearId?)` | Composes `GET /reports/participation`, `/completion`, `/service-hours`, `/top-projects`, passing the same optional `academicYearId` to each | Yes |
 | `users.list` | `GET /users` | No |
 
 `api.accounts.get(studentId)` takes a student ID while the account endpoints are keyed by account ID. This is resolved in the client — filter by `studentId`, then use the returned `accountId` — rather than by adding a student-scoped account endpoint.
