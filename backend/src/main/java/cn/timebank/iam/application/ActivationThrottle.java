@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The two limits guarding {@code POST /auth/activate}
@@ -68,9 +69,17 @@ class ActivationThrottle {
      */
     private static final int MAX_TRACKED_IPS = 10_000;
 
+    /** At most one exhaustion warning per this interval, however hard the endpoint is hit. */
+    private static final int EXHAUSTION_LOG_INTERVAL_MINUTES = 10;
+    private static final Duration EXHAUSTION_LOG_INTERVAL = Duration.ofMinutes(EXHAUSTION_LOG_INTERVAL_MINUTES);
+
     private final Bandwidth perIpBandwidth;
     private final Map<String, Bucket> perIpBuckets = new ConcurrentHashMap<>();
     private final Bucket globalFailureBudget;
+    private final AtomicLong guessesCharged = new AtomicLong();
+    private final AtomicLong guessesAtLastLog = new AtomicLong();
+    private final AtomicLong lastExhaustionLogAtNanos = new AtomicLong();
+    private final AtomicLong exhaustionWarnings = new AtomicLong();
 
     ActivationThrottle(
             @Value("${timebank.auth.activation.failure-budget-per-hour:300}") int failureBudgetPerHour,
@@ -118,15 +127,39 @@ class ActivationThrottle {
      * Charges one guess against the shared budget. Called only for a
      * well-formed code that matched no row — see the class note for why the
      * other failure modes deliberately cost nothing.
+     *
+     * <p>The exhaustion warning is deliberately rate limited. The budget refills
+     * greedily (one token every {@code 3600/capacity} seconds), so a sustained
+     * attack does not sit at zero — it drains each token as it appears, and a
+     * naive "warn whenever tokens are zero" fired once per guess: roughly
+     * {@value #EXHAUSTION_LOG_INTERVAL_MINUTES}-hundred lines an hour, into the
+     * six-month-retained log, during precisely the incident someone would be
+     * trying to read. One line per interval, carrying the number of guesses
+     * charged since the last one, says strictly more while staying legible.</p>
      */
     void recordGuess() {
         globalFailureBudget.tryConsume(1);
-        if (globalFailureBudget.getAvailableTokens() <= 0) {
+        long charged = guessesCharged.incrementAndGet();
+        if (globalFailureBudget.getAvailableTokens() > 0) {
+            return;
+        }
+        long now = System.nanoTime();
+        long last = lastExhaustionLogAtNanos.get();
+        boolean due = last == 0L || now - last >= EXHAUSTION_LOG_INTERVAL.toNanos();
+        if (due && lastExhaustionLogAtNanos.compareAndSet(last, now)) {
+            long since = charged - guessesAtLastLog.getAndSet(charged);
             // No code, no hash, no IP, no username: this line is a signal that
             // somebody is grinding the endpoint, not a record of what they tried.
-            log.warn("Activation failure budget exhausted — /auth/activate is now refusing attempts "
-                    + "until the budget refills. This is expected only under a brute-force attempt.");
+            log.warn("Activation failure budget exhausted — /auth/activate is refusing attempts "
+                    + "until it refills. {} guesses charged since the last such warning. "
+                    + "This is expected only under a brute-force attempt.", since);
+            exhaustionWarnings.incrementAndGet();
         }
+    }
+
+    /** Test seam: how many exhaustion warnings have actually been emitted. */
+    long exhaustionWarningsEmitted() {
+        return exhaustionWarnings.get();
     }
 
     /** Test seam: how many guesses the shared budget still has. */
