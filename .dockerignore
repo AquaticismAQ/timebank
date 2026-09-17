@@ -1,0 +1,33 @@
+# The build context is the repo root (docker-compose.yml needs `backend/`
+# visible), so without this every build would upload the whole working tree to
+# the daemon — including `.git`, two `node_modules` trees, and an 85 MB fat JAR
+# in `backend/target` that the image rebuilds from source anyway.
+
+.git
+.github
+**/node_modules
+
+# Build output. `backend/target` in particular: copying a host-built JAR into
+# the context risks the image silently shipping whatever was last built locally
+# instead of what the Dockerfile compiles.
+backend/target
+frontend/dist
+frontend/.vite
+
+# Nothing in the image needs these, and `.env` holds local credentials that
+# should never end up in a layer.
+.env
+*.env
+!docker/.env.example
+Docs
+Design
+Report
+drafts
+integration-test
+ops
+tmp
+output
+test-server-credits.md
+
+# Playwright/browser verification artefacts.
+.playwright-mcp

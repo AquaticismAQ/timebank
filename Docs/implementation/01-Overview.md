@@ -105,7 +105,9 @@ Five checkpoints where work stops until the criterion is met. They exist because
 
 ## 6. Environments
 
-**There is no Docker in this project.** Not in development, not in test, not in production. Services run as **systemd units** from a fat JAR, and every environment shares that one packaging model. Two consequences run through the whole plan: there is no `docker compose up` to bring a stack up locally, and **Testcontainers is not available**, so integration tests run against a real MySQL schema on the shared test server (`Design.md` §19).
+**Production runs no containers.** Services are deployed as **systemd units** from a fat JAR (`backend/scripts/deploy.sh`), and that is the only packaging model any real environment uses. **Testcontainers is still not available**, so integration tests run against a real MySQL schema they are given credentials for, never one they start themselves (`Design.md` §19, `MySqlTestSchemaExtension`).
+
+**Amended 2026-09-18 (issue 101):** this section previously read "no Docker in this project — not in development, not in test, not in production". The development half no longer holds. `docker-compose.yml` brings MySQL and the backend up on one machine, because the original rule assumed every contributor had a second host to use as a test server, and most do not. Nothing else moved: deployment is unchanged, no test starts a container, and CI does not build the image. The rule existed to stop *production* having two packaging models that drift apart — a stack on a laptop does not create that, since if it breaks the deployment path is untouched. See `Docs/operations/DockerDevelopment.md` §6.
 
 | Environment | What it is | Used for |
 | --- | --- | --- |

@@ -20,6 +20,18 @@ TIMEBANK_DB_USERNAME=timebank_app TIMEBANK_DB_PASSWORD=<from test-server-credits
 
 Optional env vars: `TIMEBANK_SSH_TARGET` (default `root@tb.example.com`), `TIMEBANK_BASE_URL` (default `https://tb.example.com`).
 
+### Seeding a local Docker stack
+
+Set `TIMEBANK_DB_HOST` and the SQL phase connects over TCP instead of shelling through SSH (issue 101) — which is what makes `docker-compose.yml` seedable, since there is no SSH host in that picture:
+
+```bash
+TIMEBANK_DB_HOST=127.0.0.1 TIMEBANK_DB_PORT=3307 \
+TIMEBANK_DB_USERNAME=timebank_app TIMEBANK_DB_PASSWORD=timebank-not-for-production \
+TIMEBANK_BASE_URL=http://localhost:8080 npm run seed
+```
+
+Needs a `mysql` client on your PATH. SSH stays the default for the shared server, where the database is not reachable over TCP from a workstation at all. Full walkthrough: `Docs/operations/DockerDevelopment.md` §4.
+
 If you keep `~/.timebank.env` (see `Docs/operations/DeploymentEnv.md`), `source ~/.timebank.env` before `npm run seed` sets all of the above at once instead of exporting them inline.
 
 Requires: SSH key access to the server (same key used for `backend/scripts/deploy.sh`), Node 18+ (for global `fetch`/`Headers.getSetCookie()`).

@@ -1,0 +1,64 @@
+# TimeBank backend — local development image (issue 101).
+#
+# This exists so a contributor with one machine can bring the stack up without
+# a second server. It is NOT the deployment artefact: production is a fat JAR
+# under a systemd unit (`backend/scripts/deploy.sh`), and that has not changed.
+# See `Docs/operations/DockerDevelopment.md` for where the line is drawn.
+#
+# Multi-stage, because the build needs a full JDK and Maven while the runtime
+# needs neither — carrying them into the final image would roughly triple it
+# and ship a compiler into every contributor's container for no reason.
+
+# ── Build ────────────────────────────────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /build
+
+# Dependencies first, as their own layer. `pom.xml` changes rarely and the
+# source changes constantly, so this caches the (slow, network-bound) dependency
+# resolution across every rebuild that does not touch the pom. Without the
+# split, every source edit re-downloads the world.
+COPY backend/pom.xml ./pom.xml
+RUN mvn -B -q dependency:go-offline
+
+COPY backend/src ./src
+# Tests are skipped *here* on purpose. `mvn verify` needs a real MySQL schema
+# with CREATE/DROP rights (`MySqlTestSchemaExtension`), which does not exist
+# during an image build — running them here would either fail the build or
+# quietly reduce to the unit subset and look like more coverage than it is.
+# Run them on the host: `cd backend && mvn test`.
+RUN mvn -B -q clean package -DskipTests
+
+# ── Runtime ──────────────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+
+# curl is for the container healthcheck below, and nothing else.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Not root. The app writes only to the evidence directory, which is a volume.
+RUN useradd --system --create-home --uid 10001 timebank
+# Exact name, not a version glob: `pom.xml` sets `<finalName>timebank-backend</finalName>`,
+# so the artefact is `timebank-backend.jar` with no version in it. A
+# `timebank-backend-*.jar` glob matches nothing and fails the build — verified
+# against a real `mvn package` rather than assumed from the artifactId/version.
+COPY --from=build /build/target/timebank-backend.jar /app/timebank-backend.jar
+
+# `TIMEBANK_FILE_STORAGE_PATH` points here, and compose mounts a named volume
+# over it. Without the volume, every uploaded evidence file would live in the
+# container's writable layer and vanish with the container — the same class of
+# loss issue 060 caused on the real server with an over-eager rsync `--delete`.
+RUN mkdir -p /app/data/evidence-storage && chown -R timebank:timebank /app
+USER timebank
+
+EXPOSE 8080
+
+# Readiness, not liveness: the process answers on the port well before Flyway
+# has finished migrating, and a check that only proves "something is listening"
+# would let compose declare the stack ready while the schema is still being
+# built.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=90s --retries=12 \
+    CMD curl -fsS http://127.0.0.1:8080/actuator/health/readiness | grep -q '"status":"UP"' || exit 1
+
+ENTRYPOINT ["java", "-jar", "/app/timebank-backend.jar"]

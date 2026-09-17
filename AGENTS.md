@@ -87,8 +87,10 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn verify     # adds *IT integration tes
 ```
 
 The machine's default `java` may not be JDK 21 — set `JAVA_HOME` explicitly
-as shown. **No Docker anywhere in this project** — not locally, not in
-tests, not in deployment. Integration tests (`*IT` classes, run via `mvn
+as shown. **No Docker in deployment or tests** — but there
+*is* a local development stack (`docker-compose.yml`, MySQL + backend on one
+machine, for contributors without a second host: `Docs/operations/DockerDevelopment.md`,
+issue 101). Production remains systemd + fat JAR and no test starts a container. Integration tests (`*IT` classes, run via `mvn
 verify`/Failsafe, not `mvn test`/Surefire) run against real MySQL on the
 shared test server, each in its own `timebank_it_<random>` schema created
 and dropped per test class — never against the application's own `timebank`

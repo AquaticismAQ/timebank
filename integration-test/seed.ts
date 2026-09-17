@@ -29,6 +29,25 @@ import {
 
 const SSH_TARGET = process.env.TIMEBANK_SSH_TARGET ?? 'root@tb.example.com';
 const BASE_URL = process.env.TIMEBANK_BASE_URL ?? 'https://tb.example.com';
+
+/**
+ * Direct-connection mode (issue 101). Set `TIMEBANK_DB_HOST` and the SQL phase
+ * talks to MySQL over TCP instead of shelling through SSH.
+ *
+ * This is what makes the Docker stack seedable. Without it the seeder could
+ * only reach a database that happened to sit on the far end of an SSH session,
+ * so a contributor could bring the local stack up and then have no way to put
+ * data in it — which is most of the point of having it up.
+ *
+ * The remote path stays the default and is untouched: on the shared server the
+ * database is not reachable over TCP from a workstation at all (VPC-internal,
+ * `08-mlps-level1-security-design-guide.md` §3), so SSH is not a stylistic
+ * choice there.
+ */
+const DB_HOST = process.env.TIMEBANK_DB_HOST;
+const DB_PORT = process.env.TIMEBANK_DB_PORT ?? '3306';
+const DB_NAME = process.env.TIMEBANK_DB_NAME ?? 'timebank';
+const USE_DIRECT_DB = Boolean(DB_HOST);
 const DB_USERNAME = requireEnv('TIMEBANK_DB_USERNAME');
 const DB_PASSWORD = requireEnv('TIMEBANK_DB_PASSWORD');
 
@@ -86,6 +105,41 @@ function shQuote(s: string): string {
 }
 
 /**
+ * The direct-TCP half of {@link runSqlOnServer} (issue 101), used when
+ * `TIMEBANK_DB_HOST` is set — the Docker stack, or any MySQL you can reach
+ * without a jump host.
+ *
+ * The password goes to the client as an environment variable, never as a
+ * command-line argument: `mysql -p<secret>` is visible in `ps` output to every
+ * other user on the machine for as long as the command runs. `MYSQL_PWD` is
+ * what the client reads for exactly this reason. It is still a local
+ * development password, but the habit is the point.
+ *
+ * No retry loop here. The remote path retries because sshd on the shared server
+ * drops connections under bot-driven `MaxStartups` throttling; a socket to a
+ * container on the same machine either connects or has a real problem, and
+ * retrying it would only delay the error.
+ */
+function runSqlDirect(sql: string): string {
+  const result = spawnSync(
+    'mysql',
+    ['--protocol=TCP', '-h', DB_HOST!, '-P', DB_PORT, '-u', DB_USERNAME, DB_NAME],
+    { input: sql, encoding: 'utf8', env: { ...process.env, MYSQL_PWD: DB_PASSWORD } }
+  );
+  if (result.error) {
+    throw new Error(
+      `Could not run the mysql client: ${result.error.message}. `
+      + 'The direct-connection mode needs a mysql client on your PATH '
+      + '(macOS: `brew install mysql-client`).'
+    );
+  }
+  if (result.status !== 0) {
+    throw new Error(`SQL phase failed (exit ${result.status}): ${result.stderr}`);
+  }
+  return result.stdout;
+}
+
+/**
  * Retries on transient SSH failures. This is not defensive padding: the test
  * server is continuously scanned by SSH brute-force bots, and when they
  * saturate sshd's `MaxStartups` window it drops *our* connection too
@@ -95,6 +149,7 @@ function shQuote(s: string): string {
  * connection rolls back and a retry is safe to repeat.
  */
 function runSqlOnServer(sql: string): string {
+  if (USE_DIRECT_DB) return runSqlDirect(sql);
   const cnf = `printf '[client]\\nuser=%s\\npassword=%s\\nhost=127.0.0.1\\nport=3306\\n' ${shQuote(DB_USERNAME)} ${shQuote(DB_PASSWORD)}`;
   const remoteCommand = `mysql --defaults-extra-file=<(${cnf}) timebank`;
   const attempts = 4;

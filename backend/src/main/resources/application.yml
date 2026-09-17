@@ -47,7 +47,15 @@ server:
   port: ${TIMEBANK_SERVER_PORT:8080}
   # Bound to loopback only — Nginx terminates TLS and proxies (Design.md §17.1);
   # the app is never reachable directly from outside the host.
-  address: 127.0.0.1
+  #
+  # Overridable solely so the container image can bind 0.0.0.0 (issue 101):
+  # inside a container, loopback means the container's own loopback, so a
+  # published port connects to nothing and the symptom is a bare connection
+  # refused with a perfectly healthy process behind it. The default is
+  # unchanged, so a systemd deployment that sets nothing keeps the property
+  # this line exists for; `docker-compose.yml` is the only thing that overrides
+  # it, and only because the container boundary already provides the isolation.
+  address: ${TIMEBANK_SERVER_ADDRESS:127.0.0.1}
   # Nginx sets X-Forwarded-Proto/-For (B0.11's vhost config) — without this,
   # request.isSecure() reports false behind the proxy and the Secure cookie
   # flag below would silently never be set.

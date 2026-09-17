@@ -1,0 +1,94 @@
+# TimeBank — local development stack (issue 101).
+#
+# Brings up MySQL and the backend on one machine, so a contributor does not need
+# a second server to work on this project. Production is unchanged and still has
+# no containers in it: a fat JAR under a systemd unit, deployed by
+# `backend/scripts/deploy.sh`. `Docs/operations/DockerDevelopment.md` explains
+# where that line sits and why.
+#
+#   cp docker/.env.example .env && docker compose up -d --build
+#
+# The frontend is deliberately not in here — see the doc. Run it on the host
+# with `pnpm dev`, which gives you hot reload and proxies /api to this backend.
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: timebank-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-not-for-production}
+      MYSQL_DATABASE: ${TIMEBANK_DB_NAME:-timebank}
+      MYSQL_USER: ${TIMEBANK_DB_USERNAME:-timebank_app}
+      MYSQL_PASSWORD: ${TIMEBANK_DB_PASSWORD:-timebank-not-for-production}
+    # utf8mb4 with the same collation as production (V1's table definitions).
+    # MySQL 8 defaults to utf8mb4_0900_ai_ci already; stating it here keeps a
+    # future image-default change from silently altering how names sort and
+    # compare, which for masked Chinese names is not a cosmetic difference.
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    ports:
+      # 3307 on the host, not 3306. Anyone who has ever installed MySQL locally
+      # already has 3306 bound, and the failure mode is a container that starts,
+      # binds nothing, and leaves you debugging the wrong database.
+      - "${TIMEBANK_DB_HOST_PORT:-3307}:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      # Authenticated ping, not `mysqladmin ping` unauthenticated: the server
+      # answers pings during initialisation, before the database and user in
+      # MYSQL_DATABASE/MYSQL_USER exist. The backend needs those, so waiting on
+      # a bare ping hands it a live server it cannot log into.
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1",
+             "-u", "${TIMEBANK_DB_USERNAME:-timebank_app}",
+             "-p${TIMEBANK_DB_PASSWORD:-timebank-not-for-production}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  backend:
+    build:
+      # Repo root, so the Dockerfile can see `backend/` — the image is built
+      # from source, not from a JAR you have to remember to build first.
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: timebank-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        # `service_healthy`, not `service_started`. Flyway opens a connection
+        # within a second of boot; against a still-initialising MySQL the app
+        # exits and compose reports a crash loop that looks like a code fault.
+        condition: service_healthy
+    environment:
+      # `db` is the compose service name and resolves on the internal network.
+      TIMEBANK_DB_URL: jdbc:mysql://db:3306/${TIMEBANK_DB_NAME:-timebank}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=utf8
+      TIMEBANK_DB_USERNAME: ${TIMEBANK_DB_USERNAME:-timebank_app}
+      TIMEBANK_DB_PASSWORD: ${TIMEBANK_DB_PASSWORD:-timebank-not-for-production}
+
+      # See application.yml: the default is 127.0.0.1, which inside a container
+      # is the container's own loopback — a published port would then connect to
+      # nothing. The container boundary is what provides the isolation here.
+      TIMEBANK_SERVER_ADDRESS: 0.0.0.0
+
+      # All three fail startup when unset, deliberately (issue 027 and plan 10
+      # §2.9). Local-only values, and none of them a secret worth protecting —
+      # which is exactly why they must never be copied to a real deployment.
+      TIMEBANK_ALLOWED_ORIGINS: ${TIMEBANK_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:8080}
+      TIMEBANK_SITE_ROOT_URL: ${TIMEBANK_SITE_ROOT_URL:-http://localhost:5173}
+      TIMEBANK_FILE_TOKEN_SECRET: ${TIMEBANK_FILE_TOKEN_SECRET:-local-development-only-not-a-secret}
+
+      TIMEBANK_ENVIRONMENT: ${TIMEBANK_ENVIRONMENT:-local}
+      TIMEBANK_FILE_STORAGE_PATH: /app/data/evidence-storage
+    ports:
+      - "${TIMEBANK_BACKEND_PORT:-8080}:8080"
+    volumes:
+      # Survives `docker compose down`. Only `down -v` removes it, which is the
+      # documented way to start over.
+      - evidence-data:/app/data/evidence-storage
+
+volumes:
+  db-data:
+  evidence-data:
