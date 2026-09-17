@@ -860,6 +860,33 @@ grade sort as SQL `NULL` (first ascending, last descending). `search` matches
 - These required-ness rules are enforced at request-validation time, not
   bean-level `@NotBlank`, since each is conditional on `roleCode`.
 
+**`POST /users` creates no password** (changed 2026-09-17, issue 096). The
+request body has **no `initialPassword` field** — it carried a required one
+until that date — and the account it creates is `PENDING_ACTIVATION` with no
+stored hash, exactly like a roster-imported student's. Nobody, including the
+administrator who created it, can sign into it until an activation slip is
+redeemed, so a client must follow the create with
+`POST /users/{id}/reset-password` (below) to print one. This is what makes
+`10-StudentIdentityAndOnboarding.md` §2.4's *"no password plaintext exists at
+any point"* true with **no staff exception**: an administrator-typed initial
+password has to be conveyed over a channel nobody controls, which is the
+"初始密码清单" `08-mlps-level1-security-design-guide.md` §8.2 tells schools this
+system does not produce.
+
+Two consequences for the request body:
+
+- `username` is **required and explicit**, `@Size(min = 3, max = 64)`. The
+  admin UI used to send `email.split('@')[0]`.
+- `email` is **optional** — `@Email`, no `@NotBlank` — and always has been. It
+  only looked required because the username was derived from it. Send it
+  omitted or `null`, not `""`, which `@Email` rejects.
+
+Creating a `student`-role account through this endpoint remains *possible* on
+the API and is no longer offered in the admin UI: students arrive by roster
+import, which mints the 8-random-digit username §2.1 requires. A hand-typed
+student username is the enumerable, name-leaking kind that section exists to
+avoid.
+
 **`POST /users/activation-slips` — the credential slip document**
 (added 2026-09-17, `Docs/optimization/10-StudentIdentityAndOnboarding.md` §3.4).
 The only way a student ever receives their first credential: it mints one

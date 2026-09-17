@@ -29,10 +29,25 @@ import java.util.Set;
  * {@code roleCode} is a single value, not a set — 07-RoleFinetune.md §2.5:
  * every user holds exactly one role, always. The type itself is the
  * cardinality enforcement; no separate "exactly one" check is needed.
+ *
+ * <p><b>There is no {@code initialPassword} field</b> (issue 096 §3/§4). It
+ * carried one until 2026-09-17, which meant an administrator invented a
+ * password, knew it, and had to convey it over a channel nobody controls —
+ * relocating the "初始密码清单" that
+ * {@code 08-mlps-level1-security-design-guide.md} §8.2 promises schools does
+ * not exist into the administrator's notes. An account created here is
+ * {@code PENDING_ACTIVATION} with no stored hash, and the caller prints an
+ * activation slip for it exactly as a class batch does — one credential
+ * mechanism for every role, no exception for staff.</p>
+ *
+ * <p>{@code username} is now explicit rather than derived from {@code email}.
+ * The form used to send {@code email.split("@")[0]}, which is why the API's
+ * genuinely optional {@code email} was marked required in the UI — and why a
+ * teacher who changed their address kept a username that no longer resembled
+ * it.</p>
  */
 public record CreateUserRequest(
         @NotBlank @Size(min = 3, max = 64) String username,
-        @NotBlank @Size(min = 12, max = 128) String initialPassword,
         @NotBlank @Size(max = 100) String displayName,
         @Email String email,
         @NotBlank String roleCode,
@@ -42,14 +57,14 @@ public record CreateUserRequest(
         String staffId) {
 
     /** Convenience overload for existing callers that don't set an initial grade bond, studentId, or staffId. */
-    public CreateUserRequest(String username, String initialPassword, String displayName, String email,
+    public CreateUserRequest(String username, String displayName, String email,
                               String roleCode, String preferredLanguage, Set<String> scopeGradeIds) {
-        this(username, initialPassword, displayName, email, roleCode, preferredLanguage, scopeGradeIds, null, null);
+        this(username, displayName, email, roleCode, preferredLanguage, scopeGradeIds, null, null);
     }
 
     /** Convenience overload for the many existing callers that set none of the above. */
-    public CreateUserRequest(String username, String initialPassword, String displayName, String email,
+    public CreateUserRequest(String username, String displayName, String email,
                               String roleCode, String preferredLanguage) {
-        this(username, initialPassword, displayName, email, roleCode, preferredLanguage, Set.of(), null, null);
+        this(username, displayName, email, roleCode, preferredLanguage, Set.of(), null, null);
     }
 }

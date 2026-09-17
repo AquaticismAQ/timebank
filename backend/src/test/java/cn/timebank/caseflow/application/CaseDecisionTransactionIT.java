@@ -173,7 +173,7 @@ class CaseDecisionTransactionIT extends AbstractIntegrationTest {
         CaseDto submitted = createAndSubmitAppeal(student);
 
         var teacher = userService.create(new CreateUserRequest(
-                "case_scope_teacher_" + OpaqueIds.generate("u"), "InitialChoice123!", "Scope Teacher", null,
+                "case_scope_teacher_" + OpaqueIds.generate("u"), "Scope Teacher", null,
                 "teacher", "zh-CN"), "usr_test_admin");
         scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
                 "cases", TeacherScopeAssignment.ScopeType.GRADE, "grade_9", Instant.now()));

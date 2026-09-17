@@ -119,6 +119,21 @@ class UserServiceImpl implements UserService {
         return new PageImpl<>(rows, pageable, userListQueryRepository.countMatching(effective));
     }
 
+    /**
+     * <b>Creates no password</b> (issue 096 §3/§4). The account lands in
+     * {@code PENDING_ACTIVATION} with a null hash, exactly like a roster-imported
+     * student, and the administrator prints it an activation slip — the caller's
+     * next call, not this one's business. Until that slip is redeemed the account
+     * cannot authenticate at all, because {@link User#hasUsableCredential()} is
+     * false and {@code AuthServiceImpl} refuses before it reaches the encoder.
+     *
+     * <p>This used to encode an administrator-typed {@code initialPassword}. That
+     * made §2.4's "no password plaintext exists at any point" true for students
+     * and false for everyone else, and put the school's only copy of a staff
+     * credential somewhere the system's controls do not reach. One mechanism for
+     * every role is the whole point; a second one is what issues 088 and 089 were
+     * both about.
+     */
     @Override
     @Transactional
     public UserDto create(CreateUserRequest request, String actorId) {
@@ -131,13 +146,11 @@ class UserServiceImpl implements UserService {
         if (request.staffId() != null && userRepository.existsByStaffId(request.staffId())) {
             throw ApiException.stateConflict("Staff ID is already in use.");
         }
-        PasswordPolicy.validate(request.initialPassword(), request.username());
         Role role = resolveRole(request.roleCode());
         Instant now = Instant.now();
-        User user = new User(OpaqueIds.generate("usr"), request.username(),
-                passwordEncoder.encode(request.initialPassword()), request.displayName(), request.email(),
-                request.preferredLanguage() != null ? request.preferredLanguage() : "zh-CN", now);
-        user.setStudentId(request.studentId());
+        User user = User.pendingActivation(OpaqueIds.generate("usr"), request.username(), request.displayName(),
+                request.studentId(), request.preferredLanguage() != null ? request.preferredLanguage() : "zh-CN", now);
+        user.setEmail(request.email());
         user.setStaffId(request.staffId());
         user.addRole(role);
         userRepository.save(user);

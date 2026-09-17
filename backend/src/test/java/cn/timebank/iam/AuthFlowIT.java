@@ -1,5 +1,6 @@
 package cn.timebank.iam;
 
+import cn.timebank.iam.application.ActivationService;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.iam.application.dto.UpdateUserRequest;
@@ -21,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,11 +34,17 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AuthFlowIT extends AbstractIntegrationTest {
 
+    /** One distinct client IP per activation — see {@link #createUser}. */
+    private static final AtomicInteger ACTIVATION_IP_SEQ = new AtomicInteger();
+
     @Autowired
     private TestRestTemplate restTemplate;
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private ActivationService activationService;
 
     @Autowired
     private SessionRevocationService sessionRevocationService;
@@ -91,7 +99,7 @@ class AuthFlowIT extends AbstractIntegrationTest {
         loginHeaders.setContentType(MediaType.APPLICATION_JSON);
         loginHeaders.add(HttpHeaders.COOKIE, csrfCookie);
         loginHeaders.add("X-XSRF-TOKEN", cookieValue(csrfCookie));
-        String loginBody = "{\"username\":\"auth_flow_scoped_teacher\",\"password\":\"InitialPass123!\"}";
+        String loginBody = "{\"username\":\"auth_flow_scoped_teacher\",\"password\":\"InitialChoice123!\"}";
         ResponseEntity<String> loginResponse = restTemplate.postForEntity(
                 "/api/v1/auth/login", new HttpEntity<>(loginBody, loginHeaders), String.class);
         assertThat(loginResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -168,9 +176,25 @@ class AuthFlowIT extends AbstractIntegrationTest {
         assertThat(getWithSession("/api/v1/me", newSessionCookie).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
+    /**
+     * Creates an account and puts it through the real activation flow, because
+     * since issue 096 that is the <em>only</em> way any account — student or
+     * staff — acquires a password. {@code userService.create} now leaves it
+     * {@code PENDING_ACTIVATION} with no hash, so a test that skipped this step
+     * would be testing login against an account that cannot log in.
+     *
+     * <p>Each redemption is charged to its own client IP: the per-IP attempt
+     * limit in {@code ActivationThrottle} is real and shared across the class,
+     * and a fixture that quietly exhausted it would start failing tests for a
+     * reason having nothing to do with what they assert.</p>
+     */
     private UserDto createUser(String username, String password, String roleCode) {
-        return userService.create(new CreateUserRequest(username, password, "Display " + username,
+        UserDto created = userService.create(new CreateUserRequest(username, "Display " + username,
                 username + "@example.com", roleCode, "zh-CN"), "system");
+        activationService.redeem(
+                activationService.issue(created.id(), "system").code(), password,
+                "198.51.100." + ACTIVATION_IP_SEQ.incrementAndGet());
+        return created;
     }
 
     private String login(String username, String password) {

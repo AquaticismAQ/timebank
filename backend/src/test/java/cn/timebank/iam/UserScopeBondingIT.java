@@ -153,7 +153,7 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
     void teacherWithoutStaffIdIsRejected() {
         Authentication auth = adminAuth();
         CreateUserRequest request = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialChoice123!", "No Staff Id", null, "teacher", "zh-CN", Set.of("grade_7"), null, null);
+                "No Staff Id", null, "teacher", "zh-CN", Set.of("grade_7"), null, null);
         assertThatThrownBy(() -> asAdmin(auth, () -> userController.create(request, auth)))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("staff");
@@ -166,7 +166,7 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
 
         Authentication auth = adminAuth();
         CreateUserRequest request = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialChoice123!", "Duplicate Staff Id", null, "teacher", "zh-CN", Set.of("grade_8"), null, staffId);
+                "Duplicate Staff Id", null, "teacher", "zh-CN", Set.of("grade_8"), null, staffId);
         assertThatThrownBy(() -> asAdmin(auth, () -> userController.create(request, auth)))
                 .isInstanceOf(ApiException.class);
     }
@@ -175,7 +175,7 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
     void studentRoleRequiresALinkedStudent() {
         Authentication auth = adminAuth();
         CreateUserRequest request = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialChoice123!", "No Linked Student", null, "student", "zh-CN", Set.of(), null, null);
+                "No Linked Student", null, "student", "zh-CN", Set.of(), null, null);
         assertThatThrownBy(() -> asAdmin(auth, () -> userController.create(request, auth)))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("student");
@@ -185,7 +185,7 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
     void studentRoleRejectsAnUnknownStudentId() {
         Authentication auth = adminAuth();
         CreateUserRequest request = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialChoice123!", "Bad Link", null, "student", "zh-CN", Set.of(), "std_does_not_exist", null);
+                "Bad Link", null, "student", "zh-CN", Set.of(), "std_does_not_exist", null);
         assertThatThrownBy(() -> asAdmin(auth, () -> userController.create(request, auth)))
                 .isInstanceOf(ApiException.class);
     }
@@ -196,12 +196,12 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
         Authentication auth = adminAuth();
 
         CreateUserRequest first = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialChoice123!", "Linked Student", null, "student", "zh-CN", Set.of(), student.id(), null);
+                "Linked Student", null, "student", "zh-CN", Set.of(), student.id(), null);
         UserDto created = asAdmin(auth, () -> userController.create(first, auth)).data();
         assertThat(created.studentId()).isEqualTo(student.id());
 
         CreateUserRequest second = new CreateUserRequest("scope_bonding_" + OpaqueIds.generate("u"),
-                "InitialChoice123!", "Same Student Again", null, "student", "zh-CN", Set.of(), student.id(), null);
+                "Same Student Again", null, "student", "zh-CN", Set.of(), student.id(), null);
         assertThatThrownBy(() -> asAdmin(auth, () -> userController.create(second, auth)))
                 .isInstanceOf(ApiException.class);
     }
@@ -212,7 +212,7 @@ class UserScopeBondingIT extends AbstractIntegrationTest {
 
     private UserDto createWithStaffId(String roleCode, Set<String> scopeGradeIds, String staffId) {
         String username = "scope_bonding_" + OpaqueIds.generate("u");
-        CreateUserRequest request = new CreateUserRequest(username, "InitialChoice123!", "Scope Bonding Test", null,
+        CreateUserRequest request = new CreateUserRequest(username, "Scope Bonding Test", null,
                 roleCode, "zh-CN", scopeGradeIds, null, staffId);
         Authentication auth = adminAuth();
         return asAdmin(auth, () -> userController.create(request, auth).data());

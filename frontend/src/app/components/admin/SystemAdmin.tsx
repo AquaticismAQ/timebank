@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Eye, EyeOff, Pencil, Trash2, Lock, Building2, KeyRound, Check, Tags, Search } from 'lucide-react';
+import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Pencil, Trash2, Lock, Building2, KeyRound, Check, Tags, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
@@ -12,8 +12,6 @@ import { ServiceCategoryManagement } from './ServiceCategoryManagement';
 import { GradePicker } from '../GradePicker';
 import { useDictionaries } from '../../api/useDictionaries';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
-import { PasswordStrength } from '../shared/PasswordStrength';
-import { isAcceptable } from '../../lib/passwordPolicy';
 import { formatGradeClass, formatClassName, minutesToHours } from '../../lib/format';
 import { downloadBlob } from '../../lib/download';
 import { localDateTimeToISO, formatLocalInstant } from '../../lib/datetime';
@@ -403,6 +401,8 @@ const USER_STATUS_COLORS: Record<UserStatus, string> = {
 
 interface AdminUser {
   id: string;
+  /** The login name. Its own field, not the local part of `email` (issue 096 §1). */
+  username: string;
   name: string;
   email: string;
   roleCode: string;
@@ -437,6 +437,10 @@ const HIDDEN_ROLE_CODES = new Set(['sysadmin']);
 const NO_GRADE_SCOPE_ROLES = new Set(['admin', 'student', 'sysadmin']);
 
 const STUDENT_ROLE_CODE = 'student';
+
+/** Mirrors `CreateUserRequest.username`'s `@Size(min = 3, max = 64)`. */
+const USERNAME_MIN_LENGTH = 3;
+const USERNAME_MAX_LENGTH = 64;
 
 /** Issue 094: the Users tab's three sort options (05-SearchFilterSortConsistency.md §2.1 — one button per field). */
 type UserSortKey = 'name' | 'grade' | 'class';
@@ -483,12 +487,12 @@ function auditLogDotColor(resourceType: string): string {
 }
 
 interface UserFormState {
+  /** Explicit since issue 096 §1 — it used to be `email.split('@')[0]`. */
+  username: string;
   name: string;
   email: string;
   roleCode: string;
   status: UserStatus;
-  password: string;
-  confirmPassword: string;
   showResetPwd: boolean;
   scopeGradeIds: string[];
   studentId?: string;
@@ -496,15 +500,15 @@ interface UserFormState {
 }
 
 const emptyForm = (): UserFormState => ({
-  name: '', email: '', roleCode: '', status: 'active',
-  password: '', confirmPassword: '', showResetPwd: false, scopeGradeIds: [],
+  username: '', name: '', email: '', roleCode: '', status: 'active',
+  showResetPwd: false, scopeGradeIds: [],
   studentId: undefined, staffId: '',
 });
 
 function userToForm(u: AdminUser): UserFormState {
   return {
-    name: u.name, email: u.email, roleCode: u.roleCode, status: u.status,
-    password: '', confirmPassword: '', showResetPwd: false, scopeGradeIds: [...u.scopeGradeIds],
+    username: u.username, name: u.name, email: u.email, roleCode: u.roleCode, status: u.status,
+    showResetPwd: false, scopeGradeIds: [...u.scopeGradeIds],
     studentId: u.studentId, staffId: u.staffId ?? '',
   };
 }
@@ -521,8 +525,6 @@ interface UserModalProps {
 function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModalProps) {
   const { t } = useTranslation();
   const [form, setForm] = useState<UserFormState>(initial);
-  const [showPwd, setShowPwd] = useState(false);
-  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<SearchPickerOption[]>([]);
   const { grades } = useDictionaries();
@@ -556,51 +558,47 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
   const needsStaffId = form.roleCode !== '' && !isStudent;
 
   /**
-   * The username `handleCreate` will actually send, derived here too so the
-   * live check tests the password against the same string the server will.
-   * Derive it in one more place and the two quietly drift apart.
+   * `student` is not offered when creating (issue 096 §2): students arrive by
+   * roster import, which mints the 8-random-digit username §2.1 requires and
+   * leaves the account pending its slip. Creating one here would produce an
+   * account with a hand-typed username — the enumerable, name-leaking kind
+   * §2.1 exists to avoid — through the one door that bypasses the roster.
+   *
+   * It stays in the list when the account being edited already holds it,
+   * because otherwise the dropdown would render blank for every existing
+   * student and saving would clear their role.
    */
-  const derivedUsername = form.email.split('@')[0];
+  const roleOptions = roles.filter(r => r.code !== STUDENT_ROLE_CODE || initial.roleCode === STUDENT_ROLE_CODE);
+
+  /** §1: the API's `email` has no `@NotBlank`, so neither does this form. */
+  const emailIsWellFormed = form.email.trim() === '' || form.email.includes('@');
 
   /**
    * Create mode disables its own button until the form is genuinely
-   * submittable: every required field filled, the password meeting the
-   * policy, and the confirmation matching. The checklist under the password
-   * boxes is what keeps that from being a dead end — it names the outstanding
-   * requirement the whole time the button is grey. Edit mode keeps the
-   * toast-on-click validation it always had; it sets no password, and a
-   * silently disabled Save on an account already missing a field would be
+   * submittable. Edit mode keeps the toast-on-click validation it always had:
+   * a silently disabled Save on an account already missing a field would be
    * the hostile version of this.
    */
   const requiredFieldsFilled =
-    form.name.trim() !== ''
-    && form.email.trim() !== '' && form.email.includes('@')
+    form.username.trim().length >= USERNAME_MIN_LENGTH
+    && form.name.trim() !== ''
+    && emailIsWellFormed
     && form.roleCode !== ''
     && (!needsGradeScope || form.scopeGradeIds.length > 0)
     && (!isStudent || !!form.studentId)
     && (!needsStaffId || form.staffId.trim() !== '');
-  const canSave = mode !== 'create' || (
-    requiredFieldsFilled
-    && isAcceptable(form.password, derivedUsername)
-    && form.password === form.confirmPassword
-  );
+  const canSave = mode !== 'create' || requiredFieldsFilled;
 
   const handleSave = () => {
+    if (mode === 'create' && form.username.trim().length < USERNAME_MIN_LENGTH) {
+      toast.error(t('admin.system.errorUsernameTooShort', { min: USERNAME_MIN_LENGTH })); return;
+    }
     if (!form.name.trim()) { toast.error(t('admin.system.errorNameRequired')); return; }
-    if (!form.email.trim() || !form.email.includes('@')) { toast.error(t('admin.system.errorEmailInvalid')); return; }
+    if (!emailIsWellFormed) { toast.error(t('admin.system.errorEmailInvalid')); return; }
     if (!form.roleCode) { toast.error(t('admin.system.errorRoleRequired')); return; }
     if (needsGradeScope && form.scopeGradeIds.length === 0) { toast.error(t('admin.system.errorGradeRequired')); return; }
     if (isStudent && !form.studentId) { toast.error(t('admin.system.errorStudentLinkRequired')); return; }
     if (needsStaffId && !form.staffId.trim()) { toast.error(t('admin.system.errorStaffIdRequired')); return; }
-    if (mode === 'create') {
-      if (!form.password) { toast.error(t('admin.system.errorPasswordRequired')); return; }
-      // The one rule, from `lib/passwordPolicy.ts`, which mirrors the
-      // backend's `PasswordPolicy`. This was a bare `length < 8` check, which
-      // let an admin create an account the server would refuse, or — worse,
-      // before the server had the rule — one that met nothing but a length.
-      if (!isAcceptable(form.password, derivedUsername)) { toast.error(t('admin.system.errorPasswordPolicy')); return; }
-      if (form.password !== form.confirmPassword) { toast.error(t('admin.system.errorPasswordMismatch')); return; }
-    }
     onSave(form);
   };
 
@@ -621,6 +619,28 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
         {/* Body */}
         <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
 
+          {/* Username (create). Its own field since issue 096 §1: it was
+              `email.split('@')[0]`, which is why an optional contact field was
+              marked required, and why changing an address left a login name
+              that no longer resembled it. Read-only afterwards — a username is
+              what the account's audit rows and login history are written
+              against, and `PATCH /users/{id}` does not accept a new one. */}
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1.5">
+              {t('admin.system.usernameLabel')}{mode === 'create' ? ' *' : ''}
+            </label>
+            {mode === 'create' ? (
+              <input type="text" value={form.username} onChange={e => set({ username: e.target.value })}
+                placeholder={t('admin.system.usernamePlaceholder')}
+                minLength={USERNAME_MIN_LENGTH} maxLength={USERNAME_MAX_LENGTH} autoComplete="off"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
+            ) : (
+              <div className="w-full px-4 py-2.5 rounded-xl border border-border bg-muted text-muted-foreground text-sm">
+                {form.username}
+              </div>
+            )}
+          </div>
+
           {/* Name */}
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.nameLabel')} *</label>
@@ -629,9 +649,14 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
               className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
           </div>
 
-          {/* Email */}
+          {/* Email — genuinely optional, matching `CreateUserRequest.email`
+              (`@Email`, no `@NotBlank`). Nothing in the system requires an
+              address: there is no send path, and password recovery is offline
+              by design (plan 10 §2.4). */}
           <div>
-            <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.emailLabel')} *</label>
+            <label className="block text-xs text-muted-foreground mb-1.5">
+              {t('admin.system.emailLabel')} <span className="text-muted-foreground/70">({t('common.optional')})</span>
+            </label>
             <input type="email" value={form.email} onChange={e => set({ email: e.target.value })}
               placeholder={t('admin.system.emailPlaceholder')} maxLength={255}
               className="w-full px-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
@@ -646,7 +671,7 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
                 <SelectValue placeholder={t('admin.system.selectRolePlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                {roles.map(role => (
+                {roleOptions.map(role => (
                   <SelectItem key={role.id} value={role.code}>{roleDisplayName(role, t)}</SelectItem>
                 ))}
               </SelectContent>
@@ -717,38 +742,20 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
             </div>
           )}
 
-          {/* Password (create) */}
+          {/* No password boxes (issue 096 §3/§4). Creating an account mints an
+              activation slip instead, exactly as a class batch does: the
+              account is created with no password at all and the person it
+              belongs to chooses their own by redeeming the printed code. An
+              admin-typed initial password would have to be conveyed over a
+              channel nobody controls, which is the "初始密码清单" the MLPS
+              guide §8.2 tells schools this system does not produce. */}
           {mode === 'create' && (
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.initialPassword')} *</label>
-                <div className="relative">
-                  <input type={showPwd ? 'text' : 'password'} value={form.password} onChange={e => set({ password: e.target.value })}
-                    placeholder={t('admin.system.passwordPlaceholder')}
-                    className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
-                  <button type="button" onClick={() => setShowPwd(!showPwd)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
+            <div className="rounded-xl border border-border bg-muted/50 px-4 py-3 space-y-1.5">
+              <div className="flex items-center gap-2 text-sm text-foreground">
+                <KeyRound className="w-4 h-4 shrink-0" />
+                <span>{t('admin.system.createIssuesSlip')}</span>
               </div>
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.confirmPassword')} *</label>
-                <div className="relative">
-                  <input type={showConfirmPwd ? 'text' : 'password'} value={form.confirmPassword} onChange={e => set({ confirmPassword: e.target.value })}
-                    placeholder={t('admin.system.reenterPassword')}
-                    className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40" />
-                  <button type="button" onClick={() => setShowConfirmPwd(!showConfirmPwd)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    {showConfirmPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-              {/* The same live checker the student sees at activation, against
-                  the same rule — including "must not contain your username",
-                  which here is the local part of the email, because that is
-                  what `handleCreate` sends as the username. */}
-              <PasswordStrength password={form.password} username={derivedUsername} confirm={form.confirmPassword} />
+              <p className="text-xs text-muted-foreground">{t('admin.system.createIssuesSlipHint')}</p>
             </div>
           )}
 
@@ -764,7 +771,7 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
               they redeem the slip. */}
           {mode === 'edit' && (
             <div className="border border-border rounded-xl overflow-hidden">
-              <button type="button" onClick={() => set({ showResetPwd: !form.showResetPwd, password: '', confirmPassword: '' })}
+              <button type="button" onClick={() => set({ showResetPwd: !form.showResetPwd })}
                 className="w-full flex items-center justify-between px-4 py-3 text-sm text-muted-foreground hover:bg-accent transition-colors">
                 <span>{t('admin.system.resetPassword')}</span>
                 <span className={`w-4 h-4 rounded border flex items-center justify-center ${form.showResetPwd ? 'bg-[oklch(0.488_0.243_264.376)] border-transparent text-white' : 'border-border'}`}>
@@ -912,7 +919,7 @@ export function SystemAdmin() {
 
   useEffect(() => {
     setUsers(usersApi.items.map(u => ({
-      id: u.id, name: u.displayName, email: u.email,
+      id: u.id, username: u.username, name: u.displayName, email: u.email,
       roleCode: u.roleCode,
       status: (u.status as UserStatus) || 'active',
       // `toLocaleDateString` dropped the time, so two logins on the same day
@@ -1089,11 +1096,12 @@ export function SystemAdmin() {
       const needsGradeScope = form.roleCode !== '' && !NO_GRADE_SCOPE_ROLES.has(form.roleCode);
       const isStudent = form.roleCode === 'student';
       const needsStaffId = form.roleCode !== '' && !isStudent;
-      await api.users.create({
-        username: form.email.split('@')[0],
-        initialPassword: form.password,
+      const created = await api.users.create({
+        username: form.username.trim(),
         displayName: form.name.trim(),
-        email: form.email.trim(),
+        // Optional on the wire as well as in the form — an empty box must send
+        // nothing, not an empty string that `@Email` would then reject.
+        email: form.email.trim() || undefined,
         roleCode: form.roleCode,
         scopeGradeIds: needsGradeScope ? form.scopeGradeIds : undefined,
         studentId: isStudent ? form.studentId : undefined,
@@ -1105,7 +1113,25 @@ export function SystemAdmin() {
       // excluded by the active filter altogether.
       usersApi.refetch();
       setCreateOpen(false);
-      toast.success(t('admin.system.userCreated', { name: form.name.trim() }));
+
+      // The second half of creating an account (issue 096 §4): it has no
+      // password, so without a slip nobody can ever sign into it. This is the
+      // same single-person slip an admin reset prints — one flow and one
+      // document format for every role, which is what keeps plan 10 §2.4's "no
+      // password plaintext exists at any point" true without a staff exception.
+      //
+      // Reported separately from the creation itself. The account really does
+      // exist if the download fails, and a combined "couldn't create" message
+      // would send the admin back to a form that now rejects the username as
+      // taken — Edit → Reset password reprints the slip.
+      try {
+        const { blob, filename } = await api.users.resetPassword(created.id);
+        downloadBlob(blob, filename);
+        toast.success(t('admin.system.userCreatedWithSlip', { name: form.name.trim() }));
+      } catch (slipErr) {
+        toast.error(t('admin.system.userCreatedSlipFailed', { name: form.name.trim() }));
+        if (slipErr instanceof ApiError) toast.error(mapApiError(slipErr).message);
+      }
     } catch (err) {
       if (err instanceof ApiError) toast.error(mapApiError(err).message);
       else toast.error(String(err));
@@ -1123,7 +1149,11 @@ export function SystemAdmin() {
       const needsStaffId = form.roleCode !== '' && !isStudent;
       await api.users.update(editTarget.id, {
         displayName: form.name.trim(),
-        email: form.email.trim(),
+        // Same as create: an empty box means "no address", and `PATCH` treats
+        // an omitted field as "don't touch" — sending `""` would write an
+        // empty string over a NULL, which reads as an address that is set and
+        // blank rather than one that was never given.
+        email: form.email.trim() || undefined,
         status: form.status,
         roleCode: form.roleCode,
         version: editTarget.version,

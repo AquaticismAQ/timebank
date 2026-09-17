@@ -104,7 +104,7 @@ class RoleTemplateIT extends AbstractIntegrationTest {
         String templateCode = roleRepository.findById(template.id()).orElseThrow().getCode();
 
         CreateUserRequest request = new CreateUserRequest(
-                "template_assign_test_" + OpaqueIds.generate("u"), "InitialChoice123!", "Template Assign Test",
+                "template_assign_test_" + OpaqueIds.generate("u"), "Template Assign Test",
                 null, templateCode, "zh-CN");
 
         assertThatThrownBy(() -> userService.create(request, "usr_test_admin"))

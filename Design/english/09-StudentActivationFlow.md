@@ -237,7 +237,17 @@ immediately, rather than making a round trip to be told a bare "invalid".
 
 ## 6. Adjacent, but not part of this flow
 
-- **Staff accounts** do not use this flow; an administrator creates them directly.
+- **Staff accounts use exactly this flow** (changed 2026-09-17, issue 096).
+  They did not until that date: the create-user form took an
+  administrator-typed initial password, which made §5's "no password plaintext
+  exists at any point" true for students and false for every teacher — the
+  only copy of a new teacher's credential lived in whatever message or note the
+  administrator used to pass it on. A staff account is now created
+  `PENDING_ACTIVATION` with no stored hash and issued the same single-person
+  slip §4 describes, printed at the moment of creation. The difference that
+  remains is upstream of the slip and unchanged: a student's account and
+  username come from the roster import (§3), a staff account is created by hand
+  with a username the administrator chooses.
 - **A student created singly through `POST /students` currently gets no account** —
   only the import path creates one. This is a known gap, not part of this design.
 - **Multi-factor authentication** is not enabled; the options are compared in

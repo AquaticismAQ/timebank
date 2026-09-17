@@ -129,10 +129,14 @@ public class User extends VersionedEntity {
     }
 
     /**
-     * A freshly imported student's account (§3.3): no password, and pending
-     * until the activation code on their printed slip is redeemed. Inert by
-     * construction rather than by a status check someone can forget —
-     * there is no credential to present.
+     * A freshly created account of <em>any</em> role (§3.3): no password, and
+     * pending until the activation code on its printed slip is redeemed. Inert
+     * by construction rather than by a status check someone can forget — there
+     * is no credential to present.
+     *
+     * <p>Named for the roster import it was written for, but issue 096 made it
+     * the only way an account is ever born: a teacher created by hand goes
+     * through here too, and {@code studentId} is simply null for them.</p>
      */
     public static User pendingActivation(String id, String username, String displayName,
                                          String studentId, String preferredLanguage, Instant now) {

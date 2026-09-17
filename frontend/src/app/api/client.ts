@@ -1114,13 +1114,19 @@ export const api = {
      * different questions and neither substitutes for the other.
      */
     async list(params?: ListParams): Promise<PageResult<{ id: string; username: string; displayName: string; email: string; roleCode: string; status: string; lastLoginAt?: string; version: number; scopeGradeIds: string[]; studentId?: string; staffId?: string; gradeId?: string; gradeLevel?: number; classId?: string; className?: string }>> {
-      type UserDtoWire = { id: string; username: string; displayName: string; email: string; roleCode: string; status: string; lastLoginAt?: string; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string; gradeId?: string | null; gradeLevel?: number | null; classId?: string | null; className?: string | null };
+      // `email` is optional on the wire and **absent, not null**, when unset:
+      // Jackson's non-null inclusion drops the field entirely. Since issue 096
+      // made the field genuinely optional, accounts without one are ordinary,
+      // and every consumer here treats `email` as a string — one `.trim()` on
+      // `undefined` white-screened the Users tab. Normalised to `''` once, at
+      // the boundary, rather than guarded at each of the places that read it.
+      type UserDtoWire = { id: string; username: string; displayName: string; email?: string | null; roleCode: string; status: string; lastLoginAt?: string; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string; gradeId?: string | null; gradeLevel?: number | null; classId?: string | null; className?: string | null };
       const filter = { ...params?.filter };
       if (filter.status) filter.status = toBackendEnum(filter.status);
       const page = await http.getPage<UserDtoWire>('/users', buildListQuery({ ...params, filter }));
       return {
         data: page.data.map(u => ({
-          id: u.id, username: u.username, displayName: u.displayName, email: u.email,
+          id: u.id, username: u.username, displayName: u.displayName, email: u.email ?? '',
           roleCode: u.roleCode, status: fromBackendEnum(u.status),
           lastLoginAt: u.lastLoginAt, version: u.version, scopeGradeIds: u.scopeGradeIds ?? [],
           studentId: u.studentId, staffId: u.staffId,
@@ -1130,7 +1136,19 @@ export const api = {
         page: page.page,
       };
     },
-    async create(data: { username: string; initialPassword: string; displayName: string; email: string; roleCode: string; preferredLanguage?: string; scopeGradeIds?: string[]; studentId?: string; staffId?: string }): Promise<{ id: string }> {
+    /**
+     * **Creates no password** (issue 096 §3/§4). The account is born
+     * `PENDING_ACTIVATION` with no stored hash and cannot be signed into by
+     * anybody, including whoever created it, until an activation slip is
+     * redeemed — so a caller must follow this with `resetPassword(id)` to print
+     * one, exactly as a class batch prints them for students.
+     *
+     * `email` is optional here because it is optional on the server
+     * (`CreateUserRequest.email` carries `@Email` and no `@NotBlank`), and
+     * `username` is its own field: this used to send `email.split('@')[0]`,
+     * which is what made an optional field effectively required.
+     */
+    async create(data: { username: string; displayName: string; email?: string; roleCode: string; preferredLanguage?: string; scopeGradeIds?: string[]; studentId?: string; staffId?: string }): Promise<{ id: string }> {
       return http.post<{ id: string }>('/users', data);
     },
     async update(id: string, data: { displayName?: string; email?: string; status?: string; roleCode?: string; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string }): Promise<void> {

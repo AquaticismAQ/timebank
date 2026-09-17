@@ -140,7 +140,7 @@ class UserListFilterSortIT extends AbstractIntegrationTest {
 
     private UserDto createUser(String displayName, String roleCode) {
         return userService.create(new CreateUserRequest(
-                "lst_" + OpaqueIds.generate("u"), "InitialChoice123!", displayName, null,
+                "lst_" + OpaqueIds.generate("u"), displayName, null,
                 roleCode, "zh-CN"), "usr_test_admin");
     }
 }

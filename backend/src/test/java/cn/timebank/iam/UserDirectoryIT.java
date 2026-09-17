@@ -69,7 +69,7 @@ class UserDirectoryIT extends AbstractIntegrationTest {
 
     private UserDto createUser(String displayName, String roleCode) {
         return userService.create(new CreateUserRequest(
-                "dir_" + OpaqueIds.generate("u"), "InitialChoice123!", displayName, null,
+                "dir_" + OpaqueIds.generate("u"), displayName, null,
                 roleCode, "zh-CN"), "usr_test_admin");
     }
 }

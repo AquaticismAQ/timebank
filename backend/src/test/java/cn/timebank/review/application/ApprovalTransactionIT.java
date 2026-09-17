@@ -302,7 +302,7 @@ class ApprovalTransactionIT extends AbstractIntegrationTest {
 
     private void createLinkedUser(String studentId) {
         UserDto user = userService.create(new CreateUserRequest(
-                "approval_user_" + studentId, "InitialChoice123!", "Approval User", null,
+                "approval_user_" + studentId, "Approval User", null,
                 "student", "zh-CN"), "usr_test_admin");
         User entity = userRepository.findById(user.id()).orElseThrow();
         entity.setStudentId(studentId);

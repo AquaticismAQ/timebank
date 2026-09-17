@@ -189,9 +189,9 @@ class DashboardReportingIT extends AbstractIntegrationTest {
         createStudent("grade_7", "class_7A");
 
         var teacherA = userService.create(new CreateUserRequest(
-                "dash_teacher_a_" + SEQ.incrementAndGet(), "InitialChoice123!", "Teacher A", null, "teacher", "zh-CN"), "usr_test_admin");
+                "dash_teacher_a_" + SEQ.incrementAndGet(), "Teacher A", null, "teacher", "zh-CN"), "usr_test_admin");
         var teacherB = userService.create(new CreateUserRequest(
-                "dash_teacher_b_" + SEQ.incrementAndGet(), "InitialChoice123!", "Teacher B", null, "teacher", "zh-CN"), "usr_test_admin");
+                "dash_teacher_b_" + SEQ.incrementAndGet(), "Teacher B", null, "teacher", "zh-CN"), "usr_test_admin");
         scopeAssignmentRepository.save(new TeacherScopeAssignment(
                 "scope_a_" + SEQ.incrementAndGet(), teacherA.id(), "serviceRecords", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", Instant.now()));
         scopeAssignmentRepository.save(new TeacherScopeAssignment(

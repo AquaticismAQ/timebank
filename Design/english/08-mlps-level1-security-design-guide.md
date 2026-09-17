@@ -406,11 +406,12 @@ per round trip.
 
 ### 8.3 Account creation and first-time activation
 
-Student accounts are created by roster import, and **the server never generates an initial
-password at any point**. No password plaintext therefore exists in the system, and no "initial
-password list" — the kind of high-risk artefact that must be distributed once and then
-destroyed — is ever produced. First access happens through a **single-use activation code**,
-and the student chooses their own password during activation.
+Student accounts are created by roster import, staff accounts by an administrator, and in
+**neither case does any password exist at creation** — not one the server generated, and, since
+2026-09-17, not one an administrator typed either. No password plaintext therefore exists in the
+system, and no "initial password list" — the kind of high-risk artefact that must be distributed
+once and then destroyed — is ever produced. First access happens through a **single-use
+activation code**, and the account's owner chooses their own password during activation.
 
 | Measure | Detail |
 | :--- | :--- |
@@ -423,6 +424,7 @@ and the student chooses their own password during activation.
 | **A global failure budget** | Beyond per-IP rate limiting, the activation endpoint carries a **system-wide failure budget** (a few hundred per hour). Distributed guessing can evade a per-IP limit but not a global budget, and legitimate activation traffic is concentrated and rare enough that the threshold never interferes |
 | **Reissue spares activated students** | When slips are lost, reissue regenerates codes only for members of the batch **still unactivated**; students who already chose a password are untouched |
 | **Password reset uses the same path** | A student who forgets their password goes through the same activation-code path. No second credential mechanism, and no email address or mobile number required |
+| **Staff accounts use the same path too** | Added 2026-09-17. A teacher or administrator account is created with **no password**, in the same pending state, and is issued the same single-use code on the same slip. The create-account form previously asked an administrator to type an initial password, which meant the only copy of a new teacher's credential lived in whatever message was used to pass it on — precisely the "initial password list" this section says the system does not produce, relocated rather than removed. **No role is an exception**, which is what makes the promise above checkable rather than a statement about students only |
 
 **There is no self-service password recovery, by design — this is a decision, not something
 not yet built.** The only route for a forgotten password is to **contact an administrator
@@ -576,7 +578,7 @@ auditable.
 
 | Control area | Measures in this proposal |
 | :--- | :--- |
-| Identification and authentication | A single login identifier, a **uniform strong password policy (≥12 chars, 3-of-4 classes, blocklist and username rejection, §8.2)**, salted hashing, login lockout, no public registration, **no self-service password recovery** (§8.1/§8.2); first access by single-use activation code with no server-generated initial password (§8.2); MFA per §8 |
+| Identification and authentication | A single login identifier, a **uniform strong password policy (≥12 chars, 3-of-4 classes, blocklist and username rejection, §8.2)**, salted hashing, login lockout, no public registration, **no self-service password recovery** (§8.1/§8.2); first access by single-use activation code with **no initial password of any kind, for any role** — neither server-generated nor administrator-typed (§8.2/§8.3); MFA per §8 |
 | Access control | RBAC plus data-scope checks, least privilege, no resource-existence disclosure on out-of-scope requests |
 | Security audit | Append-only, tamper-resistant audit log covering every data change, retained ≥6 months |
 | Intrusion prevention | Input validation, true file-type checking, upload sanitization, rate limiting, minimal open ports |

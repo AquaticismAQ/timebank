@@ -205,7 +205,7 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
         ProposalDto outOfScopeProposal = createAndSubmitProposal(outOfScopeStudent, "Out-Of-Scope Cleanup");
 
         var teacher = userService.create(new CreateUserRequest(
-                "proposal_scope_teacher_" + OpaqueIds.generate("u"), "InitialChoice123!", "Scope Teacher", null,
+                "proposal_scope_teacher_" + OpaqueIds.generate("u"), "Scope Teacher", null,
                 "teacher", "zh-CN"), "usr_test_admin");
         scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
                 "eventProposals", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", Instant.now()));
@@ -309,7 +309,7 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
     void creatingAProposalWithANonTeacherSupervisorIsRejected() {
         StudentDetailDto student = createStudent();
         UserDto nonTeacher = userService.create(new CreateUserRequest(
-                "not_a_teacher_" + OpaqueIds.generate("u"), "InitialChoice123!", "Not A Teacher", null,
+                "not_a_teacher_" + OpaqueIds.generate("u"), "Not A Teacher", null,
                 "student", "zh-CN"), "usr_test_admin");
 
         assertThatThrownBy(() -> proposalService.createDraft(
@@ -332,7 +332,7 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
                 "supervisor_eligible_" + OpaqueIds.generate("r").substring(0, 10), "Supervisor-Eligible Custom Role", 480,
                 Set.of("eventProposals.review")), "usr_test_admin");
         UserDto customSupervisor = userService.create(new CreateUserRequest(
-                "custom_supervisor_" + OpaqueIds.generate("u"), "InitialChoice123!", "Custom Supervisor",
+                "custom_supervisor_" + OpaqueIds.generate("u"), "Custom Supervisor",
                 null, customRole.code(), "zh-CN"), "usr_test_admin");
 
         ProposalDto created = proposalService.createDraft(
@@ -399,7 +399,7 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
     /** `proposedSupervisorId` is validated (`Docs/optimization/01-i3-partner-school-terminology.md`) — must be a real active `teacher`. */
     private String realTeacherId() {
         UserDto teacher = userService.create(new CreateUserRequest(
-                "proposal_supervisor_" + OpaqueIds.generate("u"), "InitialChoice123!", "Supervising Teacher", null,
+                "proposal_supervisor_" + OpaqueIds.generate("u"), "Supervising Teacher", null,
                 "teacher", "zh-CN"), "usr_test_admin");
         return teacher.id();
     }
@@ -416,7 +416,7 @@ class ProposalApprovalTransactionIT extends AbstractIntegrationTest {
 
     private void createLinkedUser(String studentId) {
         UserDto user = userService.create(new CreateUserRequest(
-                "proposal_user_" + studentId, "InitialChoice123!", "Proposal User", null,
+                "proposal_user_" + studentId, "Proposal User", null,
                 "student", "zh-CN"), "usr_test_admin");
         User entity = userRepository.findById(user.id()).orElseThrow();
         entity.setStudentId(studentId);

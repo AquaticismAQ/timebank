@@ -158,7 +158,7 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
     }
 
     private UserDto createUser(String username) {
-        return userService.create(new CreateUserRequest(username, "InitialChoice123!", "Display " + username,
+        return userService.create(new CreateUserRequest(username, "Display " + username,
                 null, "student", "zh-CN"), "system");
     }
 
