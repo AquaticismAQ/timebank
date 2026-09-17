@@ -123,26 +123,44 @@ Connect to the database directly:
 mysql --protocol=TCP -h 127.0.0.1 -P 3307 -u timebank_app -p timebank
 ```
 
-## 6. Running the frontend
+## 6. Opening the web UI
 
-The frontend is deliberately **not** in the compose file. It runs on the host:
+**`docker compose up` gives you an API, not a web page.** There is no web
+server in the compose file — browsing to `localhost:28080` returns 404s,
+because the backend only serves `/api` and `/actuator`. The UI is the Vite dev
+server, on the host, proxying to the container:
 
 ```bash
 cd frontend
 pnpm install
-cp .env.example .env.local        # then set VITE_DEV_PROXY_TARGET
-pnpm dev                          # http://localhost:5173
+printf 'VITE_DEV_PROXY_TARGET=http://localhost:28080\n' > .env.local
+pnpm dev
 ```
 
-Set `VITE_DEV_PROXY_TARGET=http://localhost:28080` in `.env.local` so the dev
-server proxies `/api` to the container.
+Then open the URL it prints — **http://localhost:5173** by default.
 
-Containerising it would mean rebuilding an image on every edit and losing hot
-reload — for a Vite dev server that watches files, a container is strictly
-worse. `TIMEBANK_ALLOWED_ORIGINS` already includes `http://localhost:5173` for
-this reason; if you change the dev server's port, change it there too, because
-CORS rejects an unlisted origin with a 403 that says nothing about this setting
-(issue 027).
+`.env.local` is required, not optional: there is no mock mode, and
+`vite.config.ts` refuses to start without it rather than 404ing on every
+request.
+
+**If 5173 is taken**, Vite silently picks the next free port, so read the
+"Local:" line it prints rather than assuming. To pin one:
+
+```bash
+pnpm dev --port 5180 --strictPort
+```
+
+Any port works — you do **not** need to add it to `TIMEBANK_ALLOWED_ORIGINS`.
+The dev proxy rewrites the `Origin` header to the proxy target
+(`vite.config.ts`, for `RequestOriginFilter`), so the backend only ever sees
+`http://localhost:28080`, which is already allow-listed.
+
+Log in with any account the seeder printed — `admin001` for the admin portal,
+`student001` for the student one.
+
+Containerising the frontend would mean rebuilding an image on every edit and
+losing hot reload — for a dev server that watches files, a container is
+strictly worse.
 
 ## 7. Where the no-Docker rule still applies
 
@@ -182,4 +200,6 @@ provides the isolation the loopback bind provides on a host.
 | Seeder: "Could not run the mysql client" | No `mysql` on your PATH. `brew install mysql-client` |
 | Seeder pauses with "rate limited on /files/upload-intents" | Expected, not an error. The API allows 20 upload-intents per student per minute and the seeder is fast enough locally to hit it; it backs off and continues. A full run took ~9 of these |
 | 404 from `localhost:28080` that is not Spring's | Port clash — see §3 |
-| 403 from the API in the browser, nothing useful logged | The dev server's origin is not in `TIMEBANK_ALLOWED_ORIGINS` |
+| `localhost:28080` shows 404 in a browser | Expected — the backend serves only `/api` and `/actuator`. The UI is the dev server, §6 |
+| `pnpm dev` refuses to start, naming `VITE_DEV_PROXY_TARGET` | No `frontend/.env.local`. §6 |
+| Dev server came up on a port you did not expect | 5173 was taken and Vite moved on. Read its "Local:" line, or pass `--port N --strictPort` |

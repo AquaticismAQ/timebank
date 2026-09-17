@@ -146,7 +146,26 @@ was slow enough by accident. The seeder now backs off and retries a `429`
 is a real control and waiting is the correct response to it. A full run took
 **9 backoffs** and completed.
 
-## 7. Reproducing it
+## 7. The web UI
+
+Asked separately, and worth stating plainly because the compose file does not
+answer it: **`docker compose up` gives you an API, not a web page.** Browsing to
+`localhost:28080` returns 404 — the backend serves only `/api` and `/actuator`.
+The UI is the Vite dev server on the host, proxying to the container.
+
+Verified against this stack: `pnpm dev` with
+`VITE_DEV_PROXY_TARGET=http://localhost:28080`, logged in as `admin001` through
+the real login form, landed on the admin dashboard showing seeded data
+("4 待审核记录"), and Student Management paged the real 50 students
+(`50 total · page 1 / 3`, 20 rows).
+
+Two things that surprised me and are now in the doc: 5173 was already taken on
+this machine so Vite silently moved to another port — its "Local:" line is the
+only reliable source — and **the dev server's port does not need adding to
+`TIMEBANK_ALLOWED_ORIGINS`**, because the proxy rewrites `Origin` to the proxy
+target before the request reaches `RequestOriginFilter`.
+
+## 8. Reproducing it
 
 ```bash
 cp docker/.env.example .env
