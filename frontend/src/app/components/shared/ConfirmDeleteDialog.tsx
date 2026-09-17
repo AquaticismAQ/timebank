@@ -1,5 +1,6 @@
 import { Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 /** A standalone delete-confirmation dialog — deliberately outside any create/edit form, since delete is a list-level action. */
 export function ConfirmDeleteDialog({ title, message, onConfirm, onCancel }: {
@@ -8,6 +9,9 @@ export function ConfirmDeleteDialog({ title, message, onConfirm, onCancel }: {
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onCancel);
+
   const { t } = useTranslation();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

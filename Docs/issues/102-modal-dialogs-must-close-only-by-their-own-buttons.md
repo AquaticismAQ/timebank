@@ -63,18 +63,43 @@ footer Cancel could suppress the X. **All three callers already pass `"none"`**
 rendered for some time. With the rule now absolute the prop can only ever hold
 one value, so it and the button go.
 
-## 5. Escape
+## 5. Escape — removed, then restored on every dialog
 
-One dialog handled `Escape` (`EvidenceViewerDialog`). Removed, because the rule
-as stated is "only the buttons at the bottom", and Escape is an
-accidental-dismissal path like the other two.
+Initially removed: the rule as stated was "only the buttons at the bottom", and
+Escape is a dismissal path like the other two. The accessibility cost was
+flagged at the time — the ARIA authoring practices expect a modal to be
+dismissible from the keyboard.
 
-**This is a deliberate accessibility trade, and worth stating plainly.** The
-ARIA authoring practices expect a modal dialog to be dismissible with Escape.
-The counter-argument here is that these dialogs are unsaved-work forms rather
-than transient popovers, every one has a visible, keyboard-reachable Cancel, and
-losing a half-filled form to a stray keypress is its own accessibility problem.
-Easy to reverse if you would rather keep Escape — it is one handler in one file.
+**Reversed the same day on the user's decision: "restore the escape dismiss."**
+
+Restored on **every** dialog rather than only on `EvidenceViewerDialog`, which
+was the one that had it. Putting it back in one place would have left 1 of 20
+dialogs keyboard-dismissible — the exact inconsistency this issue exists to
+remove — and the accessibility argument applies to all of them equally.
+
+**The rest of the rule is unchanged**: no header `X`, and backdrop clicks still
+do nothing. Escape is defensible where those are not, because it is hard to
+press by accident while a stray click is not.
+
+### `useEscapeToClose`, and why it keeps a stack
+
+`frontend/src/app/lib/useEscapeToClose.ts`. Two details that are not
+decoration:
+
+- **A module-level stack, so one `Escape` closes one dialog.** Dialogs can
+  nest — a confirmation over the form it belongs to. If each mounted dialog
+  listened on `window` independently, a single keypress would close the
+  confirmation *and* the form under it, losing the work the confirmation was
+  protecting. Only the last-registered handler responds.
+- **Capture phase.** A dialog must still close when focus is inside an input
+  that stops propagation of its own key events. `defaultPrevented` is still
+  honoured, so a combobox that closes its own popover on Escape does not also
+  close the dialog around it.
+
+The stack is **defensive rather than exercised**: no path in the app today
+opens two modals at once — what looks like nesting in `UserModal` is an inline
+confirm inside the same dialog, so Escape there closes the whole dialog, which
+is correct and loses nothing since the delete was never confirmed.
 
 ## 6. Keeping it that way
 
@@ -104,7 +129,7 @@ Deployed and driven in a browser.
 | Header contains a close button | **0 buttons in the header** |
 | Type into the form, then click the backdrop | dialog **still open** |
 | …and the typed text | **survived** — `typed-then-clicked-outside` still in the field |
-| `Escape` (dispatched at document, window and the focused input) | dialog **still open** |
+| `Escape` | **closes it** — restored per §5 |
 | Footer Cancel exists | yes |
 | Footer Cancel closes it | yes |
 
@@ -136,3 +161,18 @@ The same second pass separated the genuine non-dialogs, which keep their
 outside-click dismissal: `AppShell`'s mobile nav drawer and
 `ProjectManagement`'s dropdown menu. Neither holds unsaved input, and
 click-away is the expected gesture for both.
+
+## 9. Verification of the Escape restoration
+
+Three different wiring mechanisms exist, so all three were exercised rather than
+assuming one stands for the others:
+
+| Mechanism | Dialog | Result |
+| :--- | :--- | :--- |
+| Sub-component mounted only while open | Create User (`UserModal`) | Escape **from a focused input** closes it — which is what proves the capture-phase listener |
+| Flag-gated inline modal | Service Categories → new category | opens, Escape closes |
+| `open`-prop component with an early return | Audit Center detail (`DetailWorkbench`) | opens, Escape closes |
+
+And the rest of the rule still holds after the change — re-checked on the same
+dialogs: **header has no `X`**, and **the backdrop still does not close**
+(`DetailWorkbench` and Create User both verified explicitly).

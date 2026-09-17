@@ -16,6 +16,7 @@ import { CASE_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels
 import { formatGradeClass } from '../../lib/format';
 import { formatLocalInstant, isoToLocalDate } from '../../lib/datetime';
 import { ListSearchInput } from '../ListSearchInput';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 const STATUSES: (Case['status'])[] = ['submitted', 'needsInformation', 'resolved', 'rejected'];
 const TYPES: (Case['type'])[] = ['appeal', 'supplement', 'manualCorrection'];
@@ -63,6 +64,9 @@ export function CaseReview() {
   // null = no linked resource, or the current user can't access it — either way, no materials section content.
   const [detailEvidence, setDetailEvidence] = useState<EvidenceFile[] | null>(null);
   const [detailEvidenceLoading, setDetailEvidenceLoading] = useState(false);
+
+  // Escape closes the topmost open dialog (issue 102 §5).
+  useEscapeToClose(() => setDecisionModal(null), Boolean(decisionModal));
 
   const { items, page, loading, error, params, setSearch, setFilter, setSort, setPage, setPageSize, refetch } =
     useUrlSyncedPagedApi(api.cases.list, { sort: '-submittedAt' });

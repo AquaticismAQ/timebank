@@ -7,6 +7,7 @@ import { ApiError, mapApiError } from '../../api/http';
 import { useDictionaries } from '../../api/useDictionaries';
 import { downloadBlob } from '../../lib/download';
 import { formatClassName } from '../../lib/format';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 /**
  * The admin entry point for `POST /users/activation-slips` (contract §4.15,
@@ -142,6 +143,9 @@ export function ActivationSlips() {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
+
+  // Escape closes the topmost open dialog (issue 102 §5).
+  useEscapeToClose(() => setConfirmOpen(false), Boolean(confirmOpen));
 
   // Now keyed on the selected class rather than loaded once for the whole
   // school (issue 094 §7): the index is only ever consulted for the class in

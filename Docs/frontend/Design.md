@@ -580,8 +580,12 @@ Three rules, no exceptions:
 1. **No `X` in the header.** The corner is where a pointer drifts to.
 2. **The backdrop does not close it.** Render it as decoration, with no
    `onClick`.
-3. **`Escape` does not close it.** Deliberate, and a knowing trade against the
-   ARIA practice — see issue 102 §5 for the argument and how to reverse it.
+3. **`Escape` *does* close it**, on every dialog, via the shared
+   `useEscapeToClose` hook. It is the one dismissal path kept, because unlike a
+   stray click it is hard to press by accident, and the ARIA practices expect a
+   modal to be dismissible from the keyboard. Use the hook rather than a local
+   listener: it keeps a stack so one `Escape` closes one dialog, and listens in
+   the capture phase so it works from inside a focused input.
 
 Every dialog is a form or a decision, and all three of the removed paths fire
 *by accident*, discarding whatever was typed with no undo.

@@ -6,6 +6,7 @@ import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { type Case, type ServiceRecord } from '../../api/types';
 import { minutesToHours } from '../../lib/format';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 /**
  * 06-StudentCaseFiling.md — shared create+submit modal for the two
@@ -47,6 +48,9 @@ export function CaseFilingModal({
   onClose: () => void;
   onFiled: () => void;
 }) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onClose);
+
   const { t } = useTranslation();
   const [reason, setReason] = useState(draft?.description ?? '');
   const [saving, setSaving] = useState(false);

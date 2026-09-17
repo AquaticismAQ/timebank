@@ -11,6 +11,7 @@ import { CASE_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels
 import { type Case, type CaseStatus, type TimelineEntry } from '../../api/types';
 import { formatLocalInstant, isoToLocalDate } from '../../lib/datetime';
 import { CaseFilingModal } from './CaseFilingModal';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 const TYPE_LABEL: Record<Case['type'], string> = {
   appeal: 'admin.cases.typeAppeal',
@@ -53,6 +54,10 @@ export function StudentCases() {
   const [filing, setFiling] = useState(false);
   const [editing, setEditing] = useState<Case | null>(null);
   const [deleting, setDeleting] = useState<Case | null>(null);
+
+  // Escape closes the topmost open dialog (issue 102 §5).
+  useEscapeToClose(() => setDeleting(null), Boolean(deleting));
+  useEscapeToClose(() => setResponding(null), Boolean(responding));
 
   const changeStatus = (value: CaseStatus | 'all') => {
     setStatusFilter(value);

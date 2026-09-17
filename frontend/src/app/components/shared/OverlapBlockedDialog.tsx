@@ -4,6 +4,7 @@ import { type ServiceRecord } from '../../api/types';
 import { isoToLocalDateTime } from '../../lib/datetime';
 import { RECORD_STATUS_LABELS } from '../../lib/statusLabels';
 import { minutesToHours } from '../../lib/format';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 /** "2026-09-15 21:00 – 23:00", or "2026-09-15 21:00 – 2026-09-16 01:00" when it runs past midnight. */
 function formatWindow(date: string, startTime: string, endDate: string, endTime: string) {
@@ -37,6 +38,9 @@ export function OverlapBlockedDialog({ attempted, conflict, canDelete, onDelete,
   onKeepDraft: () => void;
   onClose: () => void;
 }) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onClose);
+
   const { t } = useTranslation();
 
   const conflictStart = conflict ? isoToLocalDateTime(conflict.startAt) : null;

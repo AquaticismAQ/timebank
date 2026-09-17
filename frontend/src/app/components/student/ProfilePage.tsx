@@ -9,6 +9,7 @@ import { formatCoins, minutesToHours } from '../../lib/format';
 import { changeLanguage } from '../../lib/language';
 import { api } from '../../api/client';
 import { useFieldErrors, handleMutationError, FieldError } from '../../api/useFieldErrors';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 export function ProfilePage() {
   const { t, i18n } = useTranslation();
@@ -63,6 +64,9 @@ export function ProfilePage() {
   const [editingBasicInfo, setEditingBasicInfo] = useState(false);
   const [basicForm, setBasicForm] = useState({ displayName: '', email: '' });
   const [savingBasicInfo, setSavingBasicInfo] = useState(false);
+
+  // Escape closes the topmost open dialog (issue 102 §5).
+  useEscapeToClose(() => setShowPrivacyModal(false), Boolean(showPrivacyModal));
   const basicInfoErrors = useFieldErrors();
 
   const startEditBasicInfo = () => {

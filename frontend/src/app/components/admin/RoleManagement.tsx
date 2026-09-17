@@ -9,6 +9,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '..
 import { Checkbox } from '../ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { ConfirmDeleteDialog } from '../shared/ConfirmDeleteDialog';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 /**
  * Row-action button shape shared with the Users/Rule Settings tabs
@@ -208,6 +209,8 @@ interface RoleFormModalProps {
 }
 
 function RoleFormModal({ mode, role, permissions, templates, onClose, onSave }: RoleFormModalProps) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onClose);
   const { t } = useTranslation();
   const [form, setForm] = useState<RoleFormState>(role ? roleToForm(role) : emptyRoleForm());
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -357,6 +360,8 @@ interface RoleTemplateFormModalProps {
 
 /** 07-RoleFinetune.md §2.7: name + permissions only — no code/session-timeout, unlike `RoleFormModal` (neither is meaningful for a template). */
 function RoleTemplateFormModal({ mode, template, permissions, onClose, onSave }: RoleTemplateFormModalProps) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onClose);
   const { t } = useTranslation();
   const [form, setForm] = useState<RoleTemplateFormState>(template ? templateToForm(template) : emptyTemplateForm());
   const [saving, setSaving] = useState(false);

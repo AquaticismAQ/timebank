@@ -23,6 +23,7 @@ import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { ListSearchInput } from '../ListSearchInput';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 /**
  * Row-action button shape shared by every list/table in the admin portal
@@ -97,6 +98,8 @@ interface RuleFormModalProps {
 }
 
 function RuleFormModal({ mode, initial, onClose, onSaved }: RuleFormModalProps) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onClose);
   const { t } = useTranslation();
   const [fields, setFields] = useState<RuleDraftFields>(initial ? {
     roundingMinutes: initial.roundingMinutes, minutesPerCoinUnit: initial.minutesPerCoinUnit, centiCoinsPerUnit: initial.centiCoinsPerUnit,
@@ -205,6 +208,8 @@ interface PublishRuleModalProps {
 }
 
 function PublishRuleModal({ rule, onClose, onPublished }: PublishRuleModalProps) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onClose);
   const { t } = useTranslation();
   const [effectiveFrom, setEffectiveFrom] = useState('');
   const [validation, setValidation] = useState<RuleValidationResult | null>(null);
@@ -290,6 +295,8 @@ interface SchoolInfoEditModalProps {
 }
 
 function SchoolInfoEditModal({ initial, onClose, onSaved }: SchoolInfoEditModalProps) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onClose);
   const { t } = useTranslation();
   const [form, setForm] = useState({
     name: initial.name ?? '', fullName: initial.fullName ?? '',
@@ -609,6 +616,8 @@ interface UserModalProps {
 }
 
 function UserModal({ mode, initial, roles, onClose, onSave, onDelete, onUnlock }: UserModalProps) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onClose);
   const { t } = useTranslation();
   const [form, setForm] = useState<UserFormState>(initial);
   const [confirmDelete, setConfirmDelete] = useState(false);

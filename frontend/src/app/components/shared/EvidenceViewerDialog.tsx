@@ -4,6 +4,7 @@ import { Download, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { type FileMetadata } from '../../api/types';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 /**
  * Large single-file viewer for an evidence file (issue 072) — opened by
@@ -34,6 +35,9 @@ export function EvidenceViewerDialog({ fileId, meta, name, onClose }: {
   name: string;
   onClose: () => void;
 }) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onClose);
+
   const { t } = useTranslation();
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);

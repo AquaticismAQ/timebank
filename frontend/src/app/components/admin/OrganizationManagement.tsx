@@ -10,6 +10,7 @@ import { usePermissions } from '../../App';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { ListSearchInput } from '../ListSearchInput';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 const INPUT = 'w-full px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40';
 const LABEL = 'block text-xs text-muted-foreground mb-1.5';
@@ -67,6 +68,11 @@ export function OrganizationManagement() {
 
   const [archiveTarget, setArchiveTarget] = useState<Organization | null>(null);
   const [archiveSaving, setArchiveSaving] = useState(false);
+
+  // Escape closes the topmost open dialog (issue 102 §5).
+  useEscapeToClose(() => setShowForm(false), Boolean(showForm));
+  useEscapeToClose(() => setArchiveTarget(null), Boolean(archiveTarget));
+  useEscapeToClose(() => setEditOrg(null), Boolean(editOrg));
 
   const handleSearchChange = (value: string) => { setSearch(value); setPagedSearch(value); };
   const handleStatusChange = (value: Organization['status'] | 'all') => { setFilterStatus(value); setFilter('status', value === 'all' ? undefined : value); };

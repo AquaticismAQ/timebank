@@ -8,6 +8,7 @@ import { RECORD_STATUS_LABELS } from '../../lib/statusLabels';
 import { formatCoins, minutesToHours } from '../../lib/format';
 import { formatLocalInstant } from '../../lib/datetime';
 import { EvidencePreview } from '../shared/EvidencePreview';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 const STATUS_COLORS: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -40,6 +41,9 @@ function Field({ label, value }: { label: string; value?: string | number | null
  * view rendered straight off the row would show no evidence at all.
  */
 export function ServiceRecordDetail({ recordId, onClose }: { recordId: string; onClose: () => void }) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onClose);
+
   const { t } = useTranslation();
   const [record, setRecord] = useState<ServiceRecord | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);

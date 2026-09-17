@@ -14,6 +14,7 @@ import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { StudentRecords } from './StudentRecords';
 import { ListSearchInput } from '../ListSearchInput';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 type SortKey = 'name' | 'gradeLevel' | 'completedHours' | 'timeCoinBalance';
 
@@ -108,6 +109,9 @@ export function StudentList() {
   // Concurrency is capped because a page can hold 100 students; a failed row
   // is left blank rather than failing the whole list.
   const [progressMap, setProgressMap] = useState<Record<string, { completedMinutes: number; annualRequiredMinutes: number }>>({});
+
+  // Escape closes the topmost open dialog (issue 102 §5).
+  useEscapeToClose(() => setEditStudent(null), Boolean(editStudent));
   useEffect(() => {
     if (items.length === 0) return;
     let cancelled = false;

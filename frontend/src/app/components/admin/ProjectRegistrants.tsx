@@ -9,6 +9,7 @@ import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { type ApplicationStatus } from '../../api/types';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 const STATUS_LABEL_KEY: Record<ApplicationStatus, string> = {
   pending: 'admin.projects.regStatusPending',
@@ -37,6 +38,9 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
  * `00-Status.md` §25.
  */
 export function ProjectRegistrants({ projectId, projectTitle, onClose }: { projectId: string; projectTitle: string; onClose: () => void }) {
+  // Escape closes the topmost dialog (issue 102 §5).
+  useEscapeToClose(onClose);
+
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
   const canManage = hasPermission('applications.manage');

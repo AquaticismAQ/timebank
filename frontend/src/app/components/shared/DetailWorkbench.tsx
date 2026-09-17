@@ -1,4 +1,5 @@
 import {  } from 'lucide-react';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 export interface DetailWorkbenchTab {
   key: string;
@@ -29,6 +30,10 @@ export function DetailWorkbench({
   /** Must contain the only way out — see the header comment (issue 102). */
   footer?: React.ReactNode;
 }) {
+  // Before the early return, and gated on `open` instead — a hook after a
+  // conditional return would change hook order between renders.
+  useEscapeToClose(onClose, open);
+
   if (!open) return null;
   const active = tabs.find(t => t.key === activeTab) ?? tabs[0];
 

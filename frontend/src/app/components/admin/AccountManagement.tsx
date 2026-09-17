@@ -15,6 +15,7 @@ import { ListStateBanner } from '../ListStateBanner';
 import { SearchPicker } from '../SearchPicker';
 import { isoToLocalDate } from '../../lib/datetime';
 import { ListSearchInput } from '../ListSearchInput';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 export function AccountManagement() {
   const { t } = useTranslation();
@@ -82,6 +83,9 @@ export function AccountManagement() {
   const [expandedTx, setExpandedTx] = useState<AccountTransaction[]>([]);
   const [expandedTxLoading, setExpandedTxLoading] = useState(false);
   const [expandedAccount, setExpandedAccount] = useState<Account | null>(null);
+
+  // Escape closes the topmost open dialog (issue 102 §5).
+  useEscapeToClose(() => setShowAdjust(false), Boolean(showAdjust));
 
   useEffect(() => {
     if (!expandedId) {

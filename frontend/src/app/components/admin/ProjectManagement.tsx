@@ -17,6 +17,7 @@ import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { GradePicker } from '../GradePicker';
 import { minutesToHours } from '../../lib/format';
 import { ListSearchInput } from '../ListSearchInput';
+import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 const colorMap: Record<string, string> = {
   gray:   'bg-muted text-muted-foreground',
@@ -359,6 +360,10 @@ export function ProjectManagement() {
   const [cancelProject, setCancelProject] = useState<Project | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelSaving, setCancelSaving] = useState(false);
+
+  // Escape closes the topmost open dialog (issue 102 §5).
+  useEscapeToClose(() => setShowForm(false), Boolean(showForm));
+  useEscapeToClose(() => setCancelProject(null), Boolean(cancelProject));
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
