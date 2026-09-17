@@ -26,7 +26,12 @@ import java.util.Set;
 @RestController
 public class AuditLogController {
 
-    private static final Set<String> SORTABLE = Set.of("createdAt");
+    /**
+     * Widened by issue 098. Keys must stay identical to
+     * {@code AuditLogQueryServiceImpl.SORT_COLUMNS} — an entry here with no
+     * column there throws rather than sorting wrongly.
+     */
+    public static final Set<String> SORTABLE = Set.of("createdAt", "action", "resourceType");
 
     private final AuditLogQueryService auditLogQueryService;
 
@@ -39,9 +44,29 @@ public class AuditLogController {
     public ApiResponse<List<AuditLogDto>> list(PageQuery query) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
         Page<AuditLogDto> page = auditLogQueryService.search(
+                query.search(), query.filter("action"),
                 query.filter("resourceType"), query.filter("resourceId"), query.filter("actorId"),
                 parseInstant(query.filter("createdFrom")), parseInstant(query.filter("createdTo")), pageable);
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
+    }
+
+    /**
+     * Issue 098: the distinct {@code action} and {@code resourceType} values the
+     * log actually holds, for the tab's filter dropdowns.
+     *
+     * <p>Served rather than hardcoded in the client because action codes accrue
+     * with every feature — a literal list would quietly stop offering the newest
+     * one, and the filter would look complete while being unable to select it.
+     * Same reasoning as the service-category tab's server-derived codes.</p>
+     *
+     * <p>Under {@code auditLogs.read}, the same permission as the list: this
+     * discloses nothing the list does not, and a separate permission would be a
+     * second thing to get wrong.</p>
+     */
+    @GetMapping("/api/v1/audit-logs/facets")
+    @PreAuthorize("hasAuthority('auditLogs.read')")
+    public ApiResponse<AuditLogQueryService.Facets> facets() {
+        return ApiResponse.of(auditLogQueryService.facets());
     }
 
     private Instant parseInstant(String raw) {

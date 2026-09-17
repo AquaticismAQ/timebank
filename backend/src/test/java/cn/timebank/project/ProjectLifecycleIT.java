@@ -67,7 +67,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         ProjectDto reread = projectService.getDetail(published.id(), adminAuth(), "zh-CN");
         assertThat(reread.status()).isEqualTo("ARCHIVED");
 
-        Page<AuditLogDto> logs = auditLogQueryService.search("project", reread.id(), null, null, null, PageRequest.of(0, 10));
+        Page<AuditLogDto> logs = auditLogQueryService.search(null, null, "project", reread.id(), null, null, null, PageRequest.of(0, 10));
         assertThat(logs.getContent()).extracting(AuditLogDto::action).contains("project.autoArchiveNoRegistrants");
         assertThat(logs.getContent()).extracting(AuditLogDto::reasonCode).contains("NO_REGISTRANTS_AT_REGISTRATION_CLOSE");
     }

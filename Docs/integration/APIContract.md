@@ -785,9 +785,39 @@ Imports must validate before commit. Duplicate imports are prevented by source f
 | `GET` | `/permissions` | `roles.read` | Permission code catalog |
 | `GET` | `/users/directory` | `users.read`/`directory.read` | Minimal `{id, displayName}` search by name and role, for picking a proposed supervisor (added 2026-08-06, `Docs/optimization/01-i3-partner-school-terminology.md`) — `role` query param required (e.g. `teacher`), no other user fields (username/email/studentId/roleCode/status) are exposed |
 | `GET` | `/audit-logs` | `auditLogs.read` | Operation audit |
+| `GET` | `/audit-logs/facets` | `auditLogs.read` | Distinct `action`/`resourceType` values present, for filter dropdowns (added 2026-09-18, issue 098) |
 | `GET` | `/login-logs` | `securityLogs.read` | Login logs |
 | `GET` | `/system/settings` | `settings.read` | System parameters |
 | `PATCH` | `/system/settings` | `settings.manage` | Update allowed parameters |
+
+**`GET /audit-logs` — search, filter and sort** (widened 2026-09-18, issue
+098). `search` matches the **actor's display name**, `action`, `resourceId` or
+`requestId`, case-insensitively. `filter[action]`, `filter[resourceType]`,
+`filter[resourceId]`, `filter[actorId]`, `filter[createdFrom]` and
+`filter[createdTo]` (the last two ISO-8601 instants). Sortable on `createdAt`,
+`action` and `resourceType`; `-createdAt` is the default, and `a.id desc` is
+appended to every ordering because `created_at` is not unique — one transaction
+writes several rows in the same millisecond, and without a tiebreaker they can
+appear on two pages or on none.
+
+Two of these were previously **accepted and discarded**, which is worse than
+absent because a caller cannot tell: `search` was never read, and the statement
+ended in a hardcoded `order by created_at desc`, so `sort=createdAt` returned
+newest-first exactly like `-createdAt` and ascending order was unreachable.
+
+Each row carries `actorDisplayName` — **resolved server-side**, null for a
+system-generated entry. Clients must not resolve it from a loaded user list:
+that list is one page, so the name would depend on unrelated state and fall back
+to a raw opaque id for anyone outside it. `beforeSummary`/`afterSummary` are
+JSON **strings** as stored, whose shape varies per action — format them for
+display, do not destructure.
+
+`GET /audit-logs/facets` returns `{ actions: string[], resourceTypes: string[] }`
+— the distinct values the log actually holds, sorted. Served rather than
+hardcoded because action codes accrue with every feature: a literal client-side
+list quietly stops offering the newest one, and the filter looks complete while
+being unable to select it. Not narrowed by the caller's active filters, which
+would make switching away from the current value impossible.
 
 **Roles are configurable, not a fixed vocabulary** (07-RoleFinetune.md) —
 `student`, `admin`, and `sysadmin` are protected (undeletable; `sysadmin` is

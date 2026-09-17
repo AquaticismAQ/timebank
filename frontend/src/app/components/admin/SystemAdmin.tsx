@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, AlertTriangle, Plus, X, Pencil, Trash2, Lock, Building2, KeyRound, Check, Tags, Search } from 'lucide-react';
+import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, ChevronUp, ChevronDown, AlertTriangle, Plus, X, Pencil, Trash2, Lock, Building2, KeyRound, Check, Tags, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, usePermissions } from '../../App';
 import { api, type ImportJob } from '../../api/client';
@@ -17,7 +17,7 @@ import { downloadBlob } from '../../lib/download';
 import { localDateTimeToISO, formatLocalInstant } from '../../lib/datetime';
 import { DEFAULT_PAGE_SIZE } from '../../lib/pagination';
 import { STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
-import type { RoleSummary, AuditLogEntry, SchoolInfo, RuleVersion, RuleDraftFields, RuleValidationResult } from '../../api/types';
+import type { RoleSummary, AuditLogEntry, AuditLogFacets, SchoolInfo, RuleVersion, RuleDraftFields, RuleValidationResult } from '../../api/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
@@ -451,6 +451,9 @@ const USERNAME_MAX_LENGTH = 64;
 /** Issue 094: the Users tab's three sort options (05-SearchFilterSortConsistency.md §2.1 — one button per field). */
 type UserSortKey = 'name' | 'grade' | 'class';
 
+/** Issue 098: the Audit Logs tab's sort options. These are `AuditLogDto` field names on the wire — `AuditLogController.SORTABLE` rejects anything else. */
+type LogSortKey = 'createdAt' | 'action' | 'resourceType';
+
 /** Sort keys are `UserDto` field names on the wire; `UserController.SORTABLE` rejects anything else with a 422. */
 const USER_SORT_WIRE_KEY: Record<UserSortKey, string> = {
   name: 'displayName',
@@ -472,6 +475,88 @@ function roleColor(roleCode: string) {
   if (roleCode === 'admin' || roleCode === 'sysadmin') return 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300';
   if (roleCode === 'teacher') return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300';
   return 'bg-muted text-muted-foreground';
+}
+
+/**
+ * The expanded body of one audit row (issue 098).
+ *
+ * <p>Six of the thirteen fields `GET /audit-logs` returns were displayed
+ * nowhere in the product before this: `beforeSummary`, `afterSummary`,
+ * `permissionUsed`, `requestId`, `ipAddress` and `userAgent`. The first two are
+ * the substance — everything else on the row is metadata about a change whose
+ * content lives in those two columns, and reading them meant opening a SQL
+ * client. `Design/*​/08-mlps-level1-security-design-guide.md` §10.2 lists
+ * before/after state as a required element of the record.</p>
+ */
+function AuditLogDetail({ log, operator }: { log: AuditLogEntry; operator: string }) {
+  const { t } = useTranslation();
+
+  /**
+   * The summaries are JSON *strings* whose shape differs per action, so this
+   * only pretty-prints them — it never reaches into the object. An entry
+   * written before the column was JSON, or by something that stored a bare
+   * string, still has to render: falling back to the raw text is what keeps an
+   * unparseable value visible instead of blanking the one field that matters.
+   */
+  const pretty = (raw: string | null): string | null => {
+    if (!raw) return null;
+    try {
+      return JSON.stringify(JSON.parse(raw), null, 2);
+    } catch {
+      return raw;
+    }
+  };
+
+  const before = pretty(log.beforeSummary);
+  const after = pretty(log.afterSummary);
+
+  const rows: { label: string; value: string | null }[] = [
+    { label: t('admin.system.logDetailActor'), value: operator },
+    { label: t('admin.system.logDetailAction'), value: log.action },
+    { label: t('admin.system.logDetailResource'),
+      value: log.resourceId ? `${log.resourceType} · ${log.resourceId}` : log.resourceType },
+    { label: t('admin.system.logDetailOutcome'), value: log.reasonCode },
+    { label: t('admin.system.logDetailPermission'), value: log.permissionUsed },
+    { label: t('admin.system.logDetailTime'), value: formatLocalInstant(log.createdAt) },
+    { label: t('admin.system.logDetailIp'), value: log.ipAddress },
+    { label: t('admin.system.logDetailRequestId'), value: log.requestId },
+    { label: t('admin.system.logDetailUserAgent'), value: log.userAgent },
+  ];
+
+  return (
+    <div className="px-4 pb-4 pt-1 bg-muted/20 space-y-3">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+        {rows.map(({ label, value }) => (
+          <div key={label} className="flex gap-2 text-xs min-w-0">
+            <dt className="text-muted-foreground shrink-0">{label}</dt>
+            {/* `break-all`, not truncate: a user agent or an opaque id is
+                exactly the thing somebody needs to copy in full. */}
+            <dd className="text-foreground break-all">{value || '—'}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {(before || after) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Both panes render whenever either summary exists, so an absent
+              side is stated rather than left to look like a layout glitch —
+              "nothing before" is what a creation *means*. */}
+          <div className="min-w-0">
+            <div className="text-xs text-muted-foreground mb-1">{t('admin.system.logDetailBefore')}</div>
+            <pre className="text-[11px] leading-relaxed bg-card border border-border rounded-xl p-3 overflow-x-auto text-foreground whitespace-pre-wrap break-all">
+              {before ?? t('admin.system.logDetailNoBefore')}
+            </pre>
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs text-muted-foreground mb-1">{t('admin.system.logDetailAfter')}</div>
+            <pre className="text-[11px] leading-relaxed bg-card border border-border rounded-xl p-3 overflow-x-auto text-foreground whitespace-pre-wrap break-all">
+              {after ?? t('admin.system.logDetailNoAfter')}
+            </pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** `AuditLogEntry.action` is a real backend action code like `eventProposal.reviewDecision` — split into words for display rather than translated, since new action codes are added over time and a per-key i18n table would drift out of sync with the backend. */
@@ -906,7 +991,60 @@ export function SystemAdmin() {
   // identical permission grants post-role-merge — hardcoded role-code check
   // rather than a new permission, matching the backend's identical gate.
   const isSysadmin = user?.roles.includes('sysadmin') ?? false;
+  /**
+   * Issue 098. Search, both filters and the sort all execute server-side over
+   * the whole log, not over the loaded page — at 1,000+ rows and 50+ pages the
+   * distinction is the difference between an answer and a guess.
+   */
   const auditLogs = usePagedApi<AuditLogEntry>(api.auditLogs.list, { sort: '-createdAt', pageSize: DEFAULT_PAGE_SIZE });
+  const [logSearch, setLogSearch] = useState('');
+  const [filterLogAction, setFilterLogAction] = useState('all');
+  const [filterLogResourceType, setFilterLogResourceType] = useState('all');
+  const [logSortKey, setLogSortKey] = useState<LogSortKey>('createdAt');
+  const [logSortDesc, setLogSortDesc] = useState(true);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [logFacets, setLogFacets] = useState<AuditLogFacets>({ actions: [], resourceTypes: [] });
+
+  // Fetched once, not derived from the loaded page: a dropdown built from the
+  // current 20 rows would offer only the actions those rows happen to use, so
+  // the filter could never reach the ones it is most useful for (issue 098).
+  useEffect(() => {
+    api.auditLogs.facets().then(setLogFacets).catch(() => {});
+  }, []);
+
+  const handleLogSearch = (value: string) => {
+    setLogSearch(value);
+    auditLogs.setSearch(value);
+  };
+
+  const handleLogActionFilter = (value: string) => {
+    setFilterLogAction(value);
+    auditLogs.setFilter('action', value === 'all' ? undefined : value);
+  };
+
+  const handleLogResourceTypeFilter = (value: string) => {
+    setFilterLogResourceType(value);
+    auditLogs.setFilter('resourceType', value === 'all' ? undefined : value);
+  };
+
+  /** Same interaction as the Users tab: re-clicking the active field flips direction. */
+  const handleLogSortClick = (key: LogSortKey) => {
+    const nextDesc = logSortKey === key ? !logSortDesc : key === 'createdAt';
+    setLogSortKey(key);
+    setLogSortDesc(nextDesc);
+    auditLogs.setSort(`${nextDesc ? '-' : ''}${key}`);
+  };
+
+  const logFiltersActive = logSearch !== '' || filterLogAction !== 'all' || filterLogResourceType !== 'all';
+
+  const clearLogFilters = () => {
+    setLogSearch('');
+    setFilterLogAction('all');
+    setFilterLogResourceType('all');
+    auditLogs.setSearch('');
+    auditLogs.setFilter('action', undefined);
+    auditLogs.setFilter('resourceType', undefined);
+  };
   const [schoolInfo, setSchoolInfo] = useState<SchoolInfo | null>(null);
   const [systemVersion, setSystemVersion] = useState('');
   const [editingSchoolInfo, setEditingSchoolInfo] = useState(false);
@@ -1749,37 +1887,101 @@ export function SystemAdmin() {
 
       {/* ── Logs tab ──────────────────────────────────────────────── */}
       {activeTab === 'logs' && (
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border">
-            <h3 className="text-foreground">{t('admin.system.auditLogs')}</h3>
-            <p className="text-xs text-muted-foreground">{t('admin.system.logsDesc', { count: auditLogs.page?.totalItems ?? auditLogs.items.length })}</p>
+        <div className="space-y-4">
+          {/* Controls, matching the Users tab (issue 098). Search is committed
+              on Enter or the icon, never per keystroke — at 1,000+ rows a
+              request per character is a burst nobody reads (issue 095 §8). */}
+          <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+            <ListSearchInput value={logSearch} onCommit={handleLogSearch}
+              placeholder={t('admin.system.logSearchPlaceholder')} />
+            <div className="grid grid-cols-2 gap-2">
+              <select value={filterLogAction} onChange={e => handleLogActionFilter(e.target.value)}
+                className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+                <option value="all">{t('admin.system.allActions')}</option>
+                {logFacets.actions.map(a => <option key={a} value={a}>{humanizeAuditAction(a)}</option>)}
+              </select>
+              <select value={filterLogResourceType} onChange={e => handleLogResourceTypeFilter(e.target.value)}
+                className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+                <option value="all">{t('admin.system.allResourceTypes')}</option>
+                {logFacets.resourceTypes.map(rt => <option key={rt} value={rt}>{rt}</option>)}
+              </select>
+            </div>
           </div>
-          <div className="divide-y divide-border">
-            {auditLogs.items.map(log => {
-              const operator = log.actorId ? (users.find(u => u.id === log.actorId)?.name ?? log.actorId) : t('admin.system.logSystemActor');
-              return (
-                <div key={log.id} className="px-4 py-3 flex items-start gap-3">
-                  <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${auditLogDotColor(log.resourceType)}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-foreground">{humanizeAuditAction(log.action)}</div>
-                    <div className="text-xs text-muted-foreground">{log.resourceType}{log.resourceId ? ` · ${log.resourceId}` : ''}</div>
-                    {log.reasonCode && (
-                      <div className="mt-1 text-xs text-muted-foreground/70 bg-muted/50 rounded-md px-2 py-1 italic">
-                        {t('admin.system.memoLabel')}: {log.reasonCode}
+
+          {/* One button per sortable field (05-SearchFilterSortConsistency.md §2.1). */}
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { key: 'createdAt', label: t('admin.system.sortTime') },
+              { key: 'action', label: t('admin.system.sortAction') },
+              { key: 'resourceType', label: t('admin.system.sortResourceType') },
+            ] as { key: LogSortKey; label: string }[]).map(({ key, label }) => (
+              <button key={key} onClick={() => handleLogSortClick(key)}
+                className={`px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors ${
+                  logSortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
+                    : 'bg-muted text-muted-foreground hover:bg-accent'
+                }`}>
+                {label}
+                {logSortKey === key && (logSortDesc ? ' ↓' : ' ↑')}
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-border">
+              <h3 className="text-foreground">{t('admin.system.auditLogs')}</h3>
+              <p className="text-xs text-muted-foreground">
+                {t('admin.system.logsDesc', { count: auditLogs.page?.totalItems ?? auditLogs.items.length })}
+              </p>
+            </div>
+            <div className="divide-y divide-border">
+              {auditLogs.items.map(log => {
+                // Server-resolved (issue 098). This used to search the loaded
+                // page of the Users tab, so the name depended on unrelated
+                // state elsewhere and fell back to a raw id for most actors.
+                const operator = log.actorId
+                  ? (log.actorDisplayName ?? log.actorId)
+                  : t('admin.system.logSystemActor');
+                const isExpanded = expandedLogId === log.id;
+                return (
+                  <div key={log.id}>
+                    {/* Click-to-expand, following Time Coin Accounts as asked.
+                        A row is one moment in a chronology, and the question is
+                        usually "what changed, and what happened either side" —
+                        a modal would cover the neighbours that give it meaning.
+                        No second fetch: the list response carries every field. */}
+                    <button type="button" onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                      className="w-full px-4 py-3 flex items-start gap-3 text-left hover:bg-muted/30 transition-colors">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${auditLogDotColor(log.resourceType)}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-foreground">{humanizeAuditAction(log.action)}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {log.resourceType}{log.resourceId ? ` · ${log.resourceId}` : ''}
+                        </div>
+                        {log.reasonCode && (
+                          <div className="mt-1 text-xs text-muted-foreground/70 bg-muted/50 rounded-md px-2 py-1 italic">
+                            {t('admin.system.memoLabel')}: {log.reasonCode}
+                          </div>
+                        )}
                       </div>
-                    )}
+                      <div className="text-right shrink-0">
+                        <div className="text-xs text-foreground">{operator}</div>
+                        <div className="text-xs text-muted-foreground">{formatLocalInstant(log.createdAt)}</div>
+                      </div>
+                      {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
+                        : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />}
+                    </button>
+                    {isExpanded && <AuditLogDetail log={log} operator={operator} />}
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-xs text-foreground">{operator}</div>
-                    <div className="text-xs text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</div>
-                  </div>
-                </div>
-              );
-            })}
-            <ListStateBanner error={auditLogs.error} empty={!auditLogs.loading && auditLogs.items.length === 0} emptyLabel={t('admin.system.logsEmpty')} />
-          </div>
-          <div className="px-4 py-3 border-t border-border">
-            <PageControls page={auditLogs.page} onPageChange={auditLogs.setPage} pageSize={auditLogs.params.pageSize} onPageSizeChange={auditLogs.setPageSize} />
+                );
+              })}
+              <ListStateBanner error={auditLogs.error} empty={!auditLogs.loading && auditLogs.items.length === 0}
+                emptyLabel={t('admin.system.logsEmpty')} hasActiveFilters={logFiltersActive}
+                onClearFilters={clearLogFilters} />
+            </div>
+            <div className="px-4 py-3 border-t border-border">
+              <PageControls page={auditLogs.page} onPageChange={auditLogs.setPage}
+                pageSize={auditLogs.params.pageSize} onPageSizeChange={auditLogs.setPageSize} />
+            </div>
           </div>
         </div>
       )}

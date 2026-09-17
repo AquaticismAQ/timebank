@@ -41,7 +41,7 @@ class AuditLogQueryIT extends AbstractIntegrationTest {
         auditService.record(new AuditEntry("usr_actor_b", "cases.create", "case.update", "case", resourceId, null, null, null));
         auditService.record(new AuditEntry("usr_actor_a", "cases.create", "case.create", "case", "case_other", null, null, null));
 
-        Page<AuditLogDto> page = auditLogQueryService.search("case", resourceId, null, null, null, PageRequest.of(0, 10));
+        Page<AuditLogDto> page = auditLogQueryService.search(null, null, "case", resourceId, null, null, null, PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(2);
         assertThat(page.getContent()).allMatch(a -> a.resourceId().equals(resourceId));
@@ -53,7 +53,7 @@ class AuditLogQueryIT extends AbstractIntegrationTest {
         auditService.record(new AuditEntry(actorId, "cases.create", "case.create", "case", "case_x", null, null, null));
         auditService.record(new AuditEntry(actorId, "cases.create", "case.create", "case", "case_y", null, null, null));
 
-        Page<AuditLogDto> page = auditLogQueryService.search(null, null, actorId, null, null, PageRequest.of(0, 10));
+        Page<AuditLogDto> page = auditLogQueryService.search(null, null, null, null, actorId, null, null, PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isGreaterThanOrEqualTo(2);
         assertThat(page.getContent()).allMatch(a -> a.actorId().equals(actorId));
@@ -66,8 +66,8 @@ class AuditLogQueryIT extends AbstractIntegrationTest {
         auditService.record(new AuditEntry("usr_actor_c", "cases.create", "case.create", "case", resourceId, null, null, null));
         Instant after = Instant.now().plusSeconds(5);
 
-        Page<AuditLogDto> inRange = auditLogQueryService.search("case", resourceId, null, before, after, PageRequest.of(0, 10));
-        Page<AuditLogDto> outOfRange = auditLogQueryService.search("case", resourceId, null, after, null, PageRequest.of(0, 10));
+        Page<AuditLogDto> inRange = auditLogQueryService.search(null, null, "case", resourceId, null, before, after, PageRequest.of(0, 10));
+        Page<AuditLogDto> outOfRange = auditLogQueryService.search(null, null, "case", resourceId, null, after, null, PageRequest.of(0, 10));
 
         assertThat(inRange.getTotalElements()).isEqualTo(1);
         assertThat(outOfRange.getTotalElements()).isZero();

@@ -777,9 +777,32 @@ queued → running → succeeded
 | `GET` | `/permissions` | `roles.read` | 权限码目录 |
 | `GET` | `/users/directory` | `users.read`/`directory.read` | 按姓名与角色搜索，返回精简的 `{id, displayName}`，用于挑选拟邀请指导教师（2026-08-06 新增，见 `Docs/optimization/01-i3-partner-school-terminology.md`）——必须提供 `role` 查询参数（如 `teacher`），不暴露 username/email/studentId/roleCode/status 等其他用户字段 |
 | `GET` | `/audit-logs` | `auditLogs.read` | 操作审计 |
+| `GET` | `/audit-logs/facets` | `auditLogs.read` | 日志中实际存在的 `action`／`resourceType` 去重取值，供筛选下拉使用（2026-09-18 新增，issue 098） |
 | `GET` | `/login-logs` | `securityLogs.read` | 登录日志 |
 | `GET` | `/system/settings` | `settings.read` | 系统参数 |
 | `PATCH` | `/system/settings` | `settings.manage` | 更新允许修改的参数 |
+
+**`GET /audit-logs` 的搜索、筛选与排序**（2026-09-18 扩展，issue 098）。`search`
+匹配**操作人显示名**、`action`、`resourceId` 或 `requestId`，不区分大小写。筛选项为
+`filter[action]`、`filter[resourceType]`、`filter[resourceId]`、`filter[actorId]`、
+`filter[createdFrom]` 与 `filter[createdTo]`（后两者为 ISO-8601 时刻）。可排序字段为
+`createdAt`、`action` 与 `resourceType`；默认 `-createdAt`，且每种排序都会追加
+`a.id desc` 作为并列打破项——`created_at` 并不唯一，同一事务会在同一毫秒内写入多行，
+缺少该项时这些行可能同时出现在两页上，或一页都不出现。
+
+其中两项此前是**被接受随后丢弃**的，这比缺失更糟，因为调用方无从察觉：`search` 从未被
+读取，而语句以硬编码的 `order by created_at desc` 结尾，因此 `sort=createdAt` 返回的
+结果与 `-createdAt` 完全相同，升序根本无法请求。
+
+每行携带 `actorDisplayName`——**由服务端解析**，系统生成的条目为 null。客户端不得从
+已加载的用户列表中自行解析：该列表只是其中一页，因而显示的名称会取决于别处的无关状态，
+并对不在该页内的操作人退化为不透明 id。`beforeSummary`／`afterSummary` 为按存储原样返回的
+JSON **字符串**，其结构随 action 而异——请按文本格式化展示，不要解构其字段。
+
+`GET /audit-logs/facets` 返回 `{ actions: string[], resourceTypes: string[] }`——
+日志中实际存在的去重取值，已排序。之所以由服务端提供而非在客户端写死：action 编码会随
+每个新功能增加，写死的列表会悄悄不再提供最新的那一个，筛选看上去完整、实则无法选中它。
+该结果不随调用方当前的筛选条件收窄，否则将无法从当前取值切换到其他取值。
 
 **角色是可配置的，而非固定词表**（见 07-RoleFinetune.md）——`student`、`admin`、
 `sysadmin` 为受保护角色（不可删除；`sysadmin` 同时不在管理端界面中展示，但其本身

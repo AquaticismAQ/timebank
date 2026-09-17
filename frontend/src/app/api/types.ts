@@ -26,10 +26,23 @@ export interface SystemVersion {
   version: string;
 }
 
-/** `GET /audit-logs` (contract §4.15) — real, append-only, backend-owned. `actorId` is null for system-generated entries (e.g. auto-archive); resolve to a display name client-side via a loaded user directory, never invent one. */
+/**
+ * `GET /audit-logs` (contract §4.15) — real, append-only, backend-owned.
+ *
+ * `actorId` is null for system-generated entries (e.g. auto-archive).
+ * **`actorDisplayName` is resolved server-side** (issue 098) — do not look the
+ * actor up in a loaded user list, which is what this screen used to do: that
+ * list is one page of accounts, so the name shown depended on unrelated state
+ * elsewhere and fell back to the raw opaque id for anyone outside it.
+ *
+ * `beforeSummary`/`afterSummary` are JSON strings as stored, not parsed
+ * objects: their shape differs per action and nothing here should pretend to
+ * know it. Format for display, don't destructure.
+ */
 export interface AuditLogEntry {
   id: string;
   actorId: string | null;
+  actorDisplayName: string | null;
   permissionUsed: string | null;
   action: string;
   resourceType: string;
@@ -37,7 +50,16 @@ export interface AuditLogEntry {
   beforeSummary: string | null;
   afterSummary: string | null;
   reasonCode: string | null;
+  requestId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
   createdAt: string;
+}
+
+/** The distinct values `GET /audit-logs/facets` reports, for the filter dropdowns (issue 098). Server-derived — action codes accrue over time, so a hardcoded list silently stops offering the newest. */
+export interface AuditLogFacets {
+  actions: string[];
+  resourceTypes: string[];
 }
 
 /**

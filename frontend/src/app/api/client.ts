@@ -21,6 +21,7 @@ import type {
   UpdateSchoolInfoRequest,
   SystemVersion,
   AuditLogEntry,
+  AuditLogFacets,
   RuleVersion,
   RuleDraftFields,
   RuleValidationResult,
@@ -221,11 +222,23 @@ export const api = {
     },
   },
 
-  /** `GET /audit-logs` (contract §4.15) — the real, backend-owned, append-only trail. Only sortable field is `createdAt`. */
+  /**
+   * `GET /audit-logs` (contract §4.15) — the real, backend-owned, append-only trail.
+   *
+   * Search, `filter[action]`, `filter[resourceType]` and sorting by
+   * `createdAt`/`action`/`resourceType` all execute server-side over the whole
+   * log (issue 098). Two of these were previously accepted and discarded —
+   * `search` was never read, and the statement's `order by` was hardcoded, so
+   * `sort=createdAt` returned the same newest-first page as `-createdAt`.
+   */
   auditLogs: {
     async list(params?: ListParams): Promise<PageResult<AuditLogEntry>> {
       const page = await http.getPage<AuditLogEntry>('/audit-logs', buildListQuery(params));
       return { data: page.data, page: page.page };
+    },
+    /** The distinct actions and resource types present, for the filter dropdowns. Served, not hardcoded — see `AuditLogFacets`. */
+    async facets(): Promise<AuditLogFacets> {
+      return http.get<AuditLogFacets>('/audit-logs/facets');
     },
   },
 
