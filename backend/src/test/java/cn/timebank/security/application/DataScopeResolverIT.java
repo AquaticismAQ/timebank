@@ -113,7 +113,7 @@ class DataScopeResolverIT extends AbstractIntegrationTest {
 
     private TimeBankPrincipal principal(String usernamePrefix, String roleCode) {
         var user = userService.create(new CreateUserRequest(
-                usernamePrefix + "_" + OpaqueIds.generate("u"), "InitialPass123!", "Scope Test",
+                usernamePrefix + "_" + OpaqueIds.generate("u"), "InitialChoice123!", "Scope Test",
                 usernamePrefix + "@example.com", roleCode, "zh-CN"), "system");
         return new TimeBankPrincipal() {
             public String id() { return user.id(); }

@@ -6,6 +6,7 @@ import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.iam.domain.ActivationCode;
+import cn.timebank.iam.domain.PasswordPolicy;
 import cn.timebank.iam.domain.User;
 import cn.timebank.iam.domain.UserStatus;
 import cn.timebank.iam.infrastructure.ActivationCodeRepository;
@@ -198,6 +199,12 @@ class ActivationServiceImpl implements ActivationService {
         // was redeemed — which is why all four of these happen inside the one
         // transaction that just consumed the code. A rollback anywhere below
         // puts the code back, rather than leaving a half-activated account.
+        // The one password rule, same as every other place a password is set.
+        // Checked here rather than only on the request record: this is the
+        // transaction that spends the code, and a password refused after the
+        // code was consumed would burn a student's slip for a typo.
+        PasswordPolicy.validate(newPassword, user.getUsername());
+
         UserSummary before = new UserSummary(user);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setMustChangePassword(false);

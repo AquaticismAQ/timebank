@@ -85,7 +85,7 @@ class ActivationServiceTest {
         student = User.pendingActivation(USER_ID, "31415926", "Example Student",
                 "std_example", "zh-CN", Instant.now());
         users.put(USER_ID, student);
-        users.put(ADMIN_ID, new User(ADMIN_ID, "admin001", "irrelevant", "Example Admin",
+        users.put(ADMIN_ID, new User(ADMIN_ID, "admin001", "Irrelevant-Pw-12", "Example Admin",
                 null, "zh-CN", Instant.now()));
 
         when(userRepository.findById(anyString()))
@@ -153,12 +153,12 @@ class ActivationServiceTest {
         student.setMustChangePassword(true);
         String code = seedUsableCode();
 
-        service().redeem(code, "chosen-by-the-student", IP);
+        service().redeem(code, "Chosen-By-Student-1", IP);
 
         assertThat(student.getStatus()).isEqualTo(UserStatus.ACTIVE);
         assertThat(student.isMustChangePassword()).isFalse();
         assertThat(student.hasUsableCredential()).isTrue();
-        assertThat(passwordEncoder.matches("chosen-by-the-student", student.getPasswordHash())).isTrue();
+        assertThat(passwordEncoder.matches("Chosen-By-Student-1", student.getPasswordHash())).isTrue();
         assertThat(redeemedInDatabase).containsKey(byId.keySet().iterator().next());
     }
 
@@ -166,7 +166,7 @@ class ActivationServiceTest {
     void the_printed_grouping_and_a_lower_case_retype_both_work() {
         String code = seedUsableCode();
 
-        service().redeem(ActivationCodeFormat.group(code).toLowerCase(), "chosen-by-the-student", IP);
+        service().redeem(ActivationCodeFormat.group(code).toLowerCase(), "Chosen-By-Student-1", IP);
 
         assertThat(student.getStatus()).isEqualTo(UserStatus.ACTIVE);
     }
@@ -177,15 +177,15 @@ class ActivationServiceTest {
     void a_code_cannot_be_redeemed_twice() {
         String code = seedUsableCode();
         ActivationServiceImpl service = service();
-        service.redeem(code, "first-password", IP);
+        service.redeem(code, "First-Choice-Aa1", IP);
         String hashAfterFirst = student.getPasswordHash();
 
-        assertThatThrownBy(() -> service.redeem(code, "second-password", IP))
+        assertThatThrownBy(() -> service.redeem(code, "Second-Choice-Bb2", IP))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> assertThat(fieldCodeOf(e)).isEqualTo(ActivationServiceImpl.ALREADY_USED));
 
         assertThat(student.getPasswordHash()).isEqualTo(hashAfterFirst);
-        assertThat(passwordEncoder.matches("second-password", student.getPasswordHash())).isFalse();
+        assertThat(passwordEncoder.matches("Second-Choice-Bb2", student.getPasswordHash())).isFalse();
     }
 
     /**
@@ -199,10 +199,10 @@ class ActivationServiceTest {
         hideRedemptionFromReads = true;
         String code = seedUsableCode();
         ActivationServiceImpl service = service();
-        service.redeem(code, "first-password", IP);
+        service.redeem(code, "First-Choice-Aa1", IP);
         String hashAfterFirst = student.getPasswordHash();
 
-        assertThatThrownBy(() -> service.redeem(code, "second-password", IP))
+        assertThatThrownBy(() -> service.redeem(code, "Second-Choice-Bb2", IP))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> assertThat(fieldCodeOf(e)).isEqualTo(ActivationServiceImpl.ALREADY_USED));
 
@@ -215,7 +215,7 @@ class ActivationServiceTest {
     void a_code_past_its_expiry_is_refused_and_changes_nothing() {
         String code = seedCode(Instant.now().minus(Duration.ofDays(8)), Instant.now().minusSeconds(1));
 
-        assertThatThrownBy(() -> service().redeem(code, "chosen-by-the-student", IP))
+        assertThatThrownBy(() -> service().redeem(code, "Chosen-By-Student-1", IP))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> assertThat(fieldCodeOf(e)).isEqualTo(ActivationServiceImpl.EXPIRED));
 
@@ -233,7 +233,7 @@ class ActivationServiceTest {
     void the_same_code_one_second_before_its_expiry_still_works() {
         String code = seedCode(Instant.now().minus(Duration.ofDays(7)), Instant.now().plusSeconds(1));
 
-        service().redeem(code, "chosen-by-the-student", IP);
+        service().redeem(code, "Chosen-By-Student-1", IP);
 
         assertThat(student.getStatus()).isEqualTo(UserStatus.ACTIVE);
     }
@@ -254,7 +254,7 @@ class ActivationServiceTest {
     void an_unknown_but_well_formed_code_is_refused_generically() {
         String never_issued = ActivationCodeFormat.generate(new SecureRandom());
 
-        assertThatThrownBy(() -> service().redeem(never_issued, "chosen-by-the-student", IP))
+        assertThatThrownBy(() -> service().redeem(never_issued, "Chosen-By-Student-1", IP))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> assertThat(fieldCodeOf(e)).isEqualTo(ActivationServiceImpl.INVALID));
     }
@@ -273,7 +273,7 @@ class ActivationServiceTest {
         mistyped[pos] = mistyped[pos + 1];
         mistyped[pos + 1] = tmp;
 
-        assertThatThrownBy(() -> service().redeem(new String(mistyped), "chosen-by-the-student", IP))
+        assertThatThrownBy(() -> service().redeem(new String(mistyped), "Chosen-By-Student-1", IP))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> assertThat(fieldCodeOf(e)).isEqualTo(ActivationServiceImpl.MALFORMED));
 
@@ -286,7 +286,7 @@ class ActivationServiceTest {
         String code = seedUsableCode();
         student.setStatus(UserStatus.INACTIVE);
 
-        assertThatThrownBy(() -> service().redeem(code, "chosen-by-the-student", IP))
+        assertThatThrownBy(() -> service().redeem(code, "Chosen-By-Student-1", IP))
                 .isInstanceOf(ApiException.class)
                 // Generic, not a distinct code: this one is about the account,
                 // and saying so would turn a found slip into a fact about its owner.
@@ -303,7 +303,7 @@ class ActivationServiceTest {
         String malformed = "0000000001";
 
         for (String attempt : List.of(expired, unknown, malformed)) {
-            ApiException thrown = catchApiException(() -> service().redeem(attempt, "chosen-by-the-student", IP));
+            ApiException thrown = catchApiException(() -> service().redeem(attempt, "Chosen-By-Student-1", IP));
             assertThat(thrown.code()).isEqualTo(ApiErrorCode.VALIDATION_FAILED);
             assertThat(thrown.getMessage())
                     .doesNotContain(student.getUsername())
@@ -327,13 +327,13 @@ class ActivationServiceTest {
 
         for (int i = 1; i <= 3; i++) {
             ApiException thrown = catchApiException(() -> service.redeem(
-                    ActivationCodeFormat.generate(new SecureRandom()), "whatever-they-type", "198.51.100." + rand()));
+                    ActivationCodeFormat.generate(new SecureRandom()), "Whatever-They-Type-5", "198.51.100." + rand()));
             assertThat(fieldCodeOf(thrown)).isEqualTo(ActivationServiceImpl.INVALID);
         }
         assertThat(throttle.remainingFailureBudget()).isZero();
 
         ApiException blocked = catchApiException(() -> service.redeem(
-                ActivationCodeFormat.generate(new SecureRandom()), "whatever-they-type", "198.51.100." + rand()));
+                ActivationCodeFormat.generate(new SecureRandom()), "Whatever-They-Type-5", "198.51.100." + rand()));
         assertThat(blocked.code()).isEqualTo(ApiErrorCode.RATE_LIMITED);
     }
 
@@ -348,9 +348,9 @@ class ActivationServiceTest {
         ActivationServiceImpl service = service(throttle, 7);
         String genuine = seedUsableCode();
         catchApiException(() -> service.redeem(
-                ActivationCodeFormat.generate(new SecureRandom()), "whatever-they-type", "198.51.100.7"));
+                ActivationCodeFormat.generate(new SecureRandom()), "Whatever-They-Type-5", "198.51.100.7"));
 
-        ApiException blocked = catchApiException(() -> service.redeem(genuine, "chosen-by-the-student", IP));
+        ApiException blocked = catchApiException(() -> service.redeem(genuine, "Chosen-By-Student-1", IP));
 
         assertThat(blocked.code()).isEqualTo(ApiErrorCode.RATE_LIMITED);
         assertThat(student.getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);
@@ -368,11 +368,11 @@ class ActivationServiceTest {
         String genuine = seedUsableCode();
 
         for (int i = 0; i < 20; i++) {
-            catchApiException(() -> service.redeem("0000000001", "whatever-they-type", "198.51.100." + rand()));
+            catchApiException(() -> service.redeem("0000000001", "Whatever-They-Type-5", "198.51.100." + rand()));
         }
 
         assertThat(throttle.remainingFailureBudget()).isEqualTo(2);
-        assertThatCode(() -> service.redeem(genuine, "chosen-by-the-student", IP)).doesNotThrowAnyException();
+        assertThatCode(() -> service.redeem(genuine, "Chosen-By-Student-1", IP)).doesNotThrowAnyException();
     }
 
     @Test
@@ -380,7 +380,7 @@ class ActivationServiceTest {
         ActivationThrottle throttle = new ActivationThrottle(5, 1_000);
         String code = seedUsableCode();
 
-        service(throttle, 7).redeem(code, "chosen-by-the-student", IP);
+        service(throttle, 7).redeem(code, "Chosen-By-Student-1", IP);
 
         assertThat(throttle.remainingFailureBudget()).isEqualTo(5);
     }
@@ -391,10 +391,10 @@ class ActivationServiceTest {
         ActivationServiceImpl service = service(throttle, 7);
         String expired = seedCode(Instant.now().minus(Duration.ofDays(8)), Instant.now().minusSeconds(1));
         String usable = seedUsableCode();
-        service.redeem(usable, "chosen-by-the-student", IP);
+        service.redeem(usable, "Chosen-By-Student-1", IP);
 
-        catchApiException(() -> service.redeem(expired, "chosen-by-the-student", IP));
-        catchApiException(() -> service.redeem(usable, "chosen-by-the-student", IP));
+        catchApiException(() -> service.redeem(expired, "Chosen-By-Student-1", IP));
+        catchApiException(() -> service.redeem(usable, "Chosen-By-Student-1", IP));
 
         assertThat(throttle.remainingFailureBudget()).isEqualTo(4);
     }
@@ -441,10 +441,10 @@ class ActivationServiceTest {
 
         String replacement = service.issue(USER_ID, ADMIN_ID).code();
 
-        assertThatThrownBy(() -> service.redeem(lostSlip, "found-in-a-corridor", IP))
+        assertThatThrownBy(() -> service.redeem(lostSlip, "Found-In-Corridor-3", IP))
                 .isInstanceOf(ApiException.class);
         assertThat(student.getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);
-        assertThatCode(() -> service.redeem(replacement, "chosen-by-the-student", IP)).doesNotThrowAnyException();
+        assertThatCode(() -> service.redeem(replacement, "Chosen-By-Student-1", IP)).doesNotThrowAnyException();
     }
 
     @Test
@@ -469,11 +469,11 @@ class ActivationServiceTest {
     @Test
     void the_request_record_redacts_itself_when_printed() {
         var request = new cn.timebank.iam.application.dto.AuthDtos
-                .ActivateAccountRequest("HKTZ49QP2M", "chosen-by-the-student");
+                .ActivateAccountRequest("HKTZ49QP2M", "Chosen-By-Student-1");
 
         assertThat(request.toString())
                 .doesNotContain("HKTZ49QP2M")
-                .doesNotContain("chosen-by-the-student")
+                .doesNotContain("Chosen-By-Student-1")
                 .contains("<redacted>");
     }
 
@@ -490,7 +490,7 @@ class ActivationServiceTest {
     void activation_is_audited_and_the_audit_row_never_carries_the_code() {
         String code = seedUsableCode();
 
-        service().redeem(code, "chosen-by-the-student", IP);
+        service().redeem(code, "Chosen-By-Student-1", IP);
 
         ArgumentCaptor<AuditEntry> entry = ArgumentCaptor.forClass(AuditEntry.class);
         verify(auditService, atLeastOnce()).record(entry.capture());
@@ -504,7 +504,7 @@ class ActivationServiceTest {
         assertThat(entryAsText(recorded))
                 .doesNotContain(code)
                 .doesNotContain(sha256Hex(code))
-                .doesNotContain("chosen-by-the-student");
+                .doesNotContain("Chosen-By-Student-1");
     }
 
     @Test

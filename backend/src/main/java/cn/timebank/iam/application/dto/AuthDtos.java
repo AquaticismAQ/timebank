@@ -13,7 +13,7 @@ public final class AuthDtos {
     }
 
     public record ChangePasswordRequest(@NotBlank String currentPassword,
-                                         @NotBlank @Size(min = 8, max = 128) String newPassword) {
+                                         @NotBlank @Size(min = 12, max = 128) String newPassword) {
     }
 
     /**
@@ -34,7 +34,7 @@ public final class AuthDtos {
      * plus stray whitespace.</p>
      */
     public record ActivateAccountRequest(@NotBlank @Size(max = 64) String code,
-                                          @NotBlank @Size(min = 8, max = 128) String newPassword) {
+                                          @NotBlank @Size(min = 12, max = 128) String newPassword) {
 
         @Override
         public String toString() {

@@ -118,7 +118,7 @@ class RoleManagementIT extends AbstractIntegrationTest {
                 "assigned_" + OpaqueIds.generate("r").substring(0, 10), "Assigned Role Test", 480,
                 Set.of("serviceRecords.read")), "usr_test_admin");
         userService.create(new CreateUserRequest(
-                "role_del_test_" + OpaqueIds.generate("u"), "InitialPass123!", "Role Delete Test",
+                "role_del_test_" + OpaqueIds.generate("u"), "InitialChoice123!", "Role Delete Test",
                 null, role.code(), "zh-CN"), "usr_test_admin");
 
         assertThatThrownBy(() -> roleService.deleteRole(role.id(), "usr_test_admin"))
@@ -147,7 +147,7 @@ class RoleManagementIT extends AbstractIntegrationTest {
     @Test
     void everyRealUserHoldsExactlyOneRole() {
         var created = userService.create(new CreateUserRequest(
-                "cardinality_" + OpaqueIds.generate("u"), "InitialPass123!", "Cardinality Test",
+                "cardinality_" + OpaqueIds.generate("u"), "InitialChoice123!", "Cardinality Test",
                 null, "teacher", "zh-CN"), "usr_test_admin");
 
         // roleCode is a single field on the wire (07-RoleFinetune.md §2.5) —

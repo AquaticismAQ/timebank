@@ -351,7 +351,7 @@ class ServiceRecordSubmissionIT extends AbstractIntegrationTest {
 
     private Authentication teacherScopedToGrade6() {
         var teacher = userService.create(new CreateUserRequest(
-                "scope_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Scope Teacher", null,
+                "scope_teacher_" + OpaqueIds.generate("u"), "InitialChoice123!", "Scope Teacher", null,
                 "teacher", "zh-CN"), "usr_test_admin");
         scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
                 "serviceRecords", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", Instant.now()));

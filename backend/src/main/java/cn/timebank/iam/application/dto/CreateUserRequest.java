@@ -32,7 +32,7 @@ import java.util.Set;
  */
 public record CreateUserRequest(
         @NotBlank @Size(min = 3, max = 64) String username,
-        @NotBlank @Size(min = 8, max = 128) String initialPassword,
+        @NotBlank @Size(min = 12, max = 128) String initialPassword,
         @NotBlank @Size(max = 100) String displayName,
         @Email String email,
         @NotBlank String roleCode,

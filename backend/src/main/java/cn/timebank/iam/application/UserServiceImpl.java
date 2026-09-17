@@ -12,6 +12,7 @@ import cn.timebank.iam.application.dto.UpdateProfileRequest;
 import cn.timebank.iam.application.dto.UpdateUserRequest;
 import cn.timebank.iam.application.dto.UserDirectoryEntryDto;
 import cn.timebank.iam.application.dto.UserDto;
+import cn.timebank.iam.domain.PasswordPolicy;
 import cn.timebank.iam.domain.Role;
 import cn.timebank.iam.domain.User;
 import cn.timebank.iam.domain.UserStatus;
@@ -114,6 +115,7 @@ class UserServiceImpl implements UserService {
         if (request.staffId() != null && userRepository.existsByStaffId(request.staffId())) {
             throw ApiException.stateConflict("Staff ID is already in use.");
         }
+        PasswordPolicy.validate(request.initialPassword(), request.username());
         Role role = resolveRole(request.roleCode());
         Instant now = Instant.now();
         User user = new User(OpaqueIds.generate("usr"), request.username(),
@@ -293,6 +295,7 @@ class UserServiceImpl implements UserService {
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
             throw ApiException.invalidRequest("Current password is incorrect.");
         }
+        PasswordPolicy.validate(newPassword, user.getUsername());
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setUpdatedAt(Instant.now());
 

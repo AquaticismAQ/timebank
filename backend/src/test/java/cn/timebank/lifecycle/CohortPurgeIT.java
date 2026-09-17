@@ -81,7 +81,7 @@ class CohortPurgeIT extends AbstractIntegrationTest {
         String fileId = createApprovedServiceRecordWithEvidence(graduated);
         createAndResolveManualCorrection(graduated, 300);
         var user = userService.create(new CreateUserRequest(
-                "purge_user_" + SEQ.incrementAndGet(), "InitialPass123!", "Purge Test Student", null, "student", "zh-CN"), "usr_test_admin");
+                "purge_user_" + SEQ.incrementAndGet(), "InitialChoice123!", "Purge Test Student", null, "student", "zh-CN"), "usr_test_admin");
         jdbcTemplate.update("update user set student_id = :studentId where id = :userId",
                 new MapSqlParameterSource().addValue("studentId", graduated.id()).addValue("userId", user.id()));
 

@@ -242,7 +242,7 @@ class AccountLedgerIT extends AbstractIntegrationTest {
 
     private Authentication teacherScopedToGrade6() {
         var teacher = userService.create(new CreateUserRequest(
-                "acct_scope_teacher_" + OpaqueIds.generate("u"), "InitialPass123!", "Scope Teacher", null,
+                "acct_scope_teacher_" + OpaqueIds.generate("u"), "InitialChoice123!", "Scope Teacher", null,
                 "teacher", "zh-CN"), "usr_test_admin");
         scopeAssignmentRepository.save(new TeacherScopeAssignment(OpaqueIds.generate("scope"), teacher.id(),
                 "accounts", TeacherScopeAssignment.ScopeType.GRADE, "grade_6", java.time.Instant.now()));

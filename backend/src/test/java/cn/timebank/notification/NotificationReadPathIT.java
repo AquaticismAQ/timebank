@@ -43,7 +43,7 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
     void unreadCountIsAccurateAndReturnsARealNotModifiedOnceMarkedRead() {
         UserDto user = createUser("notif_read_1");
         notificationService.notify(user.id(), "case.resolved", "case", "case_fake");
-        String sessionCookie = login(user.username(), "InitialPass123!");
+        String sessionCookie = login(user.username(), "InitialChoice123!");
 
         ResponseEntity<String> first = getWithSession("/api/v1/notifications/unread-count", sessionCookie);
         assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -78,7 +78,7 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
         notificationService.notify(user.id(), "case.rejected", "case", "case_fake_2");
         assertThat(notificationService.unreadCount(user.id())).isEqualTo(2);
 
-        String sessionCookie = login(user.username(), "InitialPass123!");
+        String sessionCookie = login(user.username(), "InitialChoice123!");
         String csrfCookie = fetchCsrfCookie();
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.COOKIE, sessionCookie + "; " + csrfCookie);
@@ -130,7 +130,7 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
     void sameNotificationRendersInWhicheverLanguageTheReaderRequests() {
         UserDto user = createUser("notif_read_4");
         notificationService.notify(user.id(), "case.resolved", "case", "case_fake_lang");
-        String sessionCookie = login(user.username(), "InitialPass123!");
+        String sessionCookie = login(user.username(), "InitialChoice123!");
 
         ResponseEntity<String> zh = getWithSessionAndLanguage("/api/v1/notifications", sessionCookie, "zh-CN");
         ResponseEntity<String> en = getWithSessionAndLanguage("/api/v1/notifications", sessionCookie, "en");
@@ -158,7 +158,7 @@ class NotificationReadPathIT extends AbstractIntegrationTest {
     }
 
     private UserDto createUser(String username) {
-        return userService.create(new CreateUserRequest(username, "InitialPass123!", "Display " + username,
+        return userService.create(new CreateUserRequest(username, "InitialChoice123!", "Display " + username,
                 null, "student", "zh-CN"), "system");
     }
 

@@ -156,7 +156,7 @@ class PdfSanitizerTest {
         try (PDDocument document = new PDDocument()) {
             document.addPage(new PDPage());
             StandardProtectionPolicy policy =
-                    new StandardProtectionPolicy("owner-secret", "user-secret", new AccessPermission());
+                    new StandardProtectionPolicy("Owner-Secret-77", "User-Secret-77", new AccessPermission());
             policy.setEncryptionKeyLength(128);
             document.protect(policy);
 

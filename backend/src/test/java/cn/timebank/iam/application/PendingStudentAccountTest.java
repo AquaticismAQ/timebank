@@ -128,7 +128,7 @@ class PendingStudentAccountTest {
         User pending = User.pendingActivation("usr_pending", "31415926", "Example Student",
                 STUDENT_ID, "zh-CN", Instant.now());
 
-        assertThatThrownBy(() -> authenticate(pending, "whatever-they-type"))
+        assertThatThrownBy(() -> authenticate(pending, "Whatever-They-Type-5"))
                 .isInstanceOf(DisabledException.class);
     }
 
@@ -146,7 +146,7 @@ class PendingStudentAccountTest {
                 STUDENT_ID, "zh-CN", Instant.now());
         pending.setStatus(UserStatus.ACTIVE);
 
-        assertThatThrownBy(() -> authenticate(pending, "whatever-they-type"))
+        assertThatThrownBy(() -> authenticate(pending, "Whatever-They-Type-5"))
                 .isInstanceOf(DisabledException.class);
     }
 

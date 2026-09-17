@@ -143,7 +143,7 @@ class CredentialSlipControllerTest {
     }
 
     private static Authentication authFor(String roleCode) {
-        AuthenticatedUserView view = new AuthenticatedUserView("usr_admin", "admin001", "irrelevant",
+        AuthenticatedUserView view = new AuthenticatedUserView("usr_admin", "admin001", "Irrelevant-Pw-12",
                 "Example Admin", true, false, "zh-CN", Set.of(roleCode), Set.of("users.manage"), null, 480);
         CookieSessionUserDetails principal = new CookieSessionUserDetails(view);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());

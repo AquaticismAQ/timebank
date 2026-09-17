@@ -204,7 +204,7 @@ class ServiceRecordSourceOptimizationIT extends AbstractIntegrationTest {
     private UserDto createTeacherWithEmail() {
         int n = SEQ.incrementAndGet();
         return userService.create(new CreateUserRequest(
-                "src_opt_teacher_" + n, "InitialPass123!", "Source Opt Teacher " + n,
+                "src_opt_teacher_" + n, "InitialChoice123!", "Source Opt Teacher " + n,
                 "teacher" + n + "@example.com", "teacher", "zh-CN"), "usr_test_admin");
     }
 

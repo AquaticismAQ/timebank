@@ -92,7 +92,7 @@ class AdminCredentialResetTest {
     private static final String TARGET_ID = "usr_target";
     private static final String CONTROL_ID = "usr_control";
     private static final String ADMIN_ID = "usr_admin";
-    private static final String OLD_PASSWORD = "the-old-password";
+    private static final String OLD_PASSWORD = "The-Old-Choice-Cc9";
     private static final String IP = "203.0.113.10";
     private static final String ROOT = "https://tb.example.com";
 
@@ -347,15 +347,15 @@ class AdminCredentialResetTest {
 
         String printed = printedCodeIn(pdfTextOf(reset));
         assertThat(codesByHash).containsKey(sha256Hex(printed.replace("-", "")));
-        activationService.redeem(printed, "chosen-by-the-user", IP);
+        activationService.redeem(printed, "Chosen-By-The-User-1", IP);
 
         assertThat(target.getStatus()).isEqualTo(UserStatus.ACTIVE);
         assertThat(target.hasUsableCredential()).isTrue();
-        assertThat(passwordEncoder.matches("chosen-by-the-user", target.getPasswordHash())).isTrue();
+        assertThat(passwordEncoder.matches("Chosen-By-The-User-1", target.getPasswordHash())).isTrue();
         assertThat(passwordEncoder.matches(OLD_PASSWORD, target.getPasswordHash())).isFalse();
-        assertThat(authenticate(target.getUsername(), "chosen-by-the-user").isAuthenticated()).isTrue();
+        assertThat(authenticate(target.getUsername(), "Chosen-By-The-User-1").isAuthenticated()).isTrue();
 
-        assertThatThrownBy(() -> activationService.redeem(printed, "a-second-go", IP))
+        assertThatThrownBy(() -> activationService.redeem(printed, "A-Second-Go-22", IP))
                 .as("single use: the slip works once")
                 .isInstanceOf(ApiException.class);
     }
@@ -373,13 +373,13 @@ class AdminCredentialResetTest {
         String printed = printedCodeIn(pdfTextOf(reset));
 
         assertThat(printed).isNotEqualTo(ActivationCodeFormat.group(earlier));
-        assertThatThrownBy(() -> activationService.redeem(earlier, "should-not-work", IP))
+        assertThatThrownBy(() -> activationService.redeem(earlier, "Should-Not-Work-44", IP))
                 .isInstanceOf(ApiException.class);
         assertThat(target.hasUsableCredential()).isFalse();
 
         // Control: the replacement does work, so the assertion above is about
         // the old code specifically and not about redemption being broken.
-        activationService.redeem(printed, "chosen-by-the-user", IP);
+        activationService.redeem(printed, "Chosen-By-The-User-1", IP);
         assertThat(target.getStatus()).isEqualTo(UserStatus.ACTIVE);
     }
 

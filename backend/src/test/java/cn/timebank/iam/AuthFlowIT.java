@@ -54,15 +54,15 @@ class AuthFlowIT extends AbstractIntegrationTest {
      */
     @Test
     void meReturnsStudentIdForALinkedStudentAccountAndNullForStaff() {
-        UserDto student = createUser("auth_flow_student", "InitialPass123!", "student");
+        UserDto student = createUser("auth_flow_student", "InitialChoice123!", "student");
         User entity = userRepository.findById(student.id()).orElseThrow();
         entity.setStudentId("std_auth_flow_test");
         userRepository.save(entity);
-        String studentSession = login("auth_flow_student", "InitialPass123!");
+        String studentSession = login("auth_flow_student", "InitialChoice123!");
         assertThat(getWithSession("/api/v1/me", studentSession).getBody()).contains("\"studentId\":\"std_auth_flow_test\"");
 
-        createUser("auth_flow_teacher", "InitialPass123!", "teacher");
-        String teacherSession = login("auth_flow_teacher", "InitialPass123!");
+        createUser("auth_flow_teacher", "InitialChoice123!", "teacher");
+        String teacherSession = login("auth_flow_teacher", "InitialChoice123!");
         ResponseEntity<String> teacherMe = getWithSession("/api/v1/me", teacherSession);
         // Global Jackson config omits null fields from the wire entirely
         // (non_null inclusion) rather than rendering "studentId":null — see
@@ -83,7 +83,7 @@ class AuthFlowIT extends AbstractIntegrationTest {
      */
     @Test
     void loginAndRefreshBothCarryTheTeachersScopeGradeIds() {
-        UserDto teacher = createUser("auth_flow_scoped_teacher", "InitialPass123!", "teacher");
+        UserDto teacher = createUser("auth_flow_scoped_teacher", "InitialChoice123!", "teacher");
         teacherScopeAssignmentService.replaceGradeScope(teacher.id(), Set.of("grade_10"));
 
         String csrfCookie = fetchCsrfCookie();
@@ -109,9 +109,9 @@ class AuthFlowIT extends AbstractIntegrationTest {
 
     @Test
     void loginSucceedsAndEstablishesAWorkingSession() {
-        createUser("auth_flow_1", "InitialPass123!", "student");
+        createUser("auth_flow_1", "InitialChoice123!", "student");
 
-        String sessionCookie = login("auth_flow_1", "InitialPass123!");
+        String sessionCookie = login("auth_flow_1", "InitialChoice123!");
 
         ResponseEntity<String> me = getWithSession("/api/v1/me", sessionCookie);
         assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -120,21 +120,21 @@ class AuthFlowIT extends AbstractIntegrationTest {
 
     @Test
     void wrongPasswordIsRejectedAndLocksAfterThreshold() {
-        createUser("auth_flow_2", "InitialPass123!", "student");
+        createUser("auth_flow_2", "InitialChoice123!", "student");
 
         for (int i = 0; i < 5; i++) {
             ResponseEntity<String> attempt = loginRaw("auth_flow_2", "WrongPassword!");
             assertThat(attempt.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         }
         // The 6th attempt, even with the CORRECT password, must now be rejected — locked.
-        ResponseEntity<String> lockedAttempt = loginRaw("auth_flow_2", "InitialPass123!");
+        ResponseEntity<String> lockedAttempt = loginRaw("auth_flow_2", "InitialChoice123!");
         assertThat(lockedAttempt.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
     void deactivatingAUserRevokesItsLiveSessionImmediately() {
-        UserDto user = createUser("auth_flow_3", "InitialPass123!", "student");
-        String sessionCookie = login("auth_flow_3", "InitialPass123!");
+        UserDto user = createUser("auth_flow_3", "InitialChoice123!", "student");
+        String sessionCookie = login("auth_flow_3", "InitialChoice123!");
 
         assertThat(getWithSession("/api/v1/me", sessionCookie).getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -150,21 +150,21 @@ class AuthFlowIT extends AbstractIntegrationTest {
 
     @Test
     void changingPasswordRevokesTheOldSessionImmediately() {
-        createUser("auth_flow_4", "InitialPass123!", "student");
-        String sessionCookie = login("auth_flow_4", "InitialPass123!");
+        createUser("auth_flow_4", "InitialChoice123!", "student");
+        String sessionCookie = login("auth_flow_4", "InitialChoice123!");
         assertThat(getWithSession("/api/v1/me", sessionCookie).getStatusCode()).isEqualTo(HttpStatus.OK);
 
         // Simulates what UserController does after userService.changeOwnPassword(...) succeeds.
         userService.changeOwnPassword(
                 userService.findByUsernameForAuth("auth_flow_4").orElseThrow().id(),
-                "InitialPass123!", "NewPassword456!");
+                "InitialChoice123!", "NewChoice456!Ab");
         sessionRevocationService.revokeAllSessionsForUser("auth_flow_4");
 
         ResponseEntity<String> afterChange = getWithSession("/api/v1/me", sessionCookie);
         assertThat(afterChange.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 
         // The new password logs in fine, proving the change actually took effect.
-        String newSessionCookie = login("auth_flow_4", "NewPassword456!");
+        String newSessionCookie = login("auth_flow_4", "NewChoice456!Ab");
         assertThat(getWithSession("/api/v1/me", newSessionCookie).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
