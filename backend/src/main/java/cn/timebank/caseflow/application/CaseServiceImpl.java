@@ -94,7 +94,8 @@ class CaseServiceImpl implements CaseService {
                 FilterSpecifications.equalToEnum("type", CaseType.class, type),
                 FilterSpecifications.equalTo("gradeId", gradeId),
                 FilterSpecifications.searchAnyContains(search, "title"));
-        Specification<Case> spec = FilterSpecifications.and(scopeSpecification(auth), filterSpec);
+        Specification<Case> spec = FilterSpecifications.and(
+                scopeSpecification(auth), draftsVisibleOnlyToTheirOwner(auth), filterSpec);
         Page<Case> page = repository.findAll(spec, pageable);
         Map<String, Integer> gradeSequenceById = gradeSequenceById(resolvedLanguage);
         Map<String, String> classNameById = classNameById();
@@ -298,7 +299,9 @@ class CaseServiceImpl implements CaseService {
     private Case findInScopeOrThrow(String id, Authentication auth) {
         Specification<Case> idSpec = (root, query, cb) -> cb.equal(root.get("id"), id);
         Specification<Case> scopeSpec = scopeSpecification(auth);
-        Specification<Case> combined = scopeSpec == null ? idSpec : idSpec.and(scopeSpec);
+        // Same rule as list(): guessing a draft's id must not be a way around it.
+        Specification<Case> combined = idSpec.and(draftsVisibleOnlyToTheirOwner(auth));
+        combined = scopeSpec == null ? combined : combined.and(scopeSpec);
         return repository.findOne(combined).orElseThrow(() -> ApiException.notFound("Case not found."));
     }
 
@@ -307,6 +310,30 @@ class CaseServiceImpl implements CaseService {
         boolean grantAll = principal.hasSchoolWideVisibility(); // 07-RoleFinetune.md §2.10
         ScopeDescriptor scope = dataScopeResolver.resolve(principal, RESOURCE_TYPE, grantAll);
         return DataScopeSpecifications.apply(scope, scopeFields, principal.studentId());
+    }
+
+    /**
+     * A {@code DRAFT} case is the student's own unsubmitted work. It is not a
+     * review item, and a reviewer must not be able to read it at all — the
+     * title and description are whatever the student has typed so far, before
+     * they have decided to say it. Data scope alone does not express this: a
+     * school-wide admin is in scope for every case, so without this the
+     * unfiltered list an admin loads by default returned students' drafts,
+     * complete with description, and {@code submittedAt: null} beside them.
+     *
+     * <p>Owners keep seeing their own drafts — the student's My Cases page is
+     * built on exactly that, so this cannot simply exclude {@code DRAFT}
+     * outright. Staff principals have no {@code studentId}, so for them it
+     * reduces to "never a draft".</p>
+     */
+    private Specification<Case> draftsVisibleOnlyToTheirOwner(Authentication auth) {
+        String viewerStudentId = ((CookieSessionUserDetails) auth.getPrincipal()).studentId();
+        return (root, query, cb) -> {
+            var notDraft = cb.notEqual(root.get("status"), CaseStatus.DRAFT);
+            return viewerStudentId == null
+                    ? notDraft
+                    : cb.or(notDraft, cb.equal(root.get("studentId"), viewerStudentId));
+        };
     }
 
     private String principalId(Authentication auth) {

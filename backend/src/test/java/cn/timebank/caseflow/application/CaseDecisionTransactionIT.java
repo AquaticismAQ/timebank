@@ -264,6 +264,43 @@ class CaseDecisionTransactionIT extends AbstractIntegrationTest {
         return studentService.create(request, "usr_test_admin", "zh-CN");
     }
 
+    /**
+     * A DRAFT case is the student's own unsubmitted work, so a reviewer must not
+     * see it — not in the list an admin loads by default, and not by fetching the
+     * id directly. Before this rule, data scope was the only filter, and a
+     * school-wide admin is in scope for every case, so the default Case Review
+     * list returned students' drafts with their descriptions attached.
+     *
+     * <p>The owner control is the part that makes this non-vacuous: it asserts the
+     * same draft IS visible to the student who wrote it, so a change that simply
+     * excluded DRAFT for everyone would fail here rather than pass.</p>
+     */
+    @Test
+    void aDraftCaseIsVisibleToItsOwnerButNeverToAReviewer() {
+        StudentDetailDto student = createStudent();
+        CaseDto draft = caseService.createDraft(
+                new CreateCaseRequest(null, "appeal", "serviceRecord", null,
+                        "Draft title only the student should see", "Draft body", null, "DISPUTE_HOURS"),
+                studentAuth(student.id()), "zh-CN");
+        assertThat(draft.status()).isEqualTo("DRAFT");
+
+        // owner: sees it in their own list, and can fetch it
+        var ownerList = caseService.list(PageRequest.of(0, 50), studentAuth(student.id()),
+                null, null, null, null, "zh-CN");
+        assertThat(ownerList.getContent()).extracting(CaseDto::id).contains(draft.id());
+        assertThat(caseService.getDetail(draft.id(), studentAuth(student.id()), "zh-CN").id())
+                .isEqualTo(draft.id());
+
+        // admin: absent from the unfiltered list a reviewer actually loads
+        var adminList = caseService.list(PageRequest.of(0, 50), staffAuth("admin"),
+                null, null, null, null, "zh-CN");
+        assertThat(adminList.getContent()).extracting(CaseDto::id).doesNotContain(draft.id());
+
+        // admin: and not reachable by id either
+        assertThatThrownBy(() -> caseService.getDetail(draft.id(), staffAuth("admin"), "zh-CN"))
+                .isInstanceOf(ApiException.class);
+    }
+
     private Authentication studentAuth(String studentId) {
         return authFor("usr_" + studentId.substring(4), studentId, Set.of("student"));
     }
