@@ -73,7 +73,9 @@ export function ReportsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-foreground">{t('admin.reports.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('admin.reports.dataUpdated', { date: '2026-07-27 08:00' })}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('admin.reports.dataUpdated', { date: new Date(data.generatedAt).toLocaleString() })}
+          </p>
         </div>
         <div className="flex gap-2">
           <select value={yearFilter} onChange={e => setYearFilter(e.target.value)}

@@ -961,12 +961,13 @@ export const api = {
     // grade, totalMinutes not totalHours), mapped here.
     async data(): Promise<ReportData> {
       const [participation, completion, serviceHours, topProjects] = await Promise.all([
-        http.get<{ byGrade: { gradeName: string; totalStudents: number; participatedStudents: number; participationRate: number }[] }>('/reports/participation'),
+        http.get<{ generatedAt: string; byGrade: { gradeName: string; totalStudents: number; participatedStudents: number; participationRate: number }[] }>('/reports/participation'),
         http.get<{ byGrade: { gradeName: string; totalStudents: number; completedStudents: number; completionRate: number }[] }>('/reports/completion'),
         http.get<{ byMonth: { month: string; hours: number }[] }>('/reports/service-hours'),
         http.get<{ topProjects: { title: string; participants: number; totalMinutes: number }[] }>('/reports/top-projects'),
       ]);
       return {
+        generatedAt: participation.generatedAt,
         participationByGrade: participation.byGrade.map(g => ({ grade: g.gradeName, total: g.totalStudents, participated: g.participatedStudents, rate: g.participationRate })),
         completionByGrade: completion.byGrade.map(g => ({ grade: g.gradeName, total: g.totalStudents, completed: g.completedStudents, rate: g.completionRate })),
         serviceHoursByMonth: serviceHours.byMonth,

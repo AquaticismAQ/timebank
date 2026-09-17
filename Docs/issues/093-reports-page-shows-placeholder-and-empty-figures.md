@@ -1,6 +1,6 @@
 # 093 — Reports page shows placeholder and empty figures
 
-**Status:** In progress. Findings 2, 3 and 5 fixed; 4 is a seed-data gap; 1 needs a decision.
+**Status:** In progress. Findings 2, 3, 5 fixed and live-verified; 6 and 7 (found while fixing) fixed; 4 and 1 in progress.
 **Reported:** 2026-09-17 by the user, as five symptoms on the Reports page.
 
 Filed as one document rather than five: they arrived as one report about one
@@ -98,3 +98,28 @@ loop, before the System Admin export tab existed.
 
 **Fix:** remove it from the Reports page. Confirmed first that the System Admin
 path covers the same report exports, so nothing becomes unreachable.
+
+## 6. "Data updated" printed a fixed date — *found while fixing, not reported*
+
+The header read `Data updated: 2026-07-27 08:00`, hardcoded into the `t()` call.
+Same family as §3: placeholder content that outlived the mock era. Every report
+endpoint already returns a real `generatedAt`, which the API client was
+discarding. `ReportData` now carries it and the page renders it.
+
+## 7. System Admin's export buttons were labelled wrong — *found while fixing*
+
+Three of the five buttons described exports that do not exist. The backend
+supports exactly seven report types — `students`, `serviceRecords`,
+`participation`, `completion`, `serviceHours`, `reviewEfficiency`, `topProjects`
+— and there is **no audit-log or transaction export at all**. Yet:
+
+| Label | Actually requested |
+| :--- | :--- |
+| Export Transactions | `serviceHours` |
+| Export Reports | `participation` |
+| **Export Audit Logs** | **`completion`** |
+
+An administrator clicking "Export Audit Logs" during an incident would have
+received a completion report. Labels now name what each button produces, and the
+two types that had no button at all (`reviewEfficiency`, `topProjects`) are
+reachable, so the UI covers exactly what the backend supports — no more, no less.
