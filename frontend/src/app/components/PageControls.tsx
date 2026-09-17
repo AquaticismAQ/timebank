@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PAGE_SIZE_OPTIONS } from '../lib/pagination';
 import {
   Pagination,
   PaginationContent,
@@ -22,13 +23,15 @@ export function PageControls({
   onPageChange,
   pageSize,
   onPageSizeChange,
-  pageSizeOptions = [20, 50, 100],
 }: {
   page: { number: number; size: number; totalItems: number; totalPages: number } | null;
   onPageChange: (n: number) => void;
   pageSize?: number;
   onPageSizeChange?: (n: number) => void;
-  pageSizeOptions?: number[];
+  // Deliberately no `pageSizeOptions` override: the set is defined once in
+  // lib/pagination.ts so every list offers the same one. No caller ever passed
+  // it, and allowing one would reintroduce exactly the per-screen drift this
+  // removes.
 }) {
   const { t } = useTranslation();
   const [jumpValue, setJumpValue] = useState('');
@@ -69,7 +72,7 @@ export function PageControls({
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {t('common.list.pageSize')}
             <select value={pageSize} onChange={e => onPageSizeChange(Number(e.target.value))} className={SELECT_CLASS}>
-              {pageSizeOptions.map(size => <option key={size} value={size}>{size}</option>)}
+              {PAGE_SIZE_OPTIONS.map(size => <option key={size} value={size}>{size}</option>)}
             </select>
           </label>
         )}

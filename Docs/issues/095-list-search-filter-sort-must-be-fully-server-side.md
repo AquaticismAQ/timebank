@@ -112,3 +112,47 @@ Note the seeded data set (50 students, 37 users) is smaller than two default
 pages for most screens, so it **cannot** demonstrate any of this. Verification
 needs a larger fixture — see issue 093 §4 for the same lesson, where an empty
 data set hid a real defect for as long as it stayed empty.
+
+## 6. Page-size options (done, 2026-09-17)
+
+`10` was added to the selector — now `10, 20, 50, 100` — so a list can be made
+to span pages on demand. It does **not** replace a larger fixture:
+
+| List | Rows | Pages @20 | Pages @10 |
+| :--- | ---: | ---: | ---: |
+| Audit log | 1012 | 51 | 102 |
+| Service records | 237 | 12 | 24 |
+| Students | 50 | 3 | 5 |
+| Users | 37 | 2 | 4 |
+| **Projects** | 11 | **1** | **2** |
+| Organizations | 7 | 1 | **1** |
+| Cases | 5 | 1 | **1** |
+| Event proposals | 4 | 1 | **1** |
+
+The one that matters is **Project Management**: it has client-side sorting and
+was single-page at 20, so no boundary-crossing test was possible at all. At 10
+it is. Organizations, cases and proposals remain single-page even at 10 — for
+those, §5's boundary criterion stays untestable until the fixture grows.
+
+**Made shared so it needs no per-screen verification.** The options and the
+default had lived in two different files; both now come from
+`frontend/src/app/lib/pagination.ts`, and `PageControls` no longer accepts a
+`pageSizeOptions` override (no caller ever passed one). A screen therefore
+cannot offer a different set — changing that file changes every list. Verified
+across Users, Student Management and Project Management.
+
+## 7. Related: requests above the backend cap are silently truncated
+
+Found while doing the above. `PageQueryArgumentResolver` clamps to 100 **without
+telling the caller**, and two screens ask for more:
+
+- `AccountManagement.tsx:57` — `api.accounts.list({ pageSize: 200 })`
+- `StudentList.tsx:93` — `api.accounts.list({ pageSize: 200 })`
+
+Both then treat the result as the complete set of accounts. Today there are
+fewer than 100, so it is correct by accident. Past 100 they would silently hold
+the first hundred and compute balances from a subset, with nothing in the UI
+indicating it. Same family as the rest of this issue — code assuming a page is
+the whole set — which is why it is recorded here rather than separately.
+`MAX_PAGE_SIZE` is now exported alongside the options so a caller can at least
+be written against the real ceiling.

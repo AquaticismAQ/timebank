@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router';
 import type { PageResult } from './http';
 import { ApiError, mapApiError, buildListQuery, type ErrorUiMapping } from './http';
 import type { ListParams } from '../lib/pagination';
+import { DEFAULT_PAGE_SIZE } from '../lib/pagination';
 
 interface ApiState<T> {
   data: T | null;
@@ -58,7 +59,7 @@ export function usePagedApi<T>(
   fn: (params: ListParams) => Promise<PageResult<T>>,
   initialParams: ListParams = {}
 ): PagedApiState<T> {
-  const [params, setParams] = useState<ListParams>({ page: 1, pageSize: 20, ...initialParams });
+  const [params, setParams] = useState<ListParams>({ page: 1, pageSize: DEFAULT_PAGE_SIZE, ...initialParams });
   const [items, setItems] = useState<T[]>([]);
   const [page, setPageMeta] = useState<PagedApiState<T>['page']>(null);
   const [loading, setLoading] = useState(true);

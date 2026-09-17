@@ -17,6 +17,7 @@ import { isAcceptable } from '../../lib/passwordPolicy';
 import { formatGradeClass, formatClassName, minutesToHours } from '../../lib/format';
 import { downloadBlob } from '../../lib/download';
 import { localDateTimeToISO, formatLocalInstant } from '../../lib/datetime';
+import { DEFAULT_PAGE_SIZE } from '../../lib/pagination';
 import { STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import type { RoleSummary, AuditLogEntry, SchoolInfo, RuleVersion, RuleDraftFields, RuleValidationResult } from '../../api/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -854,7 +855,7 @@ export function SystemAdmin() {
   // identical permission grants post-role-merge — hardcoded role-code check
   // rather than a new permission, matching the backend's identical gate.
   const isSysadmin = user?.roles.includes('sysadmin') ?? false;
-  const auditLogs = usePagedApi<AuditLogEntry>(api.auditLogs.list, { sort: '-createdAt', pageSize: 20 });
+  const auditLogs = usePagedApi<AuditLogEntry>(api.auditLogs.list, { sort: '-createdAt', pageSize: DEFAULT_PAGE_SIZE });
   const [schoolInfo, setSchoolInfo] = useState<SchoolInfo | null>(null);
   const [systemVersion, setSystemVersion] = useState('');
   const [editingSchoolInfo, setEditingSchoolInfo] = useState(false);
@@ -869,7 +870,7 @@ export function SystemAdmin() {
   const { grades: allGrades, classes: allClasses } = useDictionaries();
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
-  const rulesApi = usePagedApi<RuleVersion>(api.rules.list, { sort: '-createdAt', pageSize: 20 });
+  const rulesApi = usePagedApi<RuleVersion>(api.rules.list, { sort: '-createdAt', pageSize: DEFAULT_PAGE_SIZE });
   const [ruleFormMode, setRuleFormMode] = useState<'create' | 'edit' | null>(null);
   const [ruleFormTarget, setRuleFormTarget] = useState<RuleVersion | null>(null);
   const [publishingRule, setPublishingRule] = useState<RuleVersion | null>(null);
@@ -899,7 +900,7 @@ export function SystemAdmin() {
    * `users` below is now just the current page, projected from `usersApi.items`
    * into the shape the table and the edit modal already expect.
    */
-  const usersApi = usePagedApi(api.users.list, { sort: 'displayName', pageSize: 20 });
+  const usersApi = usePagedApi(api.users.list, { sort: 'displayName', pageSize: DEFAULT_PAGE_SIZE });
   const [userSearch, setUserSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [filterUserStatus, setFilterUserStatus] = useState('all');
