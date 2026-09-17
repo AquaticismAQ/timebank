@@ -14,6 +14,7 @@ import { type EventProposal, type TimelineEntry } from '../../api/types';
 import { minutesToHours, formatGradeClass } from '../../lib/format';
 import { PROPOSAL_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import { formatLocalInstant } from '../../lib/datetime';
+import { ListSearchInput } from '../ListSearchInput';
 
 const STATUSES: (EventProposal['status'])[] = ['submitted', 'changesRequested', 'approved', 'rejected'];
 type SortKey = 'plannedStartAt' | 'createdAt' | 'status';
@@ -129,9 +130,11 @@ export function ProposalReview() {
           Nx1 grid alongside it, merged into one row at lg: and up. */}
       <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
         <div className="relative lg:flex-1 lg:min-w-40">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)} placeholder={t('admin.proposals.searchPlaceholder')}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+          <ListSearchInput
+            value={params.search ?? ''}
+            onCommit={setSearch}
+            placeholder={t('admin.proposals.searchPlaceholder')}
+          />
         </div>
         <div className="grid grid-cols-3 gap-2 lg:contents">
           <select value={params.filter?.categoryId ?? 'all'} onChange={e => setFilter('categoryId', e.target.value === 'all' ? undefined : e.target.value)}

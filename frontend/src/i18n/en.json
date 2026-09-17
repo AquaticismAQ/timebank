@@ -26,6 +26,7 @@
     "list": {
       "pageSize": "Per page",
       "pageJump": "Go to page",
+      "search": "Search",
       "clearFilters": "Clear filters",
       "notAvailable": "Not available.",
       "rateLimited": "Too many requests — try again shortly.",

@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
+import { ListSearchInput } from '../ListSearchInput';
 
 /**
  * Row-action button shape shared by every list/table in the admin portal
@@ -1314,10 +1315,11 @@ export function SystemAdmin() {
               while the class filter is offered (role = student), 3 otherwise. */}
           <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
             <div className="relative lg:flex-1 lg:min-w-40">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input type="text" value={userSearch} onChange={e => handleUserSearch(e.target.value)}
-                placeholder={t('admin.system.searchPlaceholder')}
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+              <ListSearchInput
+            value={userSearch}
+            onCommit={handleUserSearch}
+            placeholder={t('admin.system.searchPlaceholder')}
+          />
             </div>
             <div className={`grid ${classFilterApplies ? 'grid-cols-4' : 'grid-cols-3'} gap-2 lg:contents`}>
               <select value={filterRole} onChange={e => handleRoleFilter(e.target.value)}

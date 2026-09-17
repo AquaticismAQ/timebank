@@ -12,6 +12,7 @@ import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { minutesToHours } from '../../lib/format';
+import { ListSearchInput } from '../ListSearchInput';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -177,10 +178,11 @@ export function ProjectCenter() {
           ProjectManagement.tsx's admin view, minus the grade filter (not meaningful for a student's own view). */}
       <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
         <div className="relative lg:flex-1 lg:min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input type="text" value={search} onChange={e => applySearch(e.target.value)}
+          <ListSearchInput
+            value={search}
+            onCommit={applySearch}
             placeholder={t('student.projects.searchPlaceholder')}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+          />
           {search && (
             <button onClick={() => applySearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X className="w-3 h-3" />

@@ -1,6 +1,6 @@
 # 095 — List search, filter and sort must be fully server-side
 
-**Status:** Open — specified, not implemented.
+**Status:** Partly implemented — §1's search behaviour is done (§8); the server-side filter/sort work in §3–§4 is still open.
 **Raised:** 2026-09-17 by the user, after asking how much data the list screens
 load at once.
 
@@ -156,3 +156,39 @@ indicating it. Same family as the rest of this issue — code assuming a page is
 the whole set — which is why it is recorded here rather than separately.
 `MAX_PAGE_SIZE` is now exported alongside the options so a caller can at least
 be written against the real ceiling.
+
+## 8. Committed search (done, 2026-09-17)
+
+§1's search requirement is implemented and live, as one shared component —
+`frontend/src/app/components/ListSearchInput.tsx` — so the behaviour cannot
+differ per screen. Eleven screens converted: Student List, Project Management,
+Project Center, Account Management, Audit Center, Case Review, Proposal Review,
+Organization Management, Service Records, Event Proposals, System Admin (Users).
+
+- The icon is a **button inside the field at the trailing edge**, not the
+  decorative left-hand icon each screen previously drew. Once typing stops
+  triggering a search, the user needs something to press.
+- Searching happens on **Enter or icon click only**. Every screen previously
+  called `setSearch` from `onChange`, so each keystroke was a request racing the
+  one before it.
+- The draft is local; the committed term stays owned by the caller, and the two
+  resynchronise when the caller changes it — otherwise "Clear filters" would
+  leave stale text sitting in a box that no longer filters anything.
+
+**Two searches were deliberately left live**, because they are not paginated
+server queries: `SearchPicker` (a directory typeahead, where waiting for Enter
+would defeat the point) and `RoleManagement`'s permission filter (an in-memory
+list of a fixed, small size).
+
+Verified in a browser, 4/4, on Student Management:
+
+| Check | Result |
+| :--- | :--- |
+| Icon is a `BUTTON` inside the field, trailing edge | geometry confirmed against the input's own bounds |
+| Typing does not search | **0 requests** while typing "Parker"; totals unchanged |
+| Enter commits | `50 total · page 1 / 3` → `2 total · page 1 / 1` |
+| Clear + icon click restores | → `50 total · page 1 / 3` |
+
+The typing check counts *network requests*, not just the rendered total: a
+debounced implementation would still have left the totals unchanged mid-type and
+passed a weaker assertion.

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit, Archive, X, Building2 } from 'lucide-react';
+import { Plus, Edit, Archive, X, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { type Organization } from '../../api/types';
@@ -9,6 +9,7 @@ import { useFieldErrors, FieldError, handleMutationError } from '../../api/useFi
 import { usePermissions } from '../../App';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
+import { ListSearchInput } from '../ListSearchInput';
 
 const INPUT = 'w-full px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40';
 const LABEL = 'block text-xs text-muted-foreground mb-1.5';
@@ -137,10 +138,11 @@ export function OrganizationManagement() {
 
       <div className="flex gap-2 flex-wrap">
         <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input type="text" value={search} onChange={e => handleSearchChange(e.target.value)}
+          <ListSearchInput
+            value={search}
+            onCommit={handleSearchChange}
             placeholder={t('admin.organizations.searchPlaceholder')}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+          />
         </div>
         <select value={filterType} onChange={e => handleTypeChange(e.target.value as Organization['type'] | 'all')}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">

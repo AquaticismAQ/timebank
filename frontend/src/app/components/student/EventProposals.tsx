@@ -15,6 +15,7 @@ import { ListStateBanner } from '../ListStateBanner';
 import { SearchPicker, CREATE_NEW_ID, type SearchPickerOption } from '../SearchPicker';
 import { useAuth } from '../../App';
 import { isoToLocalDate } from '../../lib/datetime';
+import { ListSearchInput } from '../ListSearchInput';
 
 const colorMap: Record<string, string> = {
   gray: 'bg-muted text-muted-foreground',
@@ -778,10 +779,11 @@ export function EventProposals() {
           below lg:, filters as an Nx1 grid alongside it, merged into one row at lg: and up. */}
       <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
         <div className="relative lg:flex-1 lg:min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)}
+          <ListSearchInput
+            value={params.search ?? ''}
+            onCommit={setSearch}
             placeholder={t('student.proposals.searchPlaceholder')}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+          />
         </div>
         <div className="grid grid-cols-2 gap-2 lg:contents">
           <select value={params.filter?.status ?? 'all'} onChange={e => setFilter('status', e.target.value === 'all' ? undefined : e.target.value)}

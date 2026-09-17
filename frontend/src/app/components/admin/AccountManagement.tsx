@@ -14,6 +14,7 @@ import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { SearchPicker } from '../SearchPicker';
 import { isoToLocalDate } from '../../lib/datetime';
+import { ListSearchInput } from '../ListSearchInput';
 
 export function AccountManagement() {
   const { t } = useTranslation();
@@ -172,9 +173,11 @@ export function AccountManagement() {
       {/* Search + grade/class filters */}
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-40">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input type="text" value={search} onChange={e => handleSearchChange(e.target.value)} placeholder={t('admin.accounts.searchPlaceholder')}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+          <ListSearchInput
+            value={search}
+            onCommit={handleSearchChange}
+            placeholder={t('admin.accounts.searchPlaceholder')}
+          />
         </div>
         <select value={filterGrade} onChange={e => handleGradeChange(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">

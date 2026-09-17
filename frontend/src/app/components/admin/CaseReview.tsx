@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, XCircle, HelpCircle, X, Search, MoreHorizontal } from 'lucide-react';
+import { CheckCircle, XCircle, HelpCircle, X, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
@@ -15,6 +15,7 @@ import { type Case, type EvidenceFile, type TimelineEntry } from '../../api/type
 import { CASE_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import { formatGradeClass } from '../../lib/format';
 import { formatLocalInstant, isoToLocalDate } from '../../lib/datetime';
+import { ListSearchInput } from '../ListSearchInput';
 
 const STATUSES: (Case['status'])[] = ['submitted', 'needsInformation', 'resolved', 'rejected'];
 const TYPES: (Case['type'])[] = ['appeal', 'supplement', 'manualCorrection'];
@@ -142,9 +143,11 @@ export function CaseReview() {
           Nx1 grid alongside it, merged into one row at lg: and up. */}
       <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
         <div className="relative lg:flex-1 lg:min-w-40">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input type="text" value={params.search ?? ''} onChange={e => setSearch(e.target.value)} placeholder={t('admin.cases.searchPlaceholder')}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+          <ListSearchInput
+            value={params.search ?? ''}
+            onCommit={setSearch}
+            placeholder={t('admin.cases.searchPlaceholder')}
+          />
         </div>
         <div className="grid grid-cols-3 gap-2 lg:contents">
           <select value={params.filter?.type ?? 'all'} onChange={e => setFilter('type', e.target.value === 'all' ? undefined : e.target.value)}
