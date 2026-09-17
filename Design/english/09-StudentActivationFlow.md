@@ -48,6 +48,16 @@ activated, and every reissue becomes an admin round-trip. That cost was accepted
 knowingly, and can be revisited with usage evidence if it proves to be a
 bottleneck.
 
+**This flow is not students only.** A staff account is likewise created with no
+password, likewise sits pending, and is likewise activated from one single-person
+slip as described in §4. The difference lies entirely *upstream* of the slip: a
+student's account and username come from the roster import (§3), while a staff
+account is created by hand in the admin UI with a username the administrator
+chooses. Students are the through-line of this document because they are the bulk
+case and the reason the design exists — but "no initial password exists" holds for
+every role without exception, and an exception would be the same as not having the
+property at all.
+
 ---
 
 ## 3. The flow end to end
@@ -237,17 +247,6 @@ immediately, rather than making a round trip to be told a bare "invalid".
 
 ## 6. Adjacent, but not part of this flow
 
-- **Staff accounts use exactly this flow** (changed 2026-09-17, issue 096).
-  They did not until that date: the create-user form took an
-  administrator-typed initial password, which made §5's "no password plaintext
-  exists at any point" true for students and false for every teacher — the
-  only copy of a new teacher's credential lived in whatever message or note the
-  administrator used to pass it on. A staff account is now created
-  `PENDING_ACTIVATION` with no stored hash and issued the same single-person
-  slip §4 describes, printed at the moment of creation. The difference that
-  remains is upstream of the slip and unchanged: a student's account and
-  username come from the roster import (§3), a staff account is created by hand
-  with a username the administrator chooses.
 - **A student created singly through `POST /students` currently gets no account** —
   only the import path creates one. This is a known gap, not part of this design.
 - **Multi-factor authentication** is not enabled; the options are compared in
