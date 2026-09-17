@@ -38,7 +38,10 @@ class UserListQuerySqlTest {
         assertThat(clause)
                 .contains("lower(u.display_name) like :search")
                 .contains("r2.code = :roleCode")
-                .contains("u.status = :status")
+                // Issue 097: the *derived* status, not the raw column — against
+                // `u.status` the LOCKED option matched rows nothing writes.
+                .contains(UserListQueryRepository.EFFECTIVE_STATUS + " = :status")
+                .doesNotContain(" and u.status = :status")
                 .contains("s.grade_id = :gradeId")
                 .contains("s.class_id = :classId");
         assertThat(params.getValue("search")).isEqualTo("%bravo%");
@@ -131,5 +134,67 @@ class UserListQuerySqlTest {
         assertThatThrownBy(() -> repository.orderByClause(Sort.by(Sort.Order.asc("scopeGradeIds"))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("scopeGradeIds");
+    }
+
+    // ── the derived status (issue 097) ───────────────────────────────────
+
+    /**
+     * {@code LOCKED} is computed, not stored: a brute-force lockout writes
+     * {@code locked_until} and never {@code status}. The rule therefore exists
+     * twice — {@code User.effectiveStatus()} in Java, and this constant, because
+     * the list has to order and count by the result and so cannot call Java.
+     *
+     * <p>{@code EffectiveStatusTest} owns the Java copy. These read the SQL as
+     * text: what goes wrong with two copies of one rule is that one is edited
+     * and the other is not, which exercising the surviving copy never reveals.
+     * {@code UserListFilterSortIT} then runs the statement against real MySQL,
+     * which is the only thing that can prove the expression parses.</p>
+     */
+    @Test
+    void the_derived_status_expresses_the_same_rule_as_the_domain() {
+        assertThat(UserListQueryRepository.EFFECTIVE_STATUS)
+                .as("must test the same column the Java side tests")
+                .contains("u.locked_until")
+                .as("a null locked_until is not a lock")
+                .contains("u.locked_until is not null")
+                .as("the window is the future, not any value at all")
+                .contains("> now(3)")
+                .as("and must yield the same literal the enum name produces")
+                .contains("'LOCKED'")
+                .as("falling through to the stored column, exactly as effectiveStatus() does")
+                .contains("else u.status end");
+    }
+
+    /**
+     * {@code now(3)}, not {@code now()}: {@code locked_until} is
+     * {@code DATETIME(3)} and the Java side compares against an {@code Instant}.
+     * Second precision would disagree with {@code isLocked()} for up to a second
+     * at each end of the window — rarely, unreproducibly, and only in production.
+     */
+    @Test
+    void the_derived_status_compares_at_the_columns_own_precision() {
+        assertThat(UserListQueryRepository.EFFECTIVE_STATUS).doesNotContain("> now()");
+    }
+
+    /**
+     * The projection and the filter must use the one constant. Two hand-written
+     * copies would let the badge a row displays disagree with the set the filter
+     * returns — the exact defect issue 097 exists to fix, reintroduced one layer
+     * down.
+     */
+    @Test
+    void the_projection_and_the_filter_derive_the_status_the_same_way() {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        String clause = repository.filterClause(
+                new UserListFilter(null, null, "LOCKED", null, null), params);
+
+        assertThat(clause).contains(UserListQueryRepository.EFFECTIVE_STATUS);
+        assertThat(repository.queryPageSql(new UserListFilter(null, null, null, null, null),
+                        PageableFactory.toPageable(
+                                new PageQuery(1, 20, List.of(), Map.of(), null), UserController.SORTABLE),
+                        params))
+                .contains(UserListQueryRepository.EFFECTIVE_STATUS + " as status")
+                .as("the raw column must still be selected — the UI shows when a lock releases")
+                .contains("u.locked_until");
     }
 }

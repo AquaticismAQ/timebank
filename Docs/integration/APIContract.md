@@ -829,6 +829,24 @@ different questions and neither is a fallback for the other:
 - Every staff account carries all four as `null`, and expresses its grade reach
   through `scopeGradeIds` instead — empty meaning school-wide.
 
+**`status` is derived, not the stored column** (added 2026-09-17, issue 097).
+A brute-force lockout writes `locked_until` and never touches `status`, so
+`GET /users` and `GET /users/{id}` report `locked_until > now ? LOCKED : status`
+— a locked-out account reads `LOCKED` while its stored row still says `ACTIVE`.
+`filter[status]` matches the same derived value, so `LOCKED` returns exactly the
+accounts locked out at that moment and `ACTIVE` excludes them. Both self-heal at
+expiry: nothing runs when a lock releases, and nothing needs to.
+
+`lockedUntil: string | null` accompanies it — when the lock releases, absent
+otherwise (including for an already-expired `locked_until`).
+
+**`PATCH /users/{id}` rejects `status: "LOCKED"`** with `400 INVALID_REQUEST`. It is not a
+settable state: a lockout is applied by the login-failure counter and released
+by `POST /users/{id}/unlock` or by waiting. Persisting it would produce an
+account `unlock` cannot release, because the lock test ORs on the status itself.
+A client that seeds an edit form from a row must therefore not send `status`
+back unchanged — omit it, which `PATCH` already reads as "don't touch".
+
 `filter[gradeId]`/`filter[classId]` match on the student placement, so they
 never return a staff account; `filter[role]` matches the account's single
 `roleCode`, and `filter[status]` a `UserStatus` name (`ACTIVE`, `INACTIVE`,

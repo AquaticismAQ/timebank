@@ -5,15 +5,21 @@ import cn.timebank.iam.application.UserService;
 import cn.timebank.iam.application.dto.CreateUserRequest;
 import cn.timebank.iam.application.dto.UserDto;
 import cn.timebank.iam.application.dto.UserListFilter;
+import cn.timebank.iam.domain.User;
+import cn.timebank.iam.domain.UserStatus;
+import cn.timebank.iam.infrastructure.UserRepository;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 /**
  * Issue 094 §7 — the read model behind {@code GET /users}, against real MySQL.
@@ -34,6 +40,9 @@ class UserListFilterSortIT extends AbstractIntegrationTest {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Test
     void theQueryExecutesAndPaginatesAgainstRealMySql() {
@@ -64,9 +73,10 @@ class UserListFilterSortIT extends AbstractIntegrationTest {
         String marker = "StatFx" + OpaqueIds.generate("m");
         UserDto active = createUser(marker + " Active", "teacher");
 
-        // Every account is created ACTIVE, so asking for a status nothing holds
-        // is the only query that can tell "filtering" from "ignoring" here —
-        // `status=active` returns the whole fixture either way.
+        // The fixture helper activates, so every account here is ACTIVE (see
+        // createUser). Asking for a status nothing holds is the only query that
+        // can tell "filtering" from "ignoring" — `status=ACTIVE` returns the
+        // whole fixture either way.
         assertThat(idsOf(new UserListFilter(marker, null, "INACTIVE", null, null)))
                 .as("no fixture account is INACTIVE, so an honest filter returns none")
                 .isEmpty();
@@ -114,6 +124,90 @@ class UserListFilterSortIT extends AbstractIntegrationTest {
         assertThat(namesOf(marker, Sort.by("className").descending())).isNotEmpty();
     }
 
+    /**
+     * Issue 097. A brute-force lockout writes {@code locked_until} and never
+     * {@code status}, so before this the {@code LOCKED} filter asked MySQL for
+     * rows nothing produces, and a locked-out account was returned — and
+     * displayed — as {@code ACTIVE}.
+     *
+     * <p>Run here rather than only in {@code UserListQuerySqlTest} because the
+     * derivation is a {@code case} expression in a hand-written statement:
+     * that test proves the two copies of the rule agree as <em>text</em>, and
+     * nothing but MySQL can prove the expression parses, that it is legal in
+     * both the projection and the {@code where} clause, and that {@code now(3)}
+     * compares the way the Java side does.</p>
+     */
+    @Test
+    void aLockedOutAccountIsFoundByTheLockedFilterAndNotByActive() {
+        String marker = "LockFx" + OpaqueIds.generate("m");
+        UserDto locked = createUser(marker + " Locked Out", "teacher");
+        UserDto normal = createUser(marker + " Signed In Fine", "teacher");
+        lockOut(locked.id(), Instant.now().plus(15, ChronoUnit.MINUTES));
+
+        assertThat(idsOf(new UserListFilter(marker, null, "LOCKED", null, null)))
+                .as("the account whose lockout window is open, and only that one")
+                .containsExactly(locked.id());
+        assertThat(idsOf(new UserListFilter(marker, null, "ACTIVE", null, null)))
+                .as("a locked-out account must not also answer to ACTIVE — it is one or the other")
+                .containsExactly(normal.id());
+    }
+
+    @Test
+    void theRowReportsLockedAndCarriesTheReleaseTime() {
+        String marker = "LockRow" + OpaqueIds.generate("m");
+        UserDto user = createUser(marker + " Locked Out", "teacher");
+        Instant releasesAt = Instant.now().plus(15, ChronoUnit.MINUTES);
+        lockOut(user.id(), releasesAt);
+
+        UserDto row = userService.list(PageRequest.of(0, 20),
+                new UserListFilter(marker, null, null, null, null)).getContent().get(0);
+
+        assertThat(row.status()).isEqualTo("LOCKED");
+        assertThat(row.lockedUntil()).isCloseTo(releasesAt, within(1, ChronoUnit.SECONDS));
+        // The stored column is untouched — that is the whole point of deriving.
+        assertThat(userRepository.findById(user.id()).orElseThrow().getStatus())
+                .isEqualTo(UserStatus.ACTIVE);
+    }
+
+    /**
+     * The reason for deriving rather than persisting: nothing runs at expiry.
+     * A stored {@code LOCKED} would still read {@code LOCKED} here.
+     */
+    @Test
+    void anExpiredLockoutReportsActiveAgainWithNothingHavingRun() {
+        String marker = "LockExp" + OpaqueIds.generate("m");
+        UserDto user = createUser(marker + " Lock Expired", "teacher");
+        lockOut(user.id(), Instant.now().minus(1, ChronoUnit.SECONDS));
+
+        UserDto row = userService.list(PageRequest.of(0, 20),
+                new UserListFilter(marker, null, null, null, null)).getContent().get(0);
+
+        assertThat(row.status()).isEqualTo("ACTIVE");
+        assertThat(row.lockedUntil()).isNull();
+        assertThat(idsOf(new UserListFilter(marker, null, "LOCKED", null, null))).isEmpty();
+    }
+
+    /** {@code totalItems} must describe the filtered set, so the count query needs the same derivation. */
+    @Test
+    void theCountQueryDerivesTheStatusToo() {
+        String marker = "LockCnt" + OpaqueIds.generate("m");
+        createUser(marker + " One", "teacher");
+        UserDto locked = createUser(marker + " Two", "teacher");
+        lockOut(locked.id(), Instant.now().plus(15, ChronoUnit.MINUTES));
+
+        assertThat(userService.list(PageRequest.of(0, 20),
+                new UserListFilter(marker, null, "LOCKED", null, null)).getTotalElements())
+                .as("a page of 1 with a total of 2 is the bug this guards")
+                .isEqualTo(1);
+    }
+
+    /** Writes `locked_until` the way `recordFailedLogin` does, without 5 real login attempts. */
+    private void lockOut(String userId, Instant until) {
+        User user = userRepository.findById(userId).orElseThrow();
+        user.setLockedUntil(until);
+        userRepository.saveAndFlush(user);
+    }
+
     @Test
     void aStaffAccountHasNoStudentPlacement() {
         String marker = "Placement" + OpaqueIds.generate("m");
@@ -138,9 +232,31 @@ class UserListFilterSortIT extends AbstractIntegrationTest {
                 .getContent().stream().map(UserDto::displayName).toList();
     }
 
+    /**
+     * Creates an account and puts it in the state a real one reaches after
+     * activation — {@code ACTIVE}, with a password hash.
+     *
+     * <p>The activation step is not incidental. Since issue 096 every account
+     * is born {@code PENDING_ACTIVATION}, so a fixture that skipped it would
+     * make {@link #theStatusFilterExcludesOtherStatuses()} assert {@code ACTIVE}
+     * against a page of pending accounts, and would make the lockout tests
+     * below compare {@code LOCKED} against {@code PENDING_ACTIVATION} rather
+     * than against the {@code ACTIVE} the derivation actually has to override.
+     * Both would fail for a reason having nothing to do with what they check.</p>
+     *
+     * <p>Written directly rather than through {@code ActivationService} on
+     * purpose: this class is about the list read model, and a redemption per
+     * fixture row would spend the per-IP attempt budget and couple these tests
+     * to the activation flow's own rules. {@code AuthFlowIT} owns that path.</p>
+     */
     private UserDto createUser(String displayName, String roleCode) {
-        return userService.create(new CreateUserRequest(
+        UserDto created = userService.create(new CreateUserRequest(
                 "lst_" + OpaqueIds.generate("u"), displayName, null,
                 roleCode, "zh-CN"), "usr_test_admin");
+        User user = userRepository.findById(created.id()).orElseThrow();
+        user.setPasswordHash("$2a$10$fixture.hash.not.a.real.credential.....................");
+        user.setStatus(UserStatus.ACTIVE);
+        userRepository.saveAndFlush(user);
+        return created;
     }
 }

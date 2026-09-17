@@ -46,7 +46,19 @@ public record UserDto(
          * responses rather than paying a second query for a screen that has
          * nowhere to show it.
          */
-        Instant lastLoginAt) {
+        Instant lastLoginAt,
+        /**
+         * Issue 097. When the brute-force lockout releases, or {@code null} when
+         * the account is not locked out. Present so the UI can say <em>when</em>
+         * rather than only <em>that</em>, and so {@code status} being
+         * {@code LOCKED} is explainable without a second lookup.
+         *
+         * <p>{@code status} is <b>derived</b> — see {@code
+         * User.effectiveStatus()}. A lockout writes only {@code locked_until},
+         * so the stored column would report a locked-out account as
+         * {@code ACTIVE}.</p>
+         */
+        Instant lockedUntil) {
 
     /**
      * {@code UserServiceImpl} (module {@code iam}) can't populate this
@@ -69,6 +81,7 @@ public record UserDto(
      */
     public UserDto withScopeGradeIds(Set<String> scopeGradeIds) {
         return new UserDto(id, username, displayName, email, studentId, staffId, status, preferredLanguage, roleCode,
-                version, createdAt, updatedAt, scopeGradeIds, gradeId, gradeLevel, classId, className, lastLoginAt);
+                version, createdAt, updatedAt, scopeGradeIds, gradeId, gradeLevel, classId, className, lastLoginAt,
+                lockedUntil);
     }
 }

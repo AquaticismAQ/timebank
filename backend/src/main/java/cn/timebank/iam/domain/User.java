@@ -165,6 +165,30 @@ public class User extends VersionedEntity {
     }
 
     /**
+     * The status to <b>report</b>, as opposed to the one stored (issue 097).
+     *
+     * <p>A brute-force lockout writes {@code locked_until} and nothing else, so
+     * {@code status} stays whatever an administrator or the activation
+     * machinery last set. Reading the column directly therefore showed a
+     * locked-out account as {@code ACTIVE}, and made the Users tab's
+     * {@code LOCKED} filter match rows no code path produces.</p>
+     *
+     * <p><b>Derived rather than persisted on purpose.</b> The lock expires on a
+     * clock. A stored {@code LOCKED} would be correct for fifteen minutes and
+     * stale afterwards unless a scheduled job existed to un-write it — a job
+     * maintaining a value already computable from a column in the same row.
+     * Derivation is self-healing: it simply stops being true.</p>
+     *
+     * <p>{@code UserListQueryRepository.EFFECTIVE_STATUS} is the SQL mirror of
+     * this method, because the list read model cannot call it and still order
+     * and count by the result. {@code UserListQuerySqlTest} asserts the two
+     * agree, case for case.</p>
+     */
+    public UserStatus effectiveStatus() {
+        return isLocked() ? UserStatus.LOCKED : status;
+    }
+
+    /**
      * The shortest idle timeout among the user's roles (contract §2.2), so a
      * user holding both a long-timeout and a short-timeout role gets the
      * more conservative one. No role name is ever compared here — see

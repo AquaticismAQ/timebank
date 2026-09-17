@@ -96,9 +96,9 @@ class UserListFilterSortTest {
                 placement == null ? null : placement.gradeLevel(),
                 placement == null ? null : placement.classId(),
                 placement == null ? null : placement.className(),
-                // lastLoginAt: this fixture is about filtering and ordering, and
-                // no assertion here reads it.
-                null);
+                // lastLoginAt / lockedUntil: this fixture is about filtering and
+                // ordering, and no assertion here reads either.
+                null, null);
     }
 
     // ── filters ──────────────────────────────────────────────────────────

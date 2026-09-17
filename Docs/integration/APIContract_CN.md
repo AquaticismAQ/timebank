@@ -814,6 +814,21 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
 - 所有教职工账号这四个字段均为 `null`，其年级覆盖范围由 `scopeGradeIds` 表达——
   为空即表示覆盖全校。
 
+**`status` 为派生值，而非数据库中存储的那一列**（2026-09-17 新增，issue 097）。
+暴力破解锁定只写入 `locked_until`，从不改动 `status`，因此 `GET /users` 与
+`GET /users/{id}` 返回的是 `locked_until > now ? LOCKED : status`——被锁定的账号读作
+`LOCKED`，而其存储行仍为 `ACTIVE`。`filter[status]` 匹配同一个派生值，因此 `LOCKED`
+恰好返回此刻处于锁定中的账号，`ACTIVE` 则将其排除。两者在锁定到期时自动恢复：解锁时刻
+没有任何任务运行，也不需要有。
+
+同时新增 `lockedUntil: string | null`——锁定解除的时刻；未锁定时不返回该字段
+（`locked_until` 已过期的情况同样不返回）。
+
+**`PATCH /users/{id}` 拒绝 `status: "LOCKED"`，返回 `400 INVALID_REQUEST`。** 它不是可设置的状态：
+锁定由登录失败计数施加，经 `POST /users/{id}/unlock` 或等待其自然到期解除。将其持久化
+会产生一个 `unlock` 无法解除的账号，因为锁定判定本身也会检查该状态。因此，从行数据回填
+编辑表单的客户端**不得**原样回传 `status`——请省略该字段，`PATCH` 本就将省略视为"不修改"。
+
 `filter[gradeId]`/`filter[classId]` 按学生编班信息匹配，因此永远不会返回教职工账号；
 `filter[role]` 匹配账号唯一的 `roleCode`，`filter[status]` 匹配 `UserStatus` 名称
 （`ACTIVE`、`INACTIVE`、`LOCKED`、`PENDING_ACTIVATION`、`ACTIVATION_EXPIRED`）——

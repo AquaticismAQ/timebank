@@ -1,0 +1,19 @@
+-- Issue 097. `LOCKED` is a derived status, not a stored one: a brute-force
+-- lockout writes `locked_until` and never touches `status`, and
+-- `User.effectiveStatus()` computes the rest. Nothing in the application has
+-- ever written 'LOCKED' to this column.
+--
+-- A row could still hold it — `PATCH /users/{id}` accepted any UserStatus name
+-- until this change refused it — and such a row is the worst state in the
+-- table: `User.isLocked()` ORs on the status, so the account is permanently
+-- locked out while `POST /users/{id}/unlock` clears only `locked_until` and
+-- leaves it exactly where it was. Nobody can sign in and no endpoint can fix it.
+--
+-- ACTIVE is the correct repair, not INACTIVE: whoever set LOCKED was suspending
+-- access temporarily, which is what a lockout is. Any real lockout still in
+-- force is carried by `locked_until` and survives this untouched — that column
+-- is deliberately not cleared here.
+--
+-- Zero rows on the deployment this was written against (37 ACTIVE, 1
+-- PENDING_ACTIVATION, 1 INACTIVE). It is written for every other one.
+UPDATE `user` SET status = 'ACTIVE', updated_at = NOW(3) WHERE status = 'LOCKED';

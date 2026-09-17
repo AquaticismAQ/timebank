@@ -1113,14 +1113,14 @@ export const api = {
      * staff account's grade bond and is empty for a student. They answer
      * different questions and neither substitutes for the other.
      */
-    async list(params?: ListParams): Promise<PageResult<{ id: string; username: string; displayName: string; email: string; roleCode: string; status: string; lastLoginAt?: string; version: number; scopeGradeIds: string[]; studentId?: string; staffId?: string; gradeId?: string; gradeLevel?: number; classId?: string; className?: string }>> {
+    async list(params?: ListParams): Promise<PageResult<{ id: string; username: string; displayName: string; email: string; roleCode: string; status: string; lockedUntil?: string; lastLoginAt?: string; version: number; scopeGradeIds: string[]; studentId?: string; staffId?: string; gradeId?: string; gradeLevel?: number; classId?: string; className?: string }>> {
       // `email` is optional on the wire and **absent, not null**, when unset:
       // Jackson's non-null inclusion drops the field entirely. Since issue 096
       // made the field genuinely optional, accounts without one are ordinary,
       // and every consumer here treats `email` as a string — one `.trim()` on
       // `undefined` white-screened the Users tab. Normalised to `''` once, at
       // the boundary, rather than guarded at each of the places that read it.
-      type UserDtoWire = { id: string; username: string; displayName: string; email?: string | null; roleCode: string; status: string; lastLoginAt?: string; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string; gradeId?: string | null; gradeLevel?: number | null; classId?: string | null; className?: string | null };
+      type UserDtoWire = { id: string; username: string; displayName: string; email?: string | null; roleCode: string; status: string; lockedUntil?: string; lastLoginAt?: string; version: number; scopeGradeIds?: string[]; studentId?: string; staffId?: string; gradeId?: string | null; gradeLevel?: number | null; classId?: string | null; className?: string | null };
       const filter = { ...params?.filter };
       if (filter.status) filter.status = toBackendEnum(filter.status);
       const page = await http.getPage<UserDtoWire>('/users', buildListQuery({ ...params, filter }));
@@ -1128,7 +1128,7 @@ export const api = {
         data: page.data.map(u => ({
           id: u.id, username: u.username, displayName: u.displayName, email: u.email ?? '',
           roleCode: u.roleCode, status: fromBackendEnum(u.status),
-          lastLoginAt: u.lastLoginAt, version: u.version, scopeGradeIds: u.scopeGradeIds ?? [],
+          lockedUntil: u.lockedUntil, lastLoginAt: u.lastLoginAt, version: u.version, scopeGradeIds: u.scopeGradeIds ?? [],
           studentId: u.studentId, staffId: u.staffId,
           gradeId: u.gradeId ?? undefined, gradeLevel: u.gradeLevel ?? undefined,
           classId: u.classId ?? undefined, className: u.className ?? undefined,
@@ -1191,6 +1191,16 @@ export const api = {
     async issueActivationSlips(classId: string, slipsPerPage: 1 | 2): Promise<PdfDownload> {
       return postPdf('/users/activation-slips', { classId, slipsPerPage }, 'activation-slips.pdf');
     },
+    /**
+     * Releases a brute-force lockout early: clears the failed-login counter and
+     * `locked_until`, so the account can sign in again with its existing
+     * password. It sets no credential and produces no slip — the user has not
+     * forgotten anything, they were locked out by failed attempts. Use
+     * `resetPassword` for the forgotten case.
+     *
+     * A lockout also expires on its own (15 minutes by default), so this is the
+     * "don't make them wait" path, not the only way out.
+     */
     async unlock(id: string): Promise<void> {
       await http.post<void>(`/users/${id}/unlock`);
     },

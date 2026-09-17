@@ -57,6 +57,22 @@ public class UserListQueryRepository {
             "className", "c.name");
 
     /**
+     * The SQL mirror of {@code User.effectiveStatus()} (issue 097) — a
+     * brute-force lockout writes {@code locked_until} and never {@code status},
+     * so the stored column reports a locked-out account as {@code ACTIVE}.
+     *
+     * <p>Used in <b>both</b> the projection and the filter, from this one
+     * constant, so the badge a row displays and the set the {@code LOCKED}
+     * filter returns cannot disagree. Writing the expression twice is exactly
+     * how they would.</p>
+     *
+     * <p>{@code now(3)} matches the column's {@code DATETIME(3)} precision and
+     * the {@code Instant.now()} the Java side compares against.</p>
+     */
+    static final String EFFECTIVE_STATUS =
+            "(case when u.locked_until is not null and u.locked_until > now(3) then 'LOCKED' else u.status end)";
+
+    /**
      * One row per account regardless of how many {@code user_role} rows it
      * has. 07-RoleFinetune.md §2.5 says exactly one, but a join would turn a
      * not-yet-migrated two-role account into two rows and quietly corrupt
@@ -66,7 +82,11 @@ public class UserListQueryRepository {
      * {@code Set} is not.
      */
     private static final String SELECT_COLUMNS = """
-            select u.id, u.username, u.display_name, u.email, u.student_id, u.staff_id, u.status,
+            select u.id, u.username, u.display_name, u.email, u.student_id, u.staff_id,
+                   {effectiveStatus} as status,
+                   -- The raw column too, so the UI can say *when* the lock
+                   -- releases rather than only that it exists.
+                   u.locked_until,
                    u.preferred_language, u.version, u.created_at, u.updated_at,
                    (select r.code from user_role ur join role r on r.id = ur.role_id
                      where ur.user_id = u.id order by r.code limit 1) as role_code,
@@ -79,7 +99,7 @@ public class UserListQueryRepository {
                    -- user row by their login count and corrupt the page counts.
                    (select max(ll.created_at) from login_log ll
                      where ll.user_id = u.id and ll.success = 1) as last_login_at
-            """;
+            """.replace("{effectiveStatus}", EFFECTIVE_STATUS);
 
     /**
      * {@code left join}, not {@code join}: a staff account has no {@code
@@ -99,12 +119,22 @@ public class UserListQueryRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    /**
+     * Package-private so {@code UserListQuerySqlTest} can assert on the
+     * projection as well as the filter — the two have to derive {@code status}
+     * identically (issue 097), and that is a property of the statement, not of
+     * any row it returns.
+     */
+    String queryPageSql(UserListFilter filter, Pageable pageable, MapSqlParameterSource params) {
+        return SELECT_COLUMNS + FROM_AND_JOINS + filterClause(filter, params)
+                + orderByClause(pageable.getSort()) + " limit :limit offset :offset";
+    }
+
     public List<UserDto> queryPage(UserListFilter filter, Pageable pageable) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("limit", pageable.getPageSize())
                 .addValue("offset", pageable.getOffset());
-        String sql = SELECT_COLUMNS + FROM_AND_JOINS + filterClause(filter, params)
-                + orderByClause(pageable.getSort()) + " limit :limit offset :offset";
+        String sql = queryPageSql(filter, pageable, params);
 
         return jdbcTemplate.query(sql, params, (rs, rowNum) -> {
             Timestamp createdAt = rs.getTimestamp("created_at");
@@ -113,6 +143,7 @@ public class UserListQueryRepository {
             // and getInt would silently read it as grade 0.
             Integer gradeLevel = (Integer) rs.getObject("grade_level");
             Timestamp lastLogin = rs.getTimestamp("last_login_at");
+            Timestamp lockedUntil = rs.getTimestamp("locked_until");
             return new UserDto(
                     rs.getString("id"), rs.getString("username"), rs.getString("display_name"),
                     rs.getString("email"), rs.getString("student_id"), rs.getString("staff_id"),
@@ -125,7 +156,13 @@ public class UserListQueryRepository {
                     Set.of(),
                     rs.getString("grade_id"), gradeLevel,
                     rs.getString("class_id"), rs.getString("class_name"),
-                    lastLogin != null ? lastLogin.toInstant() : null);
+                    lastLogin != null ? lastLogin.toInstant() : null,
+                    // Kept as the raw column even though `status` above is
+                    // derived from it: an already-expired value is `null` to the
+                    // reader by way of the derived status, and reporting the
+                    // past instant it holds would be noise.
+                    lockedUntil != null && lockedUntil.toInstant().isAfter(java.time.Instant.now())
+                            ? lockedUntil.toInstant() : null);
         });
     }
 
@@ -160,8 +197,12 @@ public class UserListQueryRepository {
             // Not validated against UserStatus here: an unrecognized value matches
             // no row, which is FilterSpecifications.equalToEnum's documented
             // behaviour too — a filter typo is an empty page, not a 500.
+            //
+            // Matches the *derived* status, not the column (issue 097). Against
+            // the raw column, `LOCKED` asked for rows nothing ever writes, and
+            // `ACTIVE` returned accounts that were locked out at that moment.
             params.addValue("status", filter.status());
-            clause.append(" and u.status = :status");
+            clause.append(" and ").append(EFFECTIVE_STATUS).append(" = :status");
         }
         if (filter.hasGradeId()) {
             params.addValue("gradeId", filter.gradeId());

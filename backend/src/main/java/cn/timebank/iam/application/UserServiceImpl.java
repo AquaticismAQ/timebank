@@ -247,6 +247,14 @@ class UserServiceImpl implements UserService {
         User user = findOrThrow(id);
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
+        // Issue 097: clearing `locked_until` alone releases every lockout this
+        // system produces, but `isLocked()` also tests the status, so a row left
+        // at LOCKED by an older client would have stayed locked with nothing
+        // left to clear it. V29 normalises the existing ones; this keeps the
+        // endpoint able to fix one rather than depending on the migration.
+        if (user.getStatus() == UserStatus.LOCKED) {
+            user.setStatus(UserStatus.ACTIVE);
+        }
         user.setUpdatedAt(Instant.now());
         auditService.record(new AuditEntry(actorId, "users.manage", "user.unlock", "user", user.getId(),
                 null, null, null));
@@ -401,12 +409,31 @@ class UserServiceImpl implements UserService {
                 .orElseThrow(() -> ApiException.invalidRequest("Unknown role code: " + roleCode));
     }
 
+    /**
+     * {@code LOCKED} is refused (issue 097). It is a <em>derived</em> status —
+     * {@code User.effectiveStatus()} computes it from {@code locked_until}, and
+     * nothing writes it to the column — so persisting it would produce an
+     * account that {@link #unlock} could not release, because
+     * {@code User.isLocked()} also tests the status itself.
+     *
+     * <p>Refused here rather than in the form, because the form is not the only
+     * caller and was in fact where the hazard came from: a client that seeds its
+     * edit dialog from a row showing the derived {@code LOCKED} would write it
+     * back on an unrelated save.</p>
+     */
     private UserStatus parseStatus(String raw) {
+        UserStatus status;
         try {
-            return UserStatus.valueOf(raw);
+            status = UserStatus.valueOf(raw);
         } catch (IllegalArgumentException e) {
             throw ApiException.invalidRequest("Unknown user status: " + raw);
         }
+        if (status == UserStatus.LOCKED) {
+            throw ApiException.invalidRequest(
+                    "An account cannot be set to LOCKED. A lockout is applied by the login-failure "
+                            + "counter and released by POST /users/{id}/unlock or by waiting for it to expire.");
+        }
+        return status;
     }
 
     private Set<String> permissionCodesOf(User user) {
@@ -510,12 +537,17 @@ class UserServiceImpl implements UserService {
     private UserDto toDto(User user) {
         String roleCode = soleRoleCodeOf(user);
         UserDto dto = new UserDto(user.getId(), user.getUsername(), user.getDisplayName(), user.getEmail(),
-                user.getStudentId(), user.getStaffId(), user.getStatus().name(), user.getPreferredLanguage(), roleCode,
+                user.getStudentId(), user.getStaffId(),
+                // Derived, not the stored column (issue 097) — and derived here
+                // too, not only in the list read model, so a single-user read
+                // cannot contradict the row the same account occupies in a list.
+                user.effectiveStatus().name(), user.getPreferredLanguage(), roleCode,
                 user.getVersion(), user.getCreatedAt(), user.getUpdatedAt(), Set.of(),
                 // lastLoginAt is null on single-user responses by design — see
                 // UserDto. Only the list read model, which displays the column,
                 // pays for the login_log lookup.
-                null, null, null, null, null);
+                null, null, null, null, null,
+                user.isLocked() ? user.getLockedUntil() : null);
         return withPlacement(dto, user.getStudentId());
     }
 
@@ -536,7 +568,7 @@ class UserServiceImpl implements UserService {
         return new UserDto(dto.id(), dto.username(), dto.displayName(), dto.email(), dto.studentId(), dto.staffId(),
                 dto.status(), dto.preferredLanguage(), dto.roleCode(), dto.version(), dto.createdAt(), dto.updatedAt(),
                 dto.scopeGradeIds(), placement.gradeId(), placement.gradeLevel(), placement.classId(),
-                placement.className(), dto.lastLoginAt());
+                placement.className(), dto.lastLoginAt(), dto.lockedUntil());
     }
 
     /** 07-RoleFinetune.md §2.5: every user holds exactly one role — {@code null} only for a not-yet-migrated account. */

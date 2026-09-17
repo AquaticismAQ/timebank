@@ -409,6 +409,12 @@ interface AdminUser {
   status: UserStatus;
   lastLogin: string;
   version: number;
+  /**
+   * When the brute-force lockout releases (issue 097), or undefined when the
+   * account is not locked out. `status` is derived server-side, so a locked
+   * account already reads `locked` — this is what lets the UI say *when*.
+   */
+  lockedUntil?: string;
   /** A **staff** account's grade bond — never a student's own grade (issue 094). Empty means school-wide. */
   scopeGradeIds: string[];
   studentId?: string;
@@ -493,6 +499,8 @@ interface UserFormState {
   email: string;
   roleCode: string;
   status: UserStatus;
+  /** Read-only context for the Unlock panel (issue 097); never sent back. */
+  lockedUntil?: string;
   showResetPwd: boolean;
   scopeGradeIds: string[];
   studentId?: string;
@@ -501,14 +509,14 @@ interface UserFormState {
 
 const emptyForm = (): UserFormState => ({
   username: '', name: '', email: '', roleCode: '', status: 'active',
-  showResetPwd: false, scopeGradeIds: [],
+  lockedUntil: undefined, showResetPwd: false, scopeGradeIds: [],
   studentId: undefined, staffId: '',
 });
 
 function userToForm(u: AdminUser): UserFormState {
   return {
     username: u.username, name: u.name, email: u.email, roleCode: u.roleCode, status: u.status,
-    showResetPwd: false, scopeGradeIds: [...u.scopeGradeIds],
+    lockedUntil: u.lockedUntil, showResetPwd: false, scopeGradeIds: [...u.scopeGradeIds],
     studentId: u.studentId, staffId: u.staffId ?? '',
   };
 }
@@ -520,9 +528,11 @@ interface UserModalProps {
   onClose: () => void;
   onSave: (form: UserFormState) => void;
   onDelete?: () => void;
+  /** Issue 097 — shown only for a locked-out account. */
+  onUnlock?: () => void;
 }
 
-function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModalProps) {
+function UserModal({ mode, initial, roles, onClose, onSave, onDelete, onUnlock }: UserModalProps) {
   const { t } = useTranslation();
   const [form, setForm] = useState<UserFormState>(initial);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -728,15 +738,48 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete }: UserModa
             </div>
           )}
 
+          {/* Locked out (edit only). A lockout is not a status an admin sets —
+              it is the login-failure counter, released by waiting or by this
+              button (issue 097). Separate from the status toggle below on
+              purpose: that toggle is a deliberate decision about whether the
+              account should exist, this is a temporary consequence of five bad
+              guesses, and conflating them is how `LOCKED` ended up looking like
+              a settable value in the first place. */}
+          {mode === 'edit' && form.status === 'locked' && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm text-foreground">
+                <Lock className="w-4 h-4 shrink-0" />
+                <span>{t('admin.system.lockedOut')}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {form.lockedUntil
+                  ? t('admin.system.lockedOutUntil', { time: formatLocalInstant(form.lockedUntil) })
+                  : t('admin.system.lockedOutHint')}
+              </p>
+              <button type="button" onClick={onUnlock}
+                className="w-full px-4 py-2 rounded-xl border border-border bg-card text-sm text-foreground hover:bg-accent transition-colors">
+                {t('admin.system.unlockNow')}
+              </button>
+            </div>
+          )}
+
           {/* Status (edit only) */}
           {mode === 'edit' && (
             <div className="flex items-center justify-between py-1">
               <div>
                 <div className="text-sm text-foreground">{t('admin.system.accountStatus')}</div>
-                <div className="text-xs text-muted-foreground">{t('admin.system.accountStatusDesc')}</div>
+                <div className="text-xs text-muted-foreground">
+                  {/* While locked, `status` is the derived value and the real
+                      one underneath is unknown to this form — so the toggle
+                      cannot honestly show on or off. Unlock first. */}
+                  {form.status === 'locked'
+                    ? t('admin.system.accountStatusLockedFirst')
+                    : t('admin.system.accountStatusDesc')}
+                </div>
               </div>
-              <button type="button" onClick={() => set({ status: form.status === 'active' ? 'inactive' : 'active' })}
-                className={`relative w-10 h-6 rounded-full transition-colors duration-200 ${form.status === 'active' ? 'bg-[oklch(0.488_0.243_264.376)]' : 'bg-muted'}`}>
+              <button type="button" disabled={form.status === 'locked'}
+                onClick={() => set({ status: form.status === 'active' ? 'inactive' : 'active' })}
+                className={`relative w-10 h-6 rounded-full transition-colors duration-200 ${form.status === 'active' ? 'bg-[oklch(0.488_0.243_264.376)]' : 'bg-muted'} ${form.status === 'locked' ? 'opacity-40 cursor-not-allowed' : ''}`}>
                 <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${form.status === 'active' ? 'translate-x-4' : 'translate-x-0'}`} />
               </button>
             </div>
@@ -928,6 +971,7 @@ export function SystemAdmin() {
       // string directly shows UTC, which is 8h off here and looks plausible
       // (issue 067).
       lastLogin: u.lastLoginAt ? formatLocalInstant(u.lastLoginAt) : '—',
+      lockedUntil: u.lockedUntil,
       version: u.version, scopeGradeIds: u.scopeGradeIds,
       studentId: u.studentId, staffId: u.staffId,
       gradeLevel: u.gradeLevel, classId: u.classId, className: u.className,
@@ -1154,7 +1198,14 @@ export function SystemAdmin() {
         // empty string over a NULL, which reads as an address that is set and
         // blank rather than one that was never given.
         email: form.email.trim() || undefined,
-        status: form.status,
+        // Only when it actually changed (issue 097). `status` is *derived*
+        // server-side — a locked-out account reads `locked` — and this form is
+        // seeded from the row it was opened on. Sending it back unconditionally
+        // would persist `LOCKED` into the status column on any unrelated edit,
+        // producing the one state nothing can unlock. The backend refuses
+        // `LOCKED` too; this is the half that stops a legitimate save from
+        // tripping over a value the toggle never offered in the first place.
+        status: form.status === editTarget.status ? undefined : form.status,
         roleCode: form.roleCode,
         version: editTarget.version,
         scopeGradeIds: needsGradeScope ? form.scopeGradeIds : [],
@@ -1173,6 +1224,28 @@ export function SystemAdmin() {
       usersApi.refetch();
       setEditTarget(null);
       toast.success(t('admin.system.userUpdated'));
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(mapApiError(err).message);
+      else toast.error(String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
+   * Issue 097. Releases the lockout early — the account keeps its password and
+   * can sign in again immediately. Deliberately not folded into Save: a lockout
+   * is not one of the fields this form edits, and an admin opening the dialog to
+   * fix a display name must not release a lock as a side effect.
+   */
+  const handleUnlock = async () => {
+    if (!editTarget) return;
+    setSaving(true);
+    try {
+      await api.users.unlock(editTarget.id);
+      usersApi.refetch();
+      setEditTarget(null);
+      toast.success(t('admin.system.userUnlocked', { name: editTarget.name }));
     } catch (err) {
       if (err instanceof ApiError) toast.error(mapApiError(err).message);
       else toast.error(String(err));
@@ -1812,6 +1885,7 @@ export function SystemAdmin() {
           onClose={() => setEditTarget(null)}
           onSave={handleEdit}
           onDelete={canManageUsers ? handleDelete : undefined}
+          onUnlock={canManageUsers ? handleUnlock : undefined}
         />
       )}
 
