@@ -43,16 +43,25 @@ public class RequestIdFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Not X-Forwarded-For-aware yet — the deployment topology (Design.md §17.1)
-     * terminates TLS at Nginx in front of the app, so this will need the
-     * real-IP header once Nginx is fronting the service (test-server: honoured
-     * as of B0.11's proxy config). Revisit if a second untrusted proxy hop appears.
+     * The client address, taken from {@code getRemoteAddr()} and nothing else.
+     *
+     * <p>This used to read {@code X-Forwarded-For} and take the leftmost entry.
+     * That entry is supplied by the <em>client</em>: Nginx is configured with
+     * {@code $proxy_add_x_forwarded_for}, which <b>appends</b> the real peer to
+     * whatever arrived, so a request carrying {@code X-Forwarded-For: 9.9.9.9}
+     * reached the app as {@code "9.9.9.9, <real ip>"} and the leftmost value won.
+     * Anyone could therefore choose the address the system attributed to them —
+     * which defeated the per-IP activation limit outright (verified: 70 attempts
+     * from one host with a rotating header, zero throttled) and let a failed
+     * login be recorded in {@code login_log} against an innocent third party.
+     *
+     * <p>{@code getRemoteAddr()} is already correct here without any parsing:
+     * {@code server.forward-headers-strategy: native} puts Tomcat's
+     * {@code RemoteIpValve} in the chain, and it walks the header right-to-left
+     * skipping only <em>trusted</em> proxies, so a forged prefix cannot survive.
+     * Doing it by hand bypassed exactly that trust logic.</p>
      */
     private String clientIp(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
-        }
         return request.getRemoteAddr();
     }
 }
