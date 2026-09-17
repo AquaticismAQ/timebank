@@ -5,7 +5,8 @@
 > `Design/chinese/09-StudentActivationFlow.md` is the authoritative source;
 > update both in the same change.
 > Related: the security and compliance basis is in
-> `08-mlps-level1-security-design-guide.md` §8.2; the decisions and the
+> `08-mlps-level1-security-design-guide.md` §8.3 (and the password rule in
+> §8.2); the decisions and the
 > alternatives that were rejected are in
 > `Docs/optimization/10-StudentIdentityAndOnboarding.md`.
 
@@ -105,7 +106,7 @@ produce a new slip. **A reset produces no password**, so §1's guarantee holds o
 the recovery path too.
 
 The reasoning for having no self-service route is in
-`08-mlps-level1-security-design-guide.md` §8.2: an unauthenticated endpoint that
+`08-mlps-level1-security-design-guide.md` §8.3: an unauthenticated endpoint that
 mints a credential for any account the caller names is exactly the attack surface
 this design avoids, and supporting delivery would require a trusted channel —
 which means collecting minors' phone numbers or email addresses, directly against
@@ -187,7 +188,27 @@ the activation page uses "Activation code" as its field label. If the paper says
 A twelve-year-old holding a slip matches paper to screen by the literal words.
 This is a usability requirement, not a copy preference.
 
-### 4.5 Forgiving input
+### 4.5 What the student's chosen password must satisfy
+
+The password a student sets on the activation page is subject to **the same rule as
+every other place a password is set** in the system (see
+`08-mlps-level1-security-design-guide.md` §8.2): at least 12 characters; at least 3
+of lowercase, uppercase, digit and symbol; not a common password nor containing one;
+not containing the system's name or the student's own username; and not a single
+repeated character or a sequential run.
+
+For a twelve-year-old that is not a trivial bar. So the activation page shows, **as
+they type, which requirements are met and which are not**, rather than rejecting the
+password after submission — being told one problem at a time is the fastest way to
+make someone give up. The "activate and set password" button stays disabled until
+every requirement is met and the two entries match, but the unmet requirements remain
+visible, so a disabled button is never a dead end.
+
+One rule deserves singling out: **the password must not contain their own username**.
+The student is holding a slip with their 8-digit username printed on it, so reusing it
+is the most natural thing to reach for — which is exactly why it has to be refused.
+
+### 4.6 Forgiving input
 
 The code uses the **Crockford base32** alphabet, which deliberately omits I, L, O
 and U so nothing can be confused with 1 or 0 in the first place. The activation
@@ -220,4 +241,4 @@ immediately, rather than making a round trip to be told a bare "invalid".
 - **A student created singly through `POST /students` currently gets no account** —
   only the import path creates one. This is a known gap, not part of this design.
 - **Multi-factor authentication** is not enabled; the options are compared in
-  `08-mlps-level1-security-design-guide.md` §8.4.
+  `08-mlps-level1-security-design-guide.md` §8.5.
