@@ -71,7 +71,14 @@ public class UserListQueryRepository {
                    (select r.code from user_role ur join role r on r.id = ur.role_id
                      where ur.user_id = u.id order by r.code limit 1) as role_code,
                    s.grade_id as grade_id, g.sequence as grade_level,
-                   s.class_id as class_id, c.name as class_name
+                   s.class_id as class_id, c.name as class_name,
+                   -- Issue 094 §7: there is no `user.last_login` column; the
+                   -- newest successful login_log row is the only source. A
+                   -- correlated subquery rather than a join, for the same reason
+                   -- role_code is one: joining login_log would multiply every
+                   -- user row by their login count and corrupt the page counts.
+                   (select max(ll.created_at) from login_log ll
+                     where ll.user_id = u.id and ll.success = 1) as last_login_at
             """;
 
     /**
@@ -105,6 +112,7 @@ public class UserListQueryRepository {
             // getObject, not getInt: a staff account's grade_level is SQL NULL,
             // and getInt would silently read it as grade 0.
             Integer gradeLevel = (Integer) rs.getObject("grade_level");
+            Timestamp lastLogin = rs.getTimestamp("last_login_at");
             return new UserDto(
                     rs.getString("id"), rs.getString("username"), rs.getString("display_name"),
                     rs.getString("email"), rs.getString("student_id"), rs.getString("staff_id"),
@@ -116,7 +124,8 @@ public class UserListQueryRepository {
                     // are allowed to meet — see UserDto.withScopeGradeIds.
                     Set.of(),
                     rs.getString("grade_id"), gradeLevel,
-                    rs.getString("class_id"), rs.getString("class_name"));
+                    rs.getString("class_id"), rs.getString("class_name"),
+                    lastLogin != null ? lastLogin.toInstant() : null);
         });
     }
 

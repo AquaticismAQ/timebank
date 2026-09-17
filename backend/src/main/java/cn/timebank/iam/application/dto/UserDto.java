@@ -38,7 +38,15 @@ public record UserDto(
         String gradeId,
         Integer gradeLevel,
         String classId,
-        String className) {
+        String className,
+        /**
+         * Issue 094 §7. There is no {@code user.last_login} column — this is the
+         * newest successful {@code login_log} row. Populated by the list read
+         * model, where the column is displayed; {@code null} on single-user
+         * responses rather than paying a second query for a screen that has
+         * nowhere to show it.
+         */
+        Instant lastLoginAt) {
 
     /**
      * {@code UserServiceImpl} (module {@code iam}) can't populate this
@@ -61,6 +69,6 @@ public record UserDto(
      */
     public UserDto withScopeGradeIds(Set<String> scopeGradeIds) {
         return new UserDto(id, username, displayName, email, studentId, staffId, status, preferredLanguage, roleCode,
-                version, createdAt, updatedAt, scopeGradeIds, gradeId, gradeLevel, classId, className);
+                version, createdAt, updatedAt, scopeGradeIds, gradeId, gradeLevel, classId, className, lastLoginAt);
     }
 }

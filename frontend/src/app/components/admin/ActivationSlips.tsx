@@ -71,19 +71,26 @@ interface SlipPreview {
 }
 
 /**
- * Builds `studentId -> account status` for the whole school once, rather than
- * per class. There is no endpoint that answers "how many pending accounts are
- * in this class" — `GET /users` carries `studentId` and `status` but takes no
- * filter, and neither student DTO carries an account status — so the join has
- * to happen here. Doing it once on mount keeps changing the class selection
- * instant.
+ * Builds `studentId -> account status` for one class.
+ *
+ * <p>This used to page the whole school at {@code MAX_PAGE_SIZE} and join in
+ * the browser, because `GET /users` took no filters — the workaround issue 094
+ * §2 cited as its reason for existing. It now asks the server for the one class
+ * it needs (issue 094 added `filter[classId]`), so the cost no longer scales
+ * with the size of the school, and `truncated` can only be reached by a class
+ * larger than a page rather than by a school larger than {@code
+ * MAX_INDEX_PAGES} pages.</p>
  */
-async function loadAccountIndex(): Promise<AccountIndex> {
+async function loadAccountIndex(classId: string): Promise<AccountIndex> {
   const statusByStudentId = new Map<string, string>();
   let pageNumber = 1;
   let truncated = false;
   for (;;) {
-    const result = await api.users.list({ page: pageNumber, pageSize: MAX_PAGE_SIZE });
+    const result = await api.users.list({
+      page: pageNumber,
+      pageSize: MAX_PAGE_SIZE,
+      filter: { role: 'student', classId },
+    });
     for (const user of result.data) {
       if (user.studentId) statusByStudentId.set(user.studentId, user.status);
     }
@@ -136,12 +143,16 @@ export function ActivationSlips() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
 
+  // Now keyed on the selected class rather than loaded once for the whole
+  // school (issue 094 §7): the index is only ever consulted for the class in
+  // the picker, so fetching the rest was work whose only effect was latency.
   const refreshAccountIndex = useCallback(() => {
+    if (!classId) { setAccountIndex(null); setIndexFailed(false); return; }
     setIndexFailed(false);
-    loadAccountIndex()
+    loadAccountIndex(classId)
       .then(setAccountIndex)
       .catch(() => { setAccountIndex(null); setIndexFailed(true); });
-  }, []);
+  }, [classId]);
 
   useEffect(refreshAccountIndex, [refreshAccountIndex]);
 

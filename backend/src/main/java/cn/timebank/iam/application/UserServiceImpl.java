@@ -499,7 +499,10 @@ class UserServiceImpl implements UserService {
         UserDto dto = new UserDto(user.getId(), user.getUsername(), user.getDisplayName(), user.getEmail(),
                 user.getStudentId(), user.getStaffId(), user.getStatus().name(), user.getPreferredLanguage(), roleCode,
                 user.getVersion(), user.getCreatedAt(), user.getUpdatedAt(), Set.of(),
-                null, null, null, null);
+                // lastLoginAt is null on single-user responses by design — see
+                // UserDto. Only the list read model, which displays the column,
+                // pays for the login_log lookup.
+                null, null, null, null, null);
         return withPlacement(dto, user.getStudentId());
     }
 
@@ -520,7 +523,7 @@ class UserServiceImpl implements UserService {
         return new UserDto(dto.id(), dto.username(), dto.displayName(), dto.email(), dto.studentId(), dto.staffId(),
                 dto.status(), dto.preferredLanguage(), dto.roleCode(), dto.version(), dto.createdAt(), dto.updatedAt(),
                 dto.scopeGradeIds(), placement.gradeId(), placement.gradeLevel(), placement.classId(),
-                placement.className());
+                placement.className(), dto.lastLoginAt());
     }
 
     /** 07-RoleFinetune.md §2.5: every user holds exactly one role — {@code null} only for a not-yet-migrated account. */

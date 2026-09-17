@@ -116,13 +116,41 @@ Wei Chen. Browser pass 6/6 — both columns present, a student row reading
 `G6 / B`, a staff row reading its scope with `—` for class, pagination, and the
 class filter absent until the role filter is Student.
 
-## 7. Left open
+## 7. Follow-ups (all closed)
 
-- **No DB-backed integration test.** The live probe above exercises the SQL, but
-  there is no committed `*IT` guarding it against a future edit.
-- **`lastLoginAt` is dead.** The Last Login column shows `—` for everyone
-  because `UserDto` has never carried the field. Pre-existing, now conspicuous
-  beside the new columns.
-- **`ActivationSlips.tsx` still pages `GET /users` at 100/page and joins grades
-  in the browser** — the workaround this issue cites in §2. It could now use
-  `filter[classId]` directly.
+**Integration test — closed.** `UserListFilterSortIT` (7 cases) runs the read
+model against real MySQL and passes. Each filter asserts a positive *and* a
+negative, because a filter accepted and ignored returns the unfiltered set and is
+otherwise indistinguishable from one that works. The status case is the sharp
+one: every account is created `ACTIVE`, so `status=ACTIVE` proves nothing —
+asking for `INACTIVE` and getting none is what separates filtering from ignoring.
+
+**`lastLoginAt` — closed.** There is no `user.last_login` column; the value is
+the newest successful `login_log` row. Added to the list read model as a
+correlated subquery, for the same reason `role_code` is one: joining `login_log`
+would multiply each user row by their login count and corrupt the page counts.
+Single-user responses leave it null rather than paying a second query for a
+screen with nowhere to show it.
+
+**`ActivationSlips.tsx` — closed.** It now asks for the one class it needs
+(`filter[role]=student&filter[classId]=…`) instead of paging the whole school and
+joining in the browser, so the cost no longer scales with the size of the school.
+
+## 8. Login is now audited (requested during this work)
+
+Signing in reached `login_log` only — the audit log an administrator reads after
+an incident contained **no logins at all**, despite §10 of the MLPS design guide
+committing to the audit trail covering security events.
+
+Written inside `LoginLogServiceImpl.record`, the single funnel all four call
+sites already pass through (one success, three refusals), so a fifth cannot be
+added that records a login without auditing it. `user.login` / `user.loginFailed`
+with the attempted username, the client IP and the failure reason;
+`actor_id` is null for an unknown username, which the V1 schema allows. The
+password is not a parameter of that method and so cannot reach the row —
+verified: zero audit rows contain either test password.
+
+One defect found by reading the rows it actually wrote: the summary was built as
+a JSON string, but `AuditService` puts the value through Jackson, so it came back
+quoted and escaped as a JSON *string* while every other row is an object. Now a
+`Map`, and the stored shape matches its neighbours.
