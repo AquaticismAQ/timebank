@@ -108,15 +108,29 @@ public class ReportQueryRepository {
     public record TopProjectRow(String projectId, String title, long participants, long totalMinutes) {
     }
 
+    /**
+     * Issue 093 §8. The two aggregates are computed as independent scalar
+     * subqueries rather than by joining both tables and grouping, because
+     * joining enrollment <em>and</em> service_record fans the rows out: each
+     * approved record is paired with every confirmed enrollment, so
+     * {@code sum(duration_minutes)} came back multiplied by the participant
+     * count. {@code count(distinct ...)} hid the same fan-out on the other
+     * column, which is why only the hours were visibly wrong.
+     *
+     * <p>It went unnoticed because no seeded record had a {@code project_id},
+     * so every sum was 0 and 0 x 4 is still 0. The bug only became visible once
+     * the data covered the path.</p>
+     */
     public List<TopProjectRow> topProjects(int limit) {
         String sql = """
                 select p.id as project_id, p.title as title,
-                       count(distinct e.student_id) as participants,
-                       coalesce(sum(sr.duration_minutes), 0) as total_minutes
+                       (select count(distinct e.student_id) from enrollment e
+                         where e.project_id = p.id and e.status in ('CONFIRMED', 'COMPLETED')) as participants,
+                       (select coalesce(sum(sr.duration_minutes), 0) from service_record sr
+                         where sr.project_id = p.id and sr.status = 'APPROVED') as total_minutes
                 from project p
-                join enrollment e on e.project_id = p.id and e.status in ('CONFIRMED', 'COMPLETED')
-                left join service_record sr on sr.project_id = p.id and sr.status = 'APPROVED'
-                group by p.id, p.title
+                where exists (select 1 from enrollment e
+                               where e.project_id = p.id and e.status in ('CONFIRMED', 'COMPLETED'))
                 order by participants desc, total_minutes desc
                 limit :limit
                 """;

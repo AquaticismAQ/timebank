@@ -22,7 +22,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import {
   organizations, users, students, projects, serviceRecords, eventProposals, cases,
   namedClasses, expectedCoinsByUsername, reviewerForGrade, generatedStudents,
-  type SeedProject, type SeedServiceRecord, type SeedEventProposal, type SeedCase,
+  type SeedProject, type SeedServiceRecord, type SeedEventProposal, type SeedCase, type SeedUser,
 } from './mock-data.ts';
 
 // ── Config ──────────────────────────────────────────────────────────────
@@ -427,6 +427,29 @@ async function main() {
   }
 
   console.log('== Phase 3.5: SQL — enrollments (see SeedProject.registrantStudentNumbers doc comment) ==');
+
+  // Issue 093 §4. A PROJECT-sourced service record is only creatable if its
+  // student holds a CONFIRMED enrollment in that project, and registrants are
+  // *derived* (`assignRegistrants`) while records name a `studentUsername` by
+  // hand — so the two can silently drift apart and the record creation fails,
+  // or worse, the dataset ends up with no project-linked records at all and
+  // the Top Projects report reads 0 hours for every row, which is exactly what
+  // happened. Rather than rely on hand-matching a derived list, every student
+  // named by a PROJECT-sourced record is enrolled here by construction.
+  const numberByUsername = new Map(
+    (users as SeedUser[]).filter(u => u.linkedStudentNumber).map(u => [u.username, u.linkedStudentNumber!]));
+  for (const r of serviceRecords as SeedServiceRecord[]) {
+    if (r.sourceType !== 'PROJECT' || !r.projectTitle) continue;
+    const project = (projects as SeedProject[]).find(p => p.title === r.projectTitle);
+    if (!project) throw new Error(`Service record references unknown project "${r.projectTitle}".`);
+    const studentNumber = numberByUsername.get(r.studentUsername);
+    if (!studentNumber) throw new Error(`PROJECT-sourced record names "${r.studentUsername}", who has no student account.`);
+    project.registrantStudentNumbers ??= [];
+    if (!project.registrantStudentNumbers.includes(studentNumber)) {
+      project.registrantStudentNumbers.push(studentNumber);
+    }
+  }
+
   const enrollmentInserts: string[] = [];
   for (const p of projects as SeedProject[]) {
     if (!p.registrantStudentNumbers?.length) continue;

@@ -1,6 +1,6 @@
 # 093 — Reports page shows placeholder and empty figures
 
-**Status:** In progress. Findings 2, 3, 5 fixed and live-verified; 6 and 7 (found while fixing) fixed; 4 and 1 in progress.
+**Status:** In progress. Findings 2–8 fixed and live-verified; 1 (year filter) in progress.
 **Reported:** 2026-09-17 by the user, as five symptoms on the Reports page.
 
 Filed as one document rather than five: they arrived as one report about one
@@ -123,3 +123,35 @@ An administrator clicking "Export Audit Logs" during an incident would have
 received a completion report. Labels now name what each button produces, and the
 two types that had no button at all (`reviewEfficiency`, `topProjects`) are
 reachable, so the UI covers exactly what the backend supports — no more, no less.
+
+## 8. Top Projects multiplied its hours by the participant count — *found while fixing §4*
+
+Fixing §4's data immediately exposed a second, real bug underneath it. With
+three approved records totalling **150 minutes** linked to one project, the
+report returned **600**.
+
+The query joined `enrollment` *and* `service_record` and grouped:
+
+```sql
+count(distinct e.student_id) as participants,
+coalesce(sum(sr.duration_minutes), 0) as total_minutes
+from project p
+join enrollment e on ...
+left join service_record sr on ...
+group by p.id, p.title
+```
+
+Joining both tables fans the rows out — each approved record is paired with
+every confirmed enrollment — so the sum came back multiplied by the participant
+count: 150 × 4 enrollments = 600. `count(distinct ...)` silently absorbed the
+same fan-out on the other column, which is why only the hours looked wrong.
+
+**This is why §4 mattered beyond cosmetics.** While no record had a
+`project_id`, every sum was 0, and 0 × 4 is still 0 — the defect was invisible
+precisely because the dataset never covered the path. A report that is "showing
+zero" is not the same as a report that is correct.
+
+**Fix:** compute the two aggregates as independent scalar subqueries so neither
+can fan out, with `exists` preserving the original "projects that have
+registrants" filter. Verified live: the report now returns 150, matching the
+database.

@@ -672,6 +672,42 @@ const narrativeRecords: SeedServiceRecord[] = [
     targetStatus: 'approved', reviewerUsername: 'teacher003', reasonCode: 'DOCUMENTATION_COMPLETE', comment: 'Confirmation letter received.',
     key: 'student003_approved',
   },
+  // Issue 093 §4: the only PROJECT-sourced records in the dataset. Without at
+  // least one, `top_projects` sums approved records joined on `project_id` over
+  // an empty set and every row of the Top Projects report reads 0h, while the
+  // pie chart beside it (which counts enrollments) looks healthy — so the
+  // report appears broken when it is faithfully reporting nothing.
+  // Each student here is enrolled in the named project by construction; see
+  // seed.ts Phase 3.5. Project, date window, category, organisation and
+  // location are all taken from the project itself, because a PROJECT-sourced
+  // record inherits them rather than letting the student type their own.
+  {
+    studentUsername: 'student003', sourceType: 'PROJECT', projectTitle: 'School Library Organisation',
+    organizationName: 'Example Township Middle School',
+    serviceCategoryId: 'cat_campus', serviceDateOffsetDays: -45, startHour: 14, endHour: 16, location: 'School Library',
+    description: 'Reshelved returned books and repaired damaged covers during the library reorganisation.',
+    supervisorKind: 'EXTERNAL_MANUAL', supervisorName: 'Librarian Zhou', supervisorContact: 'library@example-township-school.edu',
+    targetStatus: 'approved', reviewerUsername: 'teacher003', reasonCode: 'DOCUMENTATION_COMPLETE', comment: 'Supervisor confirmed the shift.',
+    key: 'student003_project_approved',
+  },
+  {
+    studentUsername: 'student005', sourceType: 'PROJECT', projectTitle: 'Community Reading Companions',
+    organizationName: 'Example Community Library',
+    serviceCategoryId: 'cat_education', serviceDateOffsetDays: -50, startHour: 9, endHour: 11, location: 'Example Community Library',
+    description: 'Read aloud with younger children in the community library reading corner.',
+    supervisorKind: 'EXTERNAL_MANUAL', supervisorName: 'Coordinator Xie', supervisorContact: 'reading@example.org',
+    targetStatus: 'approved', reviewerUsername: 'teacher005', reasonCode: 'DOCUMENTATION_COMPLETE', comment: 'Attendance sheet received.',
+    key: 'student005_project_approved',
+  },
+  {
+    studentUsername: 'student002', sourceType: 'PROJECT', projectTitle: 'Neighbourhood Digital Help Desk',
+    organizationName: 'Example Community Service Centre',
+    serviceCategoryId: 'cat_community', serviceDateOffsetDays: -65, startHour: 13, endHour: 15, location: 'Example Community Service Centre',
+    description: 'Helped older residents set up health-code and messaging apps on their phones.',
+    supervisorKind: 'EXTERNAL_MANUAL', supervisorName: 'Director Wu', supervisorContact: 'community@example.org',
+    targetStatus: 'approved', reviewerUsername: 'teacher002', reasonCode: 'DOCUMENTATION_COMPLETE', comment: 'Help-desk log confirms the session.',
+    key: 'student002_project_approved',
+  },
   {
     studentUsername: 'student005', sourceType: 'SELF', organizationName: 'Example Environmental Association',
     serviceCategoryId: 'cat_environment', serviceDateOffsetDays: -7, startHour: 9, endHour: 12, location: 'Example District Central Park',
