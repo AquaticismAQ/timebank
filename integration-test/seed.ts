@@ -299,6 +299,26 @@ async function main() {
 
   console.log('== Phase 1: SQL — organizations, users, students ==');
   const now = 'NOW(3)';
+
+  // The academic year is read from the database, never hardcoded (issue 100).
+  // It used to be the literal 'ay_2025_2026' in both the class and student
+  // inserts, while every fixture date in mock-data.ts is an offset relative to
+  // *now* — so from September 2026 the seeder enrolled students into a year
+  // that had already ended and dated their records outside it. `end_date` is a
+  // real query bound, so annual progress then silently undercounts.
+  // R__seed_base_data.sql derives the year from the current date; this asks it
+  // which one that is rather than assuming.
+  const yearRows = runSqlOnServer(
+    'SELECT id FROM academic_year WHERE is_current = 1 ORDER BY start_date DESC;'
+  ).trim().split('\n').slice(1).filter(Boolean);
+  if (yearRows.length !== 1) {
+    throw new Error(
+      `Expected exactly one academic year flagged is_current, found ${yearRows.length}. `
+      + 'Deploy the backend once so Flyway applies R__seed_base_data.sql before seeding.'
+    );
+  }
+  const currentAcademicYearId = yearRows[0].trim();
+  console.log(`   current academic year: ${currentAcademicYearId}`);
   const orgIdByName = new Map<string, string>();
   const orgInserts: string[] = [];
   for (const org of organizations) {
@@ -315,7 +335,7 @@ async function main() {
   // test fixture does not belong in it.
   const classInserts: string[] = namedClasses.map(c =>
     `INSERT INTO class (id, code, name, grade_id, academic_year_id, created_at, updated_at) VALUES ` +
-    `(${sqlString(c.id)}, ${sqlString(c.code)}, ${sqlString(c.name)}, ${sqlString(c.gradeId)}, 'ay_2025_2026', ${now}, ${now});`
+    `(${sqlString(c.id)}, ${sqlString(c.code)}, ${sqlString(c.name)}, ${sqlString(c.gradeId)}, ${sqlString(currentAcademicYearId)}, ${now}, ${now});`
   );
 
   const studentIdByNumber = new Map<string, string>();
@@ -328,7 +348,7 @@ async function main() {
     // (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1).
     studentInserts.push(
       `INSERT INTO student (id, student_number, display_name, grade_id, class_id, enrollment_academic_year_id, graduation_year, status, joined_at, version, created_at, updated_at) VALUES ` +
-      `(${sqlString(id)}, ${sqlString(s.studentNumber)}, ${sqlString(s.displayName)}, ${sqlString(s.gradeId)}, ${sqlString(s.classId)}, 'ay_2025_2026', ${s.graduationYear}, 'ACTIVE', ${sqlString(dateFromNow(s.joinedAtOffsetDays))}, 1, ${now}, ${now});`
+      `(${sqlString(id)}, ${sqlString(s.studentNumber)}, ${sqlString(s.displayName)}, ${sqlString(s.gradeId)}, ${sqlString(s.classId)}, ${sqlString(currentAcademicYearId)}, ${s.graduationYear}, 'ACTIVE', ${sqlString(dateFromNow(s.joinedAtOffsetDays))}, 1, ${now}, ${now});`
     );
   }
 
@@ -345,8 +365,14 @@ async function main() {
     userIdByUsername.set(u.username, id);
     const studentId = u.linkedStudentNumber ? studentIdByNumber.get(u.linkedStudentNumber) : undefined;
     userInserts.push(
-      `INSERT INTO user (id, username, password_hash, display_name, email, student_id, status, preferred_language, failed_login_attempts, version, created_at, updated_at) VALUES ` +
-      `(${sqlString(id)}, ${sqlString(u.username)}, ${sqlString(hashByUsername[u.username])}, ${sqlString(u.displayName)}, ${sqlString(u.email)}, ${sqlString(studentId)}, 'ACTIVE', 'zh-CN', 0, 1, ${now}, ${now});`
+      // `staff_id` is written for every non-student account. Without it the
+      // account exists and logs in fine, but `PATCH /users/{id}` refuses every
+      // edit with "A staff ID is required for non-student accounts" — the
+      // controller checks the *effective* value, which falls back to the stored
+      // null (issue 100). Seeding it is what makes the admin UI's Edit User
+      // dialog work on a freshly seeded server.
+      `INSERT INTO user (id, username, password_hash, display_name, email, student_id, staff_id, status, preferred_language, failed_login_attempts, version, created_at, updated_at) VALUES ` +
+      `(${sqlString(id)}, ${sqlString(u.username)}, ${sqlString(hashByUsername[u.username])}, ${sqlString(u.displayName)}, ${sqlString(u.email)}, ${sqlString(studentId)}, ${sqlString(u.staffId)}, 'ACTIVE', 'zh-CN', 0, 1, ${now}, ${now});`
     );
     for (const roleCode of u.roleCodes) {
       roleInserts.push(`INSERT INTO user_role (user_id, role_id) VALUES (${sqlString(id)}, ${sqlString(ROLE_ID[roleCode])});`);

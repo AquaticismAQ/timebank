@@ -19,9 +19,37 @@ INSERT IGNORE INTO grade (id, code, name_zh, name_en, sequence) VALUES
 -- ignored looks identical to one that works — which is the exact bug §1 was.
 -- An empty prior year gives every check something to distinguish: scoped to it
 -- the reports return nothing, against a populated current year.
+--
+-- DERIVED FROM TODAY, NOT LITERALS (issue 100). These were two hardcoded rows,
+-- and the "current" one had already ended: on 2026-09-18 the flagged year was
+-- 2025-09-01..2026-08-31. That is not cosmetic — `end_date` is a real query
+-- bound (`ReportQueryRepository` joins on it, annual progress sums
+-- `service_date between :yearStart and :yearEnd`), while `integration-test`
+-- dates every fixture record relative to *now*. So a contributor seeding a
+-- fresh server got records sitting outside the year the reports scope to, and
+-- annual progress that silently undercounted. A literal year is wrong from the
+-- first September after it is typed; this cannot be.
+--
+-- A school year is taken to start on 1 September, so anything from September
+-- onwards belongs to the year named for the calendar year it starts in.
+SET @ay_start := IF(MONTH(CURDATE()) >= 9, YEAR(CURDATE()), YEAR(CURDATE()) - 1);
+SET @ay_current_id := CONCAT('ay_', @ay_start, '_', @ay_start + 1);
+SET @ay_prior_id := CONCAT('ay_', @ay_start - 1, '_', @ay_start);
+
 INSERT IGNORE INTO academic_year (id, code, start_date, end_date, is_current, created_at, updated_at) VALUES
-    ('ay_2024_2025', '2024-2025', '2024-09-01', '2025-08-31', 0, NOW(3), NOW(3)),
-    ('ay_2025_2026', '2025-2026', '2025-09-01', '2026-08-31', 1, NOW(3), NOW(3));
+    (@ay_prior_id, CONCAT(@ay_start - 1, '-', @ay_start),
+     MAKEDATE(@ay_start - 1, 1) + INTERVAL 8 MONTH,
+     MAKEDATE(@ay_start, 1) + INTERVAL 8 MONTH - INTERVAL 1 DAY, 0, NOW(3), NOW(3)),
+    (@ay_current_id, CONCAT(@ay_start, '-', @ay_start + 1),
+     MAKEDATE(@ay_start, 1) + INTERVAL 8 MONTH,
+     MAKEDATE(@ay_start + 1, 1) + INTERVAL 8 MONTH - INTERVAL 1 DAY, 1, NOW(3), NOW(3));
+
+-- Exactly one current year, whatever was flagged before. `INSERT IGNORE` alone
+-- cannot do this: on a database seeded in an earlier school year the old row
+-- still carries the flag, and two current years is worse than a stale one —
+-- `ReportAcademicYearResolver` picks whichever the database returns first.
+UPDATE academic_year SET is_current = (id = @ay_current_id), updated_at = NOW(3)
+    WHERE is_current <> (id = @ay_current_id);
 
 -- Two classes (A/B) per grade for the current academic year. `name` is the raw
 -- class label ONLY — never grade-prefixed, never locale-decorated (issue 010:
@@ -30,24 +58,24 @@ INSERT IGNORE INTO academic_year (id, code, start_date, end_date, is_current, cr
 -- grade-prefixed class name double-prefixes once combined with grade display
 -- (issue 005 — "Grade 9 Grade 9 B") — `name` stays a bare label to avoid that.
 INSERT IGNORE INTO class (id, code, name, grade_id, academic_year_id, created_at, updated_at) VALUES
-    ('class_6A', '6A', 'A', 'grade_6', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_6B', '6B', 'B', 'grade_6', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_7A', '7A', 'A', 'grade_7', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_7B', '7B', 'B', 'grade_7', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_8A', '8A', 'A', 'grade_8', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_8B', '8B', 'B', 'grade_8', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_9A', '9A', 'A', 'grade_9', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_9B', '9B', 'B', 'grade_9', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_10A', '10A', 'A', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_10B', '10B', 'B', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_11A', '11A', 'A', 'grade_11', 'ay_2025_2026', NOW(3), NOW(3)),
-    ('class_11B', '11B', 'B', 'grade_11', 'ay_2025_2026', NOW(3), NOW(3)),
+    ('class_6A', '6A', 'A', 'grade_6', @ay_current_id, NOW(3), NOW(3)),
+    ('class_6B', '6B', 'B', 'grade_6', @ay_current_id, NOW(3), NOW(3)),
+    ('class_7A', '7A', 'A', 'grade_7', @ay_current_id, NOW(3), NOW(3)),
+    ('class_7B', '7B', 'B', 'grade_7', @ay_current_id, NOW(3), NOW(3)),
+    ('class_8A', '8A', 'A', 'grade_8', @ay_current_id, NOW(3), NOW(3)),
+    ('class_8B', '8B', 'B', 'grade_8', @ay_current_id, NOW(3), NOW(3)),
+    ('class_9A', '9A', 'A', 'grade_9', @ay_current_id, NOW(3), NOW(3)),
+    ('class_9B', '9B', 'B', 'grade_9', @ay_current_id, NOW(3), NOW(3)),
+    ('class_10A', '10A', 'A', 'grade_10', @ay_current_id, NOW(3), NOW(3)),
+    ('class_10B', '10B', 'B', 'grade_10', @ay_current_id, NOW(3), NOW(3)),
+    ('class_11A', '11A', 'A', 'grade_11', @ay_current_id, NOW(3), NOW(3)),
+    ('class_11B', '11B', 'B', 'grade_11', @ay_current_id, NOW(3), NOW(3)),
     -- A named (not single-letter) class, as some schools use house or
     -- programme names instead of A/B — issue 006: nothing in seed data or the
     -- fixed-width UI assumptions had ever exercised a className longer than
     -- one character before this. The name is deliberately invented; the
     -- previous value here was a real school's class name.
-    ('class_10_luna', '10-Luna', 'Luna', 'grade_10', 'ay_2025_2026', NOW(3), NOW(3));
+    ('class_10_luna', '10-Luna', 'Luna', 'grade_10', @ay_current_id, NOW(3), NOW(3));
 
 -- Service categories, matching the frontend mock's SERVICE_CATEGORIES.
 INSERT IGNORE INTO service_category (id, code, name_zh, name_en, active, created_at, updated_at) VALUES

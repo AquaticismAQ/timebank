@@ -79,6 +79,16 @@ export interface SeedUser {
   displayName: string;
   email?: string;
   roleCodes: string[];
+  /**
+   * Required for every non-student account, and not decorative: since issue
+   * 003 `UserController.requireRoleFields` rejects a `PATCH /users/{id}` whose
+   * *effective* staffId is null — and "effective" falls back to the stored
+   * value, so an account seeded without one cannot be edited through the admin
+   * UI at all. It fails with "A staff ID is required for non-student accounts"
+   * on a form that never showed the field as empty, which is a confusing first
+   * hour for anyone who has just seeded a server (issue 100).
+   */
+  staffId?: string;
   linkedStudentNumber?: string;
   // A teacher with no teacher_scope_assignment rows resolves to
   // ScopeDescriptor.Self, so reviewing anyone else's record 404s (B1.7's
@@ -93,17 +103,17 @@ export interface SeedUser {
 // One admin, one sysadmin, five teachers. Student accounts are appended by
 // the generator below.
 const staffUsers: SeedUser[] = [
-  { username: 'admin001', displayName: 'Teacher Wei Chen', email: 'wei.chen@example-township-school.edu', roleCodes: ['admin'] },
+  { username: 'admin001', displayName: 'Teacher Wei Chen', email: 'wei.chen@example-township-school.edu', roleCodes: ['admin'], staffId: 'STAFF-0001' },
   // `sysadmin` holds the same permission grants as `admin` after V21's merge,
   // but a few surfaces are gated by role code rather than permission (school
   // info editing, for one), so this account exists to make that distinction
   // exercisable against real data rather than only provable in a test.
-  { username: 'sysadmin001', displayName: 'System Administrator', email: 'sysadmin@example-township-school.edu', roleCodes: ['sysadmin'] },
-  { username: 'teacher001', displayName: 'Alex L.', email: 'teacher001@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_6'] },
-  { username: 'teacher002', displayName: 'Jordan W.', email: 'teacher002@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_7'] },
-  { username: 'teacher003', displayName: 'Casey Z.', email: 'teacher003@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_8'] },
-  { username: 'teacher004', displayName: 'Riley H.', email: 'teacher004@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_9'] },
-  { username: 'teacher005', displayName: 'Morgan Y.', email: 'teacher005@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_10', 'grade_11'] },
+  { username: 'sysadmin001', displayName: 'System Administrator', email: 'sysadmin@example-township-school.edu', roleCodes: ['sysadmin'], staffId: 'STAFF-0002' },
+  { username: 'teacher001', displayName: 'Alex L.', email: 'teacher001@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_6'], staffId: 'STAFF-0101' },
+  { username: 'teacher002', displayName: 'Jordan W.', email: 'teacher002@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_7'], staffId: 'STAFF-0102' },
+  { username: 'teacher003', displayName: 'Casey Z.', email: 'teacher003@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_8'], staffId: 'STAFF-0103' },
+  { username: 'teacher004', displayName: 'Riley H.', email: 'teacher004@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_9'], staffId: 'STAFF-0104' },
+  { username: 'teacher005', displayName: 'Morgan Y.', email: 'teacher005@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_10', 'grade_11'], staffId: 'STAFF-0105' },
 ];
 
 /** Which teacher may review a given grade — mirrors `scopeGrades` above. Reviews are routed through this so every decision comes from someone who actually holds scope; routing one to the wrong teacher would 404, not 403. */
