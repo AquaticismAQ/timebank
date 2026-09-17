@@ -123,7 +123,12 @@ export function PasswordStrength({ password, username, confirm, className = '' }
  * reading. Returns `null` for a code this build does not know — the caller
  * falls back to its own generic message rather than printing a raw code.
  */
-export function passwordFailureMessage(code: string, t: (key: string, values?: object) => string): string | null {
+/** Accepts react-i18next's `TFunction` without importing its generic machinery:
+ *  the concrete type is far narrower than this structural signature, which is
+ *  why the previous `(key, values?) => string` did not match it. */
+export type Translate = (key: string, values?: Record<string, unknown>) => string;
+
+export function passwordFailureMessage(code: string, t: Translate): string | null {
   const key = messageKeyFor(code);
   if (!key) return null;
   return t(key, { min: MIN_LENGTH, max: MAX_LENGTH, classes: MIN_CHARACTER_CLASSES });

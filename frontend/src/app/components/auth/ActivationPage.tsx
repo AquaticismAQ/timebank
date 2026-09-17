@@ -7,7 +7,7 @@ import { useAuth, useTheme } from '../../App';
 import { api } from '../../api/client';
 import { ApiError } from '../../api/http';
 import { LanguageSwitcher } from '../LanguageSwitcher';
-import { PasswordStrength, passwordFailureMessage } from '../shared/PasswordStrength';
+import { PasswordStrength, passwordFailureMessage, type Translate } from '../shared/PasswordStrength';
 import { isAcceptable } from '../../lib/passwordPolicy';
 
 // First-time access screen (Docs/optimization/10-StudentIdentityAndOnboarding.md
@@ -99,7 +99,7 @@ const ACTIVATION_ERROR_KEYS: Record<string, string> = {
   ACTIVATION_CODE_ALREADY_USED: 'auth.activation.codeAlreadyUsed',
 };
 
-function messageFor(err: unknown, t: (key: string, values?: object) => string): string {
+function messageFor(err: unknown, t: Translate): string {
   if (!(err instanceof ApiError)) return t('auth.activation.failed');
   if (err.code === 'RATE_LIMITED') return t('auth.activation.rateLimited');
   const key = err.fieldErrors?.map(fe => ACTIVATION_ERROR_KEYS[fe.code]).find(Boolean);
