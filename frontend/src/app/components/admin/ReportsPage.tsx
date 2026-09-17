@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, BarChart2, TrendingUp, Users, Clock } from 'lucide-react';
+import { BarChart2, TrendingUp, Users, Clock } from 'lucide-react';
 import { type ReportData, type AdminStats } from '../../api/types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 
 const TOTAL_BAR_COLOR = '#94a3b8'; // slate-400 — visible in both light and dark
-import { toast } from 'sonner';
 import { api } from '../../api/client';
-import { ApiError, mapApiError } from '../../api/http';
 import { ListStateBanner } from '../ListStateBanner';
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
@@ -41,6 +39,30 @@ export function ReportsPage() {
     CompletionRate: Math.round(d.rate * 100),
   }));
 
+  // Issue 093 §2. The card is labelled Participation Rate, but read
+  // `stats.avgCompletionRate` — a field `GET /dashboards/admin` does not return
+  // (so it always rendered an em dash) and which measures something else anyway:
+  // completing the requirement, not taking part at all. Derived here from the
+  // participation figures the page has already loaded.
+  const participationTotals = data.participationByGrade.reduce(
+    (acc, g) => ({ total: acc.total + g.total, participated: acc.participated + g.participated }),
+    { total: 0, participated: 0 },
+  );
+  const participationRate = participationTotals.total > 0
+    ? participationTotals.participated / participationTotals.total
+    : null;
+
+  // Issue 093 §3. Peak and lowest were fixed strings in the translation bundle
+  // ("April · 620h"), left over from before the endpoint existed, so they
+  // contradicted the curve drawn beside them. Derived from the plotted series.
+  const monthsWithHours = data.serviceHoursByMonth.filter(m => typeof m.hours === 'number');
+  const peakMonth = monthsWithHours.length
+    ? monthsWithHours.reduce((a, b) => (b.hours > a.hours ? b : a))
+    : null;
+  const lowestMonth = monthsWithHours.length
+    ? monthsWithHours.reduce((a, b) => (b.hours < a.hours ? b : a))
+    : null;
+
   const pieData = data.topProjects.map((p, i) => ({
     name: p.title.slice(0, 8),
     value: p.participants,
@@ -59,34 +81,6 @@ export function ReportsPage() {
             <option value="2025-2026">{t('admin.reports.academicYear', { year: '2025-2026' })}</option>
             <option value="2024-2025">{t('admin.reports.academicYear', { year: '2024-2025' })}</option>
           </select>
-          <button onClick={async () => {
-            try {
-              const job = await api.exports.create('participation');
-              toast.info(t('admin.system.exportStarted'));
-              const poll = async () => {
-                try {
-                  const status = await api.exports.get(job.jobId);
-                  if (status.status === 'SUCCEEDED' || status.status === 'succeeded') {
-                    const dl = await api.exports.download(job.jobId);
-                    window.open(dl.downloadUrl, '_blank');
-                    toast.success(t('admin.reports.exportToast'));
-                  } else if (status.status === 'FAILED' || status.status === 'failed') {
-                    toast.error(t('admin.system.exportFailed'));
-                  } else { setTimeout(poll, 2000); }
-                } catch (err) {
-                  if (err instanceof ApiError) toast.error(mapApiError(err).message);
-                  else toast.error(t('common.unknownError'));
-                }
-              };
-              setTimeout(poll, 1000);
-            } catch (err) {
-              if (err instanceof ApiError) toast.error(mapApiError(err).message);
-              else toast.error(t('common.unknownError'));
-            }
-          }}
-            className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-xl text-sm text-muted-foreground hover:bg-accent">
-            <Download className="w-4 h-4" /> {t('admin.reports.export')}
-          </button>
         </div>
       </div>
 
@@ -94,7 +88,7 @@ export function ReportsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: t('admin.reports.totalServiceHours'), value: `${stats.totalServiceHours.toLocaleString()}h`, icon: Clock, color: 'text-blue-500 bg-blue-100 dark:bg-blue-900/30' },
-          { label: t('admin.reports.participationRate'), value: stats.avgCompletionRate != null ? `${Math.round(stats.avgCompletionRate * 100)}%` : '—', icon: Users, color: 'text-green-500 bg-green-100 dark:bg-green-900/30' },
+          { label: t('admin.reports.participationRate'), value: participationRate != null ? `${Math.round(participationRate * 100)}%` : '—', icon: Users, color: 'text-green-500 bg-green-100 dark:bg-green-900/30' },
           { label: t('admin.reports.activeProjects'), value: stats.activeProjects, icon: BarChart2, color: 'text-purple-500 bg-purple-100 dark:bg-purple-900/30' },
           { label: t('admin.reports.approvedThisMonth'), value: stats.approvedThisMonth, icon: TrendingUp, color: 'text-orange-500 bg-orange-100 dark:bg-orange-900/30' },
         ].map((item, i) => (
@@ -257,13 +251,15 @@ export function ReportsPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-card border border-border rounded-xl p-4">
               <div className="text-muted-foreground text-xs mb-1">{t('admin.reports.peakMonth')}</div>
-              <div className="text-foreground font-semibold">{t('admin.reports.peakMonthValue')}</div>
-              <div className="text-xs text-muted-foreground">{t('admin.reports.peakMonthDesc')}</div>
+              <div className="text-foreground font-semibold">
+                {peakMonth ? `${peakMonth.month} · ${peakMonth.hours}h` : '—'}
+              </div>
             </div>
             <div className="bg-card border border-border rounded-xl p-4">
               <div className="text-muted-foreground text-xs mb-1">{t('admin.reports.lowestMonth')}</div>
-              <div className="text-foreground font-semibold">{t('admin.reports.lowestMonthValue')}</div>
-              <div className="text-xs text-muted-foreground">{t('admin.reports.lowestMonthDesc')}</div>
+              <div className="text-foreground font-semibold">
+                {lowestMonth ? `${lowestMonth.month} · ${lowestMonth.hours}h` : '—'}
+              </div>
             </div>
           </div>
         </div>
