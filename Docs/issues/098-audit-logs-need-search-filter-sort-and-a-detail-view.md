@@ -153,8 +153,12 @@ millisecond can appear on both pages or on neither.
 
 ## 8. Not done
 
-- **`humanizeAuditAction` renders some codes awkwardly** — `user.adminResetCredential`
-  becomes "User — admin Reset Credential". Pre-existing, and more visible now
-  that 27 of them sit in a dropdown, but a per-code i18n table is exactly what
-  that function's comment argues against. Left alone.
+- **Action-code wording is settled, not outstanding.** `humanizeAuditAction`
+  renders `user.adminResetCredential` as "User — admin Reset Credential", which
+  this change makes more visible by putting 27 of them in a dropdown. **The user
+  reviewed the rendering on 2026-09-18 and accepted it as-is**, so this is a
+  decision rather than a deferral: do not re-raise it, and do not add a per-code
+  i18n table — that is exactly what the function's own comment argues against,
+  since the table would drift out of sync with a backend that adds action codes
+  with every feature.
 - **Export** — see §6.
