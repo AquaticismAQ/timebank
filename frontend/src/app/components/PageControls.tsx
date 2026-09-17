@@ -36,6 +36,16 @@ export function PageControls({
   const showPager = !!page && page.totalPages > 1;
   if (!page || (!showPager && !enhanced)) return null;
 
+  const atFirst = page.number <= 1;
+  const atLast = page.number >= page.totalPages;
+  // `aria-disabled` was already set on both, so assistive tech was told — but
+  // nothing styled it, leaving Previous on page 1 looking identical to a live
+  // control that simply did nothing when clicked. Styled here rather than in
+  // ui/pagination.tsx, which is vendored (CLAUDE.md: compose, don't edit).
+  // `pointer-events-none` stops the click reaching a handler that would reject
+  // it anyway, and tabIndex -1 keeps an unusable control out of the tab order.
+  const disabledClass = 'pointer-events-none opacity-40 text-muted-foreground';
+
   const go = (n: number) => (e: React.MouseEvent) => {
     e.preventDefault();
     if (n >= 1 && n <= page.totalPages) onPageChange(n);
@@ -69,13 +79,21 @@ export function PageControls({
           <Pagination className="mx-0 w-auto justify-end">
             <PaginationContent>
               <PaginationItem>
-                <PaginationPrevious href="#" onClick={go(page.number - 1)} aria-disabled={page.number <= 1} />
+                <PaginationPrevious
+                  href="#" onClick={go(page.number - 1)}
+                  aria-disabled={atFirst} tabIndex={atFirst ? -1 : undefined}
+                  className={atFirst ? disabledClass : undefined}
+                />
               </PaginationItem>
               <PaginationItem>
                 <PaginationLink href="#" isActive>{page.number}</PaginationLink>
               </PaginationItem>
               <PaginationItem>
-                <PaginationNext href="#" onClick={go(page.number + 1)} aria-disabled={page.number >= page.totalPages} />
+                <PaginationNext
+                  href="#" onClick={go(page.number + 1)}
+                  aria-disabled={atLast} tabIndex={atLast ? -1 : undefined}
+                  className={atLast ? disabledClass : undefined}
+                />
               </PaginationItem>
             </PaginationContent>
           </Pagination>

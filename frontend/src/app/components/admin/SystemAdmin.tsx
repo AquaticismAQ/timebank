@@ -16,7 +16,7 @@ import { PasswordStrength } from '../shared/PasswordStrength';
 import { isAcceptable } from '../../lib/passwordPolicy';
 import { formatGradeClass, formatClassName, minutesToHours } from '../../lib/format';
 import { downloadBlob } from '../../lib/download';
-import { localDateTimeToISO } from '../../lib/datetime';
+import { localDateTimeToISO, formatLocalInstant } from '../../lib/datetime';
 import { STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import type { RoleSummary, AuditLogEntry, SchoolInfo, RuleVersion, RuleDraftFields, RuleValidationResult } from '../../api/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -913,7 +913,12 @@ export function SystemAdmin() {
       id: u.id, name: u.displayName, email: u.email,
       roleCode: u.roleCode,
       status: (u.status as UserStatus) || 'active',
-      lastLogin: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : '—',
+      // `toLocaleDateString` dropped the time, so two logins on the same day
+      // were indistinguishable. `formatLocalInstant` is what the rest of the
+      // app uses and renders in the viewer's timezone — formatting the ISO
+      // string directly shows UTC, which is 8h off here and looks plausible
+      // (issue 067).
+      lastLogin: u.lastLoginAt ? formatLocalInstant(u.lastLoginAt) : '—',
       version: u.version, scopeGradeIds: u.scopeGradeIds,
       studentId: u.studentId, staffId: u.staffId,
       gradeLevel: u.gradeLevel, classId: u.classId, className: u.className,
@@ -1384,7 +1389,15 @@ export function SystemAdmin() {
                 {users.map(u => (
                   <tr key={u.id} className="border-b border-border last:border-b-0 hover:bg-muted/30">
                     <td className="px-4 py-3 text-sm text-foreground font-medium">{u.name}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{u.email}</td>
+                    {/* Truncate rather than wrap: an address long enough to wrap
+                        pushed every other column narrower, and Last Login now needs
+                        room for a time as well as a date. Full value on hover. */}
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {/* The width lives on the div, not the td: in an auto-layout
+                          table a max-width on a cell is ignored, so the column kept
+                          growing to fit the longest address. Measured before/after. */}
+                      <div className="truncate max-w-[13rem]" title={u.email}>{u.email}</div>
+                    </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(u.roleCode)}`}>{roleName(u.roleCode)}</span>
                     </td>
@@ -1395,7 +1408,7 @@ export function SystemAdmin() {
                         {t(USER_STATUS_LABEL_KEYS[u.status] ?? 'admin.system.inactive')}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{u.lastLogin}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{u.lastLogin}</td>
                     <td className="px-4 py-3">
                       {canManageUsers && (
                       <button onClick={() => setEditTarget(u)} className={ACTION_BTN_BLUE}>
