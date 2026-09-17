@@ -148,7 +148,7 @@ establishes that the 400 above is about `LOCKED` specifically.
 `totalItems` is asserted throughout rather than the visible rows: a filter
 applied to the page rather than the query looks identical on a one-row result.
 
-### Not run: `UserListFilterSortIT`
+### `UserListFilterSortIT` — not run at the time, run since
 
 The four new integration tests compile but were **not executed**. `mvn verify`
 needs a MySQL account with `CREATE`/`DROP` on `timebank_it_%`, which lives in
@@ -165,3 +165,9 @@ issue 096 every account is created `PENDING_ACTIVATION`, so the class's
 `theStatusFilterExcludesOtherStatuses` and the new lockout tests assert against.
 The helper now activates, and its Javadoc says why. `mvn test` cannot see this —
 the file compiles either way.
+
+**Resolved 2026-09-18 (issue 101).** The local Docker stack made those
+credentials available to anyone: `mvn verify` against the container, after the
+one-off `GRANT ... ON \`timebank_it_%\``, runs **`UserListFilterSortIT`, 11
+tests, all passing** — including the four lockout tests added here and the
+fixture fix above. The guard is no longer unproven.
