@@ -174,3 +174,27 @@ where the hardcoded boxes asserted 75h and marked Grade 9 complete.
 
 The sidebar (8.5h 已完成 · 304.5 时间币) now agrees with the panels beside it,
 and with the account page, which was right all along.
+
+### 4.3 A fourth instance, caught only by a mid-tier student
+
+The first pass fixed the tier's *selection* but left the
+distance-to-next-tier figure still subtracting the annual total:
+
+```tsx
+{minutesToHours(nextLevel.minHours * 60 - progress.completedMinutes)}h
+```
+
+Neither test account could show it. `student030` is at the top tier, so
+`nextLevel` is undefined and nothing renders; `student001` has 0 in both
+periods, so `25 - 0` is right either way. It took `student022` — 44.5h lifetime,
+2.5h this year, sitting between tiers — to expose it: the page said **72.5h to
+the next level** (75 minus this year's 2.5) when the answer is **30.5h** (75
+minus 44.5).
+
+Fixed and re-verified live: 距下一等级 now reads 30.5h, with the annual gap still
+correctly reading 72.5h beside it — the two figures are distinct and both right,
+which is the whole point of the issue.
+
+**The lesson is about the test accounts, not the code.** Two accounts at
+opposite extremes both passed while a defect sat between them. A middle case was
+needed, and is now named in `Docs/TestAccounts.md` so the next person picks one.

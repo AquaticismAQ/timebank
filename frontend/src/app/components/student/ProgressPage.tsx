@@ -185,7 +185,10 @@ export function ProgressPage() {
               {nextLevel && (
                 <div className="text-right">
                   <div className="text-xs text-muted-foreground mb-0.5">{t('student.progress.distanceToNext')}</div>
-                  <div className="text-2xl font-bold text-foreground">{minutesToHours(nextLevel.minHours * 60 - progress.completedMinutes)}h</div>
+                  {/* Lifetime, like the tier itself. Subtracting the *annual*
+                      figure here told a student 44.5h into a 75h tier that they
+                      had 72.5h to go (75 minus this year's 2.5) instead of 30.5. */}
+                  <div className="text-2xl font-bold text-foreground">{minutesToHours(nextLevel.minHours * 60 - progress.stageCompletedMinutes)}h</div>
                 </div>
               )}
             </div>

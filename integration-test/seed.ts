@@ -822,6 +822,22 @@ async function main() {
     `UPDATE account_transaction at JOIN service_record sr ON sr.id = at.source_id
        SET at.created_at = sr.updated_at
        WHERE at.source_type = 'serviceRecord';`,
+    // Break any remaining ties before restating the balances. Two sources
+    // produce them, and the minute-level spread above only addresses one: a
+    // genuine collision in `CRC32(rd.id) % 480`, and — the one that actually
+    // bit — `LEAST(..., NOW(3))`, which pins *every* decision whose computed
+    // date lands in the future to the very same instant. A record served
+    // yesterday hits that clamp, so the most recent rows are exactly the ones
+    // that tie, and they are the rows a student sees first.
+    //
+    // Ties matter because the ledger is listed newest-first by timestamp: the
+    // order within a tied group is arbitrary, so the running balance can appear
+    // to go backwards even though every figure in it is correct.
+    `UPDATE account_transaction t
+       JOIN (SELECT id, ROW_NUMBER() OVER (PARTITION BY account_id, created_at ORDER BY id) - 1 AS dup
+               FROM account_transaction) d ON d.id = t.id
+       SET t.created_at = t.created_at + INTERVAL d.dup SECOND
+       WHERE d.dup > 0;`,
     // …and `balance_after` has to be restated to match, because moving the
     // timestamps reorders the ledger. The backend stamped each row as it
     // credited, in approval order; a review turnaround that varies by a day or
