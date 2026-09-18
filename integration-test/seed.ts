@@ -800,10 +800,16 @@ async function main() {
        created_at = LEAST(TIMESTAMP(service_date, '18:30:00'), NOW(3)),
        submitted_at = IF(submitted_at IS NULL, NULL,
                          LEAST(TIMESTAMP(service_date + INTERVAL 1 DAY, '19:15:00'), NOW(3)));`,
-    // Decided two to four days after the service, deterministically per row.
+    // Decided two to four days after the service, deterministically per row, at
+    // a time of day that also varies. The varying minute is not decoration: a
+    // fixed hour gives two decisions made on the same day *identical*
+    // timestamps, and the ledger is listed newest-first by timestamp, so the
+    // tie broke arbitrarily and the account page showed its top two rows in the
+    // wrong order — a running balance that went 303 then 304.5 downwards.
     `UPDATE review_decision rd JOIN service_record sr ON sr.id = rd.service_record_id
        SET rd.created_at = LEAST(
-             TIMESTAMP(sr.service_date + INTERVAL (2 + (CRC32(rd.id) % 3)) DAY, '09:40:00'), NOW(3));`,
+             TIMESTAMP(sr.service_date + INTERVAL (2 + (CRC32(rd.id) % 3)) DAY, '09:00:00')
+               + INTERVAL (CRC32(rd.id) % 480) MINUTE, NOW(3));`,
     // A record's own updated_at is when it was last decided…
     `UPDATE service_record sr
        JOIN (SELECT service_record_id, MAX(created_at) AS decided_at
@@ -816,6 +822,22 @@ async function main() {
     `UPDATE account_transaction at JOIN service_record sr ON sr.id = at.source_id
        SET at.created_at = sr.updated_at
        WHERE at.source_type = 'serviceRecord';`,
+    // …and `balance_after` has to be restated to match, because moving the
+    // timestamps reorders the ledger. The backend stamped each row as it
+    // credited, in approval order; a review turnaround that varies by a day or
+    // two means a record served later can be decided earlier, so reading the
+    // account page by date showed a running balance that jumped around against
+    // its own dates. Restating it in the order the page actually reads is the
+    // only thing that makes the column true — 56 rows were wrong here even
+    // after the fixture itself was put in chronological order.
+    //
+    // The final row per account still has to equal `account.balance`, which
+    // Phase 7 checks independently through the API rather than from this sum.
+    `UPDATE account_transaction t
+       JOIN (SELECT id, SUM(amount) OVER (PARTITION BY account_id ORDER BY created_at, id
+                                          ROWS UNBOUNDED PRECEDING) AS running
+               FROM account_transaction) r ON r.id = t.id
+       SET t.balance_after = r.running;`,
     'COMMIT;',
   ].join('\n'));
   console.log('Backdated service records, review decisions and ledger rows.');

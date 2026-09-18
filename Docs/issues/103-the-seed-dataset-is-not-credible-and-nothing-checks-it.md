@@ -214,7 +214,84 @@ and 12 dots; recharts animates the stroke and the capture lands mid-animation.
 This is the second time that has nearly been reported as a defect — check the
 DOM, not the pixels.
 
-## 6. Still open
+## 6. The student portal, and a defect this change introduced
+
+Verified as three students chosen to sit at opposite ends of the data:
+`student030` (Grade 11, 304.5h, Excellent, 98 records), `student001` (Grade 6,
+one rejected record, a resolved appeal, **no `account` row at all**) and the
+roster's empty-state students.
+
+`student001` re-confirms issue 099: a student with no account row opens 时间币账户
+and 我的 without error, showing a 0 balance and 暂无流水记录 rather than failing.
+Everything else on both accounts was correct — case number
+`TB-2026-2027-6-HKTZ4HKV-001` encodes the right year, grade and student number;
+98 records paginate 20 to a page in date order.
+
+### 6.1 The ledger's running balance was scrambled — my fault, now fixed
+
+The account page showed a 余额 column that contradicted its own dates: `+4`
+landing on 76.5 in one row and 196 in the next.
+
+**Cause: the Phase 6.5 backdating reorders the ledger.** The backend stamps
+`account_transaction.balance_after` as it credits, in approval order; moving
+`created_at` to match each record's service date changes the order the page
+reads them in, and the stamped balances no longer form a running total. It was
+invisible before this issue because with every record created today inside one
+year, insertion order and date order were the same thing.
+
+Fixed in three parts, each needed:
+
+1. **`mock-data.ts` exports records in chronological order.** The generator
+   emitted a student's prior-year sessions before their current-year ones, with
+   pinned and project records appended after both. A new REPORTS invariant
+   asserts it — **confirmed red by reverting the sort: 294 failures.**
+2. **Phase 6.5 restates `balance_after`** as a window function over
+   `(created_at, id)`. Sorting alone was not enough: a review turnaround that
+   varies by a day or two means a record served later can be decided earlier, and
+   56 rows were still wrong after the fixture itself was ordered.
+3. **Decision timestamps vary by minute, not just by day.** Pinned at a fixed
+   `09:40`, two decisions made on the same day got *identical* timestamps, the
+   newest-first sort broke the tie arbitrarily, and the top two rows of the
+   ledger appeared in the wrong order.
+
+Checked afterwards in SQL, independently of the restatement: **0 accounts whose
+newest ledger row disagrees with `account.balance`** (that column is never
+touched by the restatement), 0 tied timestamps, 0 rows breaking the running sum,
+and Phase 7's API-driven balance check green for all 30 students. Then read back
+in the browser — 12 consecutive rows where each balance equals the row below it
+plus its own delta, **0 arithmetic breaks**.
+
+### 6.2 Two pre-existing Progress-page defects, found not fixed
+
+Not caused by this work, but exposed by it: until now every student's lifetime
+total *equalled* their current-year total, because all records sat in one year.
+Now they differ, and the page contradicts itself.
+
+For `student030` the API returns, correctly:
+
+```json
+{"annualRequiredMinutes":4500,"stageRequiredMinutes":18000,
+ "completedMinutes":510,"gapMinutes":3990,
+ "timeCoinBalance":30450,"recognitionLevel":"excellent"}
+```
+
+- **The honour tier ignores `recognitionLevel`.** `ProgressPage.tsx` re-derives
+  it client-side from `completedMinutes`, which is **annual**-scoped — so a
+  student the API calls `excellent` is shown as 无等级 with "16.5h to the next
+  tier" (25h bronze minus 8.5h annual). The sidebar beside it reads 304.5 时间币,
+  and the **account page gets it right** (优秀志愿者), so two screens in the same
+  portal disagree.
+- **The graduation bar divides annual hours by the lifetime threshold.**
+  `stagePct = completedMinutes / stageRequiredMinutes` mixes two periods,
+  rendering "已完成 8.5 / 300 小时" for a student who has in fact passed 300.
+  This one is a **contract gap, not just a frontend slip**: `ProgressDto` exposes
+  no lifetime-completed figure at all, though `ProgressServiceImpl` already reads
+  the `student_progress` row that holds it and uses only its honour level.
+
+Left for a separate issue and the user's call, since the fix crosses the API
+contract rather than being a fixture change.
+
+## 7. Still open
 
 - **The shared test server has not been re-seeded.** The user asked to verify on
   Docker first; re-seeding `timebank.example.com` is a separate, destructive

@@ -1276,9 +1276,27 @@ const pinnedRecords: SeedServiceRecord[] = narrativeRecords;
 
 const projectRecords: SeedServiceRecord[] = buildProjectRecords(pinnedRecords);
 
+/**
+ * Chronological order is load-bearing, not tidiness.
+ *
+ * `seed.ts` creates, submits and decides each record in one pass in this array's
+ * order (preserving each student's own order through `interleaveByStudent`), and
+ * the backend stamps `account_transaction.balance_after` as it credits. So the
+ * ledger's running balance is only correct read top-to-bottom if a student's
+ * records are *approved* in date order.
+ *
+ * They were not: the generator emits a student's prior-year sessions before
+ * their current-year ones, the pinned and project records were appended after
+ * both, and day choice within a year is shuffled. The account page then showed a
+ * balance column that jumped around against its own dates — +4 landing on 76.5
+ * one row and 196 the next. It only became visible once records spanned two
+ * years and the timestamps were backdated to match; with everything created
+ * today in one year, insertion order and date order were the same thing.
+ */
 export const serviceRecords: SeedServiceRecord[] =
   [...buildServiceRecords([...pinnedRecords, ...projectRecords]), ...pinnedRecords, ...projectRecords]
-    .map(withScopedReviewer);
+    .map(withScopedReviewer)
+    .sort((a, b) => a.serviceDateOffsetDays - b.serviceDateOffsetDays || a.startHour - b.startHour);
 
 /** Sum of approved hours per student — seed.ts asserts the live balance matches this after seeding, so a mismatch fails the run instead of leaving a baffling number on screen. */
 export const expectedCoinsByUsername: Record<string, number> = serviceRecords

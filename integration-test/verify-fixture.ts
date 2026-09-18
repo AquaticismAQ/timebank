@@ -416,6 +416,25 @@ for (const gradeId of GRADE_IDS) {
     `${gradeId}: ${met} of ${cohort.length} met last year's ${req}h — wanted a mix`);
 }
 
+// Each student's records must be listed in date order. `seed.ts` creates,
+// submits and decides them in this order, and the backend stamps
+// `account_transaction.balance_after` as it credits — so approving them out of
+// order gives the account page a running balance that contradicts its own date
+// column, while every individual figure remains correct.
+{
+  const seen = new Map<string, SeedServiceRecord>();
+  for (const r of serviceRecords) {
+    const prev = seen.get(r.studentUsername);
+    if (prev) {
+      const ordered = prev.serviceDateOffsetDays < r.serviceDateOffsetDays
+        || (prev.serviceDateOffsetDays === r.serviceDateOffsetDays && prev.startHour <= r.startHour);
+      check('REPORTS', 'a student\'s records are in chronological order', ordered,
+        `${r.studentUsername}: @${r.serviceDateOffsetDays}d ${r.startHour}h follows @${prev.serviceDateOffsetDays}d ${prev.startHour}h`);
+    }
+    seen.set(r.studentUsername, r);
+  }
+}
+
 // ── Report ────────────────────────────────────────────────────────────────
 
 function sum(xs: number[]): number {
