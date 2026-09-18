@@ -68,11 +68,25 @@ class ProgressServiceImpl implements ProgressService {
         int gapMinutes = Math.max(0,
                 annualRequiredMinutes - annual.approvedMinutes() - annual.pendingMinutes());
         int timeCoinBalance = accountService.getBalanceForStudent(studentId);
-        String recognitionLevel = repository.findById(studentId)
-                .map(p -> p.getHonourLevel().toLowerCase()).orElse("none");
+
+        // The stored lifetime projection, maintained inside the approval
+        // transaction (V5__core_loop.sql). It was already being loaded here and
+        // everything but the honour level thrown away, which left the client
+        // with no cumulative figure at all and the graduation bar dividing this
+        // *year's* hours by the lifetime requirement (issue 104 §2.2).
+        //
+        // Absent row means no approval has ever credited this student, so zero
+        // is the honest reading rather than a missing value. `honourLevel` is a
+        // nullable column and was dereferenced unguarded, which would have
+        // thrown on such a row instead of yielding "none".
+        StudentProgress stored = repository.findById(studentId).orElse(null);
+        int stageCompletedMinutes = stored == null ? 0 : stored.getTotalCreditedMinutes();
+        String recognitionLevel = stored == null || stored.getHonourLevel() == null
+                ? "none" : stored.getHonourLevel().toLowerCase();
 
         return new ProgressDto(studentId, annualRequiredMinutes, stageRequiredMinutes,
-                annual.approvedMinutes(), annual.pendingMinutes(), gapMinutes, timeCoinBalance, recognitionLevel);
+                annual.approvedMinutes(), annual.pendingMinutes(), gapMinutes,
+                stageCompletedMinutes, timeCoinBalance, recognitionLevel);
     }
 
     @Override

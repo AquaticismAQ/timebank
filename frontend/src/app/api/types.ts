@@ -316,9 +316,12 @@ export interface StudentProgress {
   grade: string;
   annualRequiredMinutes: number;
   stageRequiredMinutes: number;
+  /** This academic year only. Compare against `annualRequiredMinutes`, never against the stage figures (issue 104). */
   completedMinutes: number;
   underReviewMinutes: number;
   gapMinutes: number;
+  /** Lifetime credited minutes — the figure `stageRequiredMinutes` is measured against. */
+  stageCompletedMinutes: number;
   timeCoinBalance: number;
   byCategory: {
     categoryId: string;

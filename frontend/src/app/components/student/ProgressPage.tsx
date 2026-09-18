@@ -68,13 +68,22 @@ export function ProgressPage() {
   const underReviewHoursLabel = minutesToHours(progress.underReviewMinutes);
   const gapHoursLabel = minutesToHours(progress.gapMinutes);
 
+  // Annual against annual, lifetime against lifetime. These were both driven by
+  // `completedMinutes` — this year's hours — so the graduation card read
+  // "8.5 / 300" for a student who had in fact passed 300 (issue 104 §2.2).
+  const stageCompletedHours = progress.stageCompletedMinutes / 60;
+  const stageCompletedHoursLabel = minutesToHours(progress.stageCompletedMinutes);
   const annualPct = progress.completedMinutes / progress.annualRequiredMinutes;
-  const stagePct = progress.completedMinutes / progress.stageRequiredMinutes;
+  const stagePct = progress.stageCompletedMinutes / progress.stageRequiredMinutes;
 
-  const currentLevel = RECOGNITION_LEVELS.find((l, i) =>
-    completedHours >= l.minHours && completedHours < (RECOGNITION_LEVELS[i + 1]?.minHours ?? Infinity)
-  ) || RECOGNITION_LEVELS[0];
-  const nextLevel = RECOGNITION_LEVELS.find(l => l.minHours > completedHours);
+  // The server owns the tier (contract §268: the client renders server-computed
+  // progress totals and never recomputes them). This used to re-derive it from
+  // the *annual* hours, so a student the API calls `excellent` was shown as
+  // "no level" while the account page — reading lifetime — showed 优秀志愿者.
+  // The lookup below is a label/icon lookup for a code, not a second opinion.
+  const currentLevel = RECOGNITION_LEVELS.find(l => l.level === progress.recognitionLevel)
+    ?? RECOGNITION_LEVELS[0];
+  const nextLevel = RECOGNITION_LEVELS.find(l => l.minHours > stageCompletedHours);
 
   return (
     <div className="p-4 lg:p-6">
@@ -127,38 +136,18 @@ export function ProgressPage() {
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="text-foreground mb-1">{t('student.progress.graduationReq')}</h3>
             <div className="text-muted-foreground text-sm mb-3">
-              {t('student.progress.completedLabel')} <span className="text-foreground font-semibold">{completedHoursLabel}</span> / {stageRequiredHoursLabel} {t('common.hours')}
+              {t('student.progress.completedLabel')} <span className="text-foreground font-semibold">{stageCompletedHoursLabel}</span> / {stageRequiredHoursLabel} {t('common.hours')}
             </div>
             <div className="mb-2 relative">
               <div className="h-3 bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${Math.min(stagePct, 1) * 100}%` }} />
               </div>
             </div>
-            <div className="flex justify-between text-xs text-muted-foreground mb-4">
-              <span>{completedHoursLabel}h</span>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{stageCompletedHoursLabel}h</span>
               <span>{stageRequiredHoursLabel}h</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { label: t('student.progress.grade9'), target: 75, done: true },
-                { label: t('student.progress.grade10'), target: 75, done: false, current: true },
-                { label: t('student.progress.grade11'), target: 75, done: false },
-              ].map((yr, i) => (
-                <div key={i} className={`p-2.5 rounded-xl text-center ${
-                  yr.current ? 'bg-primary/10 border border-primary/30' :
-                  yr.done ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' :
-                  'bg-muted'
-                }`}>
-                  <div className={`text-xs mb-0.5 whitespace-pre-line ${yr.current ? 'text-primary' : yr.done ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground'}`}>
-                    {yr.label}
-                  </div>
-                  <div className={`text-sm font-medium ${yr.current ? 'text-primary' : yr.done ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
-                    {yr.target}h {yr.done ? '✓' : yr.current ? t('student.progress.inProgress') : '—'}
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Alert */}
