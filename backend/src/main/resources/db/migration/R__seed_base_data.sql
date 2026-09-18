@@ -87,8 +87,16 @@ INSERT IGNORE INTO service_category (id, code, name_zh, name_en, active, created
     ('cat_other', 'cat_other', '其他', 'Other', 1, NOW(3), NOW(3));
 
 -- School info (D8: single row, single-tenant per deployment).
+--
+-- `full_name` must name the SAME school as `name`. It used to read "Example
+-- Township Middle School", which is the placeholder `integration-test` gives a
+-- **partner** school (`mock-data.ts`) — so the host school's full name was a
+-- partner's name, and every surface that prefers `full_name` introduced the
+-- product under the wrong organisation. Keep host-school placeholders and
+-- partner placeholders visibly distinct; `Docs/README.md` §2.8 now says which
+-- is which.
 INSERT IGNORE INTO school_info (id, name, full_name, student_dev_center, contact, default_language, current_academic_year_code, updated_at) VALUES
-    ('school_default', 'Example City HD', 'Example Township Middle School', 'Student Development Center H300', 'Teacher Wei Chen', 'zh-CN', '2025-2026', NOW(3));
+    ('school_default', 'Example City HD', 'Example City HD Middle School', 'Student Development Center H300', 'Teacher Wei Chen', 'zh-CN', '2025-2026', NOW(3));
 
 -- The singleton school Organization row (V17's schema, issue 03-ServiceRecordFormOptimization
 -- §4.1) — mirrors school_info's own values rather than being derived from it, since this
@@ -96,7 +104,7 @@ INSERT IGNORE INTO school_info (id, name, full_name, student_dev_center, contact
 -- no ordering guarantee relative to each other within the same file run.
 INSERT IGNORE INTO organization (id, name, type, description, contact_name, contact_email, contact_phone, address,
                                   status, is_school_organization, version, created_at, updated_at) VALUES
-    ('org_school_default', 'Example City HD', 'SCHOOL', 'Example Township Middle School', 'Teacher Wei Chen', NULL, NULL, NULL,
+    ('org_school_default', 'Example City HD', 'SCHOOL', 'Example City HD Middle School', 'Teacher Wei Chen', NULL, NULL, NULL,
      'ACTIVE', 1, 1, NOW(3), NOW(3));
 
 -- Backfill (issue 03 §10 D5): every project must have exactly one HOST_SCHOOL row.

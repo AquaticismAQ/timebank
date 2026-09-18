@@ -209,9 +209,23 @@ itself — regardless of whether it appears in `Docs/`, in application code
 (frontend i18n copy, backend seed data), or in a commit message. Use the
 placeholders already established elsewhere in the repo instead of inventing
 new ones: `tb.example.com` for the shared test server's hostname,
-`Example City HD` / `Example Township Middle School` / `Teacher Wei Chen`
-for the school/contact (from `backend/.../R__seed_base_data.sql` and
-`Docs/integration/APIContract_CN.md`), `example-township-school.edu` for email domains.
+`Teacher Wei Chen` for a staff contact, and `example-township-school.edu` for
+email domains.
+
+**The school placeholders are not interchangeable — which one you pick says
+which organisation you mean:**
+
+| Placeholder | Means |
+| :--- | :--- |
+| `Example City HD` | the **host school**, the one running the system (`school_info.name`, and its own `org_school_default` row) |
+| `Example City HD Middle School` | that same host school's **full name** (`school_info.full_name`) |
+| `Example Township Middle School` | a **partner school** — an ordinary organisation the host school works with (`integration-test/mock-data.ts`) |
+
+This list previously ran `Example City HD` and `Example Township Middle School`
+together as if either would do for "the school". They would not:
+`R__seed_base_data.sql` seeded the host school's `full_name` with the *partner's*
+placeholder, so every screen preferring `full_name` displayed a partner
+organisation as the host school, on the login page included.
 
 This is easy to violate without noticing. Narrating a live-verification
 session ("logged in as `admin001`, saw '<real contact name>' in Admin
