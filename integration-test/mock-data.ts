@@ -632,14 +632,62 @@ function splitIntoSessions(totalCoins: number, rnd: () => number): number[] {
 }
 
 /**
- * @param taken records already pinned by hand (`narrativeRecords`). The
- *        generator must not place a record that overlaps one of those in time:
- *        submission hard-blocks overlaps for the *whole* student, whatever each
- *        record's status, so a generated 13:00-17:00 session collides with a
- *        hand-pinned 14:00-16:00 one on the same day and the seed run dies
- *        mid-Phase-4. Checking only the generated records against each other
- *        missed this — they were self-consistent and still clashed with the
- *        fixtures they share a student with.
+ * Moves any hand-pinned record dated before the current academic year into it
+ * (issue: Top Projects reported 0h for every project).
+ *
+ * The four `sourceType: 'PROJECT'` fixtures are the *only* records in the whole
+ * dataset that carry a project link — the 270 generated ones are all `SELF`. So
+ * when their offsets (-45, -50, -65) fell outside the academic year, the
+ * year-scoped Top Projects report summed nothing and every row read "0h" beside
+ * a real participant count. The generated records had already been moved inside
+ * the year; leaving these outside quietly removed the only rows that report
+ * depends on.
+ *
+ * Their exact age is not what they are fixtures *for* — each exists to give a
+ * specific screen a row — so the date moves and everything else stays.
+ * Overlaps are avoided the same way the generator avoids them.
+ */
+function clampToAcademicYear(records: SeedServiceRecord[]): SeedServiceRecord[] {
+  const windowDays = Math.max(1, daysSinceAcademicYearStart());
+  const busy = new Map<string, { start: number; end: number }[]>();
+  const key = (student: string, day: number) => `${student}|${day}`;
+  const occupy = (r: SeedServiceRecord) => {
+    const k = key(r.studentUsername, r.serviceDateOffsetDays);
+    busy.set(k, [...(busy.get(k) ?? []), { start: r.startHour, end: r.endHour }]);
+  };
+  const free = (student: string, day: number, start: number, end: number) =>
+    !(busy.get(key(student, day)) ?? []).some(b => start < b.end && b.start < end);
+
+  // Records already inside the window keep their slot and claim it first.
+  const inside = records.filter(r => r.serviceDateOffsetDays >= -windowDays);
+  inside.forEach(occupy);
+
+  return records.map(r => {
+    if (r.serviceDateOffsetDays >= -windowDays) return r;
+    const span = r.endHour - r.startHour;
+    for (let probe = 0; probe < windowDays * 3; probe += 1) {
+      const day = -(1 + (probe % windowDays));
+      const startHour = 8 + (Math.floor(probe / windowDays) % 3) * 5;
+      if (free(r.studentUsername, day, startHour, startHour + span)) {
+        const moved = { ...r, serviceDateOffsetDays: day, startHour, endHour: startHour + span };
+        occupy(moved);
+        return moved;
+      }
+    }
+    return r; // window genuinely full — leave it rather than fabricate an overlap
+  });
+}
+
+/**
+ * @param taken records already pinned by hand (`narrativeRecords`, and the
+ *        project-linked ones built from them). The generator must not place a
+ *        record that overlaps one of those in time: submission hard-blocks
+ *        overlaps for the *whole* student, whatever each record's status, so a
+ *        generated 13:00-17:00 session collides with a hand-pinned 14:00-16:00
+ *        one on the same day and the seed run dies mid-Phase-4. Checking only
+ *        the generated records against each other missed this — they were
+ *        self-consistent and still clashed with the fixtures they share a
+ *        student with.
  */
 function buildServiceRecords(taken: SeedServiceRecord[]): SeedServiceRecord[] {
   const rnd = makeRandom(776611);
@@ -835,6 +883,45 @@ const narrativeRecords: SeedServiceRecord[] = [
 ];
 
 /**
+ * Pulls a project's date window inside the current academic year when it starts
+ * before it (issue: Top Projects listed only projects that had not begun).
+ *
+ * `GET /reports/top-projects` selects projects by `start_at` falling inside the
+ * selected academic year. The completed fixtures started 60-90 days ago, which
+ * in September is the *previous* year, so the projects that had actually
+ * delivered hours were excluded from the report entirely — and the ones left
+ * were those starting in a few weeks, which correctly showed participants and
+ * zero hours. The report looked broken while being right about the data it
+ * could see.
+ *
+ * Only the offsets move, and only for projects that would otherwise fall out of
+ * the year. Their relative shape is preserved — a project that ran for 30 days
+ * and finished still runs for 30 days and finishes — so the statuses the
+ * fixtures encode (completed, in progress) stay truthful.
+ */
+function clampProjectToAcademicYear(p: SeedProject): SeedProject {
+  const windowDays = Math.max(1, daysSinceAcademicYearStart());
+  if (p.startOffsetDays >= -windowDays) return p;
+
+  const span = p.endOffsetDays - p.startOffsetDays;
+  const regLead = p.startOffsetDays - p.registrationOpenOffsetDays;
+  const regCloseLead = p.startOffsetDays - p.registrationCloseOffsetDays;
+  // Finish at least a day ago so "completed" stays true, and start late enough
+  // to sit inside the year. A short window simply compresses the project.
+  const end = Math.max(-1, -Math.floor(windowDays / 4));
+  const start = Math.max(-windowDays, end - Math.max(1, Math.min(span, windowDays - 2)));
+  return {
+    ...p,
+    startOffsetDays: start,
+    endOffsetDays: end,
+    // Registration must still precede the start, and may legitimately predate
+    // the academic year — nothing reports on it by year.
+    registrationOpenOffsetDays: start - Math.max(1, regLead),
+    registrationCloseOffsetDays: start - Math.max(1, regCloseLead),
+  };
+}
+
+/**
  * Give every project whose registration window has already opened a set of
  * CONFIRMED registrants drawn from its own eligible grades.
  *
@@ -867,7 +954,7 @@ function assignRegistrants(list: SeedProject[]): SeedProject[] {
   });
 }
 
-export const projects: SeedProject[] = assignRegistrants(rawProjects);
+export const projects: SeedProject[] = assignRegistrants(rawProjects).map(clampProjectToAcademicYear);
 
 const gradeByUsername = new Map(
   generatedStudents.filter(s => s.username).map(s => [s.username!, s.gradeId] as const));
@@ -889,8 +976,85 @@ function withScopedReviewer(r: SeedServiceRecord): SeedServiceRecord {
   return { ...r, reviewerUsername: reviewerForGrade[gradeId] };
 }
 
+
+/**
+ * Approved service records logged *against the project a student enrolled in*
+ * (issue: Top Projects reported "0h total" beside a real participant count).
+ *
+ * `GET /reports/top-projects` picks projects that have confirmed enrollments,
+ * ranks them by participant count, and sums the approved records whose
+ * `project_id` is that project. In this fixture those were disjoint sets: 26
+ * enrollments existed, and the only project-linked records belonged to projects
+ * nobody had enrolled in. So every row in the report showed participants and
+ * zero hours — which reads as a broken aggregate rather than as a fixture that
+ * never joined the two halves up.
+ *
+ * One record per enrolled student, on the project they actually joined, so the
+ * report's two columns describe the same students.
+ */
+function buildProjectRecords(occupied: SeedServiceRecord[]): SeedServiceRecord[] {
+  const rnd = makeRandom(20260918);
+  const windowDays = Math.max(1, daysSinceAcademicYearStart());
+  const usernameByNumber = new Map(
+    generatedStudents.filter(s => s.username).map(s => [s.studentNumber, s.username!] as const));
+
+  const busy = new Map<string, { start: number; end: number }[]>();
+  const key = (student: string, day: number) => `${student}|${day}`;
+  const occupy = (student: string, day: number, start: number, end: number) =>
+    busy.set(key(student, day), [...(busy.get(key(student, day)) ?? []), { start, end }]);
+  for (const r of occupied) occupy(r.studentUsername, r.serviceDateOffsetDays, r.startHour, r.endHour);
+
+  const out: SeedServiceRecord[] = [];
+  for (const project of projects) {
+    // Only projects whose work has actually happened — logging hours against a
+    // project that has not started yet would be rejected on submission.
+    if (!project.registrantStudentNumbers || project.startOffsetDays >= 0) continue;
+
+    for (const number of project.registrantStudentNumbers) {
+      const username = usernameByNumber.get(number);
+      if (!username) continue;
+      const hours = 2 + Math.floor(rnd() * 3); // 2-4h, a plausible shift
+      // Inside the project's own window, not merely inside the academic year:
+      // hours logged before a project started (or after it closed) are not
+      // something a real submission would accept, and would read as broken data
+      // on the project's own page.
+      const lastDay = Math.min(-1, project.endOffsetDays);
+      const firstDay = Math.max(project.startOffsetDays, -windowDays);
+      const spanDays = Math.max(1, lastDay - firstDay + 1);
+      let placed = false;
+      for (let probe = 0; probe < spanDays * 3 && !placed; probe += 1) {
+        const day = lastDay - (probe % spanDays);
+        const startHour = 8 + (Math.floor(probe / spanDays) % 3) * 5;
+        const clash = (busy.get(key(username, day)) ?? [])
+          .some(b => startHour < b.end && b.start < startHour + hours);
+        if (clash) continue;
+        occupy(username, day, startHour, startHour + hours);
+        out.push({
+          studentUsername: username,
+          sourceType: 'PROJECT',
+          projectTitle: project.title,
+          serviceCategoryId: project.categoryId,
+          serviceDateOffsetDays: day,
+          startHour,
+          endHour: startHour + hours,
+          targetStatus: 'approved',
+          reviewerUsername: reviewerForGrade[gradeByUsername.get(username) ?? 'grade_6'],
+          reasonCode: 'DOCUMENTATION_COMPLETE',
+          comment: 'Project attendance confirmed by the organiser.',
+        });
+        placed = true;
+      }
+    }
+  }
+  return out;
+}
+
+const pinnedRecords: SeedServiceRecord[] = clampToAcademicYear(narrativeRecords);
+const projectRecords: SeedServiceRecord[] = buildProjectRecords(pinnedRecords);
+
 export const serviceRecords: SeedServiceRecord[] =
-  [...buildServiceRecords(narrativeRecords), ...narrativeRecords].map(withScopedReviewer);
+  [...buildServiceRecords([...pinnedRecords, ...projectRecords]), ...pinnedRecords, ...projectRecords]
+    .map(withScopedReviewer);
 
 /** Sum of approved hours per student — seed.ts asserts the live balance matches this after seeding, so a mismatch fails the run instead of leaving a baffling number on screen. */
 export const expectedCoinsByUsername: Record<string, number> = serviceRecords
