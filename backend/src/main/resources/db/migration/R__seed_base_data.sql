@@ -96,7 +96,11 @@ INSERT IGNORE INTO service_category (id, code, name_zh, name_en, active, created
 -- partner placeholders visibly distinct; `Docs/README.md` §2.8 now says which
 -- is which.
 INSERT IGNORE INTO school_info (id, name, full_name, student_dev_center, contact, default_language, current_academic_year_code, updated_at) VALUES
-    ('school_default', 'Example City HD', 'Example City HD Middle School', 'Student Development Center H300', 'Teacher Wei Chen', 'zh-CN', '2025-2026', NOW(3));
+    ('school_default', 'Example City HD', 'Example City HD Middle School', 'Student Development Center H300', 'Teacher Wei Chen', 'zh-CN',
+     -- Derived, like the academic_year rows above. A literal here went stale the
+     -- same way theirs did: on a fresh install today it claimed 2025-2026 while
+     -- the academic_year table said 2026-2027 was current.
+     CONCAT(@ay_start, '-', @ay_start + 1), NOW(3));
 
 -- The singleton school Organization row (V17's schema, issue 03-ServiceRecordFormOptimization
 -- §4.1) — mirrors school_info's own values rather than being derived from it, since this

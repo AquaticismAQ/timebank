@@ -631,9 +631,27 @@ function splitIntoSessions(totalCoins: number, rnd: () => number): number[] {
   return out;
 }
 
-function buildServiceRecords(): SeedServiceRecord[] {
+/**
+ * @param taken records already pinned by hand (`narrativeRecords`). The
+ *        generator must not place a record that overlaps one of those in time:
+ *        submission hard-blocks overlaps for the *whole* student, whatever each
+ *        record's status, so a generated 13:00-17:00 session collides with a
+ *        hand-pinned 14:00-16:00 one on the same day and the seed run dies
+ *        mid-Phase-4. Checking only the generated records against each other
+ *        missed this — they were self-consistent and still clashed with the
+ *        fixtures they share a student with.
+ */
+function buildServiceRecords(taken: SeedServiceRecord[]): SeedServiceRecord[] {
   const rnd = makeRandom(776611);
   const out: SeedServiceRecord[] = [];
+  const busy = new Map<string, { start: number; end: number }[]>();
+  const key = (student: string, day: number) => `${student}|${day}`;
+  for (const r of taken) {
+    const k = key(r.studentUsername, r.serviceDateOffsetDays);
+    busy.set(k, [...(busy.get(k) ?? []), { start: r.startHour, end: r.endHour }]);
+  }
+  const clashes = (student: string, day: number, start: number, end: number) =>
+    (busy.get(key(student, day)) ?? []).some(b => start < b.end && b.start < end);
 
   for (const s of generatedStudents) {
     if (!s.username) continue;
@@ -661,10 +679,21 @@ function buildServiceRecords(): SeedServiceRecord[] {
 
     for (const hours of splitIntoSessions(s.targetCoins, rnd)) {
       const a = pick(rnd, selfActivities);
-      const dayCursor = -(1 + (recordIndex % yearWindowDays));
-      const hourSlot = Math.floor(recordIndex / yearWindowDays) % 3;
-      const startHour = 8 + hourSlot * 5; // 08:00, 13:00 or 18:00
-      recordIndex += 1;
+      // Walk forward through (day, slot) pairs until one is free for this
+      // student — of their own earlier records and of any hand-pinned fixture.
+      let dayCursor = 0;
+      let startHour = 0;
+      for (let probe = 0; probe < yearWindowDays * 3; probe += 1) {
+        const at = recordIndex + probe;
+        dayCursor = -(1 + (at % yearWindowDays));
+        startHour = 8 + (Math.floor(at / yearWindowDays) % 3) * 5; // 08:00, 13:00, 18:00
+        if (!clashes(s.username, dayCursor, startHour, startHour + hours)) {
+          recordIndex = at + 1;
+          break;
+        }
+      }
+      busy.set(key(s.username, dayCursor),
+        [...(busy.get(key(s.username, dayCursor)) ?? []), { start: startHour, end: startHour + hours }]);
       out.push({
         studentUsername: s.username,
         sourceType: 'SELF',
@@ -861,7 +890,7 @@ function withScopedReviewer(r: SeedServiceRecord): SeedServiceRecord {
 }
 
 export const serviceRecords: SeedServiceRecord[] =
-  [...buildServiceRecords(), ...narrativeRecords].map(withScopedReviewer);
+  [...buildServiceRecords(narrativeRecords), ...narrativeRecords].map(withScopedReviewer);
 
 /** Sum of approved hours per student — seed.ts asserts the live balance matches this after seeding, so a mismatch fails the run instead of leaving a baffling number on screen. */
 export const expectedCoinsByUsername: Record<string, number> = serviceRecords

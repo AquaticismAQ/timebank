@@ -114,15 +114,15 @@ is blank and nothing can be exercised. The seeder fills it.
 ```bash
 cd integration-test
 npm install
-TIMEBANK_DB_HOST=127.0.0.1 \
-TIMEBANK_DB_PORT=3307 \
+TIMEBANK_SEED_DB_HOST=127.0.0.1 \
+TIMEBANK_SEED_DB_PORT=3307 \
 TIMEBANK_DB_USERNAME=timebank_app \
 TIMEBANK_DB_PASSWORD=timebank-not-for-production \
 TIMEBANK_BASE_URL=http://localhost:28080 \
 npm run seed
 ```
 
-`TIMEBANK_DB_HOST` is what selects direct-connection mode. Without it the
+`TIMEBANK_SEED_DB_HOST` is what selects direct-connection mode. Without it the
 seeder talks to MySQL over SSH, which is right for the shared server — where
 the database is not reachable over TCP from a workstation at all — and useless
 here.
@@ -219,7 +219,7 @@ Then:
 
 ```bash
 cd backend
-TIMEBANK_DB_HOST=127.0.0.1 TIMEBANK_DB_PORT=3307 \
+TIMEBANK_SEED_DB_HOST=127.0.0.1 TIMEBANK_SEED_DB_PORT=3307 \
 TIMEBANK_DB_USERNAME=timebank_app TIMEBANK_DB_PASSWORD=timebank-not-for-production \
 mvn verify
 ```

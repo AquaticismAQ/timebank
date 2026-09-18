@@ -45,9 +45,18 @@ const BASE_URL = process.env.TIMEBANK_BASE_URL ?? 'https://tb.example.com';
  * `08-mlps-level1-security-design-guide.md` §3), so SSH is not a stylistic
  * choice there.
  */
-const DB_HOST = process.env.TIMEBANK_DB_HOST;
-const DB_PORT = process.env.TIMEBANK_DB_PORT ?? '3306';
-const DB_NAME = process.env.TIMEBANK_DB_NAME ?? 'timebank';
+// `TIMEBANK_SEED_DB_HOST`, deliberately not `TIMEBANK_DB_HOST`. That name was
+// taken: `~/.timebank.env` and `MySqlTestSchemaExtension` both already use it
+// for the integration-test database, so keying direct mode off it meant that
+// merely sourcing the standard env file silently switched the seeder from SSH
+// to TCP — and pointed it at whatever MySQL happened to be on the workstation's
+// own 127.0.0.1. That failed with "Access denied for user
+// 'timebank_app'@'localhost'" from a completely unrelated server, which reads
+// as a credentials problem with the shared box rather than as the seeder having
+// quietly changed transport. A distinct name cannot be turned on by accident.
+const DB_HOST = process.env.TIMEBANK_SEED_DB_HOST;
+const DB_PORT = process.env.TIMEBANK_SEED_DB_PORT ?? '3306';
+const DB_NAME = process.env.TIMEBANK_SEED_DB_NAME ?? 'timebank';
 const USE_DIRECT_DB = Boolean(DB_HOST);
 const DB_USERNAME = requireEnv('TIMEBANK_DB_USERNAME');
 const DB_PASSWORD = requireEnv('TIMEBANK_DB_PASSWORD');

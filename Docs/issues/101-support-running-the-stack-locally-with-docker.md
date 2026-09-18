@@ -55,7 +55,7 @@ directory.
 **The seeder required SSH.** `runSqlOnServer` shells through `ssh` to reach
 MySQL. Against a container on localhost there is no SSH host, so a contributor
 could bring the stack up and then have no way to put data in it — which is most
-of the point of having it up. `TIMEBANK_DB_HOST` now selects a direct-TCP mode.
+of the point of having it up. `TIMEBANK_SEED_DB_HOST` now selects a direct-TCP mode.
 SSH stays the default: on the shared server the database is not reachable over
 TCP from a workstation at all (VPC-internal,
 `08-mlps-level1-security-design-guide.md` §3), so it is not a stylistic choice
@@ -174,7 +174,7 @@ docker compose ps                                      # backend → (healthy)
 curl -s localhost:28080/actuator/health/readiness       # {"status":"UP"}
 
 cd integration-test && npm install
-TIMEBANK_DB_HOST=127.0.0.1 TIMEBANK_DB_PORT=3307 \
+TIMEBANK_SEED_DB_HOST=127.0.0.1 TIMEBANK_SEED_DB_PORT=3307 \
 TIMEBANK_DB_USERNAME=timebank_app TIMEBANK_DB_PASSWORD=timebank-not-for-production \
 TIMEBANK_BASE_URL=http://localhost:28080 npm run seed
 ```

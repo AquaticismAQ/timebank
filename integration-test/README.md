@@ -22,10 +22,10 @@ Optional env vars: `TIMEBANK_SSH_TARGET` (default `root@tb.example.com`), `TIMEB
 
 ### Seeding a local Docker stack
 
-Set `TIMEBANK_DB_HOST` and the SQL phase connects over TCP instead of shelling through SSH (issue 101) — which is what makes `docker-compose.yml` seedable, since there is no SSH host in that picture:
+Set `TIMEBANK_SEED_DB_HOST` and the SQL phase connects over TCP instead of shelling through SSH (issue 101) — which is what makes `docker-compose.yml` seedable, since there is no SSH host in that picture:
 
 ```bash
-TIMEBANK_DB_HOST=127.0.0.1 TIMEBANK_DB_PORT=3307 \
+TIMEBANK_SEED_DB_HOST=127.0.0.1 TIMEBANK_SEED_DB_PORT=3307 \
 TIMEBANK_DB_USERNAME=timebank_app TIMEBANK_DB_PASSWORD=timebank-not-for-production \
 TIMEBANK_BASE_URL=http://localhost:8080 npm run seed
 ```
