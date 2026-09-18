@@ -54,3 +54,11 @@ Docs/TestAccounts.md
 
 # Drafts
 drafts/
+
+# Scratch and generated output — never source, and never worth a blob in a repo
+# that is meant to go public (issue: 4.5 MB of screenshots and rendered PDFs had
+# been committed). `tmp/` is where browser-verification screenshots land,
+# `output/` holds rendered documents, `Report/` is a working draft area.
+Report/
+output/
+tmp/
