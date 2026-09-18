@@ -94,12 +94,12 @@ export function LoginPage() {
           <h1 className="text-foreground mb-1">{t('auth.login.title')}</h1>
           {/* School name leads at a larger size; the platform description sits on
               its own line rather than running on after it. */}
-          {/* `fullName` first, matching the sidebar footer exactly — the two showed
-              different names otherwise (`name` is the short form, "…HD"), which
-              reads as two different schools. */}
-          {(schoolInfo?.fullName || schoolInfo?.name) && (
-            <p className="text-foreground text-lg font-medium">{schoolInfo.fullName || schoolInfo.name}</p>
-          )}
+          {/* `name` is the host school's own name — the one `school_info.name` holds and
+          the one its `org_school_default` organization row carries. **Not `fullName`**:
+          that field is free text a school types in the School Info editor, and on at
+          least one deployment it was holding a *partner organisation's* name, so
+          preferring it displayed a partner as the host school. */}
+          {schoolInfo?.name && <p className="text-foreground text-lg font-medium">{schoolInfo.name}</p>}
           <p className="text-muted-foreground text-sm">{t('auth.login.subtitle')}</p>
         </div>
 
