@@ -1,5 +1,60 @@
 # Updating `mock-data.ts`
 
+## Check your work: `npm run verify-fixture`
+
+**Run it after every edit, before you seed anything.** It is also run by
+`seed.ts` itself, so a fixture that breaks an invariant cannot reach a database.
+
+```bash
+cd integration-test && npm run verify-fixture
+```
+
+Every rule in this guide used to be prose enforced by nothing, which meant a
+violation could only be found by opening the one screen that exposed it — that
+is what issue 103 is about, and it cost two evenings of one-defect-at-a-time
+fixes. The rules are executable now. `verify-fixture.ts` groups them three ways,
+and the grouping tells you how urgent a failure is:
+
+| | What a failure means |
+| :--- | :--- |
+| **BACKEND** | The real API would reject this. Your seed run dies partway through with a 422 and leaves a half-populated database |
+| **REPORTS** | A report will answer nothing, or answer wrongly, while looking like it worked — the expensive kind, because the screen still shows a number |
+| **CREDIBLE** | The data is implausible to a school. Nothing else in this project has an opinion about these, which is how 99 hours of volunteering inside 17 days once passed a full verification pass |
+
+If you are adding a rule to this guide, add it to the checker in the same edit.
+
+## The dataset spans two school years
+
+`R__seed_base_data.sql` derives the academic year from the current date, so in
+mid-September the *current* year is about a fortnight old. Everything used to be
+crammed into it, which made the data self-consistent and unbelievable.
+
+So the fixture populates **both** the current year and the one before it:
+
+- **Prior year** carries the history — about 90% of the hours, spread across all
+  twelve months. This is what gives the Reports trend a curve, and it is the
+  only place the *cumulative* stage requirement (75h middle, 300h high) can be
+  reached, since one fortnight cannot hold 300 hours.
+- **Current year** carries recent activity only — roughly the share of the year
+  that has actually elapsed, so the month in progress never shows more hours
+  than a complete month of last year.
+
+`academicYearWindow(startYear)` gives the day-offset bounds of either. Nothing
+in this file may use a literal year.
+
+## Students belong to enrolment cohorts
+
+Students enter at Grade 6 and stay six years, so `enrollmentAcademicYearId` is
+derived from the grade and `seed.ts` inserts a cohort row per year. This is not
+bookkeeping: `ReportQueryRepository` joins `ay.start_date <= :end`, so a student
+enrolled in a year *after* the one being reported on is excluded from that
+year's population entirely.
+
+The visible consequence is correct and worth keeping: **Grade 6 has no
+prior-year history**, because that cohort had not joined yet. Their coin targets
+are correspondingly tiny — the only window they can have served in is the days
+since term started.
+
 ## Why this file looks the way it does
 
 `mock-data.ts`'s exported arrays (`organizations`, `users`, `students`, `projects`, `serviceRecords`, `eventProposals`) are shaped close to the real backend's `Create*Request` DTOs — real field names, real id formats — not the frontend's view-model shapes in `frontend/src/app/mock/data.ts` (which has its own `User.password`, denormalized display names, `myApplicationStatus`, etc., and is maintained independently for the app's own offline mock mode). The two files will drift from each other over time; that's an accepted tradeoff, not a bug — see the plan discussion that produced this directory if you want the reasoning.
@@ -14,6 +69,44 @@ Two kinds of fixture live in this file, and they are edited differently:
 - **Generated** — the 50 students and the ~230 approved service records backing their balances, produced by the builders at the bottom of the file from a **fixed PRNG seed**. Hand-writing them would make this file unreviewable. Do not paste generated rows in by hand; change the builder or its inputs instead.
 
 Because the PRNG seed is fixed, every run produces byte-identical data. A re-seed is reproducible, and any difference you see between two runs is a real change, not noise.
+
+## Coin targets are chosen to cover the design, not to look random
+
+`COIN_TARGETS_BY_GRADE` gives each grade five slots, and every grade gets all
+five exactly once:
+
+| Slot | What it demonstrates |
+| ---: | :--- |
+| 0 | no service at all — the empty-state screens |
+| 1 | short of the annual requirement — the "gap to target" state |
+| 2 | annual requirement met |
+| 3 | cumulative stage requirement met |
+| 4 | a sustained volunteer, high honour tier |
+
+The magnitudes rise with the grade because an older student has had longer to
+accumulate *and* because the bar itself rises (grades 6-8: 25h a year, 75h
+cumulative; grades 9-11: 75h and 300h).
+
+`targetCoins` is the student's **total approved hours**, including any
+hand-pinned or project record they already carry — the generator subtracts what
+is already there rather than stacking on top.
+
+Two things the checker enforces that are easy to break by accident: every honour
+tier must have at least one student in it, and at least five students must have
+no service at all. Raising targets across the board quietly costs you the empty
+states.
+
+## One session per student per day
+
+The generator consumes a day when it places a session and never revisits it, so
+two records for the same student on the same day are unrepresentable rather than
+merely checked for. Sessions are weekend-weighted about two to one, and the
+length menu differs by day kind — a weekend shift is 2-6h, a school-day one is
+1-2.5h after the last lesson.
+
+This is what the CREDIBLE checks defend. Before it, the busiest student did 99
+hours in 17 days, active on every one of them, with more records on a Thursday
+than a Saturday.
 
 ## Two consistency rules you must not break
 

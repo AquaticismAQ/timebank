@@ -5,7 +5,8 @@
   "description": "Seeds a realistic dataset onto the TimeBank shared test server for manual/automated testing. See README.md.",
   "type": "module",
   "scripts": {
-    "seed": "tsx seed.ts"
+    "seed": "tsx seed.ts",
+    "verify-fixture": "tsx verify-fixture.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

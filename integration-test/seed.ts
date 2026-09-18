@@ -22,7 +22,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import {
   organizations, users, students, projects, serviceRecords, eventProposals, cases,
-  namedClasses, expectedCoinsByUsername, reviewerForGrade, generatedStudents,
+  namedClasses, expectedCoinsByUsername, reviewerForGrade, generatedStudents, cohortAcademicYearStarts,
   type SeedProject, type SeedServiceRecord, type SeedEventProposal, type SeedCase, type SeedUser,
 } from './mock-data.ts';
 
@@ -408,7 +408,29 @@ function sqlDateTime(iso: string): string {
 
 // ── Main ────────────────────────────────────────────────────────────────
 
+/**
+ * Refuses to seed a fixture that violates its own invariants (issue 103).
+ *
+ * The checker is spawned rather than imported so this runs the *same* command a
+ * contributor runs by hand — `npm run verify-fixture` — with no second code
+ * path that could pass while that one fails. A couple of seconds against a run
+ * that takes minutes and ends in a database full of data that has to be dropped
+ * by hand is not a trade worth thinking about.
+ */
+function verifyFixtureOrExit(): void {
+  console.log('== Phase 0a: fixture invariants ==');
+  const result = spawnSync('npx', ['tsx', 'verify-fixture.ts'], {
+    cwd: import.meta.dirname, encoding: 'utf8', stdio: ['ignore', 'inherit', 'inherit'],
+  });
+  if (result.status !== 0) {
+    console.error('\nRefusing to seed: the fixture does not satisfy its own invariants (see above).');
+    process.exit(1);
+  }
+}
+
 async function main() {
+  verifyFixtureOrExit();
+
   console.log('== Phase 0: pre-flight re-run check ==');
   const usernameList = users.map(u => sqlString(u.username)).join(',');
   const studentNumberList = students.map(s => sqlString(s.studentNumber)).join(',');
@@ -446,6 +468,23 @@ async function main() {
   }
   const currentAcademicYearId = yearRows[0].trim();
   console.log(`   current academic year: ${currentAcademicYearId}`);
+
+  // Enrolment-cohort years. Students enter at Grade 6 and stay six years, so an
+  // honest `enrollment_academic_year_id` needs a row per cohort — Flyway's base
+  // data ships only the current year and the one before it, and writing the
+  // current year for all 50 (which is what this did) made every Grade 11
+  // student a first-year enrollee and left every earlier year with an empty
+  // population in the participation and completion reports, which join
+  // `ay.start_date <= :end` (issue 103 §2.2).
+  //
+  // These belong here rather than in `R__seed_base_data.sql` for the same
+  // reason the named test classes do: base data ships to every real deployment,
+  // and a fixture's cohort history does not. They carry no data of their own.
+  const cohortYearInserts = cohortAcademicYearStarts.map(startYear =>
+    `INSERT IGNORE INTO academic_year (id, code, start_date, end_date, is_current, created_at, updated_at) VALUES ` +
+    `('ay_${startYear}_${startYear + 1}', '${startYear}-${startYear + 1}', ` +
+    `'${startYear}-09-01', '${startYear + 1}-08-31', 0, ${now}, ${now});`);
+
   const orgIdByName = new Map<string, string>();
   const orgInserts: string[] = [];
   for (const org of organizations) {
@@ -475,7 +514,7 @@ async function main() {
     // (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1).
     studentInserts.push(
       `INSERT INTO student (id, student_number, display_name, grade_id, class_id, enrollment_academic_year_id, graduation_year, status, joined_at, version, created_at, updated_at) VALUES ` +
-      `(${sqlString(id)}, ${sqlString(s.studentNumber)}, ${sqlString(s.displayName)}, ${sqlString(s.gradeId)}, ${sqlString(s.classId)}, ${sqlString(currentAcademicYearId)}, ${s.graduationYear}, 'ACTIVE', ${sqlString(dateFromNow(s.joinedAtOffsetDays))}, 1, ${now}, ${now});`
+      `(${sqlString(id)}, ${sqlString(s.studentNumber)}, ${sqlString(s.displayName)}, ${sqlString(s.gradeId)}, ${sqlString(s.classId)}, ${sqlString(s.enrollmentAcademicYearId)}, ${s.graduationYear}, 'ACTIVE', ${sqlString(dateFromNow(s.joinedAtOffsetDays))}, 1, ${now}, ${now});`
     );
   }
 
@@ -517,8 +556,8 @@ async function main() {
     }
   }
 
-  runSqlOnServer(['START TRANSACTION;', ...classInserts, ...orgInserts, ...studentInserts, ...userInserts, ...roleInserts, ...scopeInserts, 'COMMIT;'].join('\n'));
-  console.log(`Inserted ${organizations.length} organizations, ${students.length} students, ${users.length} users.`);
+  runSqlOnServer(['START TRANSACTION;', ...cohortYearInserts, ...classInserts, ...orgInserts, ...studentInserts, ...userInserts, ...roleInserts, ...scopeInserts, 'COMMIT;'].join('\n'));
+  console.log(`Inserted ${cohortYearInserts.length} cohort academic years, ${organizations.length} organizations, ${students.length} students, ${users.length} users.`);
 
   console.log(`== Phase 2: API — logging in as ${users.length} personas ==`);
   // nginx rate-limits /api/v1/auth/login to 10r/m per IP with burst 5, and
@@ -526,7 +565,11 @@ async function main() {
   // create-a-record-on-behalf path. Without pacing, everything past the
   // burst gets 429'd. 6.5s keeps us just under the sustained rate; expect
   // this phase to take roughly `users.length * 6.5` seconds.
-  const LOGIN_INTERVAL_MS = 6_500;
+  // …but that limit is nginx's, and the local Docker stack has no nginx in
+  // front of it (issue 101). Pacing there costs five minutes of a verification
+  // loop whose whole value is being fast, so direct-DB mode — which only the
+  // local stack uses — goes at full speed.
+  const LOGIN_INTERVAL_MS = USE_DIRECT_DB ? 0 : 6_500;
   const sessions = new Map<string, Session>();
   let loginIndex = 0;
   for (const u of users) {
@@ -581,27 +624,13 @@ async function main() {
 
   console.log('== Phase 3.5: SQL — enrollments (see SeedProject.registrantStudentNumbers doc comment) ==');
 
-  // Issue 093 §4. A PROJECT-sourced service record is only creatable if its
-  // student holds a CONFIRMED enrollment in that project, and registrants are
-  // *derived* (`assignRegistrants`) while records name a `studentUsername` by
-  // hand — so the two can silently drift apart and the record creation fails,
-  // or worse, the dataset ends up with no project-linked records at all and
-  // the Top Projects report reads 0 hours for every row, which is exactly what
-  // happened. Rather than rely on hand-matching a derived list, every student
-  // named by a PROJECT-sourced record is enrolled here by construction.
-  const numberByUsername = new Map(
-    (users as SeedUser[]).filter(u => u.linkedStudentNumber).map(u => [u.username, u.linkedStudentNumber!]));
-  for (const r of serviceRecords as SeedServiceRecord[]) {
-    if (r.sourceType !== 'PROJECT' || !r.projectTitle) continue;
-    const project = (projects as SeedProject[]).find(p => p.title === r.projectTitle);
-    if (!project) throw new Error(`Service record references unknown project "${r.projectTitle}".`);
-    const studentNumber = numberByUsername.get(r.studentUsername);
-    if (!studentNumber) throw new Error(`PROJECT-sourced record names "${r.studentUsername}", who has no student account.`);
-    project.registrantStudentNumbers ??= [];
-    if (!project.registrantStudentNumbers.includes(studentNumber)) {
-      project.registrantStudentNumbers.push(studentNumber);
-    }
-  }
+  // This used to reconcile registrants against the PROJECT-sourced records here,
+  // by mutating the imported `projects` array at run time. That hid a real
+  // inconsistency: the fixture as written did not enrol those students, so no
+  // offline check could tell a correct dataset from a broken one, and the whole
+  // question only ever surfaced as a 422 mid-run. `mock-data.ts` now exports
+  // projects whose registrant lists already include them
+  // (`withPinnedRegistrants`), and `verify-fixture.ts` asserts it.
 
   const enrollmentInserts: string[] = [];
   for (const p of projects as SeedProject[]) {
@@ -744,6 +773,52 @@ async function main() {
     }, randomUUID());
     console.log(`  case "${c.title}" -> ${c.targetStatus} (by ${c.reviewerUsername})`);
   }
+
+  // ── Phase 6.5: SQL — backdate the audit timestamps ──────────────────────
+  //
+  // Everything above is created *now*, because it is created by really calling
+  // the API — which is the point. But the service dates span two school years,
+  // so a record of last October carries a `created_at` of this afternoon, and
+  // two reports read those columns rather than `service_date`:
+  //
+  //   · `adminStats.approvedThisMonth` counts `updated_at` inside the current
+  //     month, so the dashboard announces every approval ever made as this
+  //     month's — 622 of them, against a school of 50 students.
+  //   · `reviewEfficiencyByReviewer` averages `submitted_at` to decision, which
+  //     collapses to a couple of minutes and reads as though nobody reviews
+  //     anything.
+  //
+  // So the columns are moved to where the story says they happened: logged the
+  // evening of the service, submitted the next day, decided a couple of days
+  // after that. `LEAST(..., NOW(3))` keeps a record served yesterday from
+  // acquiring a submission in the future.
+  console.log('== Phase 6.5: SQL — backdating created/submitted/decided timestamps ==');
+  runSqlOnServer([
+    'START TRANSACTION;',
+    // Logged the evening of the service; submitted the following evening.
+    `UPDATE service_record SET
+       created_at = LEAST(TIMESTAMP(service_date, '18:30:00'), NOW(3)),
+       submitted_at = IF(submitted_at IS NULL, NULL,
+                         LEAST(TIMESTAMP(service_date + INTERVAL 1 DAY, '19:15:00'), NOW(3)));`,
+    // Decided two to four days after the service, deterministically per row.
+    `UPDATE review_decision rd JOIN service_record sr ON sr.id = rd.service_record_id
+       SET rd.created_at = LEAST(
+             TIMESTAMP(sr.service_date + INTERVAL (2 + (CRC32(rd.id) % 3)) DAY, '09:40:00'), NOW(3));`,
+    // A record's own updated_at is when it was last decided…
+    `UPDATE service_record sr
+       JOIN (SELECT service_record_id, MAX(created_at) AS decided_at
+               FROM review_decision GROUP BY service_record_id) d ON d.service_record_id = sr.id
+       SET sr.updated_at = GREATEST(d.decided_at, COALESCE(sr.submitted_at, sr.created_at));`,
+    // …and for anything still undecided, when it was last touched.
+    `UPDATE service_record SET updated_at = COALESCE(submitted_at, created_at)
+       WHERE id NOT IN (SELECT service_record_id FROM review_decision);`,
+    // The ledger row belongs to the moment of the approval that created it.
+    `UPDATE account_transaction at JOIN service_record sr ON sr.id = at.source_id
+       SET at.created_at = sr.updated_at
+       WHERE at.source_type = 'serviceRecord';`,
+    'COMMIT;',
+  ].join('\n'));
+  console.log('Backdated service records, review decisions and ledger rows.');
 
   // ── Phase 7: consistency check ──────────────────────────────────────────
   // The whole point of driving records through the real API is that balances

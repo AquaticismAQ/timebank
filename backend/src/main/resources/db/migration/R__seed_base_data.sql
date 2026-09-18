@@ -149,10 +149,22 @@ INSERT IGNORE INTO feature_flag (code, enabled, updated_at) VALUES
     ('borrowing', 0, NOW(3)),
     ('appreciation', 0, NOW(3));
 
--- Default rule version, published and effective from the current academic
--- year's start (§22.1: 0.5h rounding, 1h->1 coin, honour tiers 25/75/150/300h;
--- middle school 25h/year+75h cumulative, high school 75h/year+300h cumulative
--- — matching Design/chinese/01-TimeBankDesign.md §4.2/§6/§8.1).
+-- Default rule version (§22.1: 0.5h rounding, 1h->1 coin, honour tiers
+-- 25/75/150/300h; middle school 25h/year+75h cumulative, high school
+-- 75h/year+300h cumulative — matching Design/chinese/01-TimeBankDesign.md
+-- §4.2/§6/§8.1).
+--
+-- `effective_from` is DERIVED, and it is load-bearing rather than descriptive.
+-- Approving a record resolves the rule **at that record's service date**
+-- (`ReviewDecisionTransaction`) and throws "No rule is in effect for service
+-- date …" when none is, so any record older than this value cannot be approved
+-- at all. It was the literal '2025-09-01' under a comment claiming it tracked
+-- the current academic year — which it did not, and which happened to still
+-- work only because that date was in the past.
+--
+-- The prior year's start, not the current one: `integration-test` seeds a full
+-- year of history behind the current one (issue 103 §3.1), and a real school
+-- importing last year's records needs the same room.
 INSERT IGNORE INTO rule_version (
     id, status, rounding_minutes, minutes_per_coin_unit, centi_coins_per_unit,
     middle_annual_required_minutes, middle_stage_required_minutes,
@@ -164,7 +176,7 @@ INSERT IGNORE INTO rule_version (
     1500, 4500,
     4500, 18000,
     1500, 4500, 9000, 18000,
-    '2025-09-01T00:00:00', NULL, NOW(3), NOW(3), NOW(3), NULL
+    MAKEDATE(@ay_start - 1, 1) + INTERVAL 8 MONTH, NULL, NOW(3), NOW(3), NOW(3), NULL
 );
 
 -- Notification templates: representative examples proving the mechanism.
