@@ -602,6 +602,20 @@ const selfActivities = [
 ];
 
 /** Split a coin total into per-record hour chunks of 1-4 hours (whole/half hours only, so rounding is always a no-op). */
+/**
+ * Days elapsed since 1 September of the current school year — the width of the
+ * window a seeded record may occupy and still count toward this year's
+ * progress. Mirrors `R__seed_base_data.sql`'s rule for which academic year is
+ * current (September starts the year), so the fixture and the schema agree
+ * about where the boundary is without either importing the other.
+ */
+function daysSinceAcademicYearStart(): number {
+  const now = new Date();
+  const startYear = now.getUTCMonth() >= 8 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  const start = Date.UTC(startYear, 8, 1); // month 8 === September
+  return Math.floor((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - start) / 86400000);
+}
+
 function splitIntoSessions(totalCoins: number, rnd: () => number): number[] {
   const out: number[] = [];
   let left = totalCoins;
@@ -625,13 +639,32 @@ function buildServiceRecords(): SeedServiceRecord[] {
     if (!s.username) continue;
     const reviewer = reviewerForGrade[s.gradeId];
 
-    // Distinct day per record keeps records from overlapping in time, which
-    // submission hard-blocks (issues 064-074).
-    let dayCursor = -20 - Math.floor(rnd() * 40);
+    // Records must land inside the CURRENT academic year, not merely "recently"
+    // (issue 100's other half). The cursor used to start 20-60 days back and
+    // step back 3-7 days per record, so a student with 36 of them reached ~8
+    // months into the past — guaranteed to cross 1 September whichever day you
+    // seed. Annual progress sums `service_date between :yearStart and :yearEnd`,
+    // so those records counted for nothing: a freshly seeded server showed a
+    // student holding 89 coins and 0 hours of progress, which reads as a bug in
+    // the product rather than in the fixture.
+    //
+    // Now the records are spread across the window the current year actually
+    // offers — 1 September to yesterday. In September that window is days long
+    // rather than months, so a student's records share days; `hourSlot` keeps
+    // two records on one day from overlapping in time, which submission
+    // hard-blocks (issues 064-074). Sessions run to 4.5h, so slots sit 5 hours
+    // apart; three of them give 3 records per day, which is what the busiest
+    // student needs (38 records against a 17-day window in mid-September — two
+    // slots wrapped onto days already used and produced real overlaps).
+    const yearWindowDays = Math.max(1, daysSinceAcademicYearStart());
+    let recordIndex = 0;
 
     for (const hours of splitIntoSessions(s.targetCoins, rnd)) {
       const a = pick(rnd, selfActivities);
-      const startHour = 9 + Math.floor(rnd() * 5); // 09:00-13:00 starts
+      const dayCursor = -(1 + (recordIndex % yearWindowDays));
+      const hourSlot = Math.floor(recordIndex / yearWindowDays) % 3;
+      const startHour = 8 + hourSlot * 5; // 08:00, 13:00 or 18:00
+      recordIndex += 1;
       out.push({
         studentUsername: s.username,
         sourceType: 'SELF',
@@ -650,7 +683,6 @@ function buildServiceRecords(): SeedServiceRecord[] {
         reasonCode: 'DOCUMENTATION_COMPLETE',
         comment: 'Documentation complete, hours verified.',
       });
-      dayCursor -= 3 + Math.floor(rnd() * 5);
     }
   }
   return out;

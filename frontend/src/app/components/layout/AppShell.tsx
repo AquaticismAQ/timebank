@@ -127,12 +127,12 @@ export function AppShell({
     // Fetched here rather than inside SidebarContent, which renders twice (the
     // desktop sidebar and the mobile drawer) and would otherwise make the same
     // request twice on every page.
-    // `name` is the host school's own name — the one `school_info.name` holds and
-    // the one its `org_school_default` organization row carries. **Not `fullName`**:
-    // that field is free text a school types in the School Info editor, and on at
-    // least one deployment it was holding a *partner organisation's* name, so
-    // preferring it displayed a partner as the host school.
-    api.school.getInfo().then(info => setSchoolName(info.name)).catch(() => {});
+    // `fullName` is the school's full name and `name` the short form; the sidebar
+    // and the login page must agree, so both prefer the full one. This briefly
+    // rendered `name` only, because `fullName` had been seeded with a *partner*
+    // organisation's name — that was a data fault, now corrected in
+    // `R__seed_base_data.sql` and on the server.
+    api.school.getInfo().then(info => setSchoolName(info.fullName || info.name)).catch(() => {});
   }, []);
 
   const themeOptions: { value: 'light' | 'dark' | 'auto'; icon: React.ReactNode; label: string }[] = [
