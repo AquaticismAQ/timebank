@@ -20,9 +20,11 @@ interface SidebarContentProps {
   onNavClick?: () => void;
   /** Only passed by the persistent desktop sidebar — the mobile drawer has no room for it. */
   version?: string;
+  /** The host school, shown at the foot of the sidebar. Absent until `GET /school/info` resolves. */
+  schoolName?: string;
 }
 
-function SidebarContent({ navItems, statsStrip, onNavClick, version }: SidebarContentProps) {
+function SidebarContent({ navItems, statsStrip, onNavClick, version, schoolName }: SidebarContentProps) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col h-full">
@@ -70,6 +72,20 @@ function SidebarContent({ navItems, statsStrip, onNavClick, version }: SidebarCo
           </NavLink>
         ))}
       </nav>
+
+      {/* The host school, at the foot of the sidebar. Rendered only once the
+          name is known — a placeholder would be worse than nothing here, since
+          this is the one line on screen that says whose system this is. The
+          name is whatever `GET /school/info` returns, never a literal: it is
+          configurable per deployment (School Info editing, issue 045) and a
+          real school name must not be in this repo at all. */}
+      {schoolName && (
+        <div className="px-4 py-3 border-t border-sidebar-border shrink-0">
+          <p className="text-xs text-sidebar-foreground/60 leading-snug break-words" title={schoolName}>
+            {schoolName}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -104,9 +120,14 @@ export function AppShell({
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [version, setVersion] = useState<string>();
+  const [schoolName, setSchoolName] = useState<string>();
 
   useEffect(() => {
     api.system.version().then(v => setVersion(v.version)).catch(() => {});
+    // Fetched here rather than inside SidebarContent, which renders twice (the
+    // desktop sidebar and the mobile drawer) and would otherwise make the same
+    // request twice on every page.
+    api.school.getInfo().then(info => setSchoolName(info.fullName || info.name)).catch(() => {});
   }, []);
 
   const themeOptions: { value: 'light' | 'dark' | 'auto'; icon: React.ReactNode; label: string }[] = [
@@ -120,6 +141,7 @@ export function AppShell({
   const sidebarProps: SidebarContentProps = {
     navItems,
     statsStrip,
+    schoolName,
   };
 
   return (
