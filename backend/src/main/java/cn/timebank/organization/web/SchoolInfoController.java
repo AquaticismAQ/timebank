@@ -2,6 +2,7 @@ package cn.timebank.organization.web;
 
 import cn.timebank.common.web.ApiResponse;
 import cn.timebank.organization.application.SchoolInfoService;
+import cn.timebank.organization.application.dto.SchoolIdentityDto;
 import cn.timebank.organization.application.dto.SchoolInfoDto;
 import cn.timebank.organization.application.dto.SchoolInfoRequests.UpdateSchoolInfoRequest;
 import cn.timebank.security.application.CookieSessionUserDetails;
@@ -27,6 +28,26 @@ public class SchoolInfoController {
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<SchoolInfoDto> getInfo() {
         return ApiResponse.of(schoolInfoService.getInfo());
+    }
+
+    /**
+     * The school's name, unauthenticated — the login page shows whose system
+     * this is, and cannot call {@code /school/info}, which is
+     * {@code isAuthenticated()} and so returned 401 to every visitor who had not
+     * logged in yet. The name was simply blank there.
+     *
+     * <p><b>Why a second endpoint rather than opening the first.</b>
+     * {@code SchoolInfoDto} also carries {@code contact} — a member of staff by
+     * name — and {@code studentDevCenter}, a room. Neither belongs on a page
+     * anyone on the internet can load, and §4.3's data-minimisation commitment
+     * is the reason. {@link SchoolIdentityDto} cannot hold them, so widening
+     * this later takes a deliberate edit rather than a field being added to a
+     * shared record.</p>
+     */
+    @GetMapping("/api/v1/school/identity")
+    @PreAuthorize("permitAll()")
+    public ApiResponse<SchoolIdentityDto> getIdentity() {
+        return ApiResponse.of(schoolInfoService.getIdentity());
     }
 
     /**

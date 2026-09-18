@@ -1,5 +1,6 @@
 package cn.timebank.organization.application;
 
+import cn.timebank.organization.application.dto.SchoolIdentityDto;
 import cn.timebank.organization.application.dto.SchoolInfoDto;
 import cn.timebank.organization.application.dto.SchoolInfoRequests.UpdateSchoolInfoRequest;
 
@@ -12,6 +13,9 @@ import cn.timebank.organization.application.dto.SchoolInfoRequests.UpdateSchoolI
 public interface SchoolInfoService {
 
     SchoolInfoDto getInfo();
+
+    /** Name only, for the unauthenticated login page — see {@link SchoolIdentityDto}. */
+    SchoolIdentityDto getIdentity();
 
     String getDefaultLanguage();
 

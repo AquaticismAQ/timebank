@@ -21,10 +21,13 @@ export function LoginPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [schoolInfo, setSchoolInfo] = useState<SchoolInfo | null>(null);
+  // Only the name is available here — see `api.school.getIdentity`.
+  const [schoolInfo, setSchoolInfo] = useState<{ name: string; fullName?: string } | null>(null);
 
   useEffect(() => {
-    api.school.getInfo().then(setSchoolInfo).catch(() => {});
+    // `getIdentity`, not `getInfo`: this page is unauthenticated (issue: the
+    // name rendered blank because /school/info 401s before login).
+    api.school.getIdentity().then(setSchoolInfo).catch(() => {});
   }, []);
 
   // Redirect if already logged in — 07-RoleFinetune.md §2.5: one role, one workspace, always.
@@ -91,7 +94,7 @@ export function LoginPage() {
           <h1 className="text-foreground mb-1">{t('auth.login.title')}</h1>
           {/* School name leads at a larger size; the platform description sits on
               its own line rather than running on after it. */}
-          <p className="text-foreground text-lg font-medium">{schoolInfo?.name ?? ''}</p>
+          {schoolInfo?.name && <p className="text-foreground text-lg font-medium">{schoolInfo.name}</p>}
           <p className="text-muted-foreground text-sm">{t('auth.login.subtitle')}</p>
         </div>
 

@@ -4,6 +4,7 @@ import cn.timebank.audit.application.AuditEntry;
 import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.cache.CacheConfig;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.organization.application.dto.SchoolIdentityDto;
 import cn.timebank.organization.application.dto.SchoolInfoDto;
 import cn.timebank.organization.application.dto.SchoolInfoRequests.UpdateSchoolInfoRequest;
 import cn.timebank.organization.domain.SchoolInfo;
@@ -35,6 +36,13 @@ class SchoolInfoServiceImpl implements SchoolInfoService {
     @Cacheable(value = CacheConfig.DICTIONARIES, key = "'schoolInfo'")
     public SchoolInfoDto getInfo() {
         return toDto(theRow());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SchoolIdentityDto getIdentity() {
+        SchoolInfo row = theRow();
+        return new SchoolIdentityDto(row.getName(), row.getFullName());
     }
 
     @Override

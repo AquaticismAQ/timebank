@@ -2,6 +2,7 @@ package cn.timebank.security;
 
 import cn.timebank.security.web.SecurityErrorHandlers;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -63,6 +64,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/ping/**").permitAll()
+                        // The school's name only, for the login page — see
+                        // SchoolInfoController.getIdentity(). Deliberately not
+                        // /school/info, which also carries a staff contact.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/school/identity").permitAll()
                         .requestMatchers("/actuator/**").permitAll() // already loopback-only (B0.11)
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex

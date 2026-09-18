@@ -81,7 +81,7 @@ function SidebarContent({ navItems, statsStrip, onNavClick, version, schoolName 
           real school name must not be in this repo at all. */}
       {schoolName && (
         <div className="px-4 py-3 border-t border-sidebar-border shrink-0">
-          <p className="text-xs text-sidebar-foreground/60 leading-snug break-words" title={schoolName}>
+          <p className="text-xs text-sidebar-foreground/80 leading-snug break-words" title={schoolName}>
             {schoolName}
           </p>
         </div>

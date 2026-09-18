@@ -206,6 +206,15 @@ export const api = {
   },
 
   school: {
+    /**
+     * Name only, and **unauthenticated** — for the login page, which cannot
+     * call `getInfo()`: that one is `isAuthenticated()` and returns 401 to a
+     * visitor who has not logged in yet, so the school name simply rendered
+     * blank there. Carries no contact or location, on purpose.
+     */
+    async getIdentity(): Promise<{ name: string; fullName?: string }> {
+      return http.get<{ name: string; fullName?: string }>('/school/identity');
+    },
     async getInfo(): Promise<SchoolInfo> {
       return http.get<SchoolInfo>('/school/info');
     },
