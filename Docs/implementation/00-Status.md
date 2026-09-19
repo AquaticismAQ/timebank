@@ -1153,3 +1153,20 @@ Follow-up deploy of `TIMEBANK_ACADEMIC_YEAR_START` and the export change that ha
 **Year-filtered exports smoke-tested afterwards**, since the stored-dates refactor is the code path that changed: `serviceRecords` scoped to 2026-2027 returns **73** rows against 672 unfiltered, so the window is doing real work; `studentList` and `studentCompletion` return 56 each. No `null` in any of them.
 
 **Housekeeping note.** `data/evidence-storage` now holds 2,887 files, of which 20 are `export_*.csv` produced by the live verification runs. The retention job removes them 7 days after each job finished; they are not evidence and do not need manual cleanup.
+
+### 41.2 Known gap moved out of the design docs: import commit is not audited (2026-09-20)
+
+`Design/*/11-DataImport.md` §8 used to carry "not yet implemented" beside its
+audit requirement. That marker has been removed as part of making the design docs
+read as design rather than as a status report — the requirement stays stated
+there, and the gap is recorded here, where gaps belong.
+
+**The gap is real.** `cn.timebank.dataexchange` writes two audit actions today —
+`export.create` and `import.historicalWindowOpened` — and a committed import
+writes none of its own. It should record actor, import type, row count and job id.
+Import is the one remaining path that changes student data in bulk without
+leaving an entry, which makes it the more important of the two halves that
+`11-DataImport.md` §8 asks for.
+
+Not fixed here because it is unrelated to the doc pass that surfaced it, and
+bundling it in would make both harder to review.

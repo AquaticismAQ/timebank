@@ -138,13 +138,15 @@ This design changes two of them: `exports` and `imports`.
 
 ### 5.1 Why not a single `exports.create`
 
-Today there is one `exports.create`: holding it allows every export type. The
-moment a teacher needs the student list, they also gain the ability to export
-Review Efficiency — a report whose every row is a colleague's review count and
-approval rate. With too coarse a grain, the only options are granting too much or
+A single `exports.create` would mean that holding it allows every export type.
+The moment a teacher needed the student list, they would also gain the ability to
+export Review Efficiency — a report whose every row is a colleague's review count
+and approval rate. At that grain the only options are granting too much or
 granting nothing.
 
-**So each export type gets its own permission**, and `exports.create` is retired.
+**So each export type has its own permission**, and `exports.create` is retired:
+its row survives so the audit trail of who once held it still resolves, but it
+grants nothing and cannot be assigned (§5.2).
 
 ### 5.2 Naming rules
 

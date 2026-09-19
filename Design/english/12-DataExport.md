@@ -110,11 +110,29 @@ holds in the implementation and must not be weakened.
   expanding reveals that export's filters and its "Export…" button.
 - **Cards for export types the user cannot access are not rendered**, rather than
   shown disabled.
+- A card is **collapsed by default and carries no Export control until it is
+  opened**. This is the point of the expand step rather than a side effect of it:
+  every filter defaults to All, so an always-present button would make one
+  unconsidered click the cheapest way to obtain the largest file the account can
+  produce, and narrowing first would cost more effort than not narrowing. For a
+  screen whose output is student records that is the wrong way round.
+- **An export with no narrowing filter applied asks for confirmation**, naming
+  what "everything" means for that user — the whole school for an SDC Admin, one
+  grade for a teacher bound to one. Narrowing is judged on the dimensions that
+  decide *whose* rows appear (Grade, Class, Reviewer), not on Academic Year: a
+  year of the whole school is still the whole school. A teacher's Review History
+  needs no confirmation, because the server has already pinned it to their own
+  decisions.
+- **A filter with only one possible answer is stated, not offered as a control.**
+  A teacher bound to a single grade gains nothing from a dropdown whose two
+  entries select the same students, and their Review History must not show "All
+  reviewers" — that would contradict what the file will actually contain.
 - Export is asynchronous: the click creates a job, and the finished file is
-  retrieved with a **time-boxed download link**. Today that link is an
-  HMAC-signed token valid for 300 seconds and **replayable within that window**
-  — it is not single-use. Making it single-use, and sweeping produced files, is
-  §8's outstanding work, not a property to claim now.
+  retrieved with a **single-use, time-boxed download link** — an HMAC-signed
+  token valid for 300 seconds that is refused on any second presentation.
+  Presenting a spent link returns `STATE_CONFLICT`, deliberately distinct from
+  the `INVALID_REQUEST` an expired one gives, so a stale click and a reused link
+  are told apart. Re-issuing a link is a click and does not re-run the export.
 
 ---
 
@@ -243,18 +261,17 @@ present grade**, and graduated students show `Graduated (YYYY)`.
 
 ### 5.4 The `GRADUATED` status is written by the annual process
 
-`StudentStatus` contains `GRADUATED`, and until the annual process defined in
-`13-AnnualRollover.md` is built, **no code writes it** — only `ACTIVE` and
-`INACTIVE` are ever set.
-
-Once that process ships, grade 8 and grade 12 students are set to `GRADUATED`
-each 1 September, and their login accounts are deactivated at the same time.
+`StudentStatus` contains `GRADUATED`, and the annual process defined in
+`13-AnnualRollover.md` is the only thing that writes it: on the day a school year
+turns over, grade 8 and grade 12 students are set to `GRADUATED` and their login
+accounts are deactivated at the same time.
 
 "Graduated" in an export is nevertheless **always derived from the graduation
-year** (§5.1), never read from the status column. That is deliberate: the
-derivation holds before the annual process exists, and holds again if a year's
-run is ever missed, whereas reading the status column gives the wrong answer in
-both cases.
+year** (§5.1), never read from the status column. That is deliberate, and it is
+not redundancy: the derivation was correct before the annual process existed, and
+stays correct if a year's run is ever missed or is still pending on the day
+someone runs the export. Reading the status column gives the wrong answer in
+every one of those cases.
 
 ---
 
@@ -430,15 +447,18 @@ school, so it belongs in no export.
 | 17 | `Approved Service Hours` | |
 | 18 | `Approval Rate` | `approved records / submitted records` |
 
-> **Changes from the draft**: `Project Description` is dropped — it is a
-> paragraph of prose, it wrecks the row layout in a CSV, and it is rarely why
-> anyone opens this file; the one-line `Project Summary` is kept. "Project
-> Duration" becomes a single `Recognized Minutes` column: in the draft it sat
-> beside the start and end dates with no way to tell whether it meant the
-> calendar span or the recognised hours.
-> `Approval Rate` uses **approved ÷ submitted records**, which measures the
-> quality of record-keeping on this project and is not distorted by a capacity
-> that was set optimistically.
+> **Note**: the file carries the one-line `Project Summary` and not the project's
+> full description. A paragraph of prose wrecks the row layout in a CSV, and it is
+> rarely why anyone opens this file.
+>
+> `Recognized Minutes` is named for what it is — the service duration the project
+> recognises — because a column called "duration" sitting beside the start and end
+> dates gives a reader no way to tell whether it means the calendar span or the
+> credited hours.
+>
+> `Approval Rate` is **approved ÷ submitted records**. That measures how well
+> service on this project was documented, and is not distorted by a capacity that
+> was set optimistically.
 
 ---
 
@@ -468,12 +488,13 @@ school, so it belongs in no export.
 | 10 | `Approved Service Hours` | |
 | 11 | `Credited Coins` | |
 
-> **Change from the draft**: the draft's "Approved Projects" is ambiguous — it
-> could mean projects whose *registration* was approved, or projects whose
-> *service records* were approved. Renamed to `Participated` and defined as
-> **at least one approved service record**. The gap between registrations and
-> participation is what makes this report worth running: students who signed up
-> and never delivered.
+> **Note**: "participated" means **at least one approved service record** for that
+> project — never an approved *registration*. The two readings are easy to
+> conflate and give different numbers, so the column is named `Participated`
+> rather than "approved", which could mean either.
+>
+> The gap between registrations and participation is what makes this report worth
+> running: students who signed up and never delivered.
 
 ---
 
@@ -503,10 +524,11 @@ school, so it belongs in no export.
 | 11 | `Rejection Rate` | |
 | 12 | `Return Rate` | |
 
-> **Change from the draft**: the draft gave three rates only. **Rates mislead at
-> low volume** — one review, approved, is an approval rate of 100.00%, which sits
-> in the column looking much like 400 reviews at 98%. The three **absolute
-> counts** are therefore given alongside, so the reader can see the denominator.
+> **Note**: the three **absolute counts** are given alongside the three rates,
+> because **rates mislead at low volume** — one review, approved, is an approval
+> rate of 100.00%, which sits in the column looking much like 400 reviews at 98%.
+> A reader must be able to see the denominator.
+>
 > This is peer performance material, and teachers do not hold the permission
 > (`10-RolesAndPermissions.md` §5.3).
 
@@ -543,10 +565,11 @@ school, so it belongs in no export.
 | 13 | `Duration Minutes` | |
 | 14 | `Credited Coins` | **Only approved rows have a value** |
 
-> **Changes from the draft**: `Project Summary` is dropped — in a file whose rows
-> are individual decisions, a project blurb is repeated, wide noise. `Decided At`
-> is added: a "history" without a timestamp cannot be sorted and cannot answer
-> when something was handled.
+> **Note**: the file carries no project summary. In a file whose rows are
+> individual decisions, a project blurb is repeated, wide noise.
+>
+> `Decided At` is present because a "history" without a timestamp cannot be
+> sorted and cannot answer when something was handled.
 
 ---
 
@@ -570,12 +593,10 @@ school, so it belongs in no export.
   to explain itself from its own contents, and a CSV carries no such explanation.
 - **No scheduled exports.** An export is an act of taking data out, and someone
   should be answerable for it at the moment it happens.
-- **No long-lived server-side copies** — an intent, not yet a fact. Every
-  export ever produced is still on disk: nothing sweeps `export_*.csv`, and the
-  download token is a replayable 300-second HMAC rather than a single-use one.
-  Both are required before this line is true, and both matter more than they
-  look: §6.1 revokes System Admin's export permission to remove a student-data
-  exit, and a permission is not the only path to a file sitting on the server
-  they administer.
+- **No long-lived server-side copies.** A produced file is deleted 7 days after
+  its job finishes and its job row's `resultRef` is cleared, so a link cannot
+  outlive the file it points at. This matters more than it looks: §6.1 revokes
+  System Admin's export permission to close a student-data exit, and a permission
+  is not the only path to a file sitting on the server they administer.
 - **No contact details in any export.** Student email and guardian information
   belong in no export — data minimisation matters most at the exit.

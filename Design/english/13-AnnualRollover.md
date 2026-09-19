@@ -81,21 +81,36 @@ means.
 
 ---
 
-## 3. Runs automatically on 1 September
+## 3. Runs automatically when the school year turns over
 
 The process **runs by itself when the new academic year begins**, so no one has
 to remember to press anything, and it produces a report.
 
+**The turnover date is configurable**, and defaults to 1 September
+(`TIMEBANK_ACADEMIC_YEAR_START`, `MM-DD`). 1 September is a convention rather
+than a law — a school may begin a week either side of it — and the date decides
+two things and only two: which academic year today falls in, and the start and
+end dates of academic years this process creates. Academic years that already
+exist keep the dates they were created with, and every query that scopes data to
+a year reads those stored dates, so moving the boundary never reinterprets a year
+students already have records in.
+
+An unreadable value refuses startup rather than falling back to the default,
+because silently promoting a school twelve days later than it asked is worse than
+not starting. `02-29` is refused outright: it does not exist in three years out of
+four, so a rollover scheduled there would simply never fire and a cohort would be
+left unpromoted with nothing saying so.
+
 > **Implementation note**: the scheduled job checks daily rather than pinning a
-> cron to 1 September. A once-a-year trigger has exactly one chance to fire, and
-> if the server happens to be restarting that night nobody is promoted and
+> cron to the turnover date. A once-a-year trigger has exactly one chance to fire,
+> and if the server happens to be restarting that night nobody is promoted and
 > nothing says so — the next signal would be a teacher noticing their class list
-> is a year stale. The observable behaviour is still "it happens on 1
-> September"; the difference is that a missed night is recovered the following
-> morning instead of being silently lost.
+> is a year stale. The observable behaviour is still "it happens on the turnover
+> date"; the difference is that a missed night is recovered the following morning
+> instead of being silently lost.
 
 ```
-① Determine the target year (the academic year 1 September falls in)
+① Determine the target year (the academic year the turnover date falls in)
         │
         ▼
 ② Idempotency check: has this year already been processed?
@@ -136,7 +151,7 @@ Neither is produced by this process. They are the two stage entry points and are
 established by the Student Development Centre through a **roster import**
 (`11-DataImport.md` §2.1).
 
-So after the 1 September run, grades 6 and 9 are empty until the import lands.
+So after the turnover run, grades 6 and 9 are empty until the import lands.
 That is correct, not a fault — and the report must say "grade 6: 0 students,
 grade 9: 0 students, awaiting roster import" rather than leaving someone to
 discover it.

@@ -180,8 +180,9 @@ after the migration is over.
   disabled — the same principle as §5.2: a control you cannot use should not be
   visible.
 - The only way to reopen it is a **maintenance utility on the server console**,
-  run by a system administrator. That utility is not built; its specification is
-  `Docs/backlog/01-HistoricalImportReenableUtility.md`.
+  run by a system administrator. It is specified in
+  `Docs/backlog/01-HistoricalImportReenableUtility.md` — the backlog being where
+  work that is specified but not yet built is kept.
 
 ### 6.2 Two things the interface must show
 
@@ -234,7 +235,7 @@ mistake.
 | **A commit either fully succeeds or fully rolls back** | Commit runs in a single transaction; "half imported" does not exist |
 | **Import produces no password plaintext** | Roster-imported accounts have no password hash and are first entered with an activation code |
 | **Conversion always uses the rule in effect on the service date** | The historical import resolves the rule version per row; no rule means the row fails |
-| **Every commit writes an audit entry** | **Required, not yet implemented** — nothing in `cn.timebank.dataexchange` references `AuditService` today. Actor, type, row count and job id |
+| **Every commit writes an audit entry** | Recording actor, import type, row count and job id. Export creation and the opening of the historical-import window are audited on the same principle: taking data in or out is an act someone is answerable for |
 
 ---
 
