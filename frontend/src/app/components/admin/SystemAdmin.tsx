@@ -442,6 +442,33 @@ const NO_GRADE_SCOPE_ROLES = new Set(['admin', 'student', 'sysadmin']);
 
 const STUDENT_ROLE_CODE = 'student';
 
+/**
+ * The seven exports of `12-DataExport.md` §6, in the design's own order.
+ *
+ * <p>`type` is the request key, and it is also the permission suffix — each
+ * export is now its own permission (`exports.studentList`, …) rather than one
+ * blanket `exports.create`, so the card list filters on `exports.${type}` and a
+ * teacher simply never sees Review Efficiency. That is the whole reason the
+ * codes were split: peer performance data is SDC-only, and a permission is the
+ * only place that can be enforced.</p>
+ *
+ * <p>`available` is the honest half. Two exports are built; the other five are
+ * being re-cut per type, and two older reports (`serviceHours`, `topProjects`)
+ * retired outright rather than being carried forward. Marking them here rather
+ * than deleting the rows keeps each explanation on screen while the file itself
+ * is still coming — and keeps the request keys in one place, so the frontend
+ * cannot drift from `SUPPORTED_REPORT_TYPES` unnoticed.</p>
+ */
+const EXPORT_TYPES: { type: string; titleKey: string; descKey: string; available: boolean }[] = [
+  { type: 'studentList', titleKey: 'admin.system.exportTypeStudentList', descKey: 'admin.system.exportTypeStudentListDesc', available: true },
+  { type: 'serviceRecords', titleKey: 'admin.system.exportTypeServiceRecords', descKey: 'admin.system.exportTypeServiceRecordsDesc', available: true },
+  { type: 'studentCompletion', titleKey: 'admin.system.exportTypeStudentCompletion', descKey: 'admin.system.exportTypeStudentCompletionDesc', available: false },
+  { type: 'projects', titleKey: 'admin.system.exportTypeProjects', descKey: 'admin.system.exportTypeProjectsDesc', available: false },
+  { type: 'studentParticipation', titleKey: 'admin.system.exportTypeStudentParticipation', descKey: 'admin.system.exportTypeStudentParticipationDesc', available: false },
+  { type: 'reviewEfficiency', titleKey: 'admin.system.exportTypeReviewEfficiency', descKey: 'admin.system.exportTypeReviewEfficiencyDesc', available: false },
+  { type: 'reviewHistory', titleKey: 'admin.system.exportTypeReviewHistory', descKey: 'admin.system.exportTypeReviewHistoryDesc', available: false },
+];
+
 /** Mirrors `CreateUserRequest.username`'s `@Size(min = 3, max = 64)`. */
 const USERNAME_MIN_LENGTH = 3;
 const USERNAME_MAX_LENGTH = 64;
@@ -1933,27 +1960,38 @@ export function SystemAdmin() {
               <Download className="w-8 h-8 text-green-500 mb-3" />
               <h3 className="text-foreground mb-1">{t('admin.system.exportData')}</h3>
               <p className="text-xs text-muted-foreground mb-4">{t('admin.system.exportDesc')}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {/* Issue 093: these labels used to describe exports that do not
-                    exist — "Export Audit Logs" requested a `completion` report and
-                    "Export Transactions" a `serviceHours` one. The backend supports
-                    exactly these seven types and no audit-log or transaction export,
-                    so the labels are corrected to what each actually produces, and
-                    the two types that had no button at all are now reachable. */}
-                {([
-                  { label: t('admin.system.exportStudents'), type: 'students' },
-                  { label: t('admin.system.exportAllRecords'), type: 'serviceRecords' },
-                  { label: t('admin.system.exportParticipation'), type: 'participation' },
-                  { label: t('admin.system.exportCompletion'), type: 'completion' },
-                  { label: t('admin.system.exportServiceHours'), type: 'serviceHours' },
-                  { label: t('admin.system.exportReviewEfficiency'), type: 'reviewEfficiency' },
-                  { label: t('admin.system.exportTopProjects'), type: 'topProjects' },
-                ] as const).map(item => (
-                  <button key={item.type} onClick={() => handleExport(item.type)}
-                    className="py-2 border border-border rounded-xl text-sm text-foreground hover:bg-accent flex items-center justify-between px-4">
-                    {item.label}
-                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                  </button>
+              {/* One card per export, each carrying its own explanation rather
+                  than a shared one-liner (12-DataExport.md §6). A name alone does
+                  not distinguish these: "Student List" and "Student Completion"
+                  sound interchangeable and are not — one is placement with no
+                  figures in it, the other is one year's hours against the
+                  requirement — and Service Records is a record of submissions,
+                  not of credit, which is the mistake the file itself invites.
+                  The text is the design's, kept in i18n so the Chinese reads as
+                  prose rather than as a translation of an English label. */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {EXPORT_TYPES.filter(item => hasPermission(`exports.${item.type}`)).map(item => (
+                  <div key={item.type} className="border border-border rounded-xl p-4 flex flex-col">
+                    <h4 className="text-sm text-foreground mb-1">{t(item.titleKey)}</h4>
+                    <p className="text-xs text-muted-foreground leading-relaxed mb-3 grow">{t(item.descKey)}</p>
+                    {item.available ? (
+                      <button onClick={() => handleExport(item.type)}
+                        className="w-full py-2 border border-border rounded-xl text-sm text-foreground hover:bg-accent flex items-center justify-between px-4">
+                        {t('admin.system.exportRunAction')}
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                      </button>
+                    ) : (
+                      /* Not a disabled button pretending to be pressable: the
+                         five re-cut exports are being rebuilt per type, and the
+                         repo's rule for a feature that is reserved rather than
+                         broken is to say so plainly (CLAUDE.md, domain
+                         conventions). Hiding the card would lose the
+                         explanation, which is useful before the file exists. */
+                      <p className="w-full py-2 rounded-xl bg-muted/50 text-xs text-muted-foreground text-center">
+                        {t('admin.system.exportNotYetAvailable')}
+                      </p>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>

@@ -62,7 +62,7 @@ class ExportOutputRetentionIT extends AbstractIntegrationTest {
         // be "deletes whatever it finds".
         ExportOutputRetentionJob.SweepResult beforeBoundary = retentionJob.sweep(now.minus(2, ChronoUnit.DAYS));
         assertThat(beforeBoundary.filesDeleted()).isZero();
-        assertThat(contentOf(oldKey)).startsWith("gradeId,gradeName,");
+        assertThat(contentOf(oldKey)).startsWith("id,studentId,studentName,");
         assertThat(resultRefOf(oldJobId)).isEqualTo(oldKey);
 
         ExportOutputRetentionJob.SweepResult afterBoundary = retentionJob.sweep(now);
@@ -75,7 +75,7 @@ class ExportOutputRetentionIT extends AbstractIntegrationTest {
 
         // The export taken minutes ago is untouched, and still downloadable.
         assertThat(resultRefOf(freshJobId)).isEqualTo(freshKey);
-        assertThat(contentOf(freshKey)).startsWith("gradeId,gradeName,");
+        assertThat(contentOf(freshKey)).startsWith("id,studentId,studentName,");
     }
 
     @Test
@@ -159,7 +159,12 @@ class ExportOutputRetentionIT extends AbstractIntegrationTest {
     }
 
     private String finishedExport() {
-        JobDto job = exportService.create(new CreateExportRequest("participation"), "usr_test_admin");
+        // `serviceRecords` because this fixture needs a type that really runs
+        // and really writes a file — the sweep has nothing to delete otherwise.
+        // It used to be `participation`, which V31 retired along with the other
+        // re-cut reports (12-DataExport.md §9.4); a retired key is refused at
+        // create, so the sweep would have been proved against no file at all.
+        JobDto job = exportService.create(new CreateExportRequest("serviceRecords"), "usr_test_admin");
         Instant deadline = Instant.now().plus(Duration.ofSeconds(25));
         while (Instant.now().isBefore(deadline)) {
             String status = statusOf(job.id());
@@ -184,7 +189,7 @@ class ExportOutputRetentionIT extends AbstractIntegrationTest {
         jdbc.update("""
                 insert into job (id, kind, resource_type, status, created_by, processed_rows, checkpoint_offset,
                                  result_ref, version, created_at, updated_at, finished_at)
-                values (:id, 'EXPORT', 'participation', 'SUCCEEDED', 'usr_test_admin', 0, 0,
+                values (:id, 'EXPORT', 'serviceRecords', 'SUCCEEDED', 'usr_test_admin', 0, 0,
                         :ref, 1, :at, :at, :at)
                 """, new MapSqlParameterSource().addValue("id", jobId)
                 .addValue("ref", storageKey).addValue("at", finishedAt));

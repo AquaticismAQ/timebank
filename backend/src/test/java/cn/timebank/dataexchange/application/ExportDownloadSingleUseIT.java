@@ -54,7 +54,7 @@ class ExportDownloadSingleUseIT extends AbstractIntegrationTest {
 
         DownloadResult first = exportService.download(token);
         assertThat(new String(first.content().readAllBytes(), StandardCharsets.UTF_8))
-                .startsWith("gradeId,gradeName,");
+                .startsWith("id,studentId,studentName,");
 
         assertThatThrownBy(() -> exportService.download(token))
                 .isInstanceOf(ApiException.class)
@@ -78,7 +78,10 @@ class ExportDownloadSingleUseIT extends AbstractIntegrationTest {
         JobDto export = finishedExport();
         String first = tokenOf(exportService.issueDownloadUrl(export.id(), adminAuth()));
         String second = tokenOf(exportService.issueDownloadUrl(export.id(), adminAuth()));
-        assertThat(second).isNotEqualTo(first); // different expiry second, so a genuinely different token
+        // Genuinely different tokens — and it is the nonce that makes them so,
+        // not the expiry second: these two are issued in the same second, which
+        // is exactly the case that used to produce two identical links.
+        assertThat(second).isNotEqualTo(first);
 
         exportService.download(first).content().close();
         assertThatThrownBy(() -> exportService.download(first)).hasMessageContaining("already been used");
@@ -88,7 +91,7 @@ class ExportDownloadSingleUseIT extends AbstractIntegrationTest {
         // download precisely so this stays possible).
         DownloadResult viaSecondLink = exportService.download(second);
         assertThat(new String(viaSecondLink.content().readAllBytes(), StandardCharsets.UTF_8))
-                .startsWith("gradeId,gradeName,");
+                .startsWith("id,studentId,studentName,");
     }
 
     @Test
@@ -153,9 +156,17 @@ class ExportDownloadSingleUseIT extends AbstractIntegrationTest {
         return tokenOf(exportService.issueDownloadUrl(finishedExport().id(), adminAuth()));
     }
 
-    /** The smallest real export there is — a bounded aggregate report, so the job finishes in one write. */
+    /**
+     * A real export, run to completion, because a single-use link is only
+     * meaningfully spent against a file that exists.
+     *
+     * <p>`serviceRecords` rather than the `participation` this used to use: V31
+     * retired that key with the other re-cut reports (12-DataExport.md §9.4),
+     * and a retired key is refused at create — so the token under test would
+     * never have been issued.</p>
+     */
     private JobDto finishedExport() {
-        JobDto job = exportService.create(new CreateExportRequest("participation"), "usr_test_admin");
+        JobDto job = exportService.create(new CreateExportRequest("serviceRecords"), "usr_test_admin");
         Instant deadline = Instant.now().plus(Duration.ofSeconds(25));
         while (Instant.now().isBefore(deadline)) {
             String status = jobRepository.findById(job.id()).orElseThrow().getStatus();
