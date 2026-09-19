@@ -1,7 +1,9 @@
 package cn.timebank.dataexchange.web;
 
 import cn.timebank.common.web.ApiResponse;
+import cn.timebank.dataexchange.application.HistoricalImportWindowService;
 import cn.timebank.dataexchange.application.ImportService;
+import cn.timebank.dataexchange.application.dto.HistoricalImportWindowDto;
 import cn.timebank.dataexchange.application.dto.ImportErrorReportDto;
 import cn.timebank.dataexchange.application.dto.JobDto;
 import cn.timebank.security.application.CookieSessionUserDetails;
@@ -23,9 +25,27 @@ import org.springframework.web.multipart.MultipartFile;
 public class ImportController {
 
     private final ImportService importService;
+    private final HistoricalImportWindowService windowService;
 
-    public ImportController(ImportService importService) {
+    public ImportController(ImportService importService, HistoricalImportWindowService windowService) {
         this.importService = importService;
+        this.windowService = windowService;
+    }
+
+    /**
+     * 11-DataImport.md §6.2. Mapped above {@code /imports/{id}} in this file
+     * only for readability — the literal path wins over the template either
+     * way, so {@code window} is not mistaken for a job id.
+     *
+     * <p>Gated on {@code imports.read} rather than {@code imports.create}: this
+     * is the read the screen uses to decide whether to draw the card at all,
+     * and anyone who may look at import jobs may see whether the feature is
+     * still open.</p>
+     */
+    @GetMapping("/api/v1/imports/window")
+    @PreAuthorize("hasAuthority('imports.read')")
+    public ApiResponse<HistoricalImportWindowDto> window() {
+        return ApiResponse.of(windowService.state());
     }
 
     @GetMapping("/api/v1/imports/templates/{type}")

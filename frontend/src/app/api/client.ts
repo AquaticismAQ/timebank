@@ -164,6 +164,26 @@ export interface ImportJob {
   validRows?: number;
 }
 
+/**
+ * The 15-day historical-import window (`Design/*&#47;11-DataImport.md` §6).
+ * `NOT_OPENED` means no historical import has ever committed, so the feature is
+ * still available and the screen owes the operator §6.2's warning; `OPEN` is
+ * the countdown state; `EXPIRED` means the card is not drawn at all, since a
+ * control that cannot be used should not be visible.
+ *
+ * `secondsRemaining` comes from the server rather than being subtracted from
+ * `expiresAt` in the browser, so a device with a skewed clock cannot render a
+ * confident countdown that is wrong. `expiresAt` is still what gets displayed
+ * as the date — §6.2 wants both, because only a date goes into a plan.
+ */
+export interface HistoricalImportWindow {
+  state: 'NOT_OPENED' | 'OPEN' | 'EXPIRED';
+  openedAt?: string;
+  expiresAt?: string;
+  windowDays?: number;
+  secondsRemaining?: number;
+}
+
 export const api = {
   auth: {
     async login(username: string, password: string): Promise<LoginResponse> {
@@ -1350,6 +1370,10 @@ export const api = {
     },
     async cancel(id: string): Promise<void> {
       await http.post<void>(`/imports/${id}/cancel`);
+    },
+    /** §6.2's three states. Read before the historical-import card is drawn — and re-read after a historical import commits, which is the one moment the answer changes. */
+    async window(): Promise<HistoricalImportWindow> {
+      return http.get<HistoricalImportWindow>('/imports/window');
     },
   },
 

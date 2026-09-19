@@ -44,14 +44,17 @@ class ImportServiceImpl implements ImportService {
     private final FileStorage fileStorage;
     private final IdempotencyService idempotencyService;
     private final RuleSetSource ruleSetSource;
+    private final HistoricalImportWindowService windowService;
 
     ImportServiceImpl(JobRepository jobRepository, ImportJobRunner importJobRunner, FileStorage fileStorage,
-                       IdempotencyService idempotencyService, RuleSetSource ruleSetSource) {
+                       IdempotencyService idempotencyService, RuleSetSource ruleSetSource,
+                       HistoricalImportWindowService windowService) {
         this.jobRepository = jobRepository;
         this.importJobRunner = importJobRunner;
         this.fileStorage = fileStorage;
         this.idempotencyService = idempotencyService;
         this.ruleSetSource = ruleSetSource;
+        this.windowService = windowService;
     }
 
     /**
@@ -97,6 +100,11 @@ class ImportServiceImpl implements ImportService {
         if (!isSupported(type)) {
             throw ApiException.invalidRequest("Unknown import type: " + type);
         }
+        // First of §2.9's two enforcement points, and before the file is read:
+        // once the 15-day window has closed there is no reason to spend a disk
+        // write and a SHA-256 pass on a file that can never be committed
+        // (11-DataImport.md §6.1). Roster import never reaches this check.
+        windowService.requireImportable(type);
         if (file == null || file.isEmpty()) {
             throw ApiException.invalidRequest("An import file is required.");
         }
@@ -195,6 +203,11 @@ class ImportServiceImpl implements ImportService {
         if (!RESUMABLE_COMMIT_STATUSES.contains(job.getStatus())) {
             throw ApiException.stateConflict("Import must be validated before it can be committed.");
         }
+        // Second enforcement point (Q-8). A job validated twenty minutes before
+        // the window closed must not commit after it: honouring in-flight jobs
+        // would make the expiry advisory, and "validate now, commit whenever"
+        // is precisely the indefinite door §6 closes.
+        windowService.requireCommittable(job.getResourceType());
         importJobRunner.commitAsync(jobId, actorId);
         return toDto(job);
     }

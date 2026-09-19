@@ -51,7 +51,7 @@ class StudentImportProvisionsAccountsTest {
     private ImportJobRunner runner() {
         return new ImportJobRunner(progressWriter, mock(HistoricalImportRowValidator.class), rowValidator,
                 mock(AccountService.class), studentService, userService, fileStorage, ruleEngine,
-                mock(RuleSetSource.class));
+                mock(RuleSetSource.class), mock(HistoricalImportWindowService.class));
     }
 
     private Job queuedStudentImport() {
