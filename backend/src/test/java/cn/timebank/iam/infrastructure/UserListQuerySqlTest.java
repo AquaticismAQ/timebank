@@ -36,7 +36,9 @@ class UserListQuerySqlTest {
                 new UserListFilter("Bravo", "student", "INACTIVE", "grd_6", "cls_6a"), params);
 
         assertThat(clause)
-                .contains("lower(u.display_name) like :search")
+                // Issue 106: both columns, in one bracketed `or` so the filters
+                // that follow keep `and`-ing against the whole group.
+                .contains("(lower(u.display_name) like :search or lower(u.username) like :search)")
                 .contains("r2.code = :roleCode")
                 // Issue 097: the *derived* status, not the raw column — against
                 // `u.status` the LOCKED option matched rows nothing writes.
@@ -49,6 +51,28 @@ class UserListQuerySqlTest {
         assertThat(params.getValue("status")).isEqualTo("INACTIVE");
         assertThat(params.getValue("gradeId")).isEqualTo("grd_6");
         assertThat(params.getValue("classId")).isEqualTo("cls_6a");
+    }
+
+    /**
+     * Issue 106. The username half is easy to add and easy to add *wrongly*:
+     * without the brackets the clause reads
+     * {@code ... like :search or lower(u.username) like :search and r2.code = :roleCode},
+     * and SQL binds {@code and} tighter than {@code or} — so every other filter
+     * would silently apply to only half the search, and a role-filtered search
+     * would return rows of the wrong role. That is invisible in a count and
+     * obvious in a string.
+     */
+    @Test
+    void the_search_predicate_is_bracketed_so_later_filters_cannot_bind_to_the_or() {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        String clause = repository.filterClause(
+                new UserListFilter("2833", "student", null, null, null), params);
+
+        assertThat(clause)
+                .contains("and (lower(u.display_name) like :search or lower(u.username) like :search)")
+                .doesNotContain("like :search or lower(u.username) like :search and");
+        // …and a username-shaped term still binds as an ordinary search value.
+        assertThat(params.getValue("search")).isEqualTo("%2833%");
     }
 
     @Test

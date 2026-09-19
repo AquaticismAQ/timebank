@@ -184,7 +184,16 @@ public class UserListQueryRepository {
         StringBuilder clause = new StringBuilder();
         if (filter.hasSearch()) {
             params.addValue("search", "%" + filter.search().toLowerCase() + "%");
-            clause.append(" and lower(u.display_name) like :search");
+            // Username as well as display name (issue 106). An administrator
+            // identifying an account is usually holding a credential slip, and
+            // a slip prints the username and the name — never the email. Since
+            // issue 105 that username is 8 random digits, so it is also the
+            // half a name search cannot help with.
+            //
+            // Parenthesised: the filters below append their own `and`, and
+            // without the brackets the trailing one would bind to the `or` and
+            // quietly widen every other filter.
+            clause.append(" and (lower(u.display_name) like :search or lower(u.username) like :search)");
         }
         if (filter.hasRoleCode()) {
             // `exists`, not a join: see SELECT_COLUMNS — the row count must not

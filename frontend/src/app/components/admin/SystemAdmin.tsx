@@ -1619,7 +1619,7 @@ export function SystemAdmin() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  {[t('admin.system.colName'), t('admin.system.colEmail'), t('admin.system.colRoles'),
+                  {[t('admin.system.colName'), t('admin.system.colUsername'), t('admin.system.colRoles'),
                     t('admin.system.colGrade'), t('admin.system.colClass'),
                     t('admin.system.colStatus'), t('admin.system.colLastLogin'), t('admin.system.colActions')].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs text-muted-foreground font-medium">{h}</th>
@@ -1630,14 +1630,13 @@ export function SystemAdmin() {
                 {users.map(u => (
                   <tr key={u.id} className="border-b border-border last:border-b-0 hover:bg-muted/30">
                     <td className="px-4 py-3 text-sm text-foreground font-medium">{u.name}</td>
-                    {/* Truncate rather than wrap: an address long enough to wrap
-                        pushed every other column narrower, and Last Login now needs
-                        room for a time as well as a date. Full value on hover. */}
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {/* The width lives on the div, not the td: in an auto-layout
-                          table a max-width on a cell is ignored, so the column kept
-                          growing to fit the longest address. Measured before/after. */}
-                      <div className="truncate max-w-[13rem]" title={u.email}>{u.email}</div>
+                    {/* The username, not the email (issue 106): email is optional
+                        on every account and may be blank, while this is the value
+                        an administrator matches against a credential slip. Since
+                        issue 105 a student's is 8 random digits, so it is rendered
+                        tabular-nums to keep the column scannable. */}
+                    <td className="px-4 py-3 text-xs text-muted-foreground font-mono tabular-nums whitespace-nowrap">
+                      {u.username}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(u.roleCode)}`}>{roleName(u.roleCode)}</span>
@@ -1679,7 +1678,7 @@ export function SystemAdmin() {
                         {t(USER_STATUS_LABEL_KEYS[u.status] ?? 'admin.system.inactive')}
                       </span>
                     </div>
-                    <div className="text-xs text-muted-foreground mb-2">{u.email}</div>
+                    <div className="text-xs text-muted-foreground font-mono tabular-nums mb-2">{u.username}</div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs px-1.5 py-0.5 rounded-md ${roleColor(u.roleCode)}`}>{roleName(u.roleCode)}</span>
                       <span className="text-xs text-muted-foreground">
