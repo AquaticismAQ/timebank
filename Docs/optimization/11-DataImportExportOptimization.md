@@ -358,7 +358,7 @@ on phase 1 and can be pulled forward if the window's deadline pressure demands i
 | 2 — filters, student scope, column conventions | Not started — **the critical path** | — |
 | 3 — Student Completion, Student Participation | Not started (needs 2) | — |
 | 4 — Projects, Review Efficiency, Review History | Not started (needs 2) | — |
-| 5 — egress hygiene | **Partly done**: single-use links and output sweeping shipped; the audit entry on export creation (F-9, exit criterion 1) is **not** done | `V33` |
+| 5 — egress hygiene | **Done**: single-use links, output sweeping, and the audit entry on export creation (F-9) | `V33` |
 | 6 — the 15-day historical-import window | **Done**, backend and frontend | `V32` |
 
 Phases 1, 5 and 6 were built in parallel and merged in migration order. Three

@@ -1930,7 +1930,11 @@ export function SystemAdmin() {
             )}
 
             {/* Roster import is deliberately outside the window: a school takes
-                in students every year, so this one never closes. */}
+                in students every year, so this one never closes. It is still
+                gated on the permission, which `imports.*` no longer grants to
+                everyone who can reach this tab — a teacher was being shown a
+                card whose every button returns 403. */}
+            {hasPermission('imports.create') && (
             <div className="bg-card border border-border rounded-2xl p-5">
               <Upload className="w-8 h-8 text-indigo-500 mb-3" />
               <h3 className="text-foreground mb-1">{t('admin.system.importStudentInfo')}</h3>
@@ -1949,6 +1953,7 @@ export function SystemAdmin() {
                 </button>
               </div>
             </div>
+            )}
 
             {/* Directly under the roster import, because that is the moment
                 this is needed: the import creates the pending accounts

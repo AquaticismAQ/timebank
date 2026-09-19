@@ -1,5 +1,7 @@
 package cn.timebank.dataexchange.application;
 
+import cn.timebank.audit.application.AuditEntry;
+import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.dataexchange.application.dto.DataExchangeRequests.CreateExportRequest;
@@ -53,13 +55,15 @@ class ExportServiceImpl implements ExportService {
     private final ExportJobRunner exportJobRunner;
     private final FileStorage fileStorage;
     private final ExportDownloadTokenService tokenService;
+    private final AuditService auditService;
 
     ExportServiceImpl(JobRepository jobRepository, ExportJobRunner exportJobRunner, FileStorage fileStorage,
-                       ExportDownloadTokenService tokenService) {
+                       ExportDownloadTokenService tokenService, AuditService auditService) {
         this.jobRepository = jobRepository;
         this.exportJobRunner = exportJobRunner;
         this.fileStorage = fileStorage;
         this.tokenService = tokenService;
+        this.auditService = auditService;
     }
 
     // Deliberately not @Transactional: jobRepository.saveAndFlush runs (and
@@ -79,8 +83,31 @@ class ExportServiceImpl implements ExportService {
         String resourceType = RUNNER_RESOURCE_TYPES.getOrDefault(request.reportType(), request.reportType());
         Job job = new Job(OpaqueIds.generate("job"), JobKind.EXPORT, resourceType, "QUEUED", actorId, Instant.now());
         jobRepository.saveAndFlush(job);
+        // F-9 / phase 5 exit criterion 1. An export is the one operation that
+        // takes student data *out* of the system, and it was until now the only
+        // significant action leaving no trace beyond a `job` row that retention
+        // later strips. The permission is recorded too, because "who was allowed
+        // to do this" is the question asked afterwards, and the per-type split
+        // (V31) is what makes the answer specific.
+        //
+        // Recorded on request rather than on completion: the request is the
+        // decision a person made, and a job that fails still says someone asked
+        // for the file. Requested is also the state under which the row must
+        // exist, so an export that dies mid-run is not invisible.
+        auditService.record(new AuditEntry(actorId, "exports." + request.reportType(),
+                "export.create", "export", job.getId(), null,
+                new ExportRequested(request.reportType(), resourceType), null));
         exportJobRunner.runAsync(job.getId());
         return toDto(job);
+    }
+
+    /**
+     * The audit row's {@code after} summary. `reportType` is what was asked for
+     * and `resourceType` is what the runner was given — the same string for
+     * every type except `studentList`, whose stopgap rename would otherwise make
+     * the audit trail disagree with the request for no visible reason.
+     */
+    private record ExportRequested(String reportType, String resourceType) {
     }
 
     @Override

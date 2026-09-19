@@ -61,6 +61,8 @@ class ImportExportIT extends AbstractIntegrationTest {
     private cn.timebank.review.application.ReviewService reviewService;
     @Autowired
     private cn.timebank.file.application.FileService fileService;
+    @Autowired
+    private org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbcTemplate;
 
     private static final AtomicInteger SEQ = new AtomicInteger();
 
@@ -182,6 +184,29 @@ class ImportExportIT extends AbstractIntegrationTest {
         DownloadResult roster = exportService.download(
                 rosterUrl.substring(rosterUrl.indexOf("token=") + "token=".length()));
         assertThat(new String(roster.content().readAllBytes(), StandardCharsets.UTF_8)).contains(s1.studentNumber());
+
+        // F-9: an export is the one operation that takes student data out of
+        // the system, so asking for one has to be answerable afterwards. The
+        // permission is asserted alongside the action because the whole point
+        // of V31's split is that "who was allowed to do this" now has a
+        // specific answer rather than a blanket `exports.create`.
+        assertThat(auditActionsFor(rosterExport.id()))
+                .as("requesting an export must leave an audit row")
+                .containsExactly("export.create");
+        assertThat(auditPermissionFor(rosterExport.id())).isEqualTo("exports.studentList");
+        assertThat(auditPermissionFor(rawExport.id())).isEqualTo("exports.serviceRecords");
+    }
+
+    private java.util.List<String> auditActionsFor(String jobId) {
+        return jdbcTemplate.queryForList(
+                "select action from audit_log where resource_type = 'export' and resource_id = :id",
+                new org.springframework.jdbc.core.namedparam.MapSqlParameterSource("id", jobId), String.class);
+    }
+
+    private String auditPermissionFor(String jobId) {
+        return jdbcTemplate.queryForObject(
+                "select permission_used from audit_log where resource_type = 'export' and resource_id = :id",
+                new org.springframework.jdbc.core.namedparam.MapSqlParameterSource("id", jobId), String.class);
     }
 
     /**
