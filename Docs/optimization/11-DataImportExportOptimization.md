@@ -391,6 +391,37 @@ test suite was green in every case:
 - **The projects test passed vacuously.** An integration schema contains no
   projects, so a header-only assertion held while the row mapper was broken.
 
+### 3.0.1 The export action is gated behind the card (2026-09-20)
+
+The first build of the export cards had the Export button always visible, with
+every filter defaulting to All. That made the cheapest gesture on the screen —
+one click, no thought — produce the largest file the account could produce: for
+an SDC Admin, the whole school, on every click. Narrowing first took *more*
+effort than not narrowing. For a screen whose output is student records that is
+the wrong way round.
+
+Three changes, all client-side; the server's scope rules were already correct:
+
+- **Cards are collapsed and carry no Export action.** Opening one is what reveals
+  both the filters and the button, so nobody runs an export without having been
+  shown what could have been narrowed.
+- **An unnarrowed export asks for confirmation**, naming what "everything" means
+  for *that* operator — "every student in the school" for an admin, "every
+  student in Grade 6" for a teacher bound to one grade. Narrowing is measured on
+  the dimensions that decide *whose* rows appear (grade, class, reviewer), not the
+  academic year: a year of the whole school is still the whole school. A teacher's
+  Review History counts as already narrowed, because the server has pinned it to
+  their own decisions.
+- **A filter with one possible answer is a statement, not a control.** A teacher
+  bound to one grade gained nothing from a dropdown whose two entries selected the
+  same students, and their Review History showed "All reviewers" — which was a
+  plain contradiction of what the file would contain. Both now read as fixed
+  facts. The same rule drops a Class dropdown with no classes under it.
+
+The Reviewer dropdown is also populated for school-wide accounts now. It had been
+left empty when Review History had no query, and stayed empty after phase 4
+landed, so the filter existed server-side and offered nothing in the UI.
+
 **Two carried forward, not done:**
 
 - **R-4's session decision.** Permission codes are serialized into the session at

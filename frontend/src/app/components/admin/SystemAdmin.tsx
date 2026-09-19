@@ -504,7 +504,27 @@ const KNOWN_ROLE_LABEL_KEYS: Record<string, string> = {
  * whatever the type declares and nothing else. Rendering a control the type does
  * not declare would build a request the server rejects.
  */
-function ExportCard({ type, filters, onFilterChange, onExport, gradeOptions, classOptions, academicYears, reviewerOptions }: {
+/**
+ * One export: its explanation, its filters, and — only once the card is open —
+ * the action that produces the file.
+ *
+ * <p><b>Collapsed with no Export button</b>, which is a deliberate inversion of
+ * the first version. There the button was always live and every filter defaulted
+ * to All, so the cheapest gesture on the screen — one click, no thought — handed
+ * an SDC administrator the entire school's data, and narrowing first took extra
+ * work. That is the wrong way round for a file full of student records: the broad
+ * export should cost more effort than the narrow one, not less. Opening the card
+ * shows what can be narrowed before anything can be run.</p>
+ *
+ * <p>A filter with only one possible answer is rendered as a <b>statement rather
+ * than a control</b>. A teacher bound to one grade gains nothing from a dropdown
+ * whose two entries ("All grades" and their grade) select the same students, and
+ * a select that cannot change the outcome invites the reader to believe it can.
+ * The same applies to a teacher's Reviewer filter, which the server pins to them
+ * — showing "All reviewers" there would be a plain lie about what the file will
+ * contain.</p>
+ */
+function ExportCard({ type, filters, onFilterChange, onExport, gradeOptions, classOptions, academicYears, reviewerOptions, isSchoolWide }: {
   type: ExportTypeInfo;
   filters: ExportFilterValues | undefined;
   onFilterChange: (field: ExportFilterField, value: string | undefined) => void;
@@ -513,13 +533,58 @@ function ExportCard({ type, filters, onFilterChange, onExport, gradeOptions, cla
   classOptions: SchoolClass[];
   academicYears: AcademicYear[];
   reviewerOptions: { id: string; displayName: string }[];
+  isSchoolWide: boolean;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const chosen = filters ?? {};
-  const activeCount = Object.values(chosen).filter(v => v != null && v !== '').length;
 
   const selectClass = 'w-full px-3 py-2 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none';
+
+  // Student Completion is always one year (Q-4), so its year is never an "All".
+  const yearOffersAll = type.key !== 'studentCompletion';
+  // A teacher's reviewer is fixed by the server, so it is not theirs to choose.
+  const reviewerIsPinned = type.filters.includes('reviewerId') && !isSchoolWide;
+
+  /**
+   * Whether the operator has actually narrowed *who* the file covers.
+   *
+   * The academic year is deliberately not counted: it limits when, not whom, and
+   * a year's worth of the whole school is still the whole school. A pinned
+   * reviewer does count — the server has already limited that file to one
+   * person's decisions, so there is nothing broad about it.
+   */
+  const narrowed = Boolean(chosen.gradeId) || Boolean(chosen.classId)
+    || Boolean(chosen.reviewerId) || reviewerIsPinned;
+
+  /** What "everything" means for this operator, in words, for the confirmation. */
+  const fullScopeDescription = gradeOptions.length === 1
+    ? t('admin.system.exportScopeOneGrade', { grade: gradeOptions[0].name })
+    : t('admin.system.exportScopeWholeSchool');
+  const yearDescription = chosen.academicYearId
+    ? (academicYears.find(y => y.id === chosen.academicYearId)?.code ?? '')
+    : t('admin.system.exportFilterAllYears');
+
+  const requestExport = () => {
+    if (narrowed) {
+      onExport();
+      return;
+    }
+    // Nothing narrowed, so this is the operator's maximum scope. Confirm it
+    // explicitly rather than let an unconsidered click produce the largest file
+    // the account is capable of producing.
+    setConfirming(true);
+  };
+
+  /** A filter whose only answer is already decided: shown, but not as a control. */
+  const fixedFilter = (label: string, value: string, note?: string) => (
+    <div className="rounded-xl border border-border bg-muted/40 px-3 py-2">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <p className="text-sm text-foreground">{value}</p>
+      {note && <p className="text-xs text-muted-foreground mt-0.5">{note}</p>}
+    </div>
+  );
 
   return (
     <div className="bg-card border border-border rounded-2xl p-5">
@@ -538,87 +603,150 @@ function ExportCard({ type, filters, onFilterChange, onExport, gradeOptions, cla
         </p>
       ) : (
         <>
-          {type.filters.length > 0 && (
-            <button onClick={() => setExpanded(v => !v)}
-              className="w-full mb-2 py-2 px-3 rounded-xl border border-border text-xs text-muted-foreground hover:bg-accent flex items-center justify-between">
-              <span>
-                {t('admin.system.exportFilters')}
-                {activeCount > 0 && ` (${activeCount})`}
-              </span>
-              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-          )}
+          <button onClick={() => setExpanded(v => !v)}
+            className="w-full py-2 px-3 rounded-xl border border-border text-xs text-muted-foreground hover:bg-accent flex items-center justify-between">
+            <span>{expanded ? t('admin.system.exportCollapse') : t('admin.system.exportPrepare')}</span>
+            {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
 
           {expanded && (
-            <div className="space-y-2 mb-3">
+            <div className="mt-3 space-y-2">
               {type.filters.includes('academicYearId') && (
-                <label className="block">
-                  <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterAcademicYear')}</span>
-                  <select className={selectClass} value={chosen.academicYearId ?? ''}
-                    onChange={e => onFilterChange('academicYearId', e.target.value || undefined)}>
-                    {/* Q-4: Student Completion does not offer "All years" at all.
-                        The requirement it measures against is an annual one, so a
-                        rate across every year has no denominator — the option is
-                        absent rather than merely non-default, because offering a
-                        choice that produces a meaningless number is worse than one
-                        card behaving differently from the other six. */}
-                    {type.key !== 'studentCompletion' && (
-                      <option value="">{t('admin.system.exportFilterAllYears')}</option>
-                    )}
-                    {academicYears.map(y => <option key={y.id} value={y.id}>{y.code}</option>)}
-                  </select>
-                </label>
+                academicYears.length <= 1 && !yearOffersAll
+                  ? fixedFilter(t('admin.system.exportFilterAcademicYear'),
+                      academicYears[0]?.code ?? '')
+                  : (
+                    <label className="block">
+                      <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterAcademicYear')}</span>
+                      <select className={selectClass} value={chosen.academicYearId ?? ''}
+                        onChange={e => onFilterChange('academicYearId', e.target.value || undefined)}>
+                        {/* Q-4: Student Completion does not offer "All years" at
+                            all. The requirement it measures against is annual, so a
+                            rate across every year has no denominator — the option is
+                            absent rather than merely non-default. */}
+                        {yearOffersAll && (
+                          <option value="">{t('admin.system.exportFilterAllYears')}</option>
+                        )}
+                        {academicYears.map(y => <option key={y.id} value={y.id}>{y.code}</option>)}
+                      </select>
+                    </label>
+                  )
               )}
+
               {type.filters.includes('gradeId') && (
-                <label className="block">
-                  <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterGrade')}</span>
-                  <select className={selectClass} value={chosen.gradeId ?? ''}
-                    onChange={e => {
-                      onFilterChange('gradeId', e.target.value || undefined);
-                      // A class belongs to exactly one grade, so a class chosen
-                      // under the previous grade is now contradictory. Clearing it
-                      // beats sending a pair that cannot match anybody and calling
-                      // the empty file a result.
-                      onFilterChange('classId', undefined);
-                    }}>
-                    <option value="">{t('admin.system.exportFilterAllGrades')}</option>
-                    {/* `Grade.name` is already resolved per request language by
-                        the server, so there is nothing to format here. */}
-                    {gradeOptions.map(g => (
-                      <option key={g.id} value={g.id}>{g.name}</option>
-                    ))}
-                  </select>
-                </label>
+                gradeOptions.length === 1
+                  /* One bound grade: "All grades" and that grade select the same
+                     students, so a dropdown would imply a choice that does not
+                     exist. Stated instead, so the operator can still see what the
+                     file will cover. */
+                  ? fixedFilter(t('admin.system.exportFilterGrade'), gradeOptions[0].name,
+                      t('admin.system.exportScopeFixedByAssignment'))
+                  : (
+                    <label className="block">
+                      <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterGrade')}</span>
+                      <select className={selectClass} value={chosen.gradeId ?? ''}
+                        onChange={e => {
+                          onFilterChange('gradeId', e.target.value || undefined);
+                          // A class belongs to exactly one grade, so a class chosen
+                          // under the previous grade is now contradictory. Clearing
+                          // it beats sending a pair that matches nobody and calling
+                          // the empty file a result.
+                          onFilterChange('classId', undefined);
+                        }}>
+                        <option value="">{t('admin.system.exportFilterAllGrades')}</option>
+                        {/* `Grade.name` is already resolved per request language by
+                            the server, so there is nothing to format here. */}
+                        {gradeOptions.map(g => (
+                          <option key={g.id} value={g.id}>{g.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )
               )}
-              {type.filters.includes('classId') && (
-                <label className="block">
-                  <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterClass')}</span>
-                  <select className={selectClass} value={chosen.classId ?? ''}
-                    onChange={e => onFilterChange('classId', e.target.value || undefined)}>
-                    <option value="">{t('admin.system.exportFilterAllClasses')}</option>
-                    {classOptions.map(c => <option key={c.id} value={c.id}>{c.code ?? c.name}</option>)}
-                  </select>
-                </label>
+
+              {/* No classes in scope at all: an "All classes" dropdown with nothing
+                  under it is noise, so the row is omitted rather than shown empty. */}
+              {type.filters.includes('classId') && classOptions.length > 0 && (
+                classOptions.length === 1
+                  ? fixedFilter(t('admin.system.exportFilterClass'),
+                      classOptions[0].code ?? classOptions[0].name)
+                  : (
+                    <label className="block">
+                      <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterClass')}</span>
+                      <select className={selectClass} value={chosen.classId ?? ''}
+                        onChange={e => onFilterChange('classId', e.target.value || undefined)}>
+                        <option value="">{t('admin.system.exportFilterAllClasses')}</option>
+                        {classOptions.map(c => <option key={c.id} value={c.id}>{c.code ?? c.name}</option>)}
+                      </select>
+                    </label>
+                  )
               )}
+
               {type.filters.includes('reviewerId') && (
-                <label className="block">
-                  <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterReviewer')}</span>
-                  <select className={selectClass} value={chosen.reviewerId ?? ''}
-                    onChange={e => onFilterChange('reviewerId', e.target.value || undefined)}>
-                    <option value="">{t('admin.system.exportFilterAllReviewers')}</option>
-                    {reviewerOptions.map(r => <option key={r.id} value={r.id}>{r.displayName}</option>)}
-                  </select>
-                </label>
+                reviewerIsPinned
+                  /* The server pins a teacher's Review History to their own
+                     decisions (§6.7). Rendering "All reviewers" here would state
+                     the opposite of what the file contains. */
+                  ? fixedFilter(t('admin.system.exportFilterReviewer'),
+                      t('admin.system.exportReviewerPinnedToYou'),
+                      t('admin.system.exportReviewerPinnedNote'))
+                  : (
+                    <label className="block">
+                      <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterReviewer')}</span>
+                      <select className={selectClass} value={chosen.reviewerId ?? ''}
+                        onChange={e => onFilterChange('reviewerId', e.target.value || undefined)}>
+                        <option value="">{t('admin.system.exportFilterAllReviewers')}</option>
+                        {reviewerOptions.map(r => <option key={r.id} value={r.id}>{r.displayName}</option>)}
+                      </select>
+                    </label>
+                  )
               )}
+
+              <button onClick={requestExport}
+                className="w-full mt-1 py-2 border border-border rounded-xl text-sm text-foreground hover:bg-accent flex items-center justify-between px-4">
+                {t('admin.system.exportRunAction')}
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </button>
             </div>
           )}
-
-          <button onClick={onExport}
-            className="w-full py-2 border border-border rounded-xl text-sm text-foreground hover:bg-accent flex items-center justify-between px-4">
-            {t('admin.system.exportRunAction')}
-            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-          </button>
         </>
+      )}
+
+      {confirming && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[92vh]">
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+              <h3 className="flex-1 text-foreground text-sm">{t('admin.system.exportConfirmTitle')}</h3>
+            </div>
+            <div className="overflow-y-auto px-5 py-4 space-y-3 text-sm">
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 flex gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                  {t('admin.system.exportConfirmWarning', {
+                    report: t(type.titleKey),
+                    scope: fullScopeDescription,
+                    year: yearDescription,
+                  })}
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t('admin.system.exportConfirmAdvice')}
+              </p>
+            </div>
+            <div className="flex gap-2 px-5 py-4 border-t border-border shrink-0">
+              <button onClick={() => setConfirming(false)}
+                className="flex-1 py-2.5 border border-border rounded-xl text-sm text-foreground hover:bg-accent">
+                {t('admin.system.exportConfirmNarrowInstead')}
+              </button>
+              <button onClick={() => { setConfirming(false); onExport(); }}
+                className="flex-1 py-2.5 rounded-xl text-sm text-white bg-amber-600 hover:bg-amber-700">
+                {t('admin.system.exportConfirmProceed')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1262,6 +1390,32 @@ export function SystemAdmin() {
    */
   const [exportTypes, setExportTypes] = useState<ExportTypeInfo[]>([]);
   const [exportFilters, setExportFilters] = useState<Record<string, ExportFilterValues>>({});
+
+  /**
+   * Mirrors the server's `hasSchoolWideVisibility()`: only these two roles see
+   * every student, and only they may pick a reviewer other than themselves.
+   * Used to decide whether a filter is the operator's to choose or already
+   * decided for them — never to grant anything, which stays the server's job.
+   */
+  const isSchoolWide = (user?.roles.includes('admin') || user?.roles.includes('sysadmin')) === true;
+
+  /**
+   * Staff who could appear as a reviewer, for Review History's filter.
+   *
+   * Only fetched for a school-wide account: a teacher's reviewer is pinned to
+   * themselves server-side, so for them this list would populate a control that
+   * cannot change the file. Students are excluded — they review nothing.
+   */
+  const [reviewerOptions, setReviewerOptions] = useState<{ id: string; displayName: string }[]>([]);
+
+  useEffect(() => {
+    if (!isSchoolWide || !canExportAnything) return;
+    api.users.list({ pageSize: 200, sort: 'displayName' })
+      .then(page => setReviewerOptions(page.items
+        .filter(u => u.roleCode !== STUDENT_ROLE_CODE)
+        .map(u => ({ id: u.id, displayName: u.displayName }))))
+      .catch(() => setReviewerOptions([]));
+  }, [isSchoolWide, canExportAnything]);
 
   const setExportFilter = (typeKey: string, field: ExportFilterField, value: string | undefined) => {
     setExportFilters(prev => ({ ...prev, [typeKey]: { ...prev[typeKey], [field]: value } }));
@@ -2219,11 +2373,8 @@ export function SystemAdmin() {
               onExport={() => handleExport(item.key)}
               gradeOptions={scopedGrades} classOptions={classesForGrade(exportFilters[item.key]?.gradeId)}
               academicYears={academicYears}
-              /* Empty until Review History exists (phase 4). It is the only type
-                 with a Reviewer filter and it is not available yet, so the panel
-                 is never drawn — fetching a staff directory to populate a control
-                 nobody can see would be a request per visit for nothing. */
-              reviewerOptions={[]} />
+              reviewerOptions={reviewerOptions}
+              isSchoolWide={isSchoolWide} />
           ))}
 
           {exportTypes.length === 0 && (
