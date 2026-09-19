@@ -7,7 +7,7 @@ public final class DataExchangeRequests {
     private DataExchangeRequests() {
     }
 
-    /** `POST /exports` (contract §4.13). {@code reportType} is one of the five `/reports/*` names, or {@code serviceRecords} for the full raw ledger (Design.md §16.3's cohort-preservation export). */
+    /** `POST /exports` (contract §4.13). {@code reportType} is an export type's stable key, and also names the permission required to ask for it — {@code exports.<reportType>} (10-RolesAndPermissions.md §5.2). {@code ExportServiceImpl.SUPPORTED_REPORT_TYPES} is the set a query exists for today. */
     public record CreateExportRequest(@NotBlank String reportType) {
     }
 

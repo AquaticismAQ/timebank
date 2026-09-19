@@ -4,6 +4,14 @@
 -- (never a Java enum) precisely so a school can add or adjust them without
 -- a code change (Design.md §5 watch-out). Grants below are the contract
 -- §5 permission matrix's defaults, not a fixed policy.
+--
+-- This file only ever adds. Because every statement is INSERT IGNORE,
+-- *deleting* a line here revokes nothing on a schema that already holds the
+-- row — it only stops a from-scratch schema acquiring it, so the live
+-- server and every fresh timebank_it_* test schema quietly diverge and
+-- `mvn verify` passes either way. A removal therefore always needs both
+-- halves: the DELETE in a versioned migration, and the line dropped here.
+-- V31__export_permissions.sql is the worked example.
 
 INSERT IGNORE INTO permission (id, code, description) VALUES
     ('perm_projects_read', 'projects.read', 'View projects within visible scope'),
@@ -43,7 +51,18 @@ INSERT IGNORE INTO permission (id, code, description) VALUES
     ('perm_rules_manage', 'rules.manage', 'Create or edit rule drafts and service categories'),
     ('perm_rules_publish', 'rules.publish', 'Publish a rule version'),
     ('perm_reports_read', 'reports.read', 'View dashboards and reports'),
-    ('perm_exports_create', 'exports.create', 'Create a data export job'),
+    ('perm_exports_create', 'exports.create', 'Retired (10-RolesAndPermissions.md §5.1): superseded by one exports.* permission per export type, grants revoked in V31. Row kept, never deleted and never reused — the code is a string in historical audit entries.'),
+    -- 10-RolesAndPermissions.md §5.3: one permission per export type. The
+    -- id is 'perm_' + the code with dots as underscores, as everywhere else
+    -- here, which needed V31 to widen permission.id — exports.studentParticipation
+    -- makes a 33-character id and the column was VARCHAR(32).
+    ('perm_exports_studentList', 'exports.studentList', 'Export the Student List report'),
+    ('perm_exports_serviceRecords', 'exports.serviceRecords', 'Export the Service Records report'),
+    ('perm_exports_studentCompletion', 'exports.studentCompletion', 'Export the Student Completion report'),
+    ('perm_exports_studentParticipation', 'exports.studentParticipation', 'Export the Student Participation report'),
+    ('perm_exports_projects', 'exports.projects', 'Export the Projects report'),
+    ('perm_exports_reviewHistory', 'exports.reviewHistory', 'Export the Review History report'),
+    ('perm_exports_reviewEfficiency', 'exports.reviewEfficiency', 'Export the Review Efficiency report'),
     ('perm_imports_create', 'imports.create', 'Create a data import job'),
     ('perm_imports_read', 'imports.read', 'View import job status and errors'),
     ('perm_imports_commit', 'imports.commit', 'Confirm and commit an import'),
@@ -110,6 +129,17 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_teacher', 'perm_accounts_read'),
     ('role_teacher', 'perm_rules_read'),
     ('role_teacher', 'perm_reports_read'),
+    -- 10-RolesAndPermissions.md §5.3: six of the seven export types. The
+    -- teacher grant is a new capability, not a narrowing of an old one —
+    -- `exports.create` was never granted to a teacher. exports.reviewEfficiency
+    -- is withheld: every row of it is a colleague's review volume and
+    -- approval rate.
+    ('role_teacher', 'perm_exports_studentList'),
+    ('role_teacher', 'perm_exports_serviceRecords'),
+    ('role_teacher', 'perm_exports_studentCompletion'),
+    ('role_teacher', 'perm_exports_studentParticipation'),
+    ('role_teacher', 'perm_exports_projects'),
+    ('role_teacher', 'perm_exports_reviewHistory'),
     -- 07-RoleFinetune.md §2.3: admin and sysadmin hold an identical,
     -- unioned permission set — same reasoning as is_protected above, this
     -- repeatable migration is what makes a from-scratch schema correct
@@ -149,7 +179,17 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_admin', 'perm_rules_manage'),
     ('role_admin', 'perm_rules_publish'),
     ('role_admin', 'perm_reports_read'),
-    ('role_admin', 'perm_exports_create'),
+    -- 10-RolesAndPermissions.md §5.3: all seven export types. Deliberately
+    -- *not* 'perm_exports_create' — that permission is retired (§5.1) and
+    -- re-seeding its grant here would put it straight back on a fresh
+    -- schema, which is the half of the change V31 cannot do on its own.
+    ('role_admin', 'perm_exports_studentList'),
+    ('role_admin', 'perm_exports_serviceRecords'),
+    ('role_admin', 'perm_exports_studentCompletion'),
+    ('role_admin', 'perm_exports_studentParticipation'),
+    ('role_admin', 'perm_exports_projects'),
+    ('role_admin', 'perm_exports_reviewHistory'),
+    ('role_admin', 'perm_exports_reviewEfficiency'),
     ('role_admin', 'perm_imports_create'),
     ('role_admin', 'perm_imports_read'),
     ('role_admin', 'perm_imports_commit'),
@@ -196,10 +236,13 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_sysadmin', 'perm_rules_manage'),
     ('role_sysadmin', 'perm_rules_publish'),
     ('role_sysadmin', 'perm_reports_read'),
-    ('role_sysadmin', 'perm_exports_create'),
-    ('role_sysadmin', 'perm_imports_create'),
-    ('role_sysadmin', 'perm_imports_read'),
-    ('role_sysadmin', 'perm_imports_commit'),
+    -- 10-RolesAndPermissions.md §6.1 reverses V21's admin/sysadmin merge for
+    -- import and export only: no exports.* and no imports.* line here on
+    -- purpose. Export takes student data out in bulk and import writes it in
+    -- bulk; a system administrator needs the system to run, not the roster
+    -- in a file. V21's union INSERT is a no-op on a fresh schema, so this
+    -- absence is what makes a from-scratch install agree with the live
+    -- schema after V31's DELETEs. Everything else stays merged.
     ('role_sysadmin', 'perm_users_read'),
     ('role_sysadmin', 'perm_users_manage'),
     ('role_sysadmin', 'perm_roles_read'),
@@ -241,4 +284,13 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_template_teacher', 'perm_organizations_manage'),
     ('role_template_teacher', 'perm_accounts_read'),
     ('role_template_teacher', 'perm_rules_read'),
-    ('role_template_teacher', 'perm_reports_read');
+    ('role_template_teacher', 'perm_reports_read'),
+    -- The same six the live `teacher` role gains above (§2.2): a template
+    -- that does not match the role it templates is a trap for whoever
+    -- creates the next teacher role from it.
+    ('role_template_teacher', 'perm_exports_studentList'),
+    ('role_template_teacher', 'perm_exports_serviceRecords'),
+    ('role_template_teacher', 'perm_exports_studentCompletion'),
+    ('role_template_teacher', 'perm_exports_studentParticipation'),
+    ('role_template_teacher', 'perm_exports_projects'),
+    ('role_template_teacher', 'perm_exports_reviewHistory');
