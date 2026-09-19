@@ -31,8 +31,25 @@ public class ExportController {
         this.exportService = exportService;
     }
 
+    /**
+     * One permission per export type, not a blanket {@code exports.create}
+     * (`Design/english/10-RolesAndPermissions.md` §5.1: a teacher who needs
+     * the student list must not thereby gain Review Efficiency, whose every
+     * row is a colleague's approval rate). The authority name is the export
+     * type's stable key, so the check is {@code exports.} + the requested
+     * type — the type is only a value here, never re-parsed as SpEL.
+     *
+     * <p>Accepted knowingly (`11-DataImportExportOptimization.md` §3.1):
+     * because authorization runs before the method body, an unknown or
+     * misspelled report type is a <b>403</b> — no such permission exists —
+     * rather than the service's 400. Right precedence for an unknown
+     * permission, confusing status for a typo. A type whose permission the
+     * caller does hold but which no query serves yet still reaches the
+     * service and gets its 400. A blank type is also still a 400, because
+     * {@code @Valid} runs during argument resolution, ahead of this.</p>
+     */
     @PostMapping("/api/v1/exports")
-    @PreAuthorize("hasAuthority('exports.create')")
+    @PreAuthorize("hasAuthority('exports.' + #request.reportType())")
     public ApiResponse<JobDto> create(@Valid @RequestBody CreateExportRequest request, Authentication auth) {
         return ApiResponse.of(exportService.create(request, principalId(auth)));
     }

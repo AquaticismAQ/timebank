@@ -42,12 +42,27 @@ class RoleManagementIT extends AbstractIntegrationTest {
         assertThat(roleRepository.findByCode("teacher").orElseThrow().isProtected()).isFalse();
     }
 
+    /**
+     * V21 merged the two roles into one permission set
+     * (`07-RoleFinetune.md` §2.3). V31 reverses that merge for import and
+     * export only (`Design/english/10-RolesAndPermissions.md` §6.1): bulk
+     * student-data movement is a Student Development Centre judgement, not
+     * an operations task. Everything else stays identical, and that "one
+     * named exception, not a general drift apart" is what this asserts —
+     * §6's closing note puts any further separation out of scope.
+     */
     @Test
-    void adminAndSysadminHoldIdenticalPermissionSets() {
+    void adminAndSysadminHoldIdenticalPermissionSetsApartFromImportAndExport() {
         RoleDto admin = roleService.listRoles().stream().filter(r -> r.code().equals("admin")).findFirst().orElseThrow();
         RoleDto sysadmin = roleService.listRoles().stream().filter(r -> r.code().equals("sysadmin")).findFirst().orElseThrow();
 
-        assertThat(admin.permissionCodes()).isEqualTo(sysadmin.permissionCodes());
+        assertThat(sysadmin.permissionCodes())
+                .as("System Admin holds no import and no export permission at all")
+                .noneMatch(code -> code.startsWith("exports.") || code.startsWith("imports."));
+        assertThat(admin.permissionCodes().stream()
+                .filter(code -> !code.startsWith("exports.") && !code.startsWith("imports."))
+                .collect(java.util.stream.Collectors.toSet()))
+                .isEqualTo(sysadmin.permissionCodes());
     }
 
     @Test

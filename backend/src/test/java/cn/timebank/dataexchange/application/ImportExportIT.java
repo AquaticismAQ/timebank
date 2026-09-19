@@ -151,11 +151,17 @@ class ImportExportIT extends AbstractIntegrationTest {
         StudentDetailDto s1 = createStudent();
         createAnApprovedServiceRecord(s1, 60);
 
-        JobDto reportExport = exportService.create(new CreateExportRequest("participation"), "usr_test_admin");
-        awaitTerminal(reportExport.id());
-        JobDto finishedReport = jobRepository.findById(reportExport.id()).map(this::toDto).orElseThrow();
-        assertThat(finishedReport.status()).isEqualTo("SUCCEEDED");
-        assertThat(finishedReport.finishedAt()).isNotNull();
+        // `studentList` is the post-V31 key for the roster export (was
+        // `students`). It runs end to end here rather than merely being
+        // accepted, because the runner still dispatches on the old name and
+        // ExportServiceImpl maps between the two — a rename applied to the
+        // request but not to the stored resource type would leave this job
+        // FAILED, which only a completed run can tell us.
+        JobDto rosterExport = exportService.create(new CreateExportRequest("studentList"), "usr_test_admin");
+        awaitTerminal(rosterExport.id());
+        JobDto finishedRoster = jobRepository.findById(rosterExport.id()).map(this::toDto).orElseThrow();
+        assertThat(finishedRoster.status()).isEqualTo("SUCCEEDED");
+        assertThat(finishedRoster.finishedAt()).isNotNull();
 
         JobDto rawExport = exportService.create(new CreateExportRequest("serviceRecords"), "usr_test_admin");
         awaitTerminal(rawExport.id());
@@ -168,6 +174,30 @@ class ImportExportIT extends AbstractIntegrationTest {
         String content = new String(result.content().readAllBytes(), StandardCharsets.UTF_8);
         assertThat(content).startsWith("id,studentId,studentName,serviceDate,durationMinutes,creditedUnits,status");
         assertThat(content).contains(s1.id());
+
+        // The roster file is downloadable too, and carries the student the
+        // fixture created — the studentList key really reaches the roster
+        // query and not some other writer.
+        String rosterUrl = exportService.issueDownloadUrl(rosterExport.id(), adminAuth());
+        DownloadResult roster = exportService.download(
+                rosterUrl.substring(rosterUrl.indexOf("token=") + "token=".length()));
+        assertThat(new String(roster.content().readAllBytes(), StandardCharsets.UTF_8)).contains(s1.studentNumber());
+    }
+
+    /**
+     * The five pre-split aggregate keys, and the roster's old name, are no
+     * longer accepted (`11-DataImportExportOptimization.md` §3.1): two
+     * export types retire outright and the rest are re-cut per type in
+     * later phases. Asserted here because "the set was narrowed" is only
+     * true if asking for an old key actually fails.
+     */
+    @Test
+    void preSplitExportKeysAreRejected() {
+        for (String retired : java.util.List.of("participation", "completion", "serviceHours", "topProjects", "students")) {
+            assertThatThrownBy(() -> exportService.create(new CreateExportRequest(retired), "usr_test_admin"))
+                    .as("export type %s must no longer be accepted", retired)
+                    .isInstanceOf(ApiException.class);
+        }
     }
 
     /** The "serviceRecords" export reads the `service_record` table directly — a real approved record, not a historical-import credit (which deliberately never creates one; see ImportJobRunner's Javadoc). */
