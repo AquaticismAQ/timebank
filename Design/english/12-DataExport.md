@@ -260,8 +260,26 @@ both cases.
 
 ## 6. The export catalogue
 
-Seven types. Each gives its title, description, required permission, filters and
+Seven types. Each gives its title, card text, required permission, filters and
 columns.
+
+**The card text is an explanation, not a label.** A one-line description tells
+someone what an export is called, which they could already guess from the title.
+What they actually need is enough to decide *without downloading it* whether this
+is the file they want — and to know the one thing about it that would otherwise
+be discovered halfway through a spreadsheet.
+
+So each card states three things:
+
+1. **what one row is** — a student, a record, a decision;
+2. **the question the file answers**, and where to go instead if that is not the
+   question;
+3. **the caveat**, where one exists. `Credited Coins` being empty on unapproved
+   rows is not a footnote to find later; it is the difference between summing
+   that column and getting the school's credited total, or getting nonsense.
+
+These strings are i18n copy in both languages (§2.6), so they are written as
+prose for a reader, not as field labels.
 
 > The former `participation` (participation rate by grade) and `serviceHours`
 > (monthly hours trend) exports are **retired**: the first is covered, in more
@@ -274,8 +292,11 @@ columns.
 ### 6.1 Student List (`studentList`)
 
 - **Title**: Student List
-- **Description**: The student roster, with student number, grade and class,
-  status, and enrolment and graduation years.
+- **Card text**: One row per student on the roster. Identity and placement only
+  — number, name, grade, class, status, and the years they entered and are due
+  to leave. It carries no service or time-coin figures: for those, use Student
+  Completion. The Grade column is the grade for the academic year you select, so
+  a past year shows where that student was *then*, not where they are now.
 - **Permission**: `exports.studentList`
 - **Filters**: Academic Year, Grade, Class
 
@@ -296,8 +317,12 @@ columns.
 ### 6.2 Service Records (`serviceRecords`)
 
 - **Title**: Service Records
-- **Description**: Submitted service records with their review status and any
-  credited time coins.
+- **Card text**: One row per submitted service record, in every review state —
+  approved, awaiting review, returned and rejected. **This is a record of
+  submissions, not of credit.** `Credited Coins` is filled only on approved
+  rows, so summing that column does not give the school's credited total; filter
+  to `Approved` first. Drafts are excluded: an unsubmitted draft is the student's
+  private working state, not a claim made to the school.
 - **Permission**: `exports.serviceRecords`
 - **Filters**: Academic Year, Grade, Class
 
@@ -339,8 +364,12 @@ school, so it belongs in no export.
 ### 6.3 Student Completion (`studentCompletion`)
 
 - **Title**: Student Completion
-- **Description**: Each student's service hours, time coins earned and progress
-  against the annual requirement, for one academic year.
+- **Card text**: One row per student for a **single academic year**: hours
+  approved, coins credited, the annual requirement for their stage, how many
+  hours remain, and the completion rate. Always one year — the requirement is an
+  annual one, so a rate across all years has no denominator and the filter does
+  not offer it. `Gap Hours` is the actionable column: "six hours short" is more
+  use to a form tutor than "67% complete".
 - **Permission**: `exports.studentCompletion`
 - **Filters**: Academic Year (**defaults to the current year**, §4.2), Grade, Class
 
@@ -370,8 +399,12 @@ school, so it belongs in no export.
 ### 6.4 Projects Report (`projects`)
 
 - **Title**: Projects Report
-- **Description**: Project organisation details, registration and participation,
-  and the service actually delivered.
+- **Card text**: One row per project that ran in the selected year — who ran it,
+  with which partner, when, for how many places, and what was actually delivered
+  against them. Use it to see which projects convert registrations into service.
+  `Approval Rate` is approved ÷ submitted **records**, so it measures how well
+  service on that project was documented, not how many students turned up; a low
+  rate usually means evidence problems rather than absence.
 - **Permission**: `exports.projects`
 - **Filters**: Academic Year, Grade (intersection of the project's eligible
   grades and the user's bound grades)
@@ -412,8 +445,12 @@ school, so it belongs in no export.
 ### 6.5 Student Participation (`studentParticipation`)
 
 - **Title**: Student Participation
-- **Description**: Which projects each student registered for and which they
-  actually delivered on, so a teacher can see engagement.
+- **Card text**: One row per student, naming the projects they registered for
+  and the projects they actually produced approved service on. **The gap between
+  those two counts is the point of the file** — a student with four registrations
+  and one participation signed up and did not deliver, which is visible here and
+  nowhere else. "Participated" means at least one approved record for that
+  project, not an approved registration.
 - **Permission**: `exports.studentParticipation`
 - **Filters**: Academic Year, Grade, Class
 
@@ -443,8 +480,11 @@ school, so it belongs in no export.
 ### 6.6 Review Efficiency (`reviewEfficiency`)
 
 - **Title**: Review Efficiency
-- **Description**: Each reviewer's volume, average turnaround and distribution of
-  decisions.
+- **Card text**: One row per reviewer: how many decisions they made, how long
+  they took on average, and how those decisions split, given as **both counts and
+  rates**. Read the counts first — one review, approved, is an approval rate of
+  100.00%, which sits in the column looking much like 400 reviews at 98%. This is
+  peer performance data and is available to the Student Development Centre only.
 - **Permission**: `exports.reviewEfficiency` (**SDC Admin only**)
 - **Filters**: Academic Year, Grade
 
@@ -475,8 +515,11 @@ school, so it belongs in no export.
 ### 6.7 Review History (`reviewHistory`)
 
 - **Title**: Review History
-- **Description**: Individual review decisions, including the reasons given for
-  returns and rejections.
+- **Card text**: One row per review decision — who decided, on whose record,
+  when, what they decided, and the reason and comment they gave, including for
+  returns and rejections. Use it to review how a decision was reached, or to give
+  a reviewer their own record. **A teacher sees only their own decisions**; the
+  Reviewer filter is fixed to them and cannot select a colleague.
 - **Permission**: `exports.reviewHistory`
 - **Filters**: Academic Year, Reviewer
   - **Teacher: the Reviewer filter is pinned to themselves** and cannot select a

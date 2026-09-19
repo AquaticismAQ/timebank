@@ -195,7 +195,8 @@ So the filter set is declared **once**, as part of the export type's definition:
 | `reviewEfficiency` | Academic Year, Grade |
 | `reviewHistory` | Academic Year, Reviewer |
 
-`GET /exports/types` returns that catalogue — key, i18n title and description, and the
+`GET /exports/types` returns that catalogue — key, i18n title and **card text** (§6
+'s explanation, not a one-line label), and the
 filters the type declares — and the client renders only what it is told. `POST /exports`
 **rejects** a filter the type does not declare, with a field error, rather than
 accepting and dropping it.
@@ -258,7 +259,9 @@ writers re-implements them. So: one `ExportCsvWriter` that owns
   "already holds in the implementation and must not be weakened").
 
 Column **names stay fixed English** and live in code beside the query (§2.6). Card
-**titles and descriptions** are i18n keys in `en.json` and `zh.json` (§2.6). Those two
+**titles and card texts** are i18n keys in `en.json` and `zh.json` (§2.6) — the card
+text is a short paragraph rather than a label, so the card layout has to give it room
+and must not truncate it to one line. Those two
 facts pull in opposite directions and are the single most likely thing to be got wrong
 by someone "making the export translatable".
 
@@ -561,7 +564,7 @@ date, because only a date goes into a migration plan — and, after expiry, **no
 | `frontend/src/app/components/admin/ExportCenter.tsx` | New. The card list + filter panels, extracted rather than grown inside a 2,100-line file |
 | `frontend/src/app/components/admin/RoleManagement.tsx` | Sensitive-permission list (F-18) |
 | `frontend/src/app/api/client.ts` | `api.exports.create` takes filters; `api.imports.window()` |
-| `frontend/src/i18n/en.json`, `zh.json` | Seven card titles + descriptions; the window's warning, countdown and expiry copy; the §7.3 no-grade message |
+| `frontend/src/i18n/en.json`, `zh.json` | Seven card titles + seven multi-sentence **card texts** (`12-DataExport.md` §6: what one row is, the question it answers, and the caveat — Q-3's non-summing rates and Q-11's mixed tenses both land here); the window's warning, countdown and expiry copy; the §7.3 no-grade message |
 | `Docs/integration/APIContract.md` + `_CN.md` | §4.13's permission cell and the "carry no period of their own" paragraph, which stops being true in phase 2; §4.14's window states |
 | `Docs/implementation/00-Status.md` | Phase entry/exit as each lands |
 | `Docs/issues/107-*.md` | Closed by §3.2, with its `integration-test/STATUS.md` rows |

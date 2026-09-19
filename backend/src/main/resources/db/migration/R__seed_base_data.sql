@@ -185,6 +185,26 @@ INSERT IGNORE INTO rule_version (
     MAKEDATE(@ay_start - 1, 1) + INTERVAL 8 MONTH, NULL, NOW(3), NOW(3), NOW(3), NULL
 );
 
+-- Mark the current academic year as already rolled over
+-- (Design/*/13-AnnualRollover.md §3).
+--
+-- A newly installed or freshly seeded system has no rollover history, but its
+-- roster is already in the grades it is supposed to be in — the import put it
+-- there. Without this row the daily job reads "this year has never been rolled
+-- over", correctly concludes it is overdue, and rolls it over a second time:
+-- everyone in grades 8 and 12 graduates and loses their login, on a database
+-- that was correct before it ran.
+--
+-- The establishing import *is* that year's rollover, so the system starts in a
+-- rolled-over state and the first real run is next September. `INSERT IGNORE`
+-- with a year-derived id means this fires once per academic year, so a
+-- deployment that spans a September does not re-mark the new year and block a
+-- rollover that genuinely is due.
+INSERT IGNORE INTO annual_rollover_run
+    (id, academic_year_id, status, triggered_by, started_at, finished_at)
+VALUES (CONCAT('aro_bootstrap_', @ay_current_id), @ay_current_id, 'SUCCEEDED',
+        'bootstrap', NOW(3), NOW(3));
+
 -- Notification templates: representative examples proving the mechanism.
 -- The full catalog is finalized as B3/B4 build the transactions that need them.
 -- serviceRecord.approved/.returned proved the mechanism in B2; .rejected is

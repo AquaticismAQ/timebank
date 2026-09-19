@@ -24,6 +24,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AnnualRolloverIT extends AbstractIntegrationTest {
 
     @Autowired
+    private AnnualRolloverService annualRolloverService;
+
+    @Autowired
     private NamedParameterJdbcTemplate jdbc;
 
     /**
@@ -40,7 +43,11 @@ class AnnualRolloverIT extends AbstractIntegrationTest {
      */
     @BeforeEach
     void clearRolloverHistory() {
-        jdbc.update("delete from annual_rollover_run", new MapSqlParameterSource());
+        // Everything except base data's bootstrap marker for the establishing
+        // year — that row is part of the migrated schema, not test residue, and
+        // refusesToRollOverTheYearTheSystemWasEstablishedIn depends on it.
+        jdbc.update("delete from annual_rollover_run where triggered_by <> 'bootstrap'",
+                new MapSqlParameterSource());
     }
 
     /**
@@ -94,6 +101,32 @@ class AnnualRolloverIT extends AbstractIntegrationTest {
     private Map<String, Object> studentRow(String id) {
         return jdbc.queryForMap("select grade_id, class_id, status from student where id = :id",
                 new MapSqlParameterSource("id", id));
+    }
+
+    /**
+     * The hazard that nearly shipped: a freshly migrated schema has a roster in
+     * its correct current grades but no rollover history, so the daily job would
+     * read the current year as overdue and roll it over a second time —
+     * graduating grades 8 and 12 and deactivating their logins on a database
+     * that was correct a moment earlier.
+     *
+     * <p>Base data therefore marks the establishing year as already rolled over.
+     * This test asserts the *current* year is refused, while a later year is
+     * still allowed — the pair matters, because a bootstrap row that blocked
+     * every year would look identical here to one that blocks only its own.</p>
+     */
+    @Test
+    void refusesToRollOverTheYearTheSystemWasEstablishedIn() {
+        String s = seedStudent("ROLLBOOT8", 8, "A", currentYearStart() - 2);
+
+        AnnualRolloverReportDto sameYear = annualRolloverService.runIfDue("test");
+
+        assertThat(sameYear.outcome()).isEqualTo("SKIPPED");
+        assertThat(studentRow(s).get("status")).isEqualTo("ACTIVE");
+
+        // The control: next September is genuinely due and must still run.
+        assertThat(rollTo(currentYearStart() + 1).outcome()).isEqualTo("RAN");
+        assertThat(studentRow(s).get("status")).isEqualTo("GRADUATED");
     }
 
     @Test
