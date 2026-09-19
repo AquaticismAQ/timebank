@@ -732,9 +732,46 @@ Effective rules cannot be modified in place; changes must create a new version.
 | `GET` | `/reports/service-hours` | `reports.read` | Service hours |
 | `GET` | `/reports/review-efficiency` | `reports.read` | Review efficiency |
 | `GET` | `/reports/top-projects` | `reports.read` | Highest-participation projects for the selected period |
-| `POST` | `/exports` | `exports.create` | Create export job |
+| `POST` | `/exports` | `exports.{reportType}` | Create export job |
 | `GET` | `/exports/{jobId}` | Creator/admin | Query export job |
-| `GET` | `/exports/{jobId}/download` | Creator/admin | Get short-lived download URL |
+| `GET` | `/exports/{jobId}/download` | Creator/admin | Get a **single-use** download URL |
+
+**`POST /exports` is authorised per report type.** The permission is
+`exports.` + the `reportType` in the body — `exports.studentList`,
+`exports.serviceRecords`, `exports.studentCompletion`, `exports.projects`,
+`exports.studentParticipation`, `exports.reviewEfficiency`,
+`exports.reviewHistory`. The former blanket `exports.create` is retired
+(`Design/*/12-DataExport.md` §9.4): "may export" meant "may export
+everything", and Review Efficiency is peer performance data that the Student
+Development Centre holds and teachers do not. The retired permission row is
+kept so the audit trail of who once held it still resolves, but it grants
+nothing and cannot be assigned.
+
+Two consequences worth knowing when writing a client:
+
+- **Authorisation is checked before the report type is validated.** Asking for
+  a type that does not exist returns `FORBIDDEN` (403), not
+  `INVALID_REQUEST` (400), because no one holds `exports.somethingMadeUp`.
+- **Only `studentList` and `serviceRecords` are accepted today.** The other
+  five are being re-cut per type and return `INVALID_REQUEST`; two earlier
+  reports (`serviceHours`, `topProjects`) retired rather than being carried
+  forward. The permissions for all seven exist now, so a client may gate its
+  UI on them before the corresponding file exists.
+
+**Download URLs are single-use.** The URL from
+`GET /exports/{jobId}/download` carries a token valid for 300 seconds *and*
+for exactly one fetch. Presenting it twice returns `STATE_CONFLICT` (409),
+deliberately distinct from the `INVALID_REQUEST` an expired link gives, so a
+client can tell "you waited too long" from "this link is already spent". The
+file itself outlives the link, so the recovery is to ask for a new URL —
+requesting one does not re-run the export. A client that fetches the content
+URL more than once per user action (a retrying download manager, a probe
+request before the real one) will burn the link on its own.
+
+**A produced export file is deleted 7 days after the job finishes**, and its
+job row's `resultRef` becomes `null` rather than pointing at a key that is no
+longer there. Asking for a download URL after that returns
+`RESOURCE_NOT_FOUND`.
 
 Dashboard endpoints are for homepage aggregation only; business details are still obtained through resource endpoints. All page data must not be concentrated into a single "mega endpoint."
 
@@ -765,8 +802,47 @@ Dashboard endpoints take no `academicYearId`: they describe the present state of
 | `GET` | `/imports/{id}/errors` | `imports.read` | Error list/file |
 | `POST` | `/imports/{id}/commit` | `imports.commit` | Confirm import |
 | `POST` | `/imports/{id}/cancel` | `imports.create` | Cancel |
+| `GET` | `/imports/window` | `imports.read` | Historical-import window state |
 
 Imports must validate before commit. Duplicate imports are prevented by source file hash, business unique keys, and idempotency keys working together.
+
+**Import is the SDC Admin's, not the System Administrator's.** `imports.create`,
+`imports.read` and `imports.commit` are no longer granted to `sysadmin`
+(`Design/*/10-RolesAndPermissions.md` §6.1): the System Administrator
+maintains the system and does not author student data, and importing service
+history is authoring student data.
+
+#### Historical import closes permanently
+
+`serviceRecordsHistorical` exists for the move onto this system and is not a
+standing capability. The **first successful** historical import opens a 15-day
+window; further historical imports are allowed inside it and **none of them
+extends it**. When it runs out, historical import is refused for good — the
+only way back is a maintenance utility run on the server console by a System
+Administrator (`Docs/backlog/01-HistoricalImportReenableUtility.md`), which
+nothing in the API can do.
+
+Roster import (`students`) is **outside** the window and never closes: a school
+takes in students every year.
+
+The refusal is enforced twice — at `POST /imports` (before the file is stored)
+and again at `POST /imports/{id}/commit`, so a job validated before the window
+closed cannot commit after it. Both return `STATE_CONFLICT` (409) naming the
+closure date.
+
+`GET /imports/window` returns the state the UI needs to decide whether to offer
+the feature at all:
+
+| Field | Meaning |
+| --- | --- |
+| `state` | `NOT_OPENED` · `OPEN` · `EXPIRED` |
+| `windowDays` | The length applied when this window opened — a stored fact, so changing the configured length never reinterprets a window already running |
+| `openedAt` / `expiresAt` | `null` while `NOT_OPENED` |
+| `secondsRemaining` | Server-computed, so a skewed client clock cannot render a confident wrong countdown; `null` unless `OPEN` |
+
+Clients should **hide** the historical-import control on `EXPIRED` rather than
+disable it, and hide it when the read fails: a control that cannot be used
+should not be on screen.
 
 ### 4.15 Users, Roles & Audit
 

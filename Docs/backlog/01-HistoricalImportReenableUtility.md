@@ -3,6 +3,14 @@
 **Status:** Specified, not built. No target release.
 **Depends on:** `Design/*/11-DataImport.md` §6, which defines the window this
 utility reopens.
+**The window itself now exists** (2026-09-19, `V32__historical_import_window.sql`).
+That settles the one thing this spec could not assume: §3's requirement that a
+reopen record who did it, when, and why has somewhere to go. The
+`historical_import_window` table carries `reopened_at`, `reopened_by` and
+`reopen_reason`, deliberately left empty by the application — nothing in the
+running system writes them, and nothing in it can. So this utility is now a
+write to an existing shape rather than a migration to be written under deadline
+pressure by whoever needs the door opened.
 
 ## 1. What this is
 

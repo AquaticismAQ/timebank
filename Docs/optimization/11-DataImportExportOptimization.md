@@ -350,6 +350,36 @@ gives two places to look for export, and the design says "two tabs", not "two pa
 Each phase ships on its own and leaves the system coherent. Phases 5 and 6 depend only
 on phase 1 and can be pulled forward if the window's deadline pressure demands it.
 
+### 3.0 Build status (2026-09-19)
+
+| Phase | State | Migration |
+| :--- | :--- | :--- |
+| 1 — permission split, two retirements | **Done**, backend and frontend | `V31` |
+| 2 — filters, student scope, column conventions | Not started — **the critical path** | — |
+| 3 — Student Completion, Student Participation | Not started (needs 2) | — |
+| 4 — Projects, Review Efficiency, Review History | Not started (needs 2) | — |
+| 5 — egress hygiene | **Partly done**: single-use links and output sweeping shipped; the audit entry on export creation (F-9, exit criterion 1) is **not** done | `V33` |
+| 6 — the 15-day historical-import window | **Done**, backend and frontend | `V32` |
+
+Phases 1, 5 and 6 were built in parallel and merged in migration order. Three
+things are worth carrying forward:
+
+- **Phase 2 is now the only thing standing between the permissions and the
+  files.** All seven export permissions exist and the UI gates on them, but only
+  `studentList` and `serviceRecords` produce a file; the other five cards say
+  "not yet available". That is honest but it is a five-export regression against
+  what worked before, and phase 2 is what unblocks 3 and 4.
+- **`ExportJobRunner` still dispatches on the pre-split key `students`.**
+  `ExportServiceImpl` maps `studentList` → `students` for the stored
+  `resourceType` as a one-line stopgap; phase 2 owns deleting it. Until then a
+  `studentList` job reports `resourceType: "students"` and downloads as
+  `students.csv`.
+- **Parallel work hid a cross-phase break that neither branch could see.** Phase
+  5's retention tests exported `participation`, which phase 1 retired. Both
+  branches were green alone and went red the moment they met. Worth remembering
+  the next time this plan's phases are split across workers: a phase that passes
+  in isolation has not been tested against its siblings.
+
 ### 3.1 Phase 1 — The permission split, and the two retirements
 
 **Backend.** One versioned migration (next free number after `V30`):

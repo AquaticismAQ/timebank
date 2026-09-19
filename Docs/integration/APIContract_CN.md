@@ -724,9 +724,36 @@ queued → running → succeeded
 | `GET` | `/reports/service-hours` | `reports.read` | 服务时长 |
 | `GET` | `/reports/review-efficiency` | `reports.read` | 审核效率 |
 | `GET` | `/reports/top-projects` | `reports.read` | 所选周期内参与度最高的项目 |
-| `POST` | `/exports` | `exports.create` | 创建导出任务 |
+| `POST` | `/exports` | `exports.{reportType}` | 创建导出任务 |
 | `GET` | `/exports/{jobId}` | 创建者/管理员 | 查询导出任务 |
-| `GET` | `/exports/{jobId}/download` | 创建者/管理员 | 获取短时下载地址 |
+| `GET` | `/exports/{jobId}/download` | 创建者/管理员 | 获取**一次性**下载地址 |
+
+**`POST /exports` 按导出类型分别鉴权。** 所需权限是 `exports.` 加请求体中的
+`reportType`——即 `exports.studentList`、`exports.serviceRecords`、
+`exports.studentCompletion`、`exports.projects`、`exports.studentParticipation`、
+`exports.reviewEfficiency`、`exports.reviewHistory`。原先笼统的 `exports.create`
+已停用（`Design/*/12-DataExport.md` §9.4）：「可以导出」实际等于「什么都可以导出」，
+而审核效率属于同侪绩效材料，归学生发展中心，教师不应拥有。停用的权限行保留在库中，
+以便审计记录中「谁曾持有它」仍能解析，但它不再授予任何能力，也不可再被分配。
+
+对客户端而言有两点需要注意：
+
+- **鉴权先于类型校验。** 请求一个不存在的导出类型返回 `FORBIDDEN`（403），
+  而不是 `INVALID_REQUEST`（400）——因为没有人持有 `exports.随便编的名字`。
+- **目前只接受 `studentList` 与 `serviceRecords`。** 其余五种正在按类型重做，
+  暂时返回 `INVALID_REQUEST`；另有两个旧报表（`serviceHours`、`topProjects`）
+  直接停用，不再保留。七种权限现已全部存在，因此客户端可以在对应文件尚未实现时，
+  就先按权限控制界面。
+
+**下载地址是一次性的。** `GET /exports/{jobId}/download` 返回的地址有效期 300 秒，
+且**只能取用一次**。重复取用返回 `STATE_CONFLICT`（409），与过期链接返回的
+`INVALID_REQUEST` 刻意区分，好让客户端能分清「等太久了」和「这个链接已经用过了」。
+文件本身比链接活得久，因此补救办法是再申请一个地址——重新申请不会重跑导出。
+如果客户端在一次用户操作中多次请求内容地址（会重试的下载管理器、正式请求前的探测请求），
+它会自己把链接用掉。
+
+**导出文件在任务完成 7 天后删除**，同时任务行的 `resultRef` 置为 `null`，
+而不是继续指向一个已不存在的 key。之后再申请下载地址返回 `RESOURCE_NOT_FOUND`。
 
 仪表盘端点只做首页聚合；业务详情仍通过资源端点获取，不能把所有页面数据集中到单一“大接口”。
 
@@ -757,8 +784,39 @@ queued → running → succeeded
 | `GET` | `/imports/{id}/errors` | `imports.read` | 错误列表/文件 |
 | `POST` | `/imports/{id}/commit` | `imports.commit` | 确认导入 |
 | `POST` | `/imports/{id}/cancel` | `imports.create` | 取消 |
+| `GET` | `/imports/window` | `imports.read` | 历史记录导入窗口状态 |
 
 导入必须先校验后确认。重复导入通过来源文件 Hash、业务唯一键和幂等键共同防护。
+
+**导入属于 SDC 管理员，不属于系统管理员。** `imports.create`、`imports.read`、
+`imports.commit` 不再授予 `sysadmin`（`Design/*/10-RolesAndPermissions.md` §6.1）：
+系统管理员负责维护系统，不负责录入学生数据，而导入服务历史就是录入学生数据。
+
+#### 历史记录导入会永久关闭
+
+`serviceRecordsHistorical` 是为迁移到本系统而存在的，不是一项常设能力。
+**第一次成功**的历史记录导入会开启一个 15 天的窗口；窗口期内允许继续导入历史记录，
+但**任何一次都不会延长它**。窗口结束后历史记录导入被永久拒绝——唯一的恢复途径是由
+系统管理员在服务器控制台运行维护工具
+（`Docs/backlog/01-HistoricalImportReenableUtility.md`），API 无法做到这件事。
+
+花名册导入（`students`）**不在**窗口之内，永不关闭：学校每年都要招新生。
+
+拒绝在两处强制执行——`POST /imports`（在文件落盘之前）与
+`POST /imports/{id}/commit`，因此在窗口关闭前完成校验的任务，也无法在关闭之后确认。
+两处都返回 `STATE_CONFLICT`（409），并在消息中写明关闭日期。
+
+`GET /imports/window` 返回界面判断「是否还要展示这个功能」所需的状态：
+
+| 字段 | 含义 |
+| --- | --- |
+| `state` | `NOT_OPENED` · `OPEN` · `EXPIRED` |
+| `windowDays` | 本窗口开启时实际采用的天数——这是一个已存下来的事实，因此之后修改配置的天数，不会重新解释一个已经在跑的窗口 |
+| `openedAt` / `expiresAt` | `NOT_OPENED` 时为 `null` |
+| `secondsRemaining` | 由服务端计算，以免客户端时钟偏差渲染出一个很有把握的错误倒计时；非 `OPEN` 时为 `null` |
+
+客户端在 `EXPIRED` 时应**隐藏**历史记录导入入口，而不是置灰；读取失败时同样隐藏：
+不能用的控件不该出现在界面上。
 
 ### 4.15 用户、角色与审计
 
