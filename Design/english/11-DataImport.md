@@ -234,7 +234,7 @@ mistake.
 | **A commit either fully succeeds or fully rolls back** | Commit runs in a single transaction; "half imported" does not exist |
 | **Import produces no password plaintext** | Roster-imported accounts have no password hash and are first entered with an activation code |
 | **Conversion always uses the rule in effect on the service date** | The historical import resolves the rule version per row; no rule means the row fails |
-| **Every commit writes an audit entry** | Actor, type, row count and job id |
+| **Every commit writes an audit entry** | **Required, not yet implemented** — nothing in `cn.timebank.dataexchange` references `AuditService` today. Actor, type, row count and job id |
 
 ---
 

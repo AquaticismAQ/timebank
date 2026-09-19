@@ -111,7 +111,10 @@ holds in the implementation and must not be weakened.
 - **Cards for export types the user cannot access are not rendered**, rather than
   shown disabled.
 - Export is asynchronous: the click creates a job, and the finished file is
-  retrieved with a single-use download token.
+  retrieved with a **time-boxed download link**. Today that link is an
+  HMAC-signed token valid for 300 seconds and **replayable within that window**
+  — it is not single-use. Making it single-use, and sweeping produced files, is
+  §8's outstanding work, not a property to claim now.
 
 ---
 
@@ -524,7 +527,12 @@ school, so it belongs in no export.
   to explain itself from its own contents, and a CSV carries no such explanation.
 - **No scheduled exports.** An export is an act of taking data out, and someone
   should be answerable for it at the moment it happens.
-- **No long-lived server-side copies.** The file is retrieved with a single-use
-  token rather than kept as a repeatedly downloadable asset.
+- **No long-lived server-side copies** — an intent, not yet a fact. Every
+  export ever produced is still on disk: nothing sweeps `export_*.csv`, and the
+  download token is a replayable 300-second HMAC rather than a single-use one.
+  Both are required before this line is true, and both matter more than they
+  look: §6.1 revokes System Admin's export permission to remove a student-data
+  exit, and a permission is not the only path to a file sitting on the server
+  they administer.
 - **No contact details in any export.** Student email and guardian information
   belong in no export — data minimisation matters most at the exit.
