@@ -85,7 +85,26 @@ class ExportScopeResolver {
         ExportScope.Restriction restriction =
                 new ExportScope.Restriction(boundGradeIds, boundClassIds, gradeFilter, classFilter);
         return new ExportScope(restriction.isEmpty() ? null : restriction,
-                selectedYearIndex, currentYearIndex, filters.reviewerId());
+                selectedYearIndex, currentYearIndex, resolveReviewer(principal, filters.reviewerId()));
+    }
+
+    /**
+     * Review History's reviewer filter, pinned to the caller unless they are
+     * school-wide (§6.7, F-17).
+     *
+     * <p><b>Enforced here, not defaulted in the UI.</b> A teacher may see only
+     * their own decisions, and a restriction that lived only in a dropdown would
+     * be bypassed by anyone willing to edit a request body — which is a one-line
+     * change in browser devtools, not a hypothetical. Their own id is substituted
+     * rather than the request being refused: asking for a colleague's history is
+     * a request the product simply narrows, and a 403 would imply they had done
+     * something wrong by having the field in the body at all.</p>
+     */
+    private String resolveReviewer(TimeBankPrincipal principal, String requestedReviewerId) {
+        if (principal.hasSchoolWideVisibility()) {
+            return requestedReviewerId;
+        }
+        return principal.id();
     }
 
     /**

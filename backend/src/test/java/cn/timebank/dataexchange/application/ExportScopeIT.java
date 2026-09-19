@@ -68,6 +68,8 @@ class ExportScopeIT extends AbstractIntegrationTest {
         // teacher has to be a real row rather than an id invented by the fixture.
         insertUser("usr_scope_it_teacher", "scope_it_teacher");
         insertUser("usr_scope_it_unbound", "scope_it_unbound");
+        jdbc.update("delete from review_decision where id like 'rdc_scope_it%'", noArgs());
+        jdbc.update("delete from project where id like 'prj_scope_it%'", noArgs());
         jdbc.update("delete from service_record where id like 'sr_scope_it%'", noArgs());
         jdbc.update("delete from student where id like 'stu_scope_it%'", noArgs());
         jdbc.update("delete from class where id like 'cls_scope_it%'", noArgs());
@@ -210,8 +212,9 @@ class ExportScopeIT extends AbstractIntegrationTest {
                         .as("Review History is filtered by who decided, never by class")
                         .containsExactly("academicYearId", "reviewerId"));
         assertThat(forAdmin).filteredOn(ExportTypeDto::available).extracting(ExportTypeDto::key)
-                .as("only the two phase-2 types have a query today")
-                .containsExactly("studentList", "serviceRecords");
+                .as("all seven have a query now that phases 3 and 4 have landed")
+                .containsExactly("studentList", "serviceRecords", "studentCompletion",
+                        "studentParticipation", "projects", "reviewEfficiency", "reviewHistory");
     }
 
     // ── fixture ──────────────────────────────────────────────────────────
@@ -219,8 +222,10 @@ class ExportScopeIT extends AbstractIntegrationTest {
     private String exportCsv(Authentication auth, String type, ExportFilters filters) throws Exception {
         JobDto job = exportService.create(new CreateExportRequest(type, filters), auth);
         awaitTerminal(job.id());
-        assertThat(jobRepository.findById(job.id()).orElseThrow().getStatus())
-                .as("export job %s must succeed", job.id()).isEqualTo("SUCCEEDED");
+        var finished = jobRepository.findById(job.id()).orElseThrow();
+        assertThat(finished.getStatus())
+                .as("export job %s must succeed, but failed with: %s", job.id(), finished.getErrorMessage())
+                .isEqualTo("SUCCEEDED");
         String url = exportService.issueDownloadUrl(job.id(), adminAuth());
         DownloadResult result = exportService.download(url.substring(url.indexOf("token=") + 6));
         return new String(result.content().readAllBytes(), StandardCharsets.UTF_8);
@@ -288,15 +293,22 @@ class ExportScopeIT extends AbstractIntegrationTest {
                 insert into service_record (id, student_id, student_name, grade_id, class_id, source_type,
                                             service_date, start_at, end_at, service_category_id,
                                             duration_minutes, status, credited_units,
-                                            includes_travel_time, has_anomaly, version, created_at, updated_at)
+                                            includes_travel_time, has_anomaly, version,
+                                            submitted_at, created_at, updated_at)
                 values (:id, :student, 'Snapshot Name', :grade, :class, 'SELF',
                         :date, :startAt, :endAt, :category,
-                        :minutes, :status, :credited, 0, 0, 1, now(3), now(3))
+                        :minutes, :status, :credited, 0, 0, 1,
+                        -- Set, and deliberately so: Average Review Hours is
+                        -- avg(submitted_at → decided_at), and a null submission
+                        -- time makes that average null. A fixture without it let a
+                        -- BigDecimal-to-Double cast bug through to real data.
+                        :submittedAt, now(3), now(3))
                 """, new MapSqlParameterSource().addValue("id", id).addValue("student", studentId)
                 .addValue("grade", gradeId).addValue("class", classId).addValue("date", serviceDate)
                 .addValue("startAt", serviceDate.atTime(9, 0))
                 .addValue("endAt", serviceDate.atTime(9, 0).plusMinutes(minutes))
                 .addValue("category", anyServiceCategoryId())
+                .addValue("submittedAt", serviceDate.atTime(18, 0))
                 .addValue("minutes", minutes).addValue("status", status).addValue("credited", creditedUnits));
     }
 
@@ -353,5 +365,126 @@ class ExportScopeIT extends AbstractIntegrationTest {
                 Set.of(role), exportPermissions, null, 480);
         CookieSessionUserDetails principal = new CookieSessionUserDetails(view);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+    }
+
+    /**
+     * Phase 4's exit criterion: a teacher cannot obtain another reviewer's history
+     * by putting a {@code reviewerId} in the request body.
+     *
+     * <p>Sent, not merely read out of the controller — F-17 is explicit that the
+     * restriction has to be enforced server-side, and the only way to know it is
+     * is to make the request a hostile client would make.</p>
+     */
+    @Test
+    void aTeacherCannotObtainAnotherReviewersHistoryByAskingForIt() throws Exception {
+        insertStudent("stu_scope_it_rev", "S-REV", "Reviewed Student", GRADE_A, "cls_scope_it_7a",
+                YEAR_CURRENT, 2029);
+        insertServiceRecord("sr_scope_it_rev", "stu_scope_it_rev", GRADE_A, "cls_scope_it_7a",
+                LocalDate.of(2026, 5, 6), 60, 100, "APPROVED");
+        bindGrade("usr_scope_it_teacher", GRADE_A);
+        insertUser("usr_scope_it_other_rev", "scope_it_other_rev");
+        // Two decisions on the same record: one by the teacher, one by a colleague.
+        insertReviewDecision("rdc_scope_it_mine", "sr_scope_it_rev", "usr_scope_it_teacher", "APPROVE");
+        insertReviewDecision("rdc_scope_it_theirs", "sr_scope_it_rev", "usr_scope_it_other_rev", "APPROVE");
+
+        String csv = exportCsv(teacherAuth("usr_scope_it_teacher"), "reviewHistory",
+                new ExportFilters(null, null, null, "usr_scope_it_other_rev"));
+
+        assertThat(csv).as("their own decision survives the pin").contains("Display scope_it_teacher");
+        assertThat(csv)
+                .as("the colleague they explicitly asked for must not appear")
+                .doesNotContain("Display scope_it_other_rev");
+
+        // The control: an admin asking the same question does get the colleague,
+        // so the pin is about who is asking and not about the filter being broken.
+        String adminCsv = exportCsv(adminAuth(), "reviewHistory",
+                new ExportFilters(null, null, null, "usr_scope_it_other_rev"));
+        assertThat(adminCsv).contains("Display scope_it_other_rev");
+    }
+
+    /**
+     * §6.6's whole point: a rate without its denominator misleads. One approval is
+     * 100.00%, and the reader has to be able to see that it was one.
+     */
+    @Test
+    void reviewEfficiencyShowsTheDenominatorBesideTheRate() throws Exception {
+        insertStudent("stu_scope_it_eff", "S-EFF", "Efficiency Student", GRADE_A, "cls_scope_it_7a",
+                YEAR_CURRENT, 2029);
+        insertServiceRecord("sr_scope_it_eff", "stu_scope_it_eff", GRADE_A, "cls_scope_it_7a",
+                LocalDate.of(2026, 5, 6), 60, 100, "APPROVED");
+        insertUser("usr_scope_it_solo", "scope_it_solo");
+        insertReviewDecision("rdc_scope_it_solo", "sr_scope_it_eff", "usr_scope_it_solo", "APPROVE");
+
+        String csv = exportCsv(adminAuth(), "reviewEfficiency", ExportFilters.none());
+
+        assertThat(csv).startsWith("No.,Reviewer Name,Reviewer Role,Bound Grades,Total Reviews,");
+        String row = rowContaining(csv, "Display scope_it_solo");
+        assertThat(row).contains(",1,")          // Total Reviews
+                       .contains("100.00%");      // and the rate beside it
+        // Average Review Hours must hold a real number, not an empty cell: the
+        // column is computed by MySQL's AVG(), whose DECIMAL result used to be cast
+        // to Double and threw. An empty cell here means the average was never
+        // computed and this test proves less than it appears to.
+        assertThat(row.split(",")[8]).as("Average Review Hours must be populated").isNotEmpty();
+    }
+
+    /**
+     * §6.4, and Q-7's "no eligible grades means open to all".
+     *
+     * <p>The fixture inserts a project deliberately: an IT schema has none, so an
+     * earlier version of this test asserted only the header and passed while the
+     * row mapper was broken — a file with no rows cannot tell a working query from
+     * one that throws on the first row.</p>
+     */
+    @Test
+    void theProjectsReportRendersEligibleGradesAndAnApprovalRate() throws Exception {
+        insertProject("prj_scope_it_open", "Open To Everyone", null);
+        insertProject("prj_scope_it_seven", "Seven Only", "[\"grade_7\"]");
+
+        String csv = exportCsv(adminAuth(), "projects", ExportFilters.none());
+
+        assertThat(csv).startsWith("No.,Project Name,Project Summary,Service Category,Partner Organisation,"
+                + "Location,Owner,Eligible Grades,Status,Start Date,End Date,Recognized Minutes,Capacity,"
+                + "Registrations,Participants,Participation Rate,Approved Service Hours,Approval Rate");
+        assertThat(rowContaining(csv, "Open To Everyone")).contains("All grades");
+        assertThat(rowContaining(csv, "Seven Only"))
+                .as("grade ids are not an answer for a column a human reads")
+                .doesNotContain("grade_7");
+
+        // The grade filter is a JSON membership test, so it must include the
+        // open-to-all project and exclude one scoped to a different grade.
+        String grade7 = exportCsv(adminAuth(), "projects", new ExportFilters(null, "grade_7", null, null));
+        assertThat(grade7).contains("Seven Only").contains("Open To Everyone");
+        String grade8 = exportCsv(adminAuth(), "projects", new ExportFilters(null, "grade_8", null, null));
+        assertThat(grade8).as("a project limited to grade 7 is not a grade 8 project")
+                .doesNotContain("Seven Only");
+        assertThat(grade8).as("but one open to all grades still is").contains("Open To Everyone");
+    }
+
+    private void insertProject(String id, String title, String eligibleGradeIdsJson) {
+        jdbc.update("""
+                insert into project (id, title, summary, status, capacity, recognized_minutes,
+                                     category_id, owner_id, eligible_grade_ids,
+                                     start_at, end_at, registration_open_at, registration_close_at,
+                                     delivery_scope, version, created_at, updated_at)
+                values (:id, :title, 'Fixture project', 'PUBLISHED', 10, 120,
+                        :category, :owner, :grades,
+                        :start, :end, :start, :end,
+                        'HYBRID', 1, now(3), now(3))
+                """, new MapSqlParameterSource().addValue("id", id).addValue("title", title)
+                .addValue("category", anyServiceCategoryId())
+                .addValue("owner", "usr_scope_it_teacher")
+                .addValue("grades", eligibleGradeIdsJson)
+                .addValue("start", LocalDate.of(2026, 5, 1).atStartOfDay())
+                .addValue("end", LocalDate.of(2026, 5, 2).atStartOfDay()));
+    }
+
+    private void insertReviewDecision(String id, String recordId, String reviewerId, String decision) {
+        jdbc.update("""
+                insert into review_decision (id, service_record_id, reviewer_id, decision, reason_code,
+                                             comment, record_version_at_decision, created_at)
+                values (:id, :record, :reviewer, :decision, 'OK', 'fixture', 1, now(3))
+                """, new MapSqlParameterSource().addValue("id", id).addValue("record", recordId)
+                .addValue("reviewer", reviewerId).addValue("decision", decision));
     }
 }

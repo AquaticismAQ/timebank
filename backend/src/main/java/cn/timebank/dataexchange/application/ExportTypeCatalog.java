@@ -68,26 +68,24 @@ final class ExportTypeCatalog {
     }
 
     /**
-     * Five of the seven have no query yet (phases 3-4). They are still published,
-     * because their permissions exist and the UI gates on them, so a client can
-     * draw the card and say the file is not available yet rather than discovering
-     * it by receiving a job that ends FAILED.
+     * All seven now have a query. The flag stays because it is the honest way to
+     * publish a type whose permission exists before its file does — a client can
+     * draw the card and say so, rather than finding out from a job that ends
+     * FAILED.
      */
-    static final String IMPLEMENTED_NOTE = "false until the type's query lands (phases 3-4)";
-
     private static final List<Filter> STUDENT_FILTERS =
             List.of(Filter.ACADEMIC_YEAR, Filter.GRADE, Filter.CLASS);
 
     static final List<ExportType> TYPES = List.of(
             new ExportType("studentList", STUDENT_FILTERS, true),
             new ExportType("serviceRecords", STUDENT_FILTERS, true),
-            new ExportType("studentCompletion", STUDENT_FILTERS, false),
-            new ExportType("studentParticipation", STUDENT_FILTERS, false),
+            new ExportType("studentCompletion", STUDENT_FILTERS, true),
+            new ExportType("studentParticipation", STUDENT_FILTERS, true),
             // Projects rows are projects, not students, so there is no class dimension.
-            new ExportType("projects", List.of(Filter.ACADEMIC_YEAR, Filter.GRADE), false),
-            new ExportType("reviewEfficiency", List.of(Filter.ACADEMIC_YEAR, Filter.GRADE), false),
+            new ExportType("projects", List.of(Filter.ACADEMIC_YEAR, Filter.GRADE), true),
+            new ExportType("reviewEfficiency", List.of(Filter.ACADEMIC_YEAR, Filter.GRADE), true),
             // Review History is filtered by who decided, never by whose class they taught.
-            new ExportType("reviewHistory", List.of(Filter.ACADEMIC_YEAR, Filter.REVIEWER), false));
+            new ExportType("reviewHistory", List.of(Filter.ACADEMIC_YEAR, Filter.REVIEWER), true));
 
     private ExportTypeCatalog() {
     }

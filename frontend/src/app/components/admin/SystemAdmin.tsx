@@ -556,7 +556,15 @@ function ExportCard({ type, filters, onFilterChange, onExport, gradeOptions, cla
                   <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterAcademicYear')}</span>
                   <select className={selectClass} value={chosen.academicYearId ?? ''}
                     onChange={e => onFilterChange('academicYearId', e.target.value || undefined)}>
-                    <option value="">{t('admin.system.exportFilterAllYears')}</option>
+                    {/* Q-4: Student Completion does not offer "All years" at all.
+                        The requirement it measures against is an annual one, so a
+                        rate across every year has no denominator — the option is
+                        absent rather than merely non-default, because offering a
+                        choice that produces a meaningless number is worse than one
+                        card behaving differently from the other six. */}
+                    {type.key !== 'studentCompletion' && (
+                      <option value="">{t('admin.system.exportFilterAllYears')}</option>
+                    )}
                     {academicYears.map(y => <option key={y.id} value={y.id}>{y.code}</option>)}
                   </select>
                 </label>
@@ -1261,8 +1269,20 @@ export function SystemAdmin() {
 
   useEffect(() => {
     if (!canExportAnything) return;
-    api.exports.types().then(setExportTypes).catch(() => setExportTypes([]));
-  }, [canExportAnything]);
+    api.exports.types().then(types => {
+      setExportTypes(types);
+      // §4.2's one documented exception to "everything defaults to All": Student
+      // Completion is scoped to a single year, and the current one is the answer
+      // nearly everyone wants. Seeded here rather than left blank so the card does
+      // not open showing an empty required field.
+      const currentYear = academicYears.find(y => y.current);
+      if (currentYear && types.some(x => x.key === 'studentCompletion')) {
+        setExportFilters(prev => prev.studentCompletion?.academicYearId
+          ? prev
+          : { ...prev, studentCompletion: { ...prev.studentCompletion, academicYearId: currentYear.id } });
+      }
+    }).catch(() => setExportTypes([]));
+  }, [canExportAnything, academicYears]);
 
   /**
    * The Grade dropdown offers only grades the user is actually bound to (F-16,

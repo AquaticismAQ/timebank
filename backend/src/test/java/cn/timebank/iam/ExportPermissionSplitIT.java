@@ -121,8 +121,8 @@ class ExportPermissionSplitIT extends AbstractIntegrationTest {
         // §5.3's one withheld type: the teacher holds the other six.
         assertThat(postExport(teacher, "reviewEfficiency").getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(postExport(admin, "reviewEfficiency").getStatusCode())
-                .as("admin holds the permission, so it is the unbuilt query that refuses — 400, not 403")
-                .isEqualTo(HttpStatus.BAD_REQUEST);
+                .as("admin holds the permission and the query now exists (phase 4)")
+                .isEqualTo(HttpStatus.OK);
 
         // §6.1: System Admin holds no export permission at all.
         assertThat(postExport(sysadmin, "studentList").getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);

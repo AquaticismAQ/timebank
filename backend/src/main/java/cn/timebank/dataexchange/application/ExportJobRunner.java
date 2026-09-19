@@ -4,6 +4,8 @@ import cn.timebank.dataexchange.application.ExportGradeDerivation.Cohort;
 import cn.timebank.dataexchange.infrastructure.ExportScopeRepository;
 import cn.timebank.dataexchange.infrastructure.ServiceRecordExportRepository;
 import cn.timebank.dataexchange.infrastructure.StudentExportRepository;
+import cn.timebank.dataexchange.infrastructure.ProjectReviewExportRepository;
+import cn.timebank.dataexchange.infrastructure.StudentReportExportRepository;
 import cn.timebank.file.application.FileStorage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +44,8 @@ class ExportJobRunner {
     private final JobProgressWriter progressWriter;
     private final ServiceRecordExportRepository serviceRecordExportRepository;
     private final StudentExportRepository studentExportRepository;
+    private final StudentReportExportRepository studentReportRepository;
+    private final ProjectReviewExportRepository projectReviewRepository;
     private final ExportScopeRepository scopeRepository;
     private final ExportJobParameters jobParameters;
     private final FileStorage fileStorage;
@@ -49,12 +53,16 @@ class ExportJobRunner {
     ExportJobRunner(JobProgressWriter progressWriter,
                      ServiceRecordExportRepository serviceRecordExportRepository,
                      StudentExportRepository studentExportRepository,
+                     StudentReportExportRepository studentReportRepository,
+                     ProjectReviewExportRepository projectReviewRepository,
                      ExportScopeRepository scopeRepository,
                      ExportJobParameters jobParameters,
                      FileStorage fileStorage) {
         this.progressWriter = progressWriter;
         this.serviceRecordExportRepository = serviceRecordExportRepository;
         this.studentExportRepository = studentExportRepository;
+        this.studentReportRepository = studentReportRepository;
+        this.projectReviewRepository = projectReviewRepository;
         this.scopeRepository = scopeRepository;
         this.jobParameters = jobParameters;
         this.fileStorage = fileStorage;
@@ -87,6 +95,11 @@ class ExportJobRunner {
                 rows = switch (reportType) {
                     case "studentList" -> writeStudentList(jobId, writer, scope, studentIds, labels);
                     case "serviceRecords" -> writeServiceRecords(jobId, writer, scope, studentIds, labels);
+                    case "studentCompletion" -> writeStudentCompletion(jobId, writer, scope, studentIds, labels);
+                    case "studentParticipation" -> writeStudentParticipation(jobId, writer, scope, studentIds, labels);
+                    case "projects" -> writeProjects(jobId, writer, scope, studentIds, labels);
+                    case "reviewEfficiency" -> writeReviewEfficiency(writer, scope, studentIds);
+                    case "reviewHistory" -> writeReviewHistory(jobId, writer, scope, studentIds);
                     // Phases 3-4 register their own cases here. Until then an
                     // unknown type is a fault rather than an empty file: the
                     // request path already refuses types with no query, so
@@ -192,6 +205,269 @@ class ExportJobRunner {
             progressWriter.renewLeaseAndProgress(jobId, writer.rowsWritten(), writer.rowsWritten());
         } while (chunk.size() == CHUNK_SIZE);
         return writer.rowsWritten();
+    }
+
+    /**
+     * §6.3: one row per student for a <b>single</b> academic year.
+     *
+     * <p>The year matters more here than anywhere else, because the requirement
+     * being measured against is an annual one. With no year selected the
+     * denominator would be one year's requirement against several years of
+     * service, which is not a completion rate at all — so the current year is
+     * used when none is given (§4.2, the one documented exception to
+     * "everything defaults to All").</p>
+     */
+    private int writeStudentCompletion(String jobId, ExportCsvWriter writer, ExportScope scope,
+                                       Set<String> studentIds, Labels labels) throws Exception {
+        writer.header("Student Number", "Student Name", "Grade", "Class",
+                "Projects Participated", "Approved Service Hours", "Credited Coins",
+                "Annual Required Hours", "Gap Hours", "Completion Rate");
+        if (studentIds != null && studentIds.isEmpty()) {
+            return 0;
+        }
+        int yearStart = scope.hasYear() ? scope.selectedYearIndex() : scope.currentYearIndex();
+        var required = studentReportRepository.requiredMinutesFor(yearStart).orElse(null);
+
+        String afterId = null;
+        List<StudentReportExportRepository.CompletionRow> chunk;
+        do {
+            chunk = studentReportRepository.completionPage(afterId, CHUNK_SIZE, studentIds, yearStart);
+            for (var row : chunk) {
+                afterId = row.studentId();
+                ExportScope yearScope = new ExportScope(scope.restriction(), yearStart,
+                        scope.currentYearIndex(), scope.reviewerId());
+                GradeCell grade = gradeCell(row.gradeId(), row.enrollmentAcademicYearId(),
+                        row.graduationYear(), yearScope, labels);
+                if (grade.excluded()) {
+                    continue;
+                }
+                Integer requiredMinutes = requiredMinutesForStudent(required, row.gradeId(), labels);
+                writer.row(row.studentNumber(), row.studentName(), grade.label(),
+                        labels.classCodes().get(row.classId()),
+                        row.projectsParticipated(),
+                        ExportCsvWriter.hours((int) row.approvedMinutes()),
+                        ExportCsvWriter.coins((int) row.creditedUnits()),
+                        ExportCsvWriter.hours(requiredMinutes),
+                        // The actionable column (§6.3): "six hours short" is more
+                        // use to a form tutor than "67% complete", and it never
+                        // goes negative — overachieving is not a negative gap.
+                        requiredMinutes == null ? null
+                                : ExportCsvWriter.hours((int) Math.max(0, requiredMinutes - row.approvedMinutes())),
+                        requiredMinutes == null ? null
+                                : ExportCsvWriter.percentage(row.approvedMinutes(), requiredMinutes));
+            }
+            progressWriter.renewLeaseAndProgress(jobId, writer.rowsWritten(), writer.rowsWritten());
+        } while (chunk.size() == CHUNK_SIZE);
+        return writer.rowsWritten();
+    }
+
+    /**
+     * §6.5: registrations beside actual participation.
+     *
+     * <p>The gap between the two counts is the reason the file exists — a student
+     * with four registrations and one participation signed up and did not
+     * deliver, which is visible here and nowhere else. "Participated" means at
+     * least one approved record for that project, not an approved registration.</p>
+     */
+    private int writeStudentParticipation(String jobId, ExportCsvWriter writer, ExportScope scope,
+                                          Set<String> studentIds, Labels labels) throws Exception {
+        writer.header("Student Number", "Student Name", "Grade", "Class",
+                "Registered Projects", "Registered Project Names",
+                "Participated Projects", "Participated Project Names",
+                "Approved Service Hours", "Credited Coins");
+        if (studentIds != null && studentIds.isEmpty()) {
+            return 0;
+        }
+        String afterId = null;
+        List<StudentReportExportRepository.ParticipationRow> chunk;
+        do {
+            chunk = studentReportRepository.participationPage(afterId, CHUNK_SIZE, studentIds,
+                    scope.selectedYearIndex());
+            for (var row : chunk) {
+                afterId = row.studentId();
+                GradeCell grade = gradeCell(row.gradeId(), row.enrollmentAcademicYearId(),
+                        row.graduationYear(), scope, labels);
+                if (grade.excluded()) {
+                    continue;
+                }
+                writer.row(row.studentNumber(), row.studentName(), grade.label(),
+                        labels.classCodes().get(row.classId()),
+                        row.registeredProjects(), row.registeredProjectNames(),
+                        row.participatedProjects(), row.participatedProjectNames(),
+                        ExportCsvWriter.hours((int) row.approvedMinutes()),
+                        ExportCsvWriter.coins((int) row.creditedUnits()));
+            }
+            progressWriter.renewLeaseAndProgress(jobId, writer.rowsWritten(), writer.rowsWritten());
+        } while (chunk.size() == CHUNK_SIZE);
+        return writer.rowsWritten();
+    }
+
+    /** §6.4: one row per project, with what was actually delivered against the places it offered. */
+    private int writeProjects(String jobId, ExportCsvWriter writer, ExportScope scope,
+                              Set<String> studentIds, Labels labels) throws Exception {
+        writer.header("Project Name", "Project Summary", "Service Category", "Partner Organisation",
+                "Location", "Owner", "Eligible Grades", "Status", "Start Date", "End Date",
+                "Recognized Minutes", "Capacity", "Registrations", "Participants",
+                "Participation Rate", "Approved Service Hours", "Approval Rate");
+        String gradeFilter = scope.restriction() == null ? null : scope.restriction().gradeFilter();
+        String afterId = null;
+        List<ProjectReviewExportRepository.ProjectRow> chunk;
+        do {
+            chunk = projectReviewRepository.projectsPage(afterId, CHUNK_SIZE, studentIds,
+                    scope.selectedYearIndex(), gradeFilter);
+            for (var row : chunk) {
+                afterId = row.id();
+                writer.row(row.title(), row.summary(), row.category(), row.organization(),
+                        row.location(), row.owner(), eligibleGradeLabels(row.eligibleGradeIds(), labels),
+                        projectStatusLabel(row.status()), row.startAt(), row.endAt(),
+                        row.recognizedMinutes(), row.capacity(),
+                        row.registrations(), row.participants(),
+                        ExportCsvWriter.percentage(row.participants(),
+                                row.capacity() == null ? 0 : row.capacity()),
+                        ExportCsvWriter.hours((int) row.approvedMinutes()),
+                        // Approved over *submitted records*, so it measures how well
+                        // service on this project was documented rather than how many
+                        // students turned up — a low rate usually means evidence
+                        // problems, not absence (§6.4).
+                        ExportCsvWriter.percentage(row.approvedRecords(), row.submittedRecords()));
+            }
+            progressWriter.renewLeaseAndProgress(jobId, writer.rowsWritten(), writer.rowsWritten());
+        } while (chunk.size() == CHUNK_SIZE);
+        return writer.rowsWritten();
+    }
+
+    /**
+     * §6.6: one row per reviewer, counts beside rates.
+     *
+     * <p>Bounded by the number of reviewers, so no chunking — the same reasoning
+     * the old aggregate reports used, and still true.</p>
+     */
+    private int writeReviewEfficiency(ExportCsvWriter writer, ExportScope scope, Set<String> studentIds)
+            throws Exception {
+        writer.header("Reviewer Name", "Reviewer Role", "Bound Grades", "Total Reviews",
+                "Approved", "Rejected", "Returned", "Average Review Hours",
+                "Approval Rate", "Rejection Rate", "Return Rate");
+        if (studentIds != null && studentIds.isEmpty()) {
+            return 0;
+        }
+        for (var row : projectReviewRepository.reviewerEfficiency(scope.selectedYearIndex(), studentIds)) {
+            writer.row(row.reviewerName(), roleLabel(row.reviewerRole()), row.boundGrades(),
+                    row.total(), row.approved(), row.rejected(), row.returned(),
+                    row.averageReviewMinutes() == null ? null
+                            : ExportCsvWriter.hours((int) Math.round(row.averageReviewMinutes())),
+                    // Over the total, which includes escalations (Q-3) — so these
+                    // three do not sum to 100% for a reviewer who escalated. Read
+                    // the counts first: one review approved is also 100.00%.
+                    ExportCsvWriter.percentage(row.approved(), row.total()),
+                    ExportCsvWriter.percentage(row.rejected(), row.total()),
+                    ExportCsvWriter.percentage(row.returned(), row.total()));
+        }
+        return writer.rowsWritten();
+    }
+
+    /** §6.7: one row per review decision, including the reason and comment given on returns and rejections. */
+    private int writeReviewHistory(String jobId, ExportCsvWriter writer, ExportScope scope,
+                                   Set<String> studentIds) throws Exception {
+        writer.header("Reviewer Name", "Reviewer Role", "Bound Grades", "Student Number", "Student Name",
+                "Service Date", "Project / Organisation", "Decision", "Decided At",
+                "Reason Code", "Comment", "Duration Minutes", "Credited Coins");
+        if (studentIds != null && studentIds.isEmpty()) {
+            return 0;
+        }
+        String afterId = null;
+        List<ProjectReviewExportRepository.ReviewHistoryRow> chunk;
+        do {
+            chunk = projectReviewRepository.reviewHistoryPage(afterId, CHUNK_SIZE,
+                    scope.selectedYearIndex(), scope.reviewerId(), studentIds);
+            for (var row : chunk) {
+                afterId = row.id();
+                writer.row(row.reviewerName(), roleLabel(row.reviewerRole()), row.boundGrades(),
+                        row.studentNumber(), row.studentName(), row.serviceDate(), row.subject(),
+                        decisionLabel(row.decision()), row.decidedAt(),
+                        row.reasonCode(), row.comment(), row.durationMinutes(),
+                        ExportCsvWriter.coins("APPROVED".equals(row.recordStatus())
+                                ? row.creditedUnits() : null));
+            }
+            progressWriter.renewLeaseAndProgress(jobId, writer.rowsWritten(), writer.rowsWritten());
+        } while (chunk.size() == CHUNK_SIZE);
+        return writer.rowsWritten();
+    }
+
+    /** Grade ids as readable names. The column is for a human, so `grade_10` is not an answer. */
+    private String eligibleGradeLabels(String eligibleGradeIdsJson, Labels labels) {
+        if (eligibleGradeIdsJson == null || eligibleGradeIdsJson.isBlank()) {
+            // Q-7: no eligible grades means open to all, which is a fact worth
+            // stating rather than an empty cell a reader would read as missing data.
+            return "All grades";
+        }
+        List<String> names = new java.util.ArrayList<>();
+        for (String raw : eligibleGradeIdsJson.replaceAll("[\\[\\]\"]", "").split(",")) {
+            String id = raw.trim();
+            if (!id.isEmpty()) {
+                names.add(labels.gradeNames().getOrDefault(id, id));
+            }
+        }
+        return String.join(", ", names);
+    }
+
+    /** §2.5 again: a role code is not a label, and `RETURN_FOR_CHANGES` is not a sentence. */
+    private static String roleLabel(String roleCode) {
+        return switch (roleCode) {
+            case "admin" -> "SDC Admin";
+            case "sysadmin" -> "System Admin";
+            case "teacher" -> "Teacher";
+            case "student" -> "Student";
+            case null -> null;
+            default -> roleCode;
+        };
+    }
+
+    private static String decisionLabel(String decision) {
+        return switch (decision) {
+            case "APPROVE" -> "Approved";
+            case "REJECT" -> "Rejected";
+            case "RETURN_FOR_CHANGES" -> "Returned";
+            // Q-3's fourth label. Omitting escalations would hide real decisions
+            // from a file called Review History.
+            case "ESCALATE" -> "Escalated";
+            case null -> null;
+            default -> decision;
+        };
+    }
+
+    private static String projectStatusLabel(String status) {
+        return switch (status) {
+            case "DRAFT" -> "Draft";
+            case "PUBLISHED" -> "Published";
+            case "REGISTRATION_OPEN" -> "Registration Open";
+            case "REGISTRATION_CLOSED" -> "Registration Closed";
+            case "IN_PROGRESS" -> "In Progress";
+            case "COMPLETED" -> "Completed";
+            case "CANCELLED" -> "Cancelled";
+            case null -> null;
+            default -> status;
+        };
+    }
+
+    /**
+     * Which band's annual requirement applies to this student (F-21).
+     *
+     * <p>Grades 6-8 are the junior band and 9-12 the senior one, matching the
+     * two-stage school model. Returns null when no published rule covers the
+     * year, which leaves the requirement, gap and rate columns empty rather than
+     * inventing a denominator — a made-up requirement would make every
+     * completion rate in the file wrong in a way nobody could see.</p>
+     */
+    private Integer requiredMinutesForStudent(StudentReportExportRepository.RequiredMinutes required,
+                                               String gradeId, Labels labels) {
+        if (required == null) {
+            return null;
+        }
+        Integer level = labels.gradeLevels().get(gradeId);
+        if (level == null) {
+            return null;
+        }
+        return level >= 9 ? required.highAnnualMinutes() : required.middleAnnualMinutes();
     }
 
     /**
