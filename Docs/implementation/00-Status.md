@@ -1143,3 +1143,13 @@ First deployment of everything in §39 and §40. Backend and frontend both shipp
 **Carried forward.** R-4 is now live-relevant rather than theoretical: permission codes are serialized into the session at login, so any `sysadmin` session that was already open keeps import and export until it ends. New logins are correct, as verified above. Revoking affected sessions versus documenting "re-login required" is still an open roll-out decision.
 
 **Why no re-seed.** The server already held the current two-stage roster (56 students, 8 in grade 12, 674 records, 42 users), and the credentials in `Docs/TestAccounts.md` were verified working against it before the deploy. Re-seeding regenerates every password, is first-run-only so it would mean clearing the live rows first, and would have gained nothing. `Docs/TestAccounts.md` was updated additively instead — per-role capability changes, the tab split, and the collapsed-card behaviour — with the credential tables untouched.
+
+### 41.1 Configurable academic-year boundary deployed (2026-09-20)
+
+Follow-up deploy of `TIMEBANK_ACADEMIC_YEAR_START` and the export change that had to come with it. Backend only — no migration, and the frontend bundle was already current (the `PageResult` fix was applied before the previous deploy's build; only its commit came later).
+
+**Verified that the setting is genuinely read on the server**, rather than inferring it from a clean startup: `TIMEBANK_ACADEMIC_YEAR_START=08-20` was set, the service restarted, and the log line `Academic year starts on --08-20 (configured), not the default --09-01` appeared; the env file was then reverted and the service restarted again, leaving zero setting lines and the site at 200. Without that step, "no log line and a healthy service" is exactly what an old build would also produce.
+
+**Year-filtered exports smoke-tested afterwards**, since the stored-dates refactor is the code path that changed: `serviceRecords` scoped to 2026-2027 returns **73** rows against 672 unfiltered, so the window is doing real work; `studentList` and `studentCompletion` return 56 each. No `null` in any of them.
+
+**Housekeeping note.** `data/evidence-storage` now holds 2,887 files, of which 20 are `export_*.csv` produced by the live verification runs. The retention job removes them 7 days after each job finished; they are not evidence and do not need manual cleanup.
