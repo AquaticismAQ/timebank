@@ -5,12 +5,19 @@ import i18n from '../../i18n';
 // places — grep for direct `/ 100` or `/ 60` elsewhere before adding one.
 
 /**
- * Grade numbers 6-11 are the only ones the school dictionary defines
+ * Grades 6-12 are the ones the school dictionary defines
  * (`R__seed_base_data.sql`) — a small lookup, not a general numeral
  * converter, since Chinese numeral construction isn't a formula for two-
  * digit numbers (十 for 10, not a concatenation of 1 and 0's characters).
+ *
+ * 12 was added with the senior stage (`Design/*\u002f13-AnnualRollover.md` §2).
+ * The fallback below is why this needed finding by looking: an unmapped grade
+ * renders as "12年级" rather than failing, which sits next to "十一年级" and
+ * reads as a formatting slip rather than a missing entry.
  */
-const ZH_GRADE_NUMERALS: Record<number, string> = { 6: '六', 7: '七', 8: '八', 9: '九', 10: '十', 11: '十一' };
+const ZH_GRADE_NUMERALS: Record<number, string> = {
+  6: '六', 7: '七', 8: '八', 9: '九', 10: '十', 11: '十一', 12: '十二',
+};
 
 /**
  * "G10, Class A" (en) / "十年级, A班" (zh). `gradeLevel`/`className` arrive
