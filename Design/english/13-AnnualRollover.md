@@ -168,6 +168,45 @@ Nobody is watching, so:
 - **The process rewrites "current state" only, never historical events** — what
   follows and what does not is §3.4.
 
+### 3.3.1 What survives a failure, and what recovery looks like
+
+Running unattended means the interesting question is not "does it work" but
+"what is true the morning after it did not".
+
+**A run that fails changes nothing.** The whole rollover is one transaction, so a
+killed process, a lost database connection or a failover part-way leaves the
+roster exactly as it was — no student half-moved, no cohort graduated without
+being promoted out of. This is the property every other recovery answer rests on.
+
+**A run that fails leaves a record.** The attempt, its error and its timestamp are
+written to `annual_rollover_run`, and they survive the rollback. This needs saying
+explicitly because it does not come for free: the failure has to be recorded
+*after* the work's transaction has ended, since a record written inside a
+transaction that is about to roll back goes with it. An operator arriving to an
+unpromoted school must find something better than silence.
+
+**A failed year is not a done year.** Idempotency is keyed on a *successful* run,
+so a failure leaves the year open and the next night's run picks it up. Nothing
+has to be reset by hand for a retry to work.
+
+**Success commits with the work it describes.** The reverse of the rule above: a
+`SUCCEEDED` row must never commit unless the promotion it claims also committed.
+A success recorded over rolled-back work would tell the idempotency check the year
+was done, and the school would never be promoted at all — silently, and for good.
+So evidence of an *attempt* survives a rollback and a claim of *success* does not.
+
+**Reversal of a completed run needs a before-state, and so one is recorded.** The
+protections above all address a run that fails. They do nothing for a run that
+succeeds against the wrong inputs — a misconfigured turnover date, a class-suffix
+mismatch that skips a cohort. Such a run commits cleanly, and the idempotency
+guard then blocks the corrective re-run. Because grade, class and status are
+overwritten in place, a rollover therefore records each changed student's previous
+grade, class and status as part of the same transaction, so the run can be
+reversed as a bounded operation. Without that journal the only recovery is a
+whole-database restore, which discards every unrelated thing that happened since —
+service records, reviews, ledger entries — to undo one column on a few hundred
+rows.
+
 ### 3.4 Which grade snapshots follow, and which do not
 
 Grade and class **are not stored only on the student row**. They are denormalised
