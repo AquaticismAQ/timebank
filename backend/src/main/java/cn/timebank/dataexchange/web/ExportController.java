@@ -4,9 +4,9 @@ import cn.timebank.common.web.ApiResponse;
 import cn.timebank.dataexchange.application.ExportService;
 import cn.timebank.dataexchange.application.dto.DataExchangeRequests.CreateExportRequest;
 import cn.timebank.dataexchange.application.dto.DownloadUrlDto;
+import cn.timebank.dataexchange.application.dto.ExportTypeDto;
 import cn.timebank.dataexchange.application.dto.JobDto;
 import cn.timebank.file.application.dto.DownloadResult;
-import cn.timebank.security.application.CookieSessionUserDetails;
 import jakarta.validation.Valid;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /** Contract §4.13. `content` (the actual byte stream) is one endpoint beyond the contract's literal table — the same shape as `file`'s `/{id}/content?token=`, needed because `/download` itself only returns a URL, not bytes, on a local-disk deployment with no native presigned-URL support (B3F). */
 @RestController
@@ -51,7 +53,22 @@ public class ExportController {
     @PostMapping("/api/v1/exports")
     @PreAuthorize("hasAuthority('exports.' + #request.reportType())")
     public ApiResponse<JobDto> create(@Valid @RequestBody CreateExportRequest request, Authentication auth) {
-        return ApiResponse.of(exportService.create(request, principalId(auth)));
+        return ApiResponse.of(exportService.create(request, auth));
+    }
+
+    /**
+     * The export types this caller may ask for, and the filters each accepts
+     * (`11-DataImportExportOptimization.md` §2.6.1).
+     *
+     * <p>{@code isAuthenticated()} rather than a specific permission: the answer is
+     * already filtered to what the caller holds, so it discloses nothing they could
+     * not discover by trying, and requiring one of the seven would mean picking an
+     * arbitrary one to gate the list of all of them.</p>
+     */
+    @GetMapping("/api/v1/exports/types")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<List<ExportTypeDto>> types(Authentication auth) {
+        return ApiResponse.of(exportService.availableTypes(auth));
     }
 
     @GetMapping("/api/v1/exports/{jobId}")
@@ -76,7 +93,4 @@ public class ExportController {
                 .body(new InputStreamResource(result.content()));
     }
 
-    private String principalId(Authentication auth) {
-        return ((CookieSessionUserDetails) auth.getPrincipal()).id();
-    }
 }

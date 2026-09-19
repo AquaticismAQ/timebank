@@ -12,6 +12,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>A student name is user-controlled and ends up in an exported CSV that an
  * administrator opens in a spreadsheet. Without neutralisation a name beginning
  * {@code =} is executed as a formula on open.</p>
+ *
+ * <p>Moved from {@code ExportJobRunner} to {@link ExportCsvWriter} when every
+ * column convention was consolidated there (§2.8). The assertions are unchanged
+ * on purpose: this is the guard that says the consolidation did not quietly
+ * weaken the escaping, so rewriting it to match a new implementation would
+ * defeat it.</p>
  */
 class ExportCsvInjectionTest {
 
@@ -20,9 +26,9 @@ class ExportCsvInjectionTest {
     void fieldsStartingWithAFormulaTriggerAreNeutralised(String trigger) {
         String hostile = trigger + "HYPERLINK(\"http://attacker.example\",\"click\")";
 
-        String line = ExportJobRunner.csvLine(hostile);
+        String line = ExportCsvWriter.csvLine(hostile);
 
-        assertThat(ExportJobRunner.neutralizeFormulaInjection(hostile)).startsWith("'");
+        assertThat(ExportCsvWriter.neutralizeFormulaInjection(hostile)).startsWith("'");
         assertThat(line).doesNotStartWith(trigger);
     }
 
@@ -37,27 +43,27 @@ class ExportCsvInjectionTest {
     void quotingAloneIsNotTreatedAsSufficient() {
         String hostile = "=cmd|'/c calc'!A1,injected";
 
-        String line = ExportJobRunner.csvLine(hostile);
+        String line = ExportCsvWriter.csvLine(hostile);
 
         assertThat(line).startsWith("\"'=");
     }
 
     @Test
     void ordinaryFieldsAreUnchanged() {
-        assertThat(ExportJobRunner.csvLine("Alex L.(李*红)", "a45b9def", "3"))
+        assertThat(ExportCsvWriter.csvLine("Alex L.(李*红)", "a45b9def", "3"))
                 .isEqualTo("Alex L.(李*红),a45b9def,3");
     }
 
     /** A negative sign on a real number must survive readably — it is still prefixed, but the value is intact. */
     @Test
     void negativeNumbersAreNeutralisedWithoutLosingTheValue() {
-        assertThat(ExportJobRunner.csvLine("-50")).isEqualTo("'-50");
+        assertThat(ExportCsvWriter.csvLine("-50")).isEqualTo("'-50");
     }
 
     @Test
     void existingQuotingBehaviourIsPreserved() {
-        assertThat(ExportJobRunner.csvLine("has,comma")).isEqualTo("\"has,comma\"");
-        assertThat(ExportJobRunner.csvLine("has\"quote")).isEqualTo("\"has\"\"quote\"");
-        assertThat(ExportJobRunner.csvLine((String) null)).isEmpty();
+        assertThat(ExportCsvWriter.csvLine("has,comma")).isEqualTo("\"has,comma\"");
+        assertThat(ExportCsvWriter.csvLine("has\"quote")).isEqualTo("\"has\"\"quote\"");
+        assertThat(ExportCsvWriter.csvLine((String) null)).isEmpty();
     }
 }

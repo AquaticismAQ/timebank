@@ -3,18 +3,23 @@ package cn.timebank.lifecycle.application;
 import cn.timebank.dataexchange.application.ExportService;
 import cn.timebank.dataexchange.application.dto.DataExchangeRequests.CreateExportRequest;
 import cn.timebank.dataexchange.application.dto.JobDto;
+import cn.timebank.iam.application.dto.AuthenticatedUserView;
+import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.file.application.FileStorage;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -62,7 +67,7 @@ class ExportOutputRetentionIT extends AbstractIntegrationTest {
         // be "deletes whatever it finds".
         ExportOutputRetentionJob.SweepResult beforeBoundary = retentionJob.sweep(now.minus(2, ChronoUnit.DAYS));
         assertThat(beforeBoundary.filesDeleted()).isZero();
-        assertThat(contentOf(oldKey)).startsWith("id,studentId,studentName,");
+        assertThat(contentOf(oldKey)).startsWith("No.,Student Number,Student Name,");
         assertThat(resultRefOf(oldJobId)).isEqualTo(oldKey);
 
         ExportOutputRetentionJob.SweepResult afterBoundary = retentionJob.sweep(now);
@@ -75,7 +80,7 @@ class ExportOutputRetentionIT extends AbstractIntegrationTest {
 
         // The export taken minutes ago is untouched, and still downloadable.
         assertThat(resultRefOf(freshJobId)).isEqualTo(freshKey);
-        assertThat(contentOf(freshKey)).startsWith("id,studentId,studentName,");
+        assertThat(contentOf(freshKey)).startsWith("No.,Student Number,Student Name,");
     }
 
     @Test
@@ -164,7 +169,7 @@ class ExportOutputRetentionIT extends AbstractIntegrationTest {
         // It used to be `participation`, which V31 retired along with the other
         // re-cut reports (12-DataExport.md §9.4); a retired key is refused at
         // create, so the sweep would have been proved against no file at all.
-        JobDto job = exportService.create(new CreateExportRequest("serviceRecords"), "usr_test_admin");
+        JobDto job = exportService.create(new CreateExportRequest("serviceRecords", null), adminAuth());
         Instant deadline = Instant.now().plus(Duration.ofSeconds(25));
         while (Instant.now().isBefore(deadline)) {
             String status = statusOf(job.id());
@@ -231,5 +236,14 @@ class ExportOutputRetentionIT extends AbstractIntegrationTest {
         } catch (Exception e) {
             throw new AssertionError("Expected " + storageKey + " to still be readable", e);
         }
+    }
+
+    /** A school-wide admin, so the fixture export is not narrowed by scope — this class is about retention, not scoping. */
+    private Authentication adminAuth() {
+        AuthenticatedUserView view = new AuthenticatedUserView(
+                "usr_test_admin", "usr_test_admin", "hash", "Test Admin", true, false, "zh-CN",
+                Set.of("admin"), Set.of(), null, 480);
+        CookieSessionUserDetails principal = new CookieSessionUserDetails(view);
+        return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 }

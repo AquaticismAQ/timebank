@@ -4,7 +4,10 @@ import cn.timebank.audit.application.AuditEntry;
 import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.dataexchange.application.dto.DataExchangeRequests.CreateExportRequest;
+import cn.timebank.dataexchange.application.dto.DataExchangeRequests.ExportFilters;
+import cn.timebank.dataexchange.application.dto.ExportTypeDto;
 import cn.timebank.dataexchange.application.dto.JobDto;
 import cn.timebank.dataexchange.domain.Job;
 import cn.timebank.dataexchange.domain.JobKind;
@@ -18,52 +21,47 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Map;
+import java.util.List;
 import java.util.Set;
 
 @Service
 class ExportServiceImpl implements ExportService {
 
     /**
-     * The export types this phase can serve honestly. V31 carries a
-     * permission for all seven of `12-DataExport.md`'s types, but five of
-     * them have no query yet (phases 3-4 of
-     * `11-DataImportExportOptimization.md`), and registering a key nothing
-     * can write would hand the caller a job that always ends FAILED — worse
-     * than a 400 saying so. The pre-split keys `participation`,
-     * `completion`, `serviceHours`, `reviewEfficiency` and `topProjects`
-     * stop being accepted here: two retire outright (§2.4) and three are
-     * the right subject in the wrong shape, to be re-cut per type.
+     * The export types a query exists for today, read from {@link ExportTypeCatalog}
+     * rather than duplicated here.
+     *
+     * <p>All seven types are permissioned and published; five have no query yet
+     * (phases 3-4), and asking for one of those is a 400 saying so rather than a
+     * job that ends FAILED. The pre-split keys — {@code participation},
+     * {@code completion}, {@code serviceHours}, {@code reviewEfficiency} as it was
+     * shaped, and {@code topProjects} — are simply absent from the catalogue: two
+     * retire outright (§2.4) and the rest are re-cut per type.</p>
      */
-    static final Set<String> SUPPORTED_REPORT_TYPES = Set.of("studentList", "serviceRecords");
+    static final Set<String> SUPPORTED_REPORT_TYPES = ExportTypeCatalog.TYPES.stream()
+            .filter(ExportTypeCatalog.ExportType::implemented)
+            .map(ExportTypeCatalog.ExportType::key)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
-    /**
-     * `studentList` is the design's stable key for the roster export
-     * (10-RolesAndPermissions.md §5.2) and is what the request body, the
-     * permission code and the audit trail all use. {@code ExportJobRunner}
-     * still dispatches on the pre-split name {@code students}, and rewriting
-     * that runner into a per-type dispatcher is phase 2's work — so the
-     * stored {@code resource_type} keeps the old name for this one type
-     * rather than renaming the key only where it would make every
-     * studentList job fail. Delete this map when the runner switches to the
-     * new keys; {@code ImportExportIT} exports a studentList over HTTP and
-     * downloads the file, so the seam is covered from both ends.
-     */
-    private static final Map<String, String> RUNNER_RESOURCE_TYPES = Map.of("studentList", "students");
 
     private final JobRepository jobRepository;
     private final ExportJobRunner exportJobRunner;
     private final FileStorage fileStorage;
     private final ExportDownloadTokenService tokenService;
     private final AuditService auditService;
+    private final ExportScopeResolver scopeResolver;
+    private final ExportJobParameters jobParameters;
 
     ExportServiceImpl(JobRepository jobRepository, ExportJobRunner exportJobRunner, FileStorage fileStorage,
-                       ExportDownloadTokenService tokenService, AuditService auditService) {
+                       ExportDownloadTokenService tokenService, AuditService auditService,
+                       ExportScopeResolver scopeResolver, ExportJobParameters jobParameters) {
         this.jobRepository = jobRepository;
         this.exportJobRunner = exportJobRunner;
         this.fileStorage = fileStorage;
         this.tokenService = tokenService;
         this.auditService = auditService;
+        this.scopeResolver = scopeResolver;
+        this.jobParameters = jobParameters;
     }
 
     // Deliberately not @Transactional: jobRepository.saveAndFlush runs (and
@@ -76,12 +74,25 @@ class ExportServiceImpl implements ExportService {
     // own transaction couldn't see the still-uncommitted insert. See
     // 00-Status.md §18.
     @Override
-    public JobDto create(CreateExportRequest request, String actorId) {
-        if (!SUPPORTED_REPORT_TYPES.contains(request.reportType())) {
-            throw ApiException.invalidRequest("Unknown export report type: " + request.reportType());
+    public JobDto create(CreateExportRequest request, Authentication auth) {
+        ExportTypeCatalog.ExportType type = ExportTypeCatalog.find(request.reportType())
+                // Unreachable through the controller — no permission exists for an
+                // unknown type, so @PreAuthorize already returned 403 — but a direct
+                // caller must not get past here either.
+                .orElseThrow(() -> ApiException.invalidRequest("Unknown export report type: " + request.reportType()));
+        if (!type.implemented()) {
+            throw ApiException.invalidRequest("Export type is not available yet: " + request.reportType());
         }
-        String resourceType = RUNNER_RESOURCE_TYPES.getOrDefault(request.reportType(), request.reportType());
-        Job job = new Job(OpaqueIds.generate("job"), JobKind.EXPORT, resourceType, "QUEUED", actorId, Instant.now());
+
+        ExportFilters filters = request.filtersOrEmpty();
+        rejectUndeclaredFilters(type, filters);
+
+        String actorId = principalId(auth);
+        ExportScope scope = scopeResolver.resolve(principal(auth), filters);
+        String paramsJson = jobParameters.write(scope);
+
+        Job job = new Job(OpaqueIds.generate("job"), JobKind.EXPORT, type.key(), "QUEUED", actorId, Instant.now());
+        job.setParamsJson(paramsJson);
         jobRepository.saveAndFlush(job);
         // F-9 / phase 5 exit criterion 1. An export is the one operation that
         // takes student data *out* of the system, and it was until now the only
@@ -90,24 +101,73 @@ class ExportServiceImpl implements ExportService {
         // to do this" is the question asked afterwards, and the per-type split
         // (V31) is what makes the answer specific.
         //
+        // The filters go in as the serialized scope, so §2.6's promise holds: an
+        // export is reconstructable from the audit log alone, rather than the log
+        // recording only that *some* file was taken.
+        //
         // Recorded on request rather than on completion: the request is the
         // decision a person made, and a job that fails still says someone asked
-        // for the file. Requested is also the state under which the row must
-        // exist, so an export that dies mid-run is not invisible.
-        auditService.record(new AuditEntry(actorId, "exports." + request.reportType(),
+        // for the file.
+        auditService.record(new AuditEntry(actorId, "exports." + type.key(),
                 "export.create", "export", job.getId(), null,
-                new ExportRequested(request.reportType(), resourceType), null));
+                new ExportRequested(type.key(), paramsJson), null));
         exportJobRunner.runAsync(job.getId());
         return toDto(job);
     }
 
     /**
-     * The audit row's {@code after} summary. `reportType` is what was asked for
-     * and `resourceType` is what the runner was given — the same string for
-     * every type except `studentList`, whose stopgap rename would otherwise make
-     * the audit trail disagree with the request for no visible reason.
+     * Refuses a filter the requested type does not declare (§2.6.1).
+     *
+     * <p>The alternative — accepting it and not applying it — is the failure issue
+     * 093 §1 existed to remove: a filter that is silently dropped is
+     * indistinguishable from one that works, and the operator cannot tell from the
+     * file that their narrowing did nothing. A field error names the offending
+     * field so a client author sees immediately which type does not have it.</p>
      */
-    private record ExportRequested(String reportType, String resourceType) {
+    private void rejectUndeclaredFilters(ExportTypeCatalog.ExportType type, ExportFilters filters) {
+        List<FieldErrorDetail> errors = new java.util.ArrayList<>();
+        checkDeclared(type, filters.academicYearId(), ExportTypeCatalog.Filter.ACADEMIC_YEAR, errors);
+        checkDeclared(type, filters.gradeId(), ExportTypeCatalog.Filter.GRADE, errors);
+        checkDeclared(type, filters.classId(), ExportTypeCatalog.Filter.CLASS, errors);
+        checkDeclared(type, filters.reviewerId(), ExportTypeCatalog.Filter.REVIEWER, errors);
+        if (!errors.isEmpty()) {
+            throw ApiException.validationFailed("Export filters failed validation.", errors);
+        }
+    }
+
+    private void checkDeclared(ExportTypeCatalog.ExportType type, String value,
+                               ExportTypeCatalog.Filter filter, List<FieldErrorDetail> errors) {
+        if (value != null && !type.filters().contains(filter)) {
+            errors.add(new FieldErrorDetail("filters." + filter.field(), "NOT_SUPPORTED",
+                    "The " + type.key() + " export has no " + filter.field() + " filter."));
+        }
+    }
+
+    /**
+     * Only the types the caller holds a permission for
+     * (`12-DataExport.md` §3: a type the user lacks renders nothing, not a
+     * disabled card). Filtering here rather than in the client means the list is
+     * also the authorisation answer, so the two cannot disagree.
+     */
+    @Override
+    public List<ExportTypeDto> availableTypes(Authentication auth) {
+        java.util.Set<String> authorities = auth.getAuthorities().stream()
+                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .collect(java.util.stream.Collectors.toSet());
+        return ExportTypeCatalog.TYPES.stream()
+                .filter(t -> authorities.contains("exports." + t.key()))
+                .map(t -> new ExportTypeDto(t.key(), t.titleKey(), t.descriptionKey(),
+                        t.filters().stream().map(ExportTypeCatalog.Filter::field).toList(),
+                        t.implemented()))
+                .toList();
+    }
+
+    /**
+     * The audit row's {@code after} summary: what was asked for, and the scope it
+     * was resolved to. The second half is what makes the entry answer "which
+     * students did that file contain" rather than only "a file was taken".
+     */
+    private record ExportRequested(String reportType, String scope) {
     }
 
     @Override
@@ -136,6 +196,14 @@ class ExportServiceImpl implements ExportService {
             throw ApiException.notFound("Export not found.");
         }
         return new DownloadResult(fileStorage.open(job.getResultRef()), job.getResourceType() + ".csv", "text/csv");
+    }
+
+    private static TimeBankPrincipal principal(Authentication auth) {
+        return (CookieSessionUserDetails) auth.getPrincipal();
+    }
+
+    private static String principalId(Authentication auth) {
+        return principal(auth).id();
     }
 
     private Job findAccessibleOrThrow(String jobId, Authentication auth) {

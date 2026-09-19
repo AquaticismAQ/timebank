@@ -1,34 +1,37 @@
 package cn.timebank.dataexchange.application;
 
+import cn.timebank.dataexchange.application.ExportGradeDerivation.Cohort;
+import cn.timebank.dataexchange.infrastructure.ExportScopeRepository;
 import cn.timebank.dataexchange.infrastructure.ServiceRecordExportRepository;
-import cn.timebank.dataexchange.infrastructure.ServiceRecordExportRepository.ExportRow;
 import cn.timebank.dataexchange.infrastructure.StudentExportRepository;
 import cn.timebank.file.application.FileStorage;
-import cn.timebank.reporting.application.ReportService;
-import cn.timebank.reporting.application.dto.CompletionReportDto;
-import cn.timebank.reporting.application.dto.ParticipationReportDto;
-import cn.timebank.reporting.application.dto.ReviewEfficiencyReportDto;
-import cn.timebank.reporting.application.dto.ServiceHoursReportDto;
-import cn.timebank.reporting.application.dto.TopProjectsReportDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
-import java.io.BufferedWriter;
 import java.io.FileInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static cn.timebank.dataexchange.application.JobExecutorConfig.JOB_EXECUTOR;
 
 /**
- * B5.9: runs on the dedicated {@code jobExecutor} (D5's executor
- * isolation), never inline in the request that created the job. Writes to
- * a local temp file rather than buffering in memory — bounded heap
- * regardless of export size (Design.md §16.2), the same reasoning
- * `LocalFileStorage` (B3.4) already applies to uploads.
+ * B5.9: runs on the dedicated {@code jobExecutor} (D5's executor isolation),
+ * never inline in the request that created the job. Writes to a local temp file
+ * rather than buffering in memory — bounded heap regardless of export size
+ * (Design.md §16.2), the same reasoning {@code LocalFileStorage} (B3.4) already
+ * applies to uploads.
+ *
+ * <p>Formatting is not this class's business: every column convention lives in
+ * {@link ExportCsvWriter} (§2.8), and the per-type methods below supply values.
+ * The scope and the selected year arrive on the job as JSON, resolved once at
+ * request time by {@code ExportScopeResolver} — a different thread cannot
+ * re-derive a principal's scope, and re-deriving it later could give a different
+ * answer if their assignments changed in between.</p>
  */
 @Component
 class ExportJobRunner {
@@ -37,18 +40,23 @@ class ExportJobRunner {
     private static final int CHUNK_SIZE = 1000;
 
     private final JobProgressWriter progressWriter;
-    private final ReportService reportService;
     private final ServiceRecordExportRepository serviceRecordExportRepository;
     private final StudentExportRepository studentExportRepository;
+    private final ExportScopeRepository scopeRepository;
+    private final ExportJobParameters jobParameters;
     private final FileStorage fileStorage;
 
-    ExportJobRunner(JobProgressWriter progressWriter, ReportService reportService,
+    ExportJobRunner(JobProgressWriter progressWriter,
                      ServiceRecordExportRepository serviceRecordExportRepository,
-                     StudentExportRepository studentExportRepository, FileStorage fileStorage) {
+                     StudentExportRepository studentExportRepository,
+                     ExportScopeRepository scopeRepository,
+                     ExportJobParameters jobParameters,
+                     FileStorage fileStorage) {
         this.progressWriter = progressWriter;
-        this.reportService = reportService;
         this.serviceRecordExportRepository = serviceRecordExportRepository;
         this.studentExportRepository = studentExportRepository;
+        this.scopeRepository = scopeRepository;
+        this.jobParameters = jobParameters;
         this.fileStorage = fileStorage;
     }
 
@@ -64,11 +72,28 @@ class ExportJobRunner {
             return;
         }
         try {
-            int rows = switch (reportType) {
-                case "serviceRecords" -> writeServiceRecordsCsv(jobId, tempFile);
-                case "students" -> writeStudentsCsv(jobId, tempFile);
-                default -> writeReportCsv(reportType, tempFile);
-            };
+            ExportScope scope = jobParameters.read(claimed.getParamsJson());
+            // The criteria were fixed when the request was authorised; the id set
+            // is materialised here, inside the job, so params_json stays a few
+            // ids rather than growing with the roster.
+            Set<String> studentIds = scope.allStudents() ? null
+                    : scopeRepository.studentIdsWithin(
+                            scope.restriction().boundGradeIds(), scope.restriction().boundClassIds(),
+                            scope.restriction().gradeFilter(), scope.restriction().classFilter());
+            Labels labels = loadLabels();
+
+            int rows;
+            try (ExportCsvWriter writer = new ExportCsvWriter(tempFile)) {
+                rows = switch (reportType) {
+                    case "studentList" -> writeStudentList(jobId, writer, scope, studentIds, labels);
+                    case "serviceRecords" -> writeServiceRecords(jobId, writer, scope, studentIds, labels);
+                    // Phases 3-4 register their own cases here. Until then an
+                    // unknown type is a fault rather than an empty file: the
+                    // request path already refuses types with no query, so
+                    // reaching this means the two disagree.
+                    default -> throw new IllegalStateException("No export writer for type: " + reportType);
+                };
+            }
 
             String storageKey = "export_" + jobId + ".csv";
             try (var in = new FileInputStream(tempFile.toFile())) {
@@ -88,178 +113,176 @@ class ExportJobRunner {
         }
     }
 
-    /** The one export type large enough to actually need chunking/checkpointing — keyset-paginated, ~1,000 rows per chunk, lease renewed each chunk. */
-    private int writeServiceRecordsCsv(String jobId, Path tempFile) throws Exception {
-        try (BufferedWriter writer = Files.newBufferedWriter(tempFile)) {
-            writer.write("id,studentId,studentName,serviceDate,durationMinutes,creditedUnits,status");
-            writer.newLine();
-            String afterId = null;
-            int total = 0;
-            List<ExportRow> chunk;
-            do {
-                chunk = serviceRecordExportRepository.page(afterId, CHUNK_SIZE);
-                for (ExportRow row : chunk) {
-                    writer.write(csvLine(row.id(), row.studentId(), row.studentName(), String.valueOf(row.serviceDate()),
-                            String.valueOf(row.durationMinutes()), String.valueOf(row.creditedUnits()), row.status()));
-                    writer.newLine();
-                    afterId = row.id();
+    /**
+     * The label lookups every export shares, read once per job rather than per
+     * row. The school has a few grades and a few dozen classes, so these are
+     * small maps; joining them per row would be a join per row for data that
+     * cannot change while the job runs.
+     */
+    private record Labels(Map<String, Integer> gradeLevels, Map<String, String> gradeNames,
+                           Map<String, String> classCodes, Map<String, Integer> yearStarts) {
+    }
+
+    private Labels loadLabels() {
+        return new Labels(scopeRepository.gradeLevelsById(),
+                scopeRepository.gradeNamesById(false),
+                scopeRepository.classCodesById(),
+                scopeRepository.academicYearStartYearsById());
+    }
+
+    /** §6.1: identity and placement only — deliberately no hours or coins, so nobody reads a roster as an achievement report. */
+    private int writeStudentList(String jobId, ExportCsvWriter writer, ExportScope scope,
+                                 Set<String> studentIds, Labels labels) throws Exception {
+        writer.header("Student Number", "Student Name", "Grade", "Class", "Status",
+                "Enrollment Academic Year", "Graduation Year", "Joined At");
+        // An empty set means the filters matched nobody, which is a real answer
+        // and a header-only file. It must not reach SQL as `in ()`.
+        if (studentIds != null && studentIds.isEmpty()) {
+            return 0;
+        }
+        String afterId = null;
+        List<StudentExportRepository.ExportRow> chunk;
+        do {
+            chunk = studentExportRepository.page(afterId, CHUNK_SIZE, studentIds);
+            for (StudentExportRepository.ExportRow row : chunk) {
+                afterId = row.id();
+                GradeCell grade = gradeCell(row.gradeId(), row.enrollmentAcademicYearId(),
+                        row.graduationYear(), scope, labels);
+                if (grade.excluded()) {
+                    continue; // §5.1: not enrolled that year ⇒ absent, not blank
                 }
-                total += chunk.size();
-                progressWriter.renewLeaseAndProgress(jobId, total, total);
-            } while (chunk.size() == CHUNK_SIZE);
-            return total;
-        }
+                writer.row(row.studentNumber(), row.displayName(), grade.label(),
+                        labels.classCodes().get(row.classId()), statusLabel(row.status()),
+                        academicYearCode(row.enrollmentAcademicYearId(), labels),
+                        row.graduationYear(), row.joinedAt());
+            }
+            progressWriter.renewLeaseAndProgress(jobId, writer.rowsWritten(), writer.rowsWritten());
+        } while (chunk.size() == CHUNK_SIZE);
+        return writer.rowsWritten();
     }
 
-    /** Student roster export — keyset-paginated, same chunking pattern as service records. */
-    private int writeStudentsCsv(String jobId, Path tempFile) throws Exception {
-        try (BufferedWriter writer = Files.newBufferedWriter(tempFile)) {
-            writer.write("id,studentNumber,displayName,gradeId,classId,status,graduationYear,joinedAt");
-            writer.newLine();
-            String afterId = null;
-            int total = 0;
-            List<StudentExportRepository.ExportRow> chunk;
-            do {
-                chunk = studentExportRepository.page(afterId, CHUNK_SIZE);
-                for (StudentExportRepository.ExportRow row : chunk) {
-                    writer.write(csvLine(row.id(), row.studentNumber(), row.displayName(),
-                            row.gradeId(), row.classId(), row.status(),
-                            String.valueOf(row.graduationYear()), String.valueOf(row.joinedAt())));
-                    writer.newLine();
-                    afterId = row.id();
+    /** §6.2: every submitted status, so `Credited Coins` is empty on rows that have not been approved. */
+    private int writeServiceRecords(String jobId, ExportCsvWriter writer, ExportScope scope,
+                                    Set<String> studentIds, Labels labels) throws Exception {
+        writer.header("Student Number", "Student Name", "Grade", "Class", "Service Date",
+                "Service Category", "Project / Organisation", "Duration Minutes",
+                "Credited Coins", "Status");
+        if (studentIds != null && studentIds.isEmpty()) {
+            return 0;
+        }
+        String afterId = null;
+        List<ServiceRecordExportRepository.ExportRow> chunk;
+        do {
+            chunk = serviceRecordExportRepository.page(afterId, CHUNK_SIZE, studentIds,
+                    scope.selectedYearIndex());
+            for (ServiceRecordExportRepository.ExportRow row : chunk) {
+                afterId = row.id();
+                writer.row(row.studentNumber(), row.studentName(),
+                        // The record's own grade snapshot is the truthful answer
+                        // for a record: it is the grade the student was in when
+                        // they did the service. Unlike the roster export there is
+                        // nothing to derive.
+                        labels.gradeNames().get(row.gradeId()),
+                        labels.classCodes().get(row.classId()),
+                        row.serviceDate(), row.serviceCategory(), row.subject(),
+                        row.durationMinutes(),
+                        ExportCsvWriter.coins(creditedOnlyWhenApproved(row)),
+                        recordStatusLabel(row.status()));
+            }
+            progressWriter.renewLeaseAndProgress(jobId, writer.rowsWritten(), writer.rowsWritten());
+        } while (chunk.size() == CHUNK_SIZE);
+        return writer.rowsWritten();
+    }
+
+    /**
+     * `Credited Coins` is populated only on approved rows (§6.2).
+     *
+     * <p>Belt and braces over the query: a non-approved record should not carry
+     * credited units at all, but if one ever does — a reversal mid-flight, a
+     * historical row — printing it here would put a credit figure beside a status
+     * that says it was rejected, and someone would sum the column.</p>
+     */
+    private Integer creditedOnlyWhenApproved(ServiceRecordExportRepository.ExportRow row) {
+        return "APPROVED".equals(row.status()) ? row.creditedUnits() : null;
+    }
+
+    /** What the Grade column says for one student, and whether they belong in this year's file at all. */
+    private record GradeCell(String label, boolean excluded) {
+    }
+
+    private GradeCell gradeCell(String liveGradeId, String enrolmentYearId, Integer graduationYear,
+                                 ExportScope scope, Labels labels) {
+        String liveLabel = labels.gradeNames().get(liveGradeId);
+        Integer liveLevel = labels.gradeLevels().get(liveGradeId);
+        Integer enrolmentYear = enrolmentYearId == null ? null : labels.yearStarts().get(enrolmentYearId);
+
+        // §5.3: with no year selected there is nothing to derive against, so the
+        // column shows present state — including `Graduated (YYYY)`.
+        if (!scope.hasYear()) {
+            if (graduationYear != null && scope.currentYearIndex() >= graduationYear) {
+                return new GradeCell("Graduated (" + graduationYear + ")", false);
+            }
+            return new GradeCell(liveLabel, false);
+        }
+
+        // Without a cohort there is nothing to derive from. Showing the live grade
+        // for a past year would be a confident wrong answer, so the row is kept
+        // with an empty grade rather than asserting one.
+        if (enrolmentYear == null || graduationYear == null || liveLevel == null) {
+            return new GradeCell(null, false);
+        }
+
+        Cohort cohort = new Cohort(enrolmentYear, graduationYear, liveLevel);
+        if (!ExportGradeDerivation.enrolledIn(cohort, scope.selectedYearIndex())) {
+            return new GradeCell(null, true);
+        }
+        if (ExportGradeDerivation.isInconsistent(cohort, scope.currentYearIndex())) {
+            // §5.2.1: this student repeated or skipped a year, which the system
+            // does not model. An empty cell is honest; a derived number would not be.
+            return new GradeCell(null, false);
+        }
+        int level = ExportGradeDerivation.gradeLevelIn(cohort, scope.selectedYearIndex(), scope.currentYearIndex());
+        return new GradeCell(gradeLabelForLevel(level, labels), false);
+    }
+
+    /** Renders a derived level through the same names the live grades use, so a derived row and a present row read alike. */
+    private String gradeLabelForLevel(int level, Labels labels) {
+        for (Map.Entry<String, Integer> entry : labels.gradeLevels().entrySet()) {
+            if (entry.getValue() == level) {
+                String name = labels.gradeNames().get(entry.getKey());
+                if (name != null) {
+                    return name;
                 }
-                total += chunk.size();
-                progressWriter.renewLeaseAndProgress(jobId, total, total);
-            } while (chunk.size() == CHUNK_SIZE);
-            return total;
-        }
-    }
-
-    /**
-     * The five aggregate reports are already bounded (grades, months,
-     * reviewers, top-N projects) — one small write, no chunking needed, still
-     * off the request thread.
-     *
-     * <p>Every call below passes a {@code null} academic year, i.e. the
-     * current one (issue 093 §1). An export job request carries no period
-     * today, so there is nothing to pass; exporting an arbitrary year needs a
-     * field on the export request first, which is a separate contract
-     * change.</p>
-     */
-    private int writeReportCsv(String reportType, Path tempFile) throws Exception {
-        try (BufferedWriter writer = Files.newBufferedWriter(tempFile)) {
-            int rows = switch (reportType) {
-                case "participation" -> writeParticipation(writer);
-                case "completion" -> writeCompletion(writer);
-                case "serviceHours" -> writeServiceHours(writer);
-                case "reviewEfficiency" -> writeReviewEfficiency(writer);
-                case "topProjects" -> writeTopProjects(writer);
-                default -> throw new IllegalStateException("Unknown report export type: " + reportType);
-            };
-            return rows;
-        }
-    }
-
-    private int writeParticipation(BufferedWriter writer) throws Exception {
-        ParticipationReportDto report = reportService.participation("zh-CN", null);
-        writer.write("gradeId,gradeName,totalStudents,participatedStudents,participationRate");
-        writer.newLine();
-        for (var g : report.byGrade()) {
-            writer.write(csvLine(g.gradeId(), g.gradeName(), String.valueOf(g.totalStudents()),
-                    String.valueOf(g.participatedStudents()), String.valueOf(g.participationRate())));
-            writer.newLine();
-        }
-        return report.byGrade().size();
-    }
-
-    private int writeCompletion(BufferedWriter writer) throws Exception {
-        CompletionReportDto report = reportService.completion("zh-CN", null);
-        writer.write("gradeId,gradeName,totalStudents,completedStudents,completionRate");
-        writer.newLine();
-        for (var g : report.byGrade()) {
-            writer.write(csvLine(g.gradeId(), g.gradeName(), String.valueOf(g.totalStudents()),
-                    String.valueOf(g.completedStudents()), String.valueOf(g.completionRate())));
-            writer.newLine();
-        }
-        return report.byGrade().size();
-    }
-
-    private int writeServiceHours(BufferedWriter writer) throws Exception {
-        ServiceHoursReportDto report = reportService.serviceHours(null);
-        writer.write("month,hours");
-        writer.newLine();
-        for (var m : report.byMonth()) {
-            writer.write(csvLine(m.month(), String.valueOf(m.hours())));
-            writer.newLine();
-        }
-        return report.byMonth().size();
-    }
-
-    private int writeReviewEfficiency(BufferedWriter writer) throws Exception {
-        ReviewEfficiencyReportDto report = reportService.reviewEfficiency(null);
-        writer.write("reviewerId,reviewerName,decisions,avgHours");
-        writer.newLine();
-        for (var r : report.byReviewer()) {
-            writer.write(csvLine(r.reviewerId(), r.reviewerName(), String.valueOf(r.decisions()), String.valueOf(r.avgHours())));
-            writer.newLine();
-        }
-        return report.byReviewer().size();
-    }
-
-    private int writeTopProjects(BufferedWriter writer) throws Exception {
-        TopProjectsReportDto report = reportService.topProjects(null);
-        writer.write("projectId,title,participants,totalMinutes");
-        writer.newLine();
-        for (var p : report.topProjects()) {
-            writer.write(csvLine(p.projectId(), p.title(), String.valueOf(p.participants()), String.valueOf(p.totalMinutes())));
-            writer.newLine();
-        }
-        return report.topProjects().size();
-    }
-
-    /**
-     * Characters that make a spreadsheet treat a cell as a formula rather than
-     * text. {@code -} is included because {@code -1+1} parses as an expression,
-     * and tab/CR because they are stripped as leading whitespace before the
-     * next character is evaluated.
-     */
-    private static final String FORMULA_TRIGGERS = "=+-@\t\r";
-
-    /**
-     * CWE-1236. Student names and descriptions reach this file from user input,
-     * and an admin opening the export in Excel or LibreOffice executes whatever
-     * a cell starting with one of {@link #FORMULA_TRIGGERS} contains —
-     * {@code =HYPERLINK(...)} to phish, or a call out to an attacker's host.
-     *
-     * <p>RFC 4180 quoting does <strong>not</strong> prevent this: the quotes are
-     * part of the CSV envelope and are stripped before the cell's contents are
-     * parsed, so {@code "=cmd"} is still a formula. Prefixing an apostrophe is
-     * what actually neutralises it — spreadsheets treat the rest as literal text
-     * and do not display the apostrophe itself.</p>
-     *
-     * <p>Applied to every export type, not just students, because the same
-     * helper writes all of them.</p>
-     */
-    static String neutralizeFormulaInjection(String field) {
-        if (!field.isEmpty() && FORMULA_TRIGGERS.indexOf(field.charAt(0)) >= 0) {
-            return "'" + field;
-        }
-        return field;
-    }
-
-    /** Package-private and static so the escaping above is unit-testable without running a job. */
-    static String csvLine(String... fields) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < fields.length; i++) {
-            if (i > 0) sb.append(',');
-            String f = fields[i] == null ? "" : fields[i];
-            f = neutralizeFormulaInjection(f);
-            if (f.contains(",") || f.contains("\"")) {
-                sb.append('"').append(f.replace("\"", "\"\"")).append('"');
-            } else {
-                sb.append(f);
             }
         }
-        return sb.toString();
+        return "Grade " + level;
+    }
+
+    private String academicYearCode(String academicYearId, Labels labels) {
+        Integer start = academicYearId == null ? null : labels.yearStarts().get(academicYearId);
+        return start == null ? null : start + "-" + (start + 1);
+    }
+
+    /** §2.5: statuses go through a label map, never {@code enum.name()} — `PENDING_ACTIVATION` is not a sentence. */
+    private static String statusLabel(String status) {
+        return switch (status) {
+            case "ACTIVE" -> "Active";
+            case "INACTIVE" -> "Inactive";
+            case "GRADUATED" -> "Graduated";
+            case null -> null;
+            default -> status;
+        };
+    }
+
+    /** §6.2's four labels over five system statuses: the two review-in-progress states read the same to a reader. */
+    private static String recordStatusLabel(String status) {
+        return switch (status) {
+            case "APPROVED" -> "Approved";
+            case "SUBMITTED", "UNDER_REVIEW" -> "Pending Review";
+            case "RETURNED" -> "Returned";
+            case "REJECTED" -> "Rejected";
+            case null -> null;
+            default -> status;
+        };
     }
 }

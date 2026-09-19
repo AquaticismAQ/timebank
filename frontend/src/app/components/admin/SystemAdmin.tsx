@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, ChevronUp, ChevronDown, AlertTriangle, Plus, Pencil, Trash2, Lock, Building2, KeyRound, Check, Tags, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, usePermissions } from '../../App';
-import { api, type ImportJob, type HistoricalImportWindow } from '../../api/client';
+import { api, type ImportJob, type HistoricalImportWindow, type ExportTypeInfo, type ExportFilterField, type ExportFilterValues } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { ActivationSlips } from './ActivationSlips';
 import { OrganizationManagement } from './OrganizationManagement';
@@ -17,7 +17,7 @@ import { downloadBlob } from '../../lib/download';
 import { localDateTimeToISO, formatLocalInstant, isoToLocalDate } from '../../lib/datetime';
 import { DEFAULT_PAGE_SIZE } from '../../lib/pagination';
 import { STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
-import type { RoleSummary, AuditLogEntry, AuditLogFacets, SchoolInfo, RuleVersion, RuleDraftFields, RuleValidationResult } from '../../api/types';
+import type { RoleSummary, AuditLogEntry, AuditLogFacets, SchoolInfo, RuleVersion, RuleDraftFields, RuleValidationResult, Grade, SchoolClass, AcademicYear } from '../../api/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
@@ -369,7 +369,7 @@ function SchoolInfoEditModal({ initial, onClose, onSaved }: SchoolInfoEditModalP
   );
 }
 
-type Tab = 'users' | 'roles' | 'rules' | 'import' | 'logs' | 'categories' | 'organizations' | 'settings';
+type Tab = 'users' | 'roles' | 'rules' | 'import' | 'export' | 'logs' | 'categories' | 'organizations' | 'settings';
 /**
  * The five real `UserStatus` values (backend `cn.timebank.iam.domain.UserStatus`),
  * camelCased by `fromBackendEnum`. This used to be `'active' | 'inactive'` only,
@@ -490,6 +490,131 @@ const USER_SORT_WIRE_KEY: Record<UserSortKey, string> = {
 const KNOWN_ROLE_LABEL_KEYS: Record<string, string> = {
   admin: 'labels.roles.admin', teacher: 'labels.roles.teacher', student: 'labels.roles.student',
 };
+
+/**
+ * One export, with its explanation and — collapsed until asked for — the filters
+ * its type declares (`12-DataExport.md` §6, plan §2.6.1).
+ *
+ * Collapsed by default because the common case is "export everything I can see":
+ * every filter defaults to All (§4.1), so an unopened panel is already the right
+ * request, and putting four dropdowns in front of that would make the simple case
+ * look like a form to fill in.
+ *
+ * The filter list comes from the server, so this component renders controls for
+ * whatever the type declares and nothing else. Rendering a control the type does
+ * not declare would build a request the server rejects.
+ */
+function ExportCard({ type, filters, onFilterChange, onExport, gradeOptions, classOptions, academicYears, reviewerOptions }: {
+  type: ExportTypeInfo;
+  filters: ExportFilterValues | undefined;
+  onFilterChange: (field: ExportFilterField, value: string | undefined) => void;
+  onExport: () => void;
+  gradeOptions: Grade[];
+  classOptions: SchoolClass[];
+  academicYears: AcademicYear[];
+  reviewerOptions: { id: string; displayName: string }[];
+}) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const chosen = filters ?? {};
+  const activeCount = Object.values(chosen).filter(v => v != null && v !== '').length;
+
+  const selectClass = 'w-full px-3 py-2 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none';
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-5">
+      <h4 className="text-foreground mb-1">{t(type.titleKey)}</h4>
+      {/* leading-relaxed and no line clamp: §2.8 requires the card text to have
+          room, because it is a paragraph that changes what the reader expects
+          from the file, not a label. */}
+      <p className="text-xs text-muted-foreground leading-relaxed mb-3">{t(type.descriptionKey)}</p>
+
+      {!type.available ? (
+        /* Reserved, not broken — the repo's rule is to say so rather than offer a
+           dead control (CLAUDE.md, domain conventions). The explanation above
+           stays visible, which is the reason the card is drawn at all. */
+        <p className="w-full py-2 rounded-xl bg-muted/50 text-xs text-muted-foreground text-center">
+          {t('admin.system.exportNotYetAvailable')}
+        </p>
+      ) : (
+        <>
+          {type.filters.length > 0 && (
+            <button onClick={() => setExpanded(v => !v)}
+              className="w-full mb-2 py-2 px-3 rounded-xl border border-border text-xs text-muted-foreground hover:bg-accent flex items-center justify-between">
+              <span>
+                {t('admin.system.exportFilters')}
+                {activeCount > 0 && ` (${activeCount})`}
+              </span>
+              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          )}
+
+          {expanded && (
+            <div className="space-y-2 mb-3">
+              {type.filters.includes('academicYearId') && (
+                <label className="block">
+                  <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterAcademicYear')}</span>
+                  <select className={selectClass} value={chosen.academicYearId ?? ''}
+                    onChange={e => onFilterChange('academicYearId', e.target.value || undefined)}>
+                    <option value="">{t('admin.system.exportFilterAllYears')}</option>
+                    {academicYears.map(y => <option key={y.id} value={y.id}>{y.code}</option>)}
+                  </select>
+                </label>
+              )}
+              {type.filters.includes('gradeId') && (
+                <label className="block">
+                  <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterGrade')}</span>
+                  <select className={selectClass} value={chosen.gradeId ?? ''}
+                    onChange={e => {
+                      onFilterChange('gradeId', e.target.value || undefined);
+                      // A class belongs to exactly one grade, so a class chosen
+                      // under the previous grade is now contradictory. Clearing it
+                      // beats sending a pair that cannot match anybody and calling
+                      // the empty file a result.
+                      onFilterChange('classId', undefined);
+                    }}>
+                    <option value="">{t('admin.system.exportFilterAllGrades')}</option>
+                    {/* `Grade.name` is already resolved per request language by
+                        the server, so there is nothing to format here. */}
+                    {gradeOptions.map(g => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {type.filters.includes('classId') && (
+                <label className="block">
+                  <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterClass')}</span>
+                  <select className={selectClass} value={chosen.classId ?? ''}
+                    onChange={e => onFilterChange('classId', e.target.value || undefined)}>
+                    <option value="">{t('admin.system.exportFilterAllClasses')}</option>
+                    {classOptions.map(c => <option key={c.id} value={c.id}>{c.code ?? c.name}</option>)}
+                  </select>
+                </label>
+              )}
+              {type.filters.includes('reviewerId') && (
+                <label className="block">
+                  <span className="text-xs text-muted-foreground">{t('admin.system.exportFilterReviewer')}</span>
+                  <select className={selectClass} value={chosen.reviewerId ?? ''}
+                    onChange={e => onFilterChange('reviewerId', e.target.value || undefined)}>
+                    <option value="">{t('admin.system.exportFilterAllReviewers')}</option>
+                    {reviewerOptions.map(r => <option key={r.id} value={r.id}>{r.displayName}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
+          )}
+
+          <button onClick={onExport}
+            className="w-full py-2 border border-border rounded-xl text-sm text-foreground hover:bg-accent flex items-center justify-between px-4">
+            {t('admin.system.exportRunAction')}
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 
 function roleDisplayName(role: Pick<RoleSummary, 'code' | 'name'>, t: (key: string) => string): string {
   const key = KNOWN_ROLE_LABEL_KEYS[role.code];
@@ -994,6 +1119,20 @@ export function SystemAdmin() {
   const canPublishRules = hasPermission('rules.publish');
   const canReadRoles = hasPermission('roles.read');
   const canManageRoles = hasPermission('roles.manage');
+  const canReadUsers = hasPermission('users.read');
+  /**
+   * Import is now the SDC admin's alone (`10-RolesAndPermissions.md` §6.1 —
+   * `imports.*` was revoked from sysadmin, and teachers never held it), so the
+   * whole tab is gated rather than each button inside it. A teacher who cannot
+   * import should not be shown the concept.
+   */
+  const canImport = hasPermission('imports.create');
+  /**
+   * Export is per type now, so "may this person export" is "do they hold any of
+   * the seven". Derived from the catalogue rather than a hardcoded list, so an
+   * eighth export type does not need this line edited.
+   */
+  const canExportAnything = EXPORT_TYPES.some(item => hasPermission(`exports.${item.type}`));
   // 07-RoleFinetune.md §2.7: template management is admin/sysadmin-only by
   // role code, not just roles.manage — narrower than ordinary role
   // management (enforced server-side too; this only hides the buttons
@@ -1080,7 +1219,7 @@ export function SystemAdmin() {
   const [activeTab, setActiveTab] = useState<Tab>('users');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<RoleSummary[]>([]);
-  const { grades: allGrades, classes: allClasses } = useDictionaries();
+  const { grades: allGrades, classes: allClasses, academicYears } = useDictionaries();
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
   const rulesApi = usePagedApi<RuleVersion>(api.rules.list, { sort: '-createdAt', pageSize: DEFAULT_PAGE_SIZE });
@@ -1104,6 +1243,45 @@ export function SystemAdmin() {
    * is explicit that a control which cannot be used should not be on screen.
    */
   const [importWindow, setImportWindow] = useState<HistoricalImportWindow | undefined>(undefined);
+
+  /**
+   * The server's export catalogue (§2.6.1) and the filter values chosen per card.
+   *
+   * Keyed by export type because each card filters independently: an operator
+   * narrowing Service Records to one class has not said anything about how they
+   * want the roster exported, and sharing one filter object between cards would
+   * silently apply it.
+   */
+  const [exportTypes, setExportTypes] = useState<ExportTypeInfo[]>([]);
+  const [exportFilters, setExportFilters] = useState<Record<string, ExportFilterValues>>({});
+
+  const setExportFilter = (typeKey: string, field: ExportFilterField, value: string | undefined) => {
+    setExportFilters(prev => ({ ...prev, [typeKey]: { ...prev[typeKey], [field]: value } }));
+  };
+
+  useEffect(() => {
+    if (!canExportAnything) return;
+    api.exports.types().then(setExportTypes).catch(() => setExportTypes([]));
+  }, [canExportAnything]);
+
+  /**
+   * The Grade dropdown offers only grades the user is actually bound to (F-16,
+   * §4.3), and the Class dropdown only classes inside the surviving grades.
+   *
+   * A school-wide admin has no bindings, so they see everything. For a teacher
+   * this is not cosmetic: the server refuses a grade outside their binding, so
+   * offering one would be offering a control that errors.
+   */
+  const scopedGrades = useMemo(() => {
+    const bound = user?.scopeGradeIds ?? [];
+    if (bound.length === 0) return allGrades;
+    return allGrades.filter(g => bound.includes(g.id));
+  }, [allGrades, user?.scopeGradeIds]);
+
+  const classesForGrade = (gradeId: string | undefined) => {
+    const withinScope = allClasses.filter(c => scopedGrades.some(g => g.id === c.gradeId));
+    return gradeId ? withinScope.filter(c => c.gradeId === gradeId) : withinScope;
+  };
 
   const loadImportWindow = () => {
     // Skipped outright without `imports.read` — this tab is visible to
@@ -1538,7 +1716,10 @@ export function SystemAdmin() {
 
   const handleExport = async (reportType: string) => {
     try {
-      const job = await api.exports.create(reportType);
+      // Whatever the card's panel holds. Undefined entries are stripped by the
+      // client, so an untouched panel sends no filters at all rather than four
+      // explicit nulls.
+      const job = await api.exports.create(reportType, exportFilters[reportType]);
       const poll = async (): Promise<void> => {
         try {
           const status = await api.exports.get(job.jobId);
@@ -1569,16 +1750,41 @@ export function SystemAdmin() {
     }
   };
 
+  /**
+   * Import and Export are two independent tabs, each present only with its own
+   * permission (`11-DataImport.md` §5.2, `12-DataExport.md` §3, plan §2.12).
+   *
+   * They were one tab while one permission covered both. Since import became the
+   * Student Development Centre's alone and export was split per type, a teacher
+   * holds export and no import at all — so a combined tab would show them a page
+   * half of which returns 403. Splitting them means a teacher never encounters
+   * the concept of importing, which is §5.2's stated intent.
+   *
+   * Every other tab is gated on its own permission too, for a reason the split
+   * exposed (F-15): granting teachers export makes this page one they routinely
+   * open, and its old hardcoded landing tab needs `users.read`, which a teacher
+   * does not have. So the landing tab is the first one they can actually see
+   * rather than always `users`.
+   */
   const tabs: { key: Tab; label: string; icon: typeof Users }[] = [
-    { key: 'users', label: t('admin.system.tabUsers'), icon: Users },
+    ...(canReadUsers ? [{ key: 'users' as const, label: t('admin.system.tabUsers'), icon: Users }] : []),
     ...(canReadRoles ? [{ key: 'roles' as const, label: t('admin.system.tabRoles'), icon: KeyRound }] : []),
     { key: 'rules', label: t('admin.system.tabRules'), icon: Shield },
-    { key: 'import', label: t('admin.system.tabImport'), icon: FileText },
+    ...(canImport ? [{ key: 'import' as const, label: t('admin.system.tabImport'), icon: Upload }] : []),
+    ...(canExportAnything ? [{ key: 'export' as const, label: t('admin.system.tabExport'), icon: Download }] : []),
     { key: 'logs', label: t('admin.system.tabLogs'), icon: FileText },
     { key: 'categories', label: t('admin.system.tabCategories'), icon: Tags },
     { key: 'organizations', label: t('admin.system.tabOrganizations'), icon: Building2 },
     { key: 'settings', label: t('admin.system.tabSettings'), icon: Settings },
   ];
+
+  // Landing on a tab that is not rendered would show the nav and an empty page,
+  // which reads as a broken screen rather than as a permission boundary.
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.some(tab => tab.key === activeTab)) {
+      setActiveTab(tabs[0].key);
+    }
+  }, [tabs.map(tab => tab.key).join(','), activeTab]);
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
@@ -1961,46 +2167,48 @@ export function SystemAdmin() {
                 into something a student can hold. */}
             {canIssueSlips && <ActivationSlips />}
 
-            <div className="bg-card border border-border rounded-2xl p-5 sm:col-span-2">
-              <Download className="w-8 h-8 text-green-500 mb-3" />
-              <h3 className="text-foreground mb-1">{t('admin.system.exportData')}</h3>
-              <p className="text-xs text-muted-foreground mb-4">{t('admin.system.exportDesc')}</p>
-              {/* One card per export, each carrying its own explanation rather
-                  than a shared one-liner (12-DataExport.md §6). A name alone does
-                  not distinguish these: "Student List" and "Student Completion"
-                  sound interchangeable and are not — one is placement with no
-                  figures in it, the other is one year's hours against the
-                  requirement — and Service Records is a record of submissions,
-                  not of credit, which is the mistake the file itself invites.
-                  The text is the design's, kept in i18n so the Chinese reads as
-                  prose rather than as a translation of an English label. */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {EXPORT_TYPES.filter(item => hasPermission(`exports.${item.type}`)).map(item => (
-                  <div key={item.type} className="border border-border rounded-xl p-4 flex flex-col">
-                    <h4 className="text-sm text-foreground mb-1">{t(item.titleKey)}</h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed mb-3 grow">{t(item.descKey)}</p>
-                    {item.available ? (
-                      <button onClick={() => handleExport(item.type)}
-                        className="w-full py-2 border border-border rounded-xl text-sm text-foreground hover:bg-accent flex items-center justify-between px-4">
-                        {t('admin.system.exportRunAction')}
-                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                      </button>
-                    ) : (
-                      /* Not a disabled button pretending to be pressable: the
-                         five re-cut exports are being rebuilt per type, and the
-                         repo's rule for a feature that is reserved rather than
-                         broken is to say so plainly (CLAUDE.md, domain
-                         conventions). Hiding the card would lose the
-                         explanation, which is useful before the file exists. */
-                      <p className="w-full py-2 rounded-xl bg-muted/50 text-xs text-muted-foreground text-center">
-                        {t('admin.system.exportNotYetAvailable')}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Export tab ────────────────────────────────────────────
+          Its own tab, not a panel inside Import: the two have different
+          permissions now, and a teacher holds export without import
+          (12-DataExport.md §3, plan §2.12). Single column, because each card
+          carries an explanatory paragraph and an expandable filter panel —
+          two columns would either truncate the text or make the filters
+          cramped, and §2.8 is explicit that the card text must not be cut to
+          one line. */}
+      {activeTab === 'export' && (
+        <div className="space-y-4">
+          <div className="bg-card border border-border rounded-2xl p-5">
+            <Download className="w-8 h-8 text-green-500 mb-3" />
+            <h3 className="text-foreground mb-1">{t('admin.system.exportData')}</h3>
+            <p className="text-xs text-muted-foreground">{t('admin.system.exportDesc')}</p>
+          </div>
+
+          {/* Types come from the server (§2.6.1): which filters an export accepts
+              is part of the export's definition, so the client renders what it is
+              told rather than keeping a second copy of the list that is free to
+              disagree. Falls back to the local catalogue only if that read fails,
+              so a network blip degrades to "no filters offered" rather than to an
+              empty screen. */}
+          {exportTypes.map(item => (
+            <ExportCard key={item.key} type={item} filters={exportFilters[item.key]}
+              onFilterChange={(field, value) => setExportFilter(item.key, field, value)}
+              onExport={() => handleExport(item.key)}
+              gradeOptions={scopedGrades} classOptions={classesForGrade(exportFilters[item.key]?.gradeId)}
+              academicYears={academicYears}
+              /* Empty until Review History exists (phase 4). It is the only type
+                 with a Reviewer filter and it is not available yet, so the panel
+                 is never drawn — fetching a staff directory to populate a control
+                 nobody can see would be a request per visit for nothing. */
+              reviewerOptions={[]} />
+          ))}
+
+          {exportTypes.length === 0 && (
+            <p className="text-sm text-muted-foreground">{t('admin.system.exportNonePermitted')}</p>
+          )}
         </div>
       )}
 

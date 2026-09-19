@@ -184,6 +184,33 @@ export interface HistoricalImportWindow {
   secondsRemaining?: number;
 }
 
+/** The filter fields an export can declare (`12-DataExport.md` §4). */
+export type ExportFilterField = 'academicYearId' | 'gradeId' | 'classId' | 'reviewerId';
+
+/** Values chosen for those fields. Absent or empty means "All" (§4.1). */
+export type ExportFilterValues = Partial<Record<ExportFilterField, string | undefined>>;
+
+/**
+ * One entry of `GET /exports/types` (§2.6.1).
+ *
+ * `titleKey`/`descriptionKey` are i18n keys, not rendered text: the client owns
+ * the wording and already holds both bundles, so language can change without a
+ * refetch. `filters` is the authoritative list for this type — the server
+ * rejects anything else, so rendering a control the type did not declare would
+ * produce a request that fails.
+ *
+ * `available` false means the type is permissioned and real but has no query
+ * yet; the card is still drawn, saying so, rather than being hidden — its
+ * explanation is useful before the file exists.
+ */
+export interface ExportTypeInfo {
+  key: string;
+  titleKey: string;
+  descriptionKey: string;
+  filters: ExportFilterField[];
+  available: boolean;
+}
+
 export const api = {
   auth: {
     async login(username: string, password: string): Promise<LoginResponse> {
@@ -1385,9 +1412,34 @@ export const api = {
     // thing the user ever saw. Mapped explicitly here rather than just
     // renaming the wire field, since `jobId` is what the rest of this file
     // (and SystemAdmin.tsx) already expects.
-    async create(reportType: string): Promise<{ jobId: string; status: string }> {
-      const dto = await http.post<{ id: string; status: string }>('/exports', { reportType });
+    /**
+     * `filters` is sent as a nested object, and only the fields the type
+     * declares may be present — the server rejects an undeclared one with a
+     * field error rather than accepting and ignoring it (§2.6.1). Undefined
+     * entries are stripped, because `null` and absent both mean "All" and
+     * sending explicit nulls just makes the audit record noisier.
+     */
+    async create(reportType: string, filters?: ExportFilterValues): Promise<{ jobId: string; status: string }> {
+      const cleaned = filters
+        ? Object.fromEntries(Object.entries(filters).filter(([, v]) => v != null && v !== ''))
+        : undefined;
+      const body = cleaned && Object.keys(cleaned).length > 0
+        ? { reportType, filters: cleaned }
+        : { reportType };
+      const dto = await http.post<{ id: string; status: string }>('/exports', body);
       return { jobId: dto.id, status: dto.status };
+    },
+    /**
+     * The export catalogue: which types this user may ask for, and which filters
+     * each accepts (§2.6.1).
+     *
+     * <p>Server-owned on purpose. The alternative — a hardcoded list here — means
+     * adding an export type requires editing two codebases, and the two are then
+     * free to disagree about which filters a type has. The response carries i18n
+     * *keys*, so switching language needs no refetch.</p>
+     */
+    async types(): Promise<ExportTypeInfo[]> {
+      return http.get<ExportTypeInfo[]>('/exports/types');
     },
     async get(jobId: string): Promise<{ jobId: string; status: string }> {
       const dto = await http.get<{ id: string; status: string }>(`/exports/${jobId}`);

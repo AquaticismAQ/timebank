@@ -159,13 +159,13 @@ class ImportExportIT extends AbstractIntegrationTest {
         // ExportServiceImpl maps between the two — a rename applied to the
         // request but not to the stored resource type would leave this job
         // FAILED, which only a completed run can tell us.
-        JobDto rosterExport = exportService.create(new CreateExportRequest("studentList"), "usr_test_admin");
+        JobDto rosterExport = exportService.create(new CreateExportRequest("studentList", null), adminAuth());
         awaitTerminal(rosterExport.id());
         JobDto finishedRoster = jobRepository.findById(rosterExport.id()).map(this::toDto).orElseThrow();
         assertThat(finishedRoster.status()).isEqualTo("SUCCEEDED");
         assertThat(finishedRoster.finishedAt()).isNotNull();
 
-        JobDto rawExport = exportService.create(new CreateExportRequest("serviceRecords"), "usr_test_admin");
+        JobDto rawExport = exportService.create(new CreateExportRequest("serviceRecords", null), adminAuth());
         awaitTerminal(rawExport.id());
         JobDto finishedRaw = jobRepository.findById(rawExport.id()).map(this::toDto).orElseThrow();
         assertThat(finishedRaw.status()).isEqualTo("SUCCEEDED");
@@ -174,8 +174,16 @@ class ImportExportIT extends AbstractIntegrationTest {
         String token = url.substring(url.indexOf("token=") + "token=".length());
         DownloadResult result = exportService.download(token);
         String content = new String(result.content().readAllBytes(), StandardCharsets.UTF_8);
-        assertThat(content).startsWith("id,studentId,studentName,serviceDate,durationMinutes,creditedUnits,status");
-        assertThat(content).contains(s1.id());
+        // Phase 2's column conventions, and issue 107's three complaints in one
+        // assertion: No. leads, Student Number precedes Student Name, and no
+        // database id appears anywhere.
+        assertThat(content).startsWith("No.,Student Number,Student Name,Grade,Class,Service Date,"
+                + "Service Category,Project / Organisation,Duration Minutes,Credited Coins,Status");
+        assertThat(content).contains(s1.studentNumber());
+        assertThat(content).doesNotContain(s1.id());
+        // `null` is the specific string issue 107 found in a delivered file: an
+        // uncredited row must leave the cell empty, not spell the absence out.
+        assertThat(content).doesNotContain("null");
 
         // The roster file is downloadable too, and carries the student the
         // fixture created — the studentList key really reaches the roster
@@ -219,7 +227,7 @@ class ImportExportIT extends AbstractIntegrationTest {
     @Test
     void preSplitExportKeysAreRejected() {
         for (String retired : java.util.List.of("participation", "completion", "serviceHours", "topProjects", "students")) {
-            assertThatThrownBy(() -> exportService.create(new CreateExportRequest(retired), "usr_test_admin"))
+            assertThatThrownBy(() -> exportService.create(new CreateExportRequest(retired, null), adminAuth()))
                     .as("export type %s must no longer be accepted", retired)
                     .isInstanceOf(ApiException.class);
         }

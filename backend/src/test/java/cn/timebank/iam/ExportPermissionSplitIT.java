@@ -108,6 +108,14 @@ class ExportPermissionSplitIT extends AbstractIntegrationTest {
 
         // A type the caller holds and a query exists for.
         assertThat(postExport(admin, "studentList").getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        // The teacher needs a grade bond before this succeeds, and that is not
+        // incidental: since phase 2 an export resolves the caller's data scope,
+        // and a teacher assigned no grade is refused outright rather than handed
+        // an empty file (§7.3, asserted on its own in ExportScopeIT). Without the
+        // row below this line fails 403 for a reason that has nothing to do with
+        // the permission this test is about.
+        assignGradeScope("exp_split_teacher", "grade_6");
         assertThat(postExport(teacher, "studentList").getStatusCode()).isEqualTo(HttpStatus.OK);
 
         // §5.3's one withheld type: the teacher holds the other six.
@@ -313,5 +321,15 @@ class ExportPermissionSplitIT extends AbstractIntegrationTest {
 
     private String cookieValue(String cookiePair) {
         return cookiePair.substring(cookiePair.indexOf('=') + 1);
+    }
+
+    /** Binds a teacher to one grade for the `students` scope namespace — the same shape the seed writes. */
+    private void assignGradeScope(String username, String gradeId) {
+        String userId = jdbc.queryForObject(
+                "SELECT id FROM user WHERE username = ?", String.class, username);
+        jdbc.update("""
+                INSERT INTO teacher_scope_assignment (id, user_id, resource_type, scope_type, scope_value, created_at)
+                VALUES (?, ?, 'students', 'GRADE', ?, NOW(3))
+                """, "tsa_it_" + System.nanoTime() % 1000000000L, userId, gradeId);
     }
 }

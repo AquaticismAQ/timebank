@@ -54,7 +54,7 @@ class ExportDownloadSingleUseIT extends AbstractIntegrationTest {
 
         DownloadResult first = exportService.download(token);
         assertThat(new String(first.content().readAllBytes(), StandardCharsets.UTF_8))
-                .startsWith("id,studentId,studentName,");
+                .startsWith("No.,Student Number,Student Name,");
 
         assertThatThrownBy(() -> exportService.download(token))
                 .isInstanceOf(ApiException.class)
@@ -91,7 +91,7 @@ class ExportDownloadSingleUseIT extends AbstractIntegrationTest {
         // download precisely so this stays possible).
         DownloadResult viaSecondLink = exportService.download(second);
         assertThat(new String(viaSecondLink.content().readAllBytes(), StandardCharsets.UTF_8))
-                .startsWith("id,studentId,studentName,");
+                .startsWith("No.,Student Number,Student Name,");
     }
 
     @Test
@@ -166,7 +166,7 @@ class ExportDownloadSingleUseIT extends AbstractIntegrationTest {
      * never have been issued.</p>
      */
     private JobDto finishedExport() {
-        JobDto job = exportService.create(new CreateExportRequest("serviceRecords"), "usr_test_admin");
+        JobDto job = exportService.create(new CreateExportRequest("serviceRecords", null), adminAuth());
         Instant deadline = Instant.now().plus(Duration.ofSeconds(25));
         while (Instant.now().isBefore(deadline)) {
             String status = jobRepository.findById(job.id()).orElseThrow().getStatus();
