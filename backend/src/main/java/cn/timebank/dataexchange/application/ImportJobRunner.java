@@ -75,11 +75,13 @@ class ImportJobRunner {
     private final FileStorage fileStorage;
     private final RuleEngine ruleEngine;
     private final RuleSetSource ruleSetSource;
+    private final HistoricalImportWindowService windowService;
 
     ImportJobRunner(JobProgressWriter progressWriter, HistoricalImportRowValidator historicalRowValidator,
                      StudentImportRowValidator studentRowValidator, AccountService accountService,
                      StudentService studentService, UserService userService, FileStorage fileStorage,
-                     RuleEngine ruleEngine, RuleSetSource ruleSetSource) {
+                     RuleEngine ruleEngine, RuleSetSource ruleSetSource,
+                     HistoricalImportWindowService windowService) {
         this.progressWriter = progressWriter;
         this.historicalRowValidator = historicalRowValidator;
         this.studentRowValidator = studentRowValidator;
@@ -89,6 +91,7 @@ class ImportJobRunner {
         this.fileStorage = fileStorage;
         this.ruleEngine = ruleEngine;
         this.ruleSetSource = ruleSetSource;
+        this.windowService = windowService;
     }
 
     /**
@@ -317,6 +320,13 @@ class ImportJobRunner {
             // reclaim of this already-COMMITTED job re-run and double-credit
             // every row again. A real bug, caught live: see 00-Status.md §18.
             progressWriter.renewCommitProgress(jobId, rowNumber, rowNumber, committed);
+            // 11-DataImport.md §6.1: the *first* successful historical import
+            // starts the 15-day clock. Before succeed(), so a job that is
+            // COMMITTED always has a window row behind it rather than the two
+            // facts being able to disagree; idempotent, so this same call from a
+            // reclaimed run re-finishing an already committed job does not move
+            // the expiry (§6.1 — "later imports do not extend the window").
+            windowService.openOnFirstCommit(jobId, actorId);
             progressWriter.succeed(jobId, "COMMITTED", null, rowNumber, committed);
             log.info("Import job {} committed: {} rows credited (resumed from line {})", jobId, committed, resumeFromLine);
         } catch (Exception e) {

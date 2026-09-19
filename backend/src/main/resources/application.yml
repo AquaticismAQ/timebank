@@ -164,6 +164,17 @@ timebank:
         # runs, oldest expiry first. A whole school's import lapsing at once is
         # the case this exists for.
         batch-limit: ${TIMEBANK_ACTIVATION_EXPIRY_SWEEP_BATCH_LIMIT:500}
+  import:
+    # 11-DataImport.md §6.1 — the window the first successful historical import
+    # opens, after which historical import is closed permanently. 15 is the
+    # design's figure and the default; the property exists because a migration
+    # that genuinely runs long should not need a code change and a deploy at the
+    # worst possible moment. It cannot delete the mechanism: values outside
+    # 1..60 are clamped with a warning (HistoricalImportWindowServiceImpl), so
+    # setting 3650 does not quietly leave the door open for a decade. The
+    # applied length is stored on the window row, so changing this later never
+    # reinterprets a window that is already running.
+    historical-window-days: ${TIMEBANK_HISTORICAL_IMPORT_WINDOW_DAYS:15}
   file:
     # B3.4, test-stage local-disk adapter (14-Backend-B3F-CloudFileStorage.md
     # tracks the move to a real S3-compatible store). Relative to the

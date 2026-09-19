@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Users, Shield, FileText, Settings, Download, Upload, ChevronRight, ChevronUp, ChevronDown, AlertTriangle, Plus, Pencil, Trash2, Lock, Building2, KeyRound, Check, Tags, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, usePermissions } from '../../App';
-import { api, type ImportJob } from '../../api/client';
+import { api, type ImportJob, type HistoricalImportWindow } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { ActivationSlips } from './ActivationSlips';
 import { OrganizationManagement } from './OrganizationManagement';
@@ -14,7 +14,7 @@ import { useDictionaries } from '../../api/useDictionaries';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { formatGradeClass, formatClassName, minutesToHours } from '../../lib/format';
 import { downloadBlob } from '../../lib/download';
-import { localDateTimeToISO, formatLocalInstant } from '../../lib/datetime';
+import { localDateTimeToISO, formatLocalInstant, isoToLocalDate } from '../../lib/datetime';
 import { DEFAULT_PAGE_SIZE } from '../../lib/pagination';
 import { STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import type { RoleSummary, AuditLogEntry, AuditLogFacets, SchoolInfo, RuleVersion, RuleDraftFields, RuleValidationResult } from '../../api/types';
@@ -1068,6 +1068,27 @@ export function SystemAdmin() {
   const importFileRef = useRef<HTMLInputElement>(null);
   const studentImportFileRef = useRef<HTMLInputElement>(null);
   const [importType, setImportType] = useState<string>('');
+  /**
+   * The 15-day historical-import window (11-DataImport.md §6). `undefined`
+   * means "not known yet" — either still loading or the read failed — and the
+   * historical card stays hidden until the server has actually said the feature
+   * is open. Hiding on an unknown answer is the safe direction: showing the
+   * card optimistically would invite an upload the API then refuses, and §6.1
+   * is explicit that a control which cannot be used should not be on screen.
+   */
+  const [importWindow, setImportWindow] = useState<HistoricalImportWindow | undefined>(undefined);
+
+  const loadImportWindow = () => {
+    // Skipped outright without `imports.read` — this tab is visible to
+    // teachers, who hold no import permission, and asking anyway would be a
+    // guaranteed 403 on every visit. They see no historical card either way.
+    if (!hasPermission('imports.read')) return;
+    api.imports.window().then(setImportWindow).catch(() => setImportWindow(undefined));
+  };
+
+  useEffect(() => {
+    loadImportWindow();
+  }, []);
 
   const loadRoles = () => {
     api.roles.list().then(list => {
@@ -1466,7 +1487,26 @@ export function SystemAdmin() {
       else toast.error(t('common.unknownError'));
     } finally {
       setSaving(false);
+      // A committed historical import is the one moment this answer changes:
+      // the first one starts the clock, so the warning has to give way to the
+      // countdown without a reload. Re-read on every import, including a failed
+      // one — cheap, and it also picks up a window that expired while this
+      // screen sat open.
+      loadImportWindow();
     }
+  };
+
+  /**
+   * §6.2's countdown, from the server's own remaining-seconds rather than the
+   * browser's clock. Days while there is more than a couple left, hours after
+   * that: rounding the last afternoon down to "0 days" is the reading that
+   * would cost someone the rest of their migration, and "in 1 days" is the
+   * other way to get it wrong.
+   */
+  const importWindowCountdown = (seconds: number): string => {
+    if (seconds >= 2 * 86400) return t('admin.system.importWindowClosesInDays', { days: Math.ceil(seconds / 86400) });
+    if (seconds >= 2 * 3600) return t('admin.system.importWindowClosesInHours', { hours: Math.ceil(seconds / 3600) });
+    return t('admin.system.importWindowClosesWithinTheHour');
   };
 
   const handleExport = async (reportType: string) => {
@@ -1805,10 +1845,47 @@ export function SystemAdmin() {
       {activeTab === 'import' && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Historical import is a migration-era capability, not a permanent
+                one (11-DataImport.md §6): the first successful import opens a
+                15-day window, and once it has run out this card is not rendered
+                at all — §6.1 asks for absent, not disabled, because a control
+                that cannot be used should not be on screen. `undefined` (the
+                read failed, or has not landed yet) is treated the same way. */}
+            {importWindow && importWindow.state !== 'EXPIRED' && (
             <div className="bg-card border border-border rounded-2xl p-5">
               <Upload className="w-8 h-8 text-[oklch(0.488_0.243_264.376)] mb-3" />
               <h3 className="text-foreground mb-1">{t('admin.system.importHistoricalRecords')}</h3>
               <p className="text-xs text-muted-foreground mb-4">{t('admin.system.importHistoricalDesc')}</p>
+              {importWindow.state === 'NOT_OPENED' ? (
+                /* §6.2: this has to be readable *before* the first import, or
+                   the administrator starts an irreversible clock without being
+                   told one exists. */
+                <div className="flex gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 mb-4">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-xs text-foreground">
+                      {t('admin.system.importWindowWarningTitle', { days: importWindow.windowDays ?? 15 })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('admin.system.importWindowWarningBody', { days: importWindow.windowDays ?? 15 })}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* Countdown *and* date, both, per §6.2: the countdown says how
+                   long is left, the date is what goes into a migration plan. */
+                <div className="rounded-xl border border-border bg-muted/50 p-3 mb-4 space-y-1">
+                  <p className="text-xs text-foreground">
+                    {importWindowCountdown(importWindow.secondsRemaining ?? 0)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('admin.system.importWindowClosesOn', {
+                      date: importWindow.expiresAt ? isoToLocalDate(importWindow.expiresAt) : '',
+                    })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{t('admin.system.importWindowNoExtension')}</p>
+                </div>
+              )}
               <div className="space-y-2">
                 <button onClick={() => handleTemplateDownload('serviceRecordsHistorical')}
                   className="w-full py-2.5 border border-border rounded-xl text-sm text-muted-foreground hover:bg-accent text-center">
@@ -1823,7 +1900,10 @@ export function SystemAdmin() {
                 </button>
               </div>
             </div>
+            )}
 
+            {/* Roster import is deliberately outside the window: a school takes
+                in students every year, so this one never closes. */}
             <div className="bg-card border border-border rounded-2xl p-5">
               <Upload className="w-8 h-8 text-indigo-500 mb-3" />
               <h3 className="text-foreground mb-1">{t('admin.system.importStudentInfo')}</h3>
