@@ -1113,3 +1113,33 @@ One writer owns every column convention (`ExportCsvWriter`). Issue 107's three c
 **Verification.** `mvn test` 346, 0 failures. 60 integration tests across the ten export/import/lifecycle classes, 0 failures. `pnpm build` clean, i18n bundles at exact key and order parity. The pre-existing red recorded in `Docs/issues/109` is unchanged and unrelated.
 
 **Not done, carried forward.** R-4's session decision — permission codes are serialized into the session at login, so a logged-in `sysadmin` keeps import/export until their session ends. And Q-11: a past-year `studentList` row pairs a derived historical `Grade` with a present-tense `Class`, which the card text should admit and does not.
+
+## 41. Import/export rework deployed to the shared test server (2026-09-20)
+
+First deployment of everything in §39 and §40. Backend and frontend both shipped to the active server; **no re-seed**, because none was needed — see below.
+
+**Migrations.** The server was at `V30`; `V31`, `V32` and `V33` applied cleanly and are recorded successful in `flyway_schema_history`. A `mysqldump` was taken first (`/root/tb-backups/timebank-pre-V31-*.sql.gz`, gzip-verified) because this deploy carried a `DELETE` of live permission grants and an `ALTER` that drops and re-adds a foreign key.
+
+**The R-1 trap, closed on a real populated schema.** This is the case a fresh integration schema cannot demonstrate: the server genuinely held `exports.create` on two roles beforehand. Afterwards it is granted to nobody, `sysadmin` holds no `imports.*`, and admin/teacher/template_teacher hold 7/6/6 export permissions. The 33-character `perm_exports_studentParticipation` id stored intact, so the widened column is real here too. 56 students and 674 service records were preserved across the migration.
+
+**R-7 took effect on a live account.** `sysadmin001` now reports **0** export and **0** import permissions. This is the one deliberate removal of working behaviour in the whole plan, and it is now true of a real login rather than only of a design document. Recorded in `Docs/TestAccounts.md` so it is not mistaken for a fault.
+
+**All seven exports produced and inspected on the live server**, via real logins: studentList 56, serviceRecords 672, studentCompletion 56, studentParticipation 56, projects 13, reviewEfficiency 5, reviewHistory 669 rows. No occurrence of the string `null` and no raw `grade_*`/`usr_*`/`stu_*` id in any of the seven files.
+
+**Scope, refusals and egress, live:**
+
+- `teacher001` exporting the roster with nothing narrowed receives **8** rows, all Grade 6, where `admin001` receives 56.
+- The same teacher asking for `reviewEfficiency` gets **403**.
+- A brand-new download link: **200**, then **409 `STATE_CONFLICT`** on the identical URL, and a re-issued link **200**. (A first attempt at this read 409 twice — because an earlier step in the same script had already spent that link. The clean demonstration needed a freshly issued one.)
+- `GET /audit-logs` returns nine `export.create` rows carrying the actor, the specific permission used, and the serialized scope — including the teacher's bound grades and pinned reviewer id.
+- `GET /imports/window` reports `NOT_OPENED` with `windowDays: 15`, correct for a server that has never run a historical import.
+
+**Browser pass against the live site** (`admin001`): Data Import and Data Export are separate tabs; the Export tab shows seven collapsed cards with **zero** export buttons and **zero** filter controls; opening one reveals three filters and the Export button; exporting with nothing narrowed raises the confirmation, which reads "will cover every student in the school, for All years".
+
+**A student account still works**: login 200, no export or import permissions, `POST /exports` refused with 403, and their own `/students/{id}/progress` returns 200 including the `stageCompletedMinutes` field added for issue 104.
+
+**`pnpm build` is not a typecheck, and this deploy proved it.** `frontend/scripts/deploy.sh` runs `tsc --noEmit`, which rejected the build: the new reviewer-options code read `page.items` where `PageResult` exposes `page.data`. Vite's esbuild strips types without checking them, so `pnpm build` had passed on that code repeatedly, and the browser verification passed too because the failing path only runs for a school-wide account fetching the staff list. **Frontend work should be typechecked with `npx tsc --noEmit -p tsconfig.json`, not just built** — `package.json` still has no script for it.
+
+**Carried forward.** R-4 is now live-relevant rather than theoretical: permission codes are serialized into the session at login, so any `sysadmin` session that was already open keeps import and export until it ends. New logins are correct, as verified above. Revoking affected sessions versus documenting "re-login required" is still an open roll-out decision.
+
+**Why no re-seed.** The server already held the current two-stage roster (56 students, 8 in grade 12, 674 records, 42 users), and the credentials in `Docs/TestAccounts.md` were verified working against it before the deploy. Re-seeding regenerates every password, is first-run-only so it would mean clearing the live rows first, and would have gained nothing. `Docs/TestAccounts.md` was updated additively instead — per-role capability changes, the tab split, and the collapsed-card behaviour — with the credential tables untouched.

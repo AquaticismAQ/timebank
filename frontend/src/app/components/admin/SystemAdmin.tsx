@@ -1411,7 +1411,10 @@ export function SystemAdmin() {
   useEffect(() => {
     if (!isSchoolWide || !canExportAnything) return;
     api.users.list({ pageSize: 200, sort: 'displayName' })
-      .then(page => setReviewerOptions(page.items
+      // `PageResult` exposes its rows as `data`, not `items` — the mismatch
+      // compiled fine because Vite's esbuild strips types without checking them,
+      // and only `tsc --noEmit` in the deploy script caught it.
+      .then(page => setReviewerOptions(page.data
         .filter(u => u.roleCode !== STUDENT_ROLE_CODE)
         .map(u => ({ id: u.id, displayName: u.displayName }))))
       .catch(() => setReviewerOptions([]));
