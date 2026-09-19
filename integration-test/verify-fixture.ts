@@ -73,8 +73,11 @@ const isWeekendDay = (offset: number) => [0, 6].includes(dateOf(offset).getUTCDa
 const hoursOf = (r: SeedServiceRecord) => r.endHour - r.startHour;
 const approved = serviceRecords.filter(r => r.targetStatus === 'approved');
 
-const studentByUsername = new Map(generatedStudents.filter(s => s.username).map(s => [s.username!, s] as const));
-const userByUsername = new Map(users.map(u => [u.username, u] as const));
+// Keyed by the fixture handle (`student001`), which is what every record's
+// `studentUsername` holds — the real login is 8 random digits and means nothing
+// to a cross-reference.
+const studentByRef = new Map(generatedStudents.filter(s => s.ref).map(s => [s.ref!, s] as const));
+const userByRef = new Map(users.map(u => [u.ref ?? u.username, u] as const));
 const projectByTitle = new Map(projects.map(p => [p.title, p] as const));
 const orgNames = new Set([...organizations.map(o => o.name), 'Example City HD']);
 
@@ -118,10 +121,10 @@ for (const r of serviceRecords) {
   check('CREDIBLE', 'sessions end at a sane hour', r.endHour <= 22,
     `${who}: ends at ${r.endHour}:00`);
 
-  const student = studentByUsername.get(r.studentUsername);
+  const student = studentByRef.get(r.studentUsername);
   check('BACKEND', 'record belongs to a login student', !!student,
-    `${r.studentUsername}: has a record but no generated student with a login`);
-  check('BACKEND', 'record author has a linked student row', !!userByUsername.get(r.studentUsername)?.linkedStudentNumber,
+    `${r.studentUsername}: has a record but no generated student with that handle`);
+  check('BACKEND', 'record author has a linked student row', !!userByRef.get(r.studentUsername)?.linkedStudentNumber,
     `${r.studentUsername}: user has no linkedStudentNumber, so the backend cannot resolve the student`);
 
   check('BACKEND', 'known service category', CATEGORY_IDS.has(r.serviceCategoryId),
@@ -144,7 +147,7 @@ for (const r of serviceRecords) {
       // (B1.7's no-existence-leak), so a mis-routed decision fails as if the
       // record did not exist — the least legible failure the seeder can hit.
       const expected = reviewerForGrade[student.gradeId];
-      const isAdmin = userByUsername.get(reviewer)?.roleCodes.includes('admin');
+      const isAdmin = userByRef.get(reviewer)?.roleCodes.includes('admin');
       check('BACKEND', 'reviewer holds scope over the grade', reviewer === expected || !!isAdmin,
         `${who}: reviewed by ${reviewer}, but ${student.gradeId} is ${expected}'s scope`);
     }
@@ -200,7 +203,7 @@ for (const p of projects) {
   check('BACKEND', 'project recognizedMinutes is a half-hour multiple', p.recognizedMinutes % 30 === 0,
     `${at}: recognizedMinutes ${p.recognizedMinutes}`);
   check('BACKEND', 'project owner can create projects',
-    ['teacher', 'admin'].some(role => userByUsername.get(p.ownerUsername)?.roleCodes.includes(role)),
+    ['teacher', 'admin'].some(role => userByRef.get(p.ownerUsername)?.roleCodes.includes(role)),
     `${at}: owner ${p.ownerUsername} does not hold projects.create`);
 
   // `ProjectServiceImpl.syncTimeBasedStatus` sends a project whose registration
@@ -244,11 +247,11 @@ for (const p of eventProposals) {
   check('BACKEND', 'proposal ends after it starts', p.plannedEndOffsetDays >= p.plannedStartOffsetDays,
     `${at}: ${p.plannedStartOffsetDays}..${p.plannedEndOffsetDays}`);
   check('BACKEND', 'proposal supervisor is a teacher',
-    !!userByUsername.get(p.supervisorUsername)?.roleCodes.includes('teacher'),
+    !!userByRef.get(p.supervisorUsername)?.roleCodes.includes('teacher'),
     `${at}: supervisor ${p.supervisorUsername} is not a teacher (checked at create, not approve)`);
   check('BACKEND', 'proposal names at most one organisation', !(p.organizationName && p.newOrganizationName),
     `${at}: organizationName and newOrganizationName are mutually exclusive`);
-  check('BACKEND', 'proposal author is a student', !!userByUsername.get(p.studentUsername)?.linkedStudentNumber,
+  check('BACKEND', 'proposal author is a student', !!userByRef.get(p.studentUsername)?.linkedStudentNumber,
     `${at}: ${p.studentUsername} has no linked student row`);
   if (p.proposedRecognizedMinutes !== undefined) {
     check('BACKEND', 'proposal minutes are a half-hour multiple', p.proposedRecognizedMinutes % 30 === 0,
@@ -264,9 +267,30 @@ for (const p of eventProposals) {
       check('BACKEND', 'case subject resolves to a record', !!c.subjectId && recordKeys.has(c.subjectId),
         `${at}: subjectId ${JSON.stringify(c.subjectId)} matches no SeedServiceRecord.key`);
     }
-    check('BACKEND', 'case author is a student', !!userByUsername.get(c.studentUsername)?.linkedStudentNumber,
+    check('BACKEND', 'case author is a student', !!userByRef.get(c.studentUsername)?.linkedStudentNumber,
       `${at}: ${c.studentUsername} has no linked student row`);
   }
+}
+
+// A student's login is 8 random digits — `09-StudentActivationFlow.md` §3, and
+// `StudentUsernameGenerator` in the backend. The fixture used `student001`…
+// `student030`, which breaks both halves of the rule at once: wrong format, and
+// sequential, which is what §2.1 rejected because it leaks enrolment order and
+// cohort size. Staff are exempt by design — an administrator names those.
+{
+  const studentLogins = users.filter(u => u.roleCodes.includes('student')).map(u => u.username);
+  for (const login of studentLogins) {
+    check('BACKEND', 'student logins are 8 digits', /^[1-9][0-9]{7}$/.test(login),
+      `student login ${JSON.stringify(login)} is not 8 digits with no leading zero`);
+  }
+  check('BACKEND', 'student logins are unique', new Set(studentLogins).size === studentLogins.length,
+    'two students share a login');
+  // Sorted-and-consecutive is the signature of a sequential allocator; a random
+  // draw over 9x10^7 will not produce it for 30 accounts.
+  const numeric = studentLogins.map(Number).filter(n => !Number.isNaN(n)).sort((a, b) => a - b);
+  const consecutive = numeric.length > 1 && numeric.every((n, i) => i === 0 || n === numeric[i - 1] + 1);
+  check('BACKEND', 'student logins are random, not sequential', !consecutive,
+    'student logins form a consecutive run, which leaks enrolment order and cohort size');
 }
 
 for (const u of users) {
@@ -306,7 +330,7 @@ for (const r of serviceRecords) {
     inYear(r.serviceDateOffsetDays, priorYear) || inYear(r.serviceDateOffsetDays, currentYear),
     `${where}: outside both ${priorYear.first}..${priorYear.last} and ${currentYear.first}..${currentYear.last}`);
 
-  const student = studentByUsername.get(r.studentUsername);
+  const student = studentByRef.get(r.studentUsername);
   if (student) {
     const joined = academicYearWindow(enrollmentYearStartFor(student.gradeId)).first;
     check('REPORTS', 'no service before the student enrolled', r.serviceDateOffsetDays >= joined,
@@ -340,7 +364,7 @@ for (const [label, year] of [['prior', priorYear], ['current', currentYear]] as 
 // `participationByGrade` encodes.
 {
   const offenders = approved.filter(r => {
-    const s = studentByUsername.get(r.studentUsername);
+    const s = studentByRef.get(r.studentUsername);
     return s?.gradeId === 'grade_6' && inYear(r.serviceDateOffsetDays, priorYear);
   });
   check('REPORTS', 'the new intake has no prior-year history', offenders.length === 0,
@@ -364,17 +388,17 @@ for (const [label, year] of [['prior', priorYear], ['current', currentYear]] as 
 // otherwise because the balance assertion checks the ledger against the records
 // rather than against the intent.
 for (const s of generatedStudents) {
-  if (!s.username) continue;
-  const got = hoursByStudent.get(s.username) ?? 0;
+  if (!s.ref) continue;
+  const got = hoursByStudent.get(s.ref) ?? 0;
   check('CREDIBLE', 'each student reaches their target', Math.abs(got - s.targetCoins) < 1e-9,
-    `${s.username}: ${got}h placed against a target of ${s.targetCoins}h`);
+    `${s.ref}: ${got}h placed against a target of ${s.targetCoins}h`);
 }
 
 {
   const tierCounts = new Map(HONOUR_TIERS.map(([name]) => [name, 0]));
   for (const s of generatedStudents) {
-    if (!s.username) continue;
-    const h = hoursByStudent.get(s.username) ?? 0;
+    if (!s.ref) continue;
+    const h = hoursByStudent.get(s.ref) ?? 0;
     const tier = HONOUR_TIERS.find(([, min]) => h >= min);
     if (tier) tierCounts.set(tier[0], tierCounts.get(tier[0])! + 1);
   }
@@ -387,8 +411,8 @@ for (const s of generatedStudents) {
 
 {
   const meets = (band: 'middle' | 'high') => generatedStudents.filter(s =>
-    s.username && (band === 'middle' ? isMiddle(s.gradeId) : !isMiddle(s.gradeId))
-    && (hoursByStudent.get(s.username) ?? 0) >= stageRequiredHours(s.gradeId)).length;
+    s.ref && (band === 'middle' ? isMiddle(s.gradeId) : !isMiddle(s.gradeId))
+    && (hoursByStudent.get(s.ref) ?? 0) >= stageRequiredHours(s.gradeId)).length;
   check('CREDIBLE', 'the cumulative stage requirement is reachable', meets('middle') > 0,
     'no middle-school student meets the 75h cumulative requirement');
   check('CREDIBLE', 'the cumulative stage requirement is reachable', meets('high') > 0,
@@ -397,7 +421,7 @@ for (const s of generatedStudents) {
 }
 
 {
-  const zero = generatedStudents.filter(s => s.username && (hoursByStudent.get(s.username) ?? 0) === 0).length;
+  const zero = generatedStudents.filter(s => s.ref && (hoursByStudent.get(s.ref) ?? 0) === 0).length;
   check('CREDIBLE', 'empty-state students are preserved', zero >= 5,
     `only ${zero} students have no service at all; the empty-state screens need some`);
   note(`students with no service: ${zero}`);
@@ -406,11 +430,11 @@ for (const s of generatedStudents) {
 // Each grade should show both sides of its annual bar, or the completion report
 // is a column of identical answers.
 for (const gradeId of GRADE_IDS) {
-  const cohort = generatedStudents.filter(s => s.username && s.gradeId === gradeId);
+  const cohort = generatedStudents.filter(s => s.ref && s.gradeId === gradeId);
   const priorHours = (username: string) => sum(approved
     .filter(r => r.studentUsername === username && inYear(r.serviceDateOffsetDays, priorYear)).map(hoursOf));
   const req = annualRequiredHours(gradeId);
-  const met = cohort.filter(s => priorHours(s.username!) >= req).length;
+  const met = cohort.filter(s => priorHours(s.ref!) >= req).length;
   if (gradeId === 'grade_6') continue; // no prior year to have met anything in
   check('CREDIBLE', 'each grade shows both sides of its annual bar', met > 0 && met < cohort.length,
     `${gradeId}: ${met} of ${cohort.length} met last year's ${req}h — wanted a mix`);
@@ -446,7 +470,7 @@ const bySeverity = (s: Severity) => failures.filter(f => f.severity === s);
 console.log('Fixture invariants (issue 103)\n');
 console.log(`  academic years : prior ${priorYear.first}..${priorYear.last}d, current ${currentYear.first}..${currentYear.last}d`);
 console.log(`  records        : ${serviceRecords.length} (${approved.length} approved)`);
-console.log(`  students       : ${students.length} (${generatedStudents.filter(s => s.username).length} with a login)`);
+console.log(`  students       : ${students.length} (${generatedStudents.filter(s => s.ref).length} with a login)`);
 console.log(`  projects       : ${projects.length}   proposals: ${eventProposals.length}   cases: ${cases.length}`);
 console.log(`  total hours    : ${sum(approved.map(hoursOf))}h\n`);
 for (const line of notes) console.log(`  · ${line}`);

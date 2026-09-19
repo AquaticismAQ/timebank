@@ -42,6 +42,31 @@ So the fixture populates **both** the current year and the one before it:
 `academicYearWindow(startYear)` gives the day-offset bounds of either. Nothing
 in this file may use a literal year.
 
+## A student's handle is not their login
+
+Two different values, and mixing them up is issue 105:
+
+| | |
+| :--- | :--- |
+| `ref` | `student001` — the **fixture handle**. Every `studentUsername`, `filedByUsername` and `reviewerUsername` field in this file holds one of these |
+| `username` | `28339473` — the **real login**, 8 random digits |
+
+`Design/chinese/09-StudentActivationFlow.md` §3 requires an imported student's
+account to carry an "8 位随机数字用户名", and `StudentUsernameGenerator` pins two
+properties: 8 digits with no leading zero (so a spreadsheet cannot eat it), and
+**random rather than sequential** — a sequential login leaks enrolment order and
+cohort size, which `10-StudentIdentityAndOnboarding.md` §2.1 rejected.
+
+A random number is useless as a cross-reference in a hand-written fixture, which
+is why the handle exists. `seed.ts` keys everything on the handle and uses the
+real username in exactly two places: the `user` row it inserts, and the login
+call. **If you add a lookup, key it on the handle** — the one that broke during
+this change was a `u.username === c.studentUsername` comparison that had been
+correct only while the two values were the same.
+
+**Staff are exempt and keep `admin001` / `teacher001`.** §2 has an administrator
+create those accounts and choose their usernames by hand.
+
 ## Students belong to enrolment cohorts
 
 Students enter at Grade 6 and stay six years, so `enrollmentAcademicYearId` is

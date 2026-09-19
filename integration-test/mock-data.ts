@@ -227,7 +227,18 @@ export const organizations: SeedOrganization[] = [
 ];
 
 export interface SeedUser {
+  /** The real login. 8 random digits for a student, an administrator-chosen name for staff. */
   username: string;
+  /**
+   * Stable handle other fixtures point at (`student001`). Absent for staff,
+   * whose own username is readable enough to reference directly.
+   *
+   * Student logins became random digits so they match what a real roster import
+   * produces, and a random number is useless as a cross-reference in a
+   * hand-written fixture — so the two are separate values, and `seed.ts` keys
+   * everything on this one.
+   */
+  ref?: string;
   displayName: string;
   email?: string;
   roleCodes: string[];
@@ -717,15 +728,64 @@ const STUDENT_COUNT = 50;
 const STUDENTS_WITH_LOGIN = 30;
 
 export interface GeneratedStudent extends SeedStudent {
+  /**
+   * How the rest of this file points at a student — `student001`, `student002`.
+   *
+   * A fixture handle, never a login. Every `studentUsername`/`reviewerUsername`
+   * field in this file holds one of these, because a hand-written record has to
+   * name a student in a way a human can read and a generator has to be able to
+   * resolve it; the actual login is a random number that means nothing to
+   * either. `seed.ts` maps a handle to the real account at the point of login.
+   */
+  ref?: string;
+  /**
+   * The login the student actually types — 8 random digits.
+   *
+   * `Design/chinese/09-StudentActivationFlow.md` §3 (and its English twin): an imported student's account is
+   * created with an "8 位随机数字用户名", and §4.1's slip shows `48215577`.
+   * `StudentUsernameGenerator` is the real implementation and pins two
+   * properties this has to match — **8 digits with no leading zero** (drawn
+   * from 10000000-99999999, so a spreadsheet cannot eat the zero) and
+   * **random rather than sequential**, because a sequential login leaks
+   * enrolment order and cohort size, which §2.1 rejected outright.
+   *
+   * This fixture used `student001`…`student030` as the real usernames, which
+   * breaks both properties — it is sequential by construction, and it is the
+   * one thing on the credential slip the student has never seen before, so a
+   * demo of the activation flow showed a login no real import would produce.
+   *
+   * Staff are unaffected: §2 has an administrator choose those by hand, and
+   * `StudentUsernameGenerator`'s own Javadoc calls `user.username` "a VARCHAR
+   * shared with teacher001-style staff names".
+   */
   username?: string;
   /** Coins the generator will compose approved records to reach. 1 coin = 1 hour. Never written to the ledger directly. */
   targetCoins: number;
+}
+
+/**
+ * Draws the 8-digit logins, mirroring `StudentUsernameGenerator`'s range and
+ * uniqueness check but from this file's fixed PRNG, so a re-seed is still
+ * byte-identical rather than different every run.
+ */
+function drawLoginUsername(rnd: () => number, taken: Set<string>): string {
+  const LOWEST = 10_000_000;
+  const HIGHEST = 99_999_999;
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const candidate = String(LOWEST + Math.floor(rnd() * (HIGHEST - LOWEST + 1)));
+    if (!taken.has(candidate)) {
+      taken.add(candidate);
+      return candidate;
+    }
+  }
+  throw new Error('Could not allocate a free 8-digit student username after 50 attempts.');
 }
 
 function buildStudents(): GeneratedStudent[] {
   const rnd = makeRandom(20260916);
   const out: GeneratedStudent[] = [];
   const usedNumbers = new Set<string>();
+  const usedLogins = new Set<string>();
 
   for (let i = 0; i < STUDENT_COUNT; i++) {
     const gradeId = gradeIds[i % gradeIds.length];
@@ -753,7 +813,8 @@ function buildStudents(): GeneratedStudent[] {
       // its own row (issue 103 §2.2).
       joinedAtOffsetDays: academicYearWindow(enrollmentYearStartFor(gradeId)).first + Math.floor(rnd() * 5),
       enrollmentAcademicYearId: enrollmentAcademicYearIdFor(gradeId),
-      username: hasLogin ? `student${String(i + 1).padStart(3, '0')}` : undefined,
+      ref: hasLogin ? `student${String(i + 1).padStart(3, '0')}` : undefined,
+      username: hasLogin ? drawLoginUsername(rnd, usedLogins) : undefined,
       targetCoins: hasLogin ? targetCoinsFor(gradeId, gradeSlot(i), rnd) : 0,
     });
   }
@@ -769,10 +830,18 @@ export const students: SeedStudent[] = generatedStudents.map(
 export const users: SeedUser[] = [
   ...staffUsers,
   ...generatedStudents
-    .filter(s => s.username)
+    .filter(s => s.ref)
     .map(s => ({
       username: s.username!,
+      ref: s.ref!,
       displayName: s.displayName,
+      // Keyed off the real login, not the handle. Readability was the first
+      // instinct here, and it was wrong: the admin Users list shows the email
+      // and not the username, so a handle-derived address put `student001@…`
+      // back on screen and left an administrator concluding the logins were
+      // still sequential — undoing, visually, the whole point of issue 105.
+      // A school mailbox named for the student number is also what schools
+      // actually issue.
       email: `${s.username}@example-township-school.edu`,
       roleCodes: ['student'],
       linkedStudentNumber: s.studentNumber,
@@ -918,10 +987,10 @@ function buildServiceRecords(taken: SeedServiceRecord[]): SeedServiceRecord[] {
   }
 
   for (const s of generatedStudents) {
-    if (!s.username) continue;
-    const outstanding = toHalfHours(s.targetCoins - (alreadyApproved.get(s.username) ?? 0));
+    if (!s.ref) continue;
+    const outstanding = toHalfHours(s.targetCoins - (alreadyApproved.get(s.ref) ?? 0));
     if (outstanding <= 0) continue;
-    const used = usedDays.get(s.username) ?? new Set<number>();
+    const used = usedDays.get(s.ref) ?? new Set<number>();
     const reviewer = reviewerForGrade[s.gradeId];
 
     // A student cannot have served before they joined the school. For Grade 6
@@ -952,7 +1021,7 @@ function buildServiceRecords(taken: SeedServiceRecord[]): SeedServiceRecord[] {
       used.add(session.day);
       const a = pick(rnd, selfActivities);
       out.push({
-        studentUsername: s.username,
+        studentUsername: s.ref,
         sourceType: 'SELF',
         organizationName: a.organizationName,
         serviceCategoryId: a.categoryId,
@@ -970,7 +1039,7 @@ function buildServiceRecords(taken: SeedServiceRecord[]): SeedServiceRecord[] {
         comment: 'Documentation complete, hours verified.',
       });
     }
-    usedDays.set(s.username, used);
+    usedDays.set(s.ref, used);
   }
   return out;
 }
@@ -1152,12 +1221,12 @@ function assignRegistrants(list: SeedProject[]): SeedProject[] {
  * the exported data true on its own terms.
  */
 function withPinnedRegistrants(list: SeedProject[]): SeedProject[] {
-  const numberByUsername = new Map(
-    generatedStudents.filter(s => s.username).map(s => [s.username!, s.studentNumber] as const));
+  const numberByRef = new Map(
+    generatedStudents.filter(s => s.ref).map(s => [s.ref!, s.studentNumber] as const));
   return list.map(p => {
     const pinned = narrativeRecords
       .filter(r => r.sourceType === 'PROJECT' && r.projectTitle === p.title)
-      .map(r => numberByUsername.get(r.studentUsername))
+      .map(r => numberByRef.get(r.studentUsername))
       .filter((n): n is string => !!n);
     if (pinned.length === 0) return p;
     const merged = [...(p.registrantStudentNumbers ?? [])];
@@ -1168,8 +1237,8 @@ function withPinnedRegistrants(list: SeedProject[]): SeedProject[] {
 
 export const projects: SeedProject[] = withPinnedRegistrants(assignRegistrants(rawProjects));
 
-const gradeByUsername = new Map(
-  generatedStudents.filter(s => s.username).map(s => [s.username!, s.gradeId] as const));
+const gradeByRef = new Map(
+  generatedStudents.filter(s => s.ref).map(s => [s.ref!, s.gradeId] as const));
 
 /**
  * Force every review onto the teacher who actually holds scope over that
@@ -1183,7 +1252,7 @@ const gradeByUsername = new Map(
  */
 function withScopedReviewer(r: SeedServiceRecord): SeedServiceRecord {
   if (r.targetStatus === 'draft' || r.targetStatus === 'submitted') return r;
-  const gradeId = gradeByUsername.get(r.studentUsername);
+  const gradeId = gradeByRef.get(r.studentUsername);
   if (!gradeId) throw new Error(`Service record references unknown student username "${r.studentUsername}".`);
   return { ...r, reviewerUsername: reviewerForGrade[gradeId] };
 }
@@ -1208,10 +1277,10 @@ function withScopedReviewer(r: SeedServiceRecord): SeedServiceRecord {
  */
 function buildProjectRecords(occupied: SeedServiceRecord[]): SeedServiceRecord[] {
   const rnd = makeRandom(20260918);
-  const usernameByNumber = new Map(
-    generatedStudents.filter(s => s.username).map(s => [s.studentNumber, s.username!] as const));
-  const studentByUsername = new Map(
-    generatedStudents.filter(s => s.username).map(s => [s.username!, s] as const));
+  const refByNumber = new Map(
+    generatedStudents.filter(s => s.ref).map(s => [s.studentNumber, s.ref!] as const));
+  const studentByRef = new Map(
+    generatedStudents.filter(s => s.ref).map(s => [s.ref!, s] as const));
 
   const usedDays = new Map<string, Set<number>>();
   for (const r of occupied) {
@@ -1230,15 +1299,15 @@ function buildProjectRecords(occupied: SeedServiceRecord[]): SeedServiceRecord[]
     if (last < first) continue;
 
     for (const number of project.registrantStudentNumbers) {
-      const username = usernameByNumber.get(number);
-      if (!username) continue;
+      const ref = refByNumber.get(number);
+      if (!ref) continue;
       // The deliberate no-service students stay at zero. They are enrolled and
       // simply never logged anything, which is both realistic and what keeps
       // the empty-state screens populated — crediting them here would quietly
       // take the empty state away.
-      if ((studentByUsername.get(username)?.targetCoins ?? 0) === 0) continue;
-      const used = usedDays.get(username) ?? new Set<number>();
-      usedDays.set(username, used);
+      if ((studentByRef.get(ref)?.targetCoins ?? 0) === 0) continue;
+      const used = usedDays.get(ref) ?? new Set<number>();
+      usedDays.set(ref, used);
 
       const days = shuffled(rnd, availableDays(first, last, used));
       if (days.length === 0) continue;
@@ -1251,7 +1320,7 @@ function buildProjectRecords(occupied: SeedServiceRecord[]): SeedServiceRecord[]
       used.add(slot.day);
 
       out.push({
-        studentUsername: username,
+        studentUsername: ref,
         sourceType: 'PROJECT',
         projectTitle: project.title,
         serviceCategoryId: project.categoryId,
@@ -1259,7 +1328,7 @@ function buildProjectRecords(occupied: SeedServiceRecord[]): SeedServiceRecord[]
         startHour,
         endHour: startHour + hours,
         targetStatus: 'approved',
-        reviewerUsername: reviewerForGrade[gradeByUsername.get(username) ?? 'grade_6'],
+        reviewerUsername: reviewerForGrade[gradeByRef.get(ref) ?? 'grade_6'],
         reasonCode: 'DOCUMENTATION_COMPLETE',
         comment: 'Project attendance confirmed by the organiser.',
       });

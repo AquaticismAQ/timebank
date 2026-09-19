@@ -80,6 +80,11 @@ function interleaveByStudent<T extends { studentUsername: string }>(records: T[]
   return out;
 }
 
+/** The handle other fixtures use to point at this account; staff have none and are referenced by their own username. */
+function refOf(u: SeedUser): string {
+  return u.ref ?? u.username;
+}
+
 function requireEnv(name: string): string {
   const v = process.env[name];
   if (!v) {
@@ -519,7 +524,10 @@ async function main() {
   }
 
   const passwordByUsername: Record<string, string> = {};
-  for (const u of users) passwordByUsername[u.username] = genPassword();
+  // Keyed by the *handle* (`student001`), because that is what every other
+  // fixture references. The real login — 8 random digits for a student — is
+  // only used where an account is actually created or authenticated.
+  for (const u of users) passwordByUsername[refOf(u)] = genPassword();
   const hashByUsername = bcryptHashOnServer(passwordByUsername);
 
   const userIdByUsername = new Map<string, string>();
@@ -528,7 +536,7 @@ async function main() {
   const scopeInserts: string[] = [];
   for (const u of users) {
     const id = genId('usr');
-    userIdByUsername.set(u.username, id);
+    userIdByUsername.set(refOf(u), id);
     const studentId = u.linkedStudentNumber ? studentIdByNumber.get(u.linkedStudentNumber) : undefined;
     userInserts.push(
       // `staff_id` is written for every non-student account. Without it the
@@ -538,7 +546,7 @@ async function main() {
       // null (issue 100). Seeding it is what makes the admin UI's Edit User
       // dialog work on a freshly seeded server.
       `INSERT INTO user (id, username, password_hash, display_name, email, student_id, staff_id, status, preferred_language, failed_login_attempts, version, created_at, updated_at) VALUES ` +
-      `(${sqlString(id)}, ${sqlString(u.username)}, ${sqlString(hashByUsername[u.username])}, ${sqlString(u.displayName)}, ${sqlString(u.email)}, ${sqlString(studentId)}, ${sqlString(u.staffId)}, 'ACTIVE', 'zh-CN', 0, 1, ${now}, ${now});`
+      `(${sqlString(id)}, ${sqlString(u.username)}, ${sqlString(hashByUsername[refOf(u)])}, ${sqlString(u.displayName)}, ${sqlString(u.email)}, ${sqlString(studentId)}, ${sqlString(u.staffId)}, 'ACTIVE', 'zh-CN', 0, 1, ${now}, ${now});`
     );
     for (const roleCode of u.roleCodes) {
       roleInserts.push(`INSERT INTO user_role (user_id, role_id) VALUES (${sqlString(id)}, ${sqlString(ROLE_ID[roleCode])});`);
@@ -575,27 +583,40 @@ async function main() {
   for (const u of users) {
     if (loginIndex >= 5) await sleep(LOGIN_INTERVAL_MS); // first 5 ride the burst allowance
     loginIndex++;
-    // Even paced under the limit, a 429 can still land if anything else is
-    // talking to /auth/login from this IP. Back off and retry rather than
-    // losing the whole run at minute four.
+    // Two different transient failures land here, and both cost the whole run
+    // if they are not retried — this phase takes four minutes and everything
+    // after it depends on having a session for every persona.
+    //
+    //   · 429, if anything else is talking to /auth/login from this IP.
+    //   · A dropped TLS handshake. Seen for real: "Client network socket
+    //     disconnected before secure TLS connection was established"
+    //     (ECONNRESET) on login 20-something of 37, which killed a run that had
+    //     already written 50 students and 37 users — leaving the database in a
+    //     state Phase 0 then refuses to seed over.
+    //
+    // The second is a connection-level failure with no HTTP status to match on,
+    // so matching only "429" let it through. Matching the transport errors by
+    // name keeps a genuine 401 from being retried three times.
+    const TRANSIENT = /429|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|socket disconnected|fetch failed/i;
     let session: Session | undefined;
-    for (let attempt = 1; attempt <= 3 && !session; attempt++) {
+    for (let attempt = 1; attempt <= 4 && !session; attempt++) {
       try {
-        session = await login(BASE_URL, u.username, passwordByUsername[u.username]);
+        session = await login(BASE_URL, u.username, passwordByUsername[refOf(u)]);
       } catch (err) {
-        if (attempt === 3 || !String(err).includes('429')) throw err;
-        console.warn(`  login rate-limited for ${u.username}, backing off ${15 * attempt}s...`);
+        const text = `${err}${(err as { cause?: unknown })?.cause ?? ''}`;
+        if (attempt === 4 || !TRANSIENT.test(text)) throw err;
+        console.warn(`  login for ${refOf(u)} failed transiently (${text.slice(0, 80)}), retrying in ${15 * attempt}s...`);
         await sleep(15_000 * attempt);
       }
     }
-    sessions.set(u.username, session!);
+    sessions.set(refOf(u), session!);
     if (loginIndex % 10 === 0 || loginIndex === users.length) {
       console.log(`  logged in ${loginIndex}/${users.length}`);
     }
   }
-  const session = (username: string): Session => {
-    const s = sessions.get(username);
-    if (!s) throw new Error(`No session for ${username} — check mock-data.ts references a real username`);
+  const session = (ref: string): Session => {
+    const s = sessions.get(ref);
+    if (!s) throw new Error(`No session for ${ref} — check mock-data.ts references a real student handle`);
     return s;
   };
 
@@ -740,7 +761,7 @@ async function main() {
     // not the student's login user id — the two are different entities linked
     // by `user.student_id`.
     const filedForStudentId = c.filedByUsername
-      ? studentIdByNumber.get(users.find(u => u.username === c.studentUsername)?.linkedStudentNumber ?? '')
+      ? studentIdByNumber.get(users.find(u => refOf(u) === c.studentUsername)?.linkedStudentNumber ?? '')
       : undefined;
     if (c.filedByUsername && !filedForStudentId) {
       throw new Error(`Case "${c.title}" is filed by ${c.filedByUsername} for ${c.studentUsername}, but that user has no linkedStudentNumber in mock-data.ts.`);
@@ -871,9 +892,9 @@ async function main() {
   const mismatches: string[] = [];
   let checked = 0;
   for (const s of generatedStudents) {
-    if (!s.username) continue;
+    if (!s.ref) continue;
     const studentId = studentIdByNumber.get(s.studentNumber)!;
-    const expectedCoins = expectedCoinsByUsername[s.username] ?? 0;
+    const expectedCoins = expectedCoinsByUsername[s.ref] ?? 0;
     const accounts = await admin.request('GET', `/api/v1/accounts?filter%5BstudentId%5D=${studentId}`);
     // `/accounts` is paginated, so `data` is the array itself; the fallbacks
     // cover the envelope shapes without assuming which one it is.
@@ -884,7 +905,7 @@ async function main() {
     const expectedCenti = Math.round(expectedCoins * 100);
     checked++;
     if (actualCenti !== expectedCenti) {
-      mismatches.push(`${s.username}: expected ${expectedCenti} centi-coins (${expectedCoins}h approved), got ${actualCenti}`);
+      mismatches.push(`${s.ref}: expected ${expectedCenti} centi-coins (${expectedCoins}h approved), got ${actualCenti}`);
     }
   }
   if (mismatches.length > 0) {
@@ -896,7 +917,10 @@ async function main() {
 
   console.log('\n== Done ==');
   console.log('Accounts created (see Docs/TestAccounts.md for the committed record):');
-  for (const u of users) console.log(`  ${u.username} / ${passwordByUsername[u.username]}  (${u.displayName})`);
+  for (const u of users) {
+    const handle = u.ref && u.ref !== u.username ? `  [${u.ref}]` : '';
+    console.log(`  ${u.username} / ${passwordByUsername[refOf(u)]}  (${u.displayName})${handle}`);
+  }
 }
 
 main().catch(err => {
