@@ -86,6 +86,14 @@ means.
 The process **runs by itself when the new academic year begins**, so no one has
 to remember to press anything, and it produces a report.
 
+> **Implementation note**: the scheduled job checks daily rather than pinning a
+> cron to 1 September. A once-a-year trigger has exactly one chance to fire, and
+> if the server happens to be restarting that night nobody is promoted and
+> nothing says so — the next signal would be a teacher noticing their class list
+> is a year stale. The observable behaviour is still "it happens on 1
+> September"; the difference is that a missed night is recovered the following
+> morning instead of being silently lost.
+
 ```
 ① Determine the target year (the academic year 1 September falls in)
         │

@@ -92,18 +92,44 @@ function isWeekend(offsetDays: number): boolean {
 }
 
 /**
- * Students enter at Grade 6 and stay six years, so the year a student joined
- * follows from the grade they are in now. This is what
- * `student.enrollment_academic_year_id` should have held all along: it was the
- * *current* year for all 50, which made every Grade 11 student a first-year
- * enrollee and — because `ReportQueryRepository` joins
- * `ay.start_date <= :end` — emptied the population of every report scoped to
- * any earlier year (issue 103 §2.2).
+ * The school runs two stages, not one continuous six-year line
+ * (`Design/*\u002f13-AnnualRollover.md` §2): grades 6-7-8, then grades
+ * 9-10-11-12. A student enters at grade 6 **or** at grade 9, and finishing
+ * grade 8 is a graduation followed by a fresh intake with a new student number
+ * — not a promotion.
+ *
+ * So "the grade a student entered at" is not a constant, and the year they
+ * joined follows from their current grade and their stage.
  */
-const ENTRY_GRADE_LEVEL = 6;
+const JUNIOR_ENTRY_LEVEL = 6;
+const SENIOR_ENTRY_LEVEL = 9;
 
+export function gradeLevelOf(gradeId: string): number {
+  return Number(gradeId.replace('grade_', ''));
+}
+
+/** 6 for the junior stage, 9 for the senior one. */
+export function entryLevelFor(gradeId: string): number {
+  return gradeLevelOf(gradeId) <= 8 ? JUNIOR_ENTRY_LEVEL : SENIOR_ENTRY_LEVEL;
+}
+
+/** The last grade of the student's stage — finishing it graduates them. */
+export function stageExitLevelFor(gradeId: string): number {
+  return gradeLevelOf(gradeId) <= 8 ? 8 : 12;
+}
+
+/**
+ * The year this student's cohort entered their stage. `seed.ts` wrote the
+ * *current* year for every student, which made every senior a first-year
+ * entrant and — because `ReportQueryRepository` joins `ay.start_date <= :end` —
+ * emptied the population of every report scoped to an earlier year
+ * (issue 103 §2.2).
+ *
+ * Grades 6 and 9 both come out as the current year, which is correct: they are
+ * the two intakes, and neither has any history yet.
+ */
 export function enrollmentYearStartFor(gradeId: string): number {
-  return CURRENT_ACADEMIC_YEAR_START - (Number(gradeId.replace('grade_', '')) - ENTRY_GRADE_LEVEL);
+  return CURRENT_ACADEMIC_YEAR_START - (gradeLevelOf(gradeId) - entryLevelFor(gradeId));
 }
 
 /** `academic_year.id` as `R__seed_base_data.sql` composes it, for the year a grade's cohort joined. */
@@ -123,7 +149,7 @@ export const cohortAcademicYearStarts: number[] = Array.from(
   new Set(gradeIdsForCohorts().map(enrollmentYearStartFor))).sort((a, b) => a - b);
 
 function gradeIdsForCohorts(): string[] {
-  return ['grade_6', 'grade_7', 'grade_8', 'grade_9', 'grade_10', 'grade_11'];
+  return ['grade_6', 'grade_7', 'grade_8', 'grade_9', 'grade_10', 'grade_11', 'grade_12'];
 }
 
 /**
@@ -150,12 +176,15 @@ function gradeIdsForCohorts(): string[] {
  * with a year of history would be a fixture contradicting its own roster row.
  */
 const COIN_TARGETS_BY_GRADE: Record<string, number[]> = {
+  // Grades 6 and 9 are the two intakes: their cohort entered this September, so
+  // the only window they can have served in is the days since term started.
   grade_6: [0, 2, 4, 6, 9],
   grade_7: [0, 14, 30, 78, 96],
   grade_8: [0, 16, 36, 80, 104],
-  grade_9: [0, 44, 82, 118, 152],
-  grade_10: [0, 52, 88, 126, 168],
-  grade_11: [0, 58, 92, 156, 304],
+  grade_9: [0, 2, 5, 8, 11],
+  grade_10: [0, 44, 82, 118, 152],
+  grade_11: [0, 52, 88, 126, 168],
+  grade_12: [0, 58, 92, 156, 304],
 };
 
 /**
@@ -276,7 +305,7 @@ const staffUsers: SeedUser[] = [
   { username: 'teacher002', displayName: 'Jordan W.', email: 'teacher002@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_7'], staffId: 'STAFF-0102' },
   { username: 'teacher003', displayName: 'Casey Z.', email: 'teacher003@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_8'], staffId: 'STAFF-0103' },
   { username: 'teacher004', displayName: 'Riley H.', email: 'teacher004@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_9'], staffId: 'STAFF-0104' },
-  { username: 'teacher005', displayName: 'Morgan Y.', email: 'teacher005@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_10', 'grade_11'], staffId: 'STAFF-0105' },
+  { username: 'teacher005', displayName: 'Morgan Y.', email: 'teacher005@example-township-school.edu', roleCodes: ['teacher'], scopeGrades: ['grade_10', 'grade_11', 'grade_12'], staffId: 'STAFF-0105' },
 ];
 
 /** Which teacher may review a given grade — mirrors `scopeGrades` above. Reviews are routed through this so every decision comes from someone who actually holds scope; routing one to the wrong teacher would 404, not 403. */
@@ -287,6 +316,7 @@ export const reviewerForGrade: Record<string, string> = {
   grade_9: 'teacher004',
   grade_10: 'teacher005',
   grade_11: 'teacher005',
+  grade_12: 'teacher005',
 };
 
 export interface SeedStudent {
@@ -699,7 +729,7 @@ function crockfordBase32(rnd: () => number, length: number): string {
   return out;
 }
 
-const gradeIds = ['grade_6', 'grade_7', 'grade_8', 'grade_9', 'grade_10', 'grade_11'];
+const gradeIds = ['grade_6', 'grade_7', 'grade_8', 'grade_9', 'grade_10', 'grade_11', 'grade_12'];
 
 /** Classes available per grade, including the two named ones seed.ts creates. */
 function classesForGrade(gradeId: string): string[] {
@@ -711,21 +741,33 @@ function classesForGrade(gradeId: string): string[] {
 }
 
 /**
- * Graduation year for a grade, given a 6-11 secondary span ending at grade 11.
+ * The calendar year this student leaves their *stage* — the year they finish
+ * grade 8, or the year they finish grade 12. Not the year they leave the school
+ * altogether: a junior graduate who returns as a grade 9 entrant does so as a
+ * new student record with a new number.
  *
- * Derived from the current school year rather than a literal: this read
- * `2026 + (11 - level) + 1`, which is the same stale-literal bug issue 100
- * fixed in the schema's own academic-year rows and silently mis-states every
- * student's graduation from the next September onwards.
+ * This read `2026 + (11 - level) + 1`, which was wrong twice over: a stale
+ * literal of exactly the kind issue 100 removed from the schema, and a single
+ * six-year span that does not exist here.
  */
 function graduationYearFor(gradeId: string): number {
-  const level = Number(gradeId.replace('grade_', ''));
-  return CURRENT_ACADEMIC_YEAR_START + (11 - level) + 1;
+  return enrollmentYearStartFor(gradeId) + (stageExitLevelFor(gradeId) - entryLevelFor(gradeId)) + 1;
 }
 
-const STUDENT_COUNT = 50;
-/** Students with a login account. The rest are roster-only, which is realistic — most schools issue portal accounts to a subset first — and keeps the paced-login cost of a re-seed down, since nginx rate-limits /auth/login to 10/min per IP. */
-const STUDENTS_WITH_LOGIN = 30;
+const STUDENT_COUNT = 56;
+/**
+ * Students with a login account; the rest are roster-only, which is realistic —
+ * most schools issue portal accounts to a subset first — and keeps the
+ * paced-login cost of a re-seed down, since nginx rate-limits /auth/login to
+ * 10/min per IP.
+ *
+ * 56 and 35 are seven grades of eight, five of them with logins, so every grade
+ * receives each of `COIN_TARGETS_BY_GRADE`'s five slots exactly once. With the
+ * previous 50/30 against seven grades the split was 4-or-5 per grade and some
+ * grades silently lost a slot — including the no-service one that the
+ * empty-state screens depend on.
+ */
+const STUDENTS_WITH_LOGIN = 35;
 
 export interface GeneratedStudent extends SeedStudent {
   /**

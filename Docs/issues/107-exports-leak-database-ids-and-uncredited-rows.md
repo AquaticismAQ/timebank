@@ -1,6 +1,6 @@
 # 107 — Exports leak database ids, omit student numbers, and ship uncredited rows
 
-**Status:** Superseded by `Design/*/12-DataExport.md` before verification completed (§5, §6). Do not commit the working-tree change as-is.
+**Status:** **Closed, not fixed as an issue.** The export rework is planned work rather than a defect fix, and is now `Docs/optimization/11-DataImportExportOptimization.md`. The code written against this issue was reverted, not committed (§5, §6).
 **Raised:** 2026-09-19 by the user, as four points about data export:
 
 > 1. For all data export, the database ids like 'id', 'student id' should be
@@ -119,6 +119,14 @@ The rest of this issue stands and is carried into that design:
 | Approved rows only, no `Status` | **Reversed** — §6.2 keeps all submitted statuses |
 | `null` in `creditedUnits` | §2.4 — absent values are *empty cells*; this is now the fix, since keeping every status means the column is legitimately empty on unapproved rows |
 
-The working-tree change that filters to `APPROVED` and drops `Status` should
-therefore **not** be committed as-is; it needs reworking to §6.2 of the design,
-where the empty-cell rule replaces the status filter as the cure for the `null`.
+The code written against this issue was **reverted and never committed.** What
+it did — removing database ids, pairing the student number with the name,
+rendering coins instead of centi-coins — survives as design rules, not as a
+patch, and lands with the rest of the export rework.
+
+**This issue is closed as not-a-defect.** The observations above were correct,
+but treating them as a bug fix was the wrong shape: it produced a change that
+contradicted the design being written alongside it. The work now belongs to
+`Docs/optimization/11-DataImportExportOptimization.md`, which plans the whole
+export and import surface against `Design/*/10`, `11` and `12` rather than
+patching one export at a time.

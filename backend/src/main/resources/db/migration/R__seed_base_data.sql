@@ -9,7 +9,11 @@ INSERT IGNORE INTO grade (id, code, name_zh, name_en, sequence) VALUES
     ('grade_8', 'grade_8', '八年级', 'Grade 8', 8),
     ('grade_9', 'grade_9', '九年级', 'Grade 9', 9),
     ('grade_10', 'grade_10', '十年级', 'Grade 10', 10),
-    ('grade_11', 'grade_11', '十一年级', 'Grade 11', 11);
+    ('grade_11', 'grade_11', '十一年级', 'Grade 11', 11),
+    -- Grade 12 completes the senior stage (Design/*/13-AnnualRollover.md §2:
+    -- stage 1 is 6-7-8, stage 2 is 9-10-11-12). Without it the rollover has
+    -- nowhere to promote grade 11 to, so the senior stage could never finish.
+    ('grade_12', 'grade_12', '十二年级', 'Grade 12', 12);
 
 -- Academic years. The current one carries every seeded student and record; the
 -- prior year is deliberately left empty.
@@ -70,6 +74,8 @@ INSERT IGNORE INTO class (id, code, name, grade_id, academic_year_id, created_at
     ('class_10B', '10B', 'B', 'grade_10', @ay_current_id, NOW(3), NOW(3)),
     ('class_11A', '11A', 'A', 'grade_11', @ay_current_id, NOW(3), NOW(3)),
     ('class_11B', '11B', 'B', 'grade_11', @ay_current_id, NOW(3), NOW(3)),
+    ('class_12A', '12A', 'A', 'grade_12', @ay_current_id, NOW(3), NOW(3)),
+    ('class_12B', '12B', 'B', 'grade_12', @ay_current_id, NOW(3), NOW(3)),
     -- A named (not single-letter) class, as some schools use house or
     -- programme names instead of A/B — issue 006: nothing in seed data or the
     -- fixed-width UI assumptions had ever exercised a className longer than

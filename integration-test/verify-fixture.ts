@@ -34,6 +34,7 @@ import {
   cases, eventProposals, generatedStudents, namedClasses, organizations, projects,
   reviewerForGrade, serviceRecords, students, users,
   CURRENT_ACADEMIC_YEAR_START, academicYearWindow, enrollmentYearStartFor,
+  entryLevelFor, gradeLevelOf, stageExitLevelFor,
   type SeedProject, type SeedServiceRecord,
 } from './mock-data';
 
@@ -82,7 +83,9 @@ const projectByTitle = new Map(projects.map(p => [p.title, p] as const));
 const orgNames = new Set([...organizations.map(o => o.name), 'Example City HD']);
 
 const CATEGORY_IDS = new Set(['cat_campus', 'cat_community', 'cat_welfare', 'cat_education', 'cat_environment', 'cat_other']);
-const GRADE_IDS = ['grade_6', 'grade_7', 'grade_8', 'grade_9', 'grade_10', 'grade_11'];
+const GRADE_IDS = ['grade_6', 'grade_7', 'grade_8', 'grade_9', 'grade_10', 'grade_11', 'grade_12'];
+/** The two stage entry grades: both are fresh intakes with no prior-year history (13-AnnualRollover.md §2). */
+const INTAKE_GRADE_IDS = ['grade_6', 'grade_9'];
 const CLASS_IDS = new Set([
   ...GRADE_IDS.flatMap(g => { const l = g.replace('grade_', ''); return [`class_${l}A`, `class_${l}B`]; }),
   ...namedClasses.map(c => c.id), 'class_10_luna',
@@ -307,6 +310,21 @@ for (const u of users) {
   }
 }
 
+// `13-AnnualRollover.md` §5: a student is always exactly 6 + n or 9 + n years
+// past their entry year, and the rollover's own consistency check counts the
+// rows where that fails. Asserting it on the fixture means the seeded roster
+// cannot be the thing that makes that check fire.
+for (const s of students) {
+  const at = `student ${s.studentNumber} (${s.gradeId})`;
+  const entry = entryLevelFor(s.gradeId);
+  const derived = entry + (CURRENT_ACADEMIC_YEAR_START - enrollmentYearStartFor(s.gradeId));
+  check('REPORTS', 'stored grade matches the enrolment cohort', derived === gradeLevelOf(s.gradeId),
+    `${at}: enrolled ${enrollmentYearStartFor(s.gradeId)} at grade ${entry} derives grade ${derived}`);
+  check('REPORTS', 'graduation year is the stage exit',
+    s.graduationYear === enrollmentYearStartFor(s.gradeId) + (stageExitLevelFor(s.gradeId) - entry) + 1,
+    `${at}: graduationYear ${s.graduationYear} does not match leaving grade ${stageExitLevelFor(s.gradeId)}`);
+}
+
 for (const s of students) {
   const at = `student ${s.studentNumber}`;
   check('BACKEND', 'known grade', GRADE_IDS.includes(s.gradeId), `${at}: unknown gradeId ${s.gradeId}`);
@@ -359,16 +377,17 @@ for (const [label, year] of [['prior', priorYear], ['current', currentYear]] as 
   note(`${label} year: ${inThisYear.length} approved records, ${sum(inThisYear.map(hoursOf))}h, ${months.size} months, ${projectsStarting.length} reportable projects`);
 }
 
-// Grade 6 entered this September, so prior-year history for them would
+// Both intakes entered this September, so prior-year history for either would
 // contradict their own roster row — and it is exactly the population rule
-// `participationByGrade` encodes.
-{
+// `participationByGrade` encodes. Grade 9 joins grade 6 here because finishing
+// grade 8 is a graduation, not a promotion: a grade 9 student is a new record.
+for (const gradeId of INTAKE_GRADE_IDS) {
   const offenders = approved.filter(r => {
     const s = studentByRef.get(r.studentUsername);
-    return s?.gradeId === 'grade_6' && inYear(r.serviceDateOffsetDays, priorYear);
+    return s?.gradeId === gradeId && inYear(r.serviceDateOffsetDays, priorYear);
   });
-  check('REPORTS', 'the new intake has no prior-year history', offenders.length === 0,
-    `${offenders.length} grade_6 records dated before this September`);
+  check('REPORTS', 'neither intake has prior-year history', offenders.length === 0,
+    `${offenders.length} ${gradeId} records dated before this September`);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -420,6 +439,11 @@ for (const s of generatedStudents) {
   note(`stage requirement met: ${meets('middle')} middle-school, ${meets('high')} high-school`);
 }
 
+for (const gradeId of GRADE_IDS) {
+  check('CREDIBLE', 'every grade is represented on the roster',
+    students.some(s => s.gradeId === gradeId), `no student is in ${gradeId}`);
+}
+
 {
   const zero = generatedStudents.filter(s => s.ref && (hoursByStudent.get(s.ref) ?? 0) === 0).length;
   check('CREDIBLE', 'empty-state students are preserved', zero >= 5,
@@ -435,7 +459,7 @@ for (const gradeId of GRADE_IDS) {
     .filter(r => r.studentUsername === username && inYear(r.serviceDateOffsetDays, priorYear)).map(hoursOf));
   const req = annualRequiredHours(gradeId);
   const met = cohort.filter(s => priorHours(s.ref!) >= req).length;
-  if (gradeId === 'grade_6') continue; // no prior year to have met anything in
+  if (INTAKE_GRADE_IDS.includes(gradeId)) continue; // an intake has no prior year to have met anything in
   check('CREDIBLE', 'each grade shows both sides of its annual bar', met > 0 && met < cohort.length,
     `${gradeId}: ${met} of ${cohort.length} met last year's ${req}h — wanted a mix`);
 }
