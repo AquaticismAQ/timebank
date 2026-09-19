@@ -207,6 +207,11 @@ whole-database restore, which discards every unrelated thing that happened since
 service records, reviews, ledger entries — to undo one column on a few hundred
 rows.
 
+The journal and the reversal that consumes it are specified in
+`Docs/backlog/02-RecoverableAnnualRollover.md`, including the condition under
+which a reversal must refuse: once anything has been filed against the new
+roster, putting it back would contradict rows that already exist.
+
 ### 3.4 Which grade snapshots follow, and which do not
 
 Grade and class **are not stored only on the student row**. They are denormalised

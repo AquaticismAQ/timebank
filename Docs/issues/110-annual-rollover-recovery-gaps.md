@@ -66,11 +66,12 @@ a transaction, it converts silent loss of the record into a loud timeout.
 
 ### 4.1 A successful but *wrong* run cannot be undone
 
-**The design now specifies the fix** (`Design/*/13-AnnualRollover.md` §3.3.1): a
-rollover records each changed student's previous grade, class and status inside
-the same transaction, so a completed run can be reversed as a bounded operation.
-The code does not do this yet, which is what keeps this issue open — the gap is
-now a gap against a written design rather than an idea nobody wrote down.
+**The design specifies the fix** (`Design/*/13-AnnualRollover.md` §3.3.1) and
+**the build is specified** in `Docs/backlog/02-RecoverableAnnualRollover.md` —
+journal shape, reversal semantics, the refusal condition, and the five open
+questions whoever builds it will hit. The code does not do this yet, which is what
+keeps this issue open; the gap is now a gap against a written design with a
+written specification, rather than an idea nobody wrote down.
 
 This is the significant one. Atomicity protects against a run that fails. Nothing
 protects against a run that **succeeds against the wrong inputs** — a misconfigured
@@ -108,4 +109,5 @@ minutes is a number chosen for comfort rather than from evidence.
 It is a schema addition, a write path and a reversal operation — bigger than the
 defect this issue was opened for, and it would make the fix in §2 harder to
 review. It is also the difference between "we can recover" and "we can restore a
-backup", so it should not be bundled in as an afterthought.
+backup", so it should not be bundled in as an afterthought. It is specified
+instead, in `Docs/backlog/02-RecoverableAnnualRollover.md`.
