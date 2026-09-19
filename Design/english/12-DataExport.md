@@ -158,53 +158,77 @@ broken system.
 is in today, and the database keeps no historical roster. So "which grade was
 this student in during 2023-2024" cannot be queried directly.
 
-**The derivation**: students enter at Grade 6 and stay six years.
+The derivation rests on the stage model (`13-AnnualRollover.md` §2): the school
+runs **two stages — grades 6-7-8 (three years) and grades 9-10-11-12 (four
+years)** — and students enter at grade 6 or at grade 9.
+
+The entry grade is itself derived, and is always 6 or 9:
 
 ```
-grade in year Y = 6 + (Y − entry year)
+entry grade   = current grade − (current year − enrolment year)
+grade in Y    = entry grade + (Y − enrolment year)
 ```
 
-For a student who entered in 2021-2022:
+For a student entering stage 1 in 2026-2027:
 
 | Selected academic year | Grade column shows |
 | :--- | :--- |
-| 2021-2022 | Grade 6 |
-| 2023-2024 | Grade 8 |
-| 2026-2027 | Grade 11 |
-| 2027-2028 onward | `Graduated (2027)` |
+| 2026-2027 | Grade 6 |
+| 2027-2028 | Grade 7 |
+| 2028-2029 | Grade 8 |
+| 2029-2030 onward | `Graduated (2029)` |
 
 The same rule answers "was this student even here that year":
 
 ```
-enrolled in the year starting Y  ⇔  entry year ≤ Y ≤ graduation year − 1
+enrolled in the year starting Y  ⇔  enrolment year ≤ Y ≤ graduation year − 1
 ```
 
 Students not enrolled in the selected year **do not appear in that year's
-export** — including younger students who had not yet joined.
+export**.
 
-### 5.2 The limits of this rule
+### 5.2 One person may be two student records
+
+Grade 8 to grade 9 is **graduation plus fresh intake**, not promotion
+(`13-AnnualRollover.md` §2.1): the student number is reassigned, and time coins
+and service hours start from zero.
+
+So **no export will ever show one person's continuous history from grade 6 to
+grade 12** — that is two student records with two student numbers, one per stage.
+This is not a defect but a direct consequence of that decision: migrating records
+across the stage boundary is unreliable because student numbers change, classes
+are renamed and some students leave, so the system deliberately does not attempt
+it.
+
+Reconstructing one person's whole trajectory means a human comparing the two
+records by name and year; the system does not link them.
+
+### 5.2.1 The limits of this derivation
 
 The derivation assumes **no repeated or skipped years**, because the system
-models neither. If a student does repeat a year, their historical grades shift by
-one. This is a known and accepted cost: the alternative is storing the grade and
-class on every service record at the time, which needs a schema change and a
-backfill — and the backfill could only use this same derivation, so it would fix
-the future without fixing history.
+models neither. Where a student does repeat, their historical grades shift by
+one. `13-AnnualRollover.md` §5's consistency check reports such students as
+inconsistent, and is the only signal that will surface them.
 
 ### 5.3 When Academic Year is "All years"
 
 There is no single year to derive against, so the **Grade column shows the
 present grade**, and graduated students show `Graduated (YYYY)`.
 
-### 5.4 Nothing currently writes the `GRADUATED` status
+### 5.4 The `GRADUATED` status is written by the annual process
 
-The `StudentStatus` enum already contains `GRADUATED`, but no code path writes it
-— only `ACTIVE` and `INACTIVE` are ever set. "Graduated" in an export is
-therefore derived from the **graduation year**, not read from the status column.
+`StudentStatus` contains `GRADUATED`, and until the annual process defined in
+`13-AnnualRollover.md` is built, **no code writes it** — only `ACTIVE` and
+`INACTIVE` are ever set.
 
-> **Open, and outside this design**: promotion and graduation should be an
-> explicit once-a-year process that advances `grade_id` and writes `GRADUATED`.
-> That process does not exist yet.
+Once that process ships, grade 8 and grade 12 students are set to `GRADUATED`
+each 1 September, and their login accounts are deactivated at the same time.
+
+"Graduated" in an export is nevertheless **always derived from the graduation
+year** (§5.1), never read from the status column. That is deliberate: the
+derivation holds before the annual process exists, and holds again if a year's
+run is ever missed, whereas reading the status column gives the wrong answer in
+both cases.
 
 ---
 

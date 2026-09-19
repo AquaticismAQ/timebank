@@ -43,6 +43,8 @@ repo/
     ├── issues/                    One doc per real defect found via live-verification or reported directly by
     │                             a maintainer, numbered 0NN-<slug>.md sequentially, never renumbered/reused
     ├── operations/                Deployment environment, runbooks, version management for the live system
+    ├── backlog/                   Work that is specified but not built and has no target release,
+    │                             numbered 0N-<Slug>.md — see §2.9
     └── cost-estimation/           Deployment cost estimates (DeploymentCostEstimate.md + _CN.md)
 ```
 
@@ -248,6 +250,36 @@ working tree and move on. And when writing up the fix itself, describe
 too and mangle it into nonsense (`Docs/issues/057-*.md`'s own first draft
 hit exactly this).
 
+### 2.9 `Docs/backlog/` — specified but not built
+
+For work that has been **designed in enough detail to be relied on by another
+document**, but that nobody has built and nothing has scheduled.
+
+It exists because a design doc will sometimes promise a mechanism that has no
+implementation — `Design/*/11-DataImport.md` §6 closes the historical-import
+window and says the only way to reopen it is a console utility. That utility has
+to be written down somewhere, or the design has promised a door nobody specified.
+
+**How it differs from the neighbouring directories:**
+
+| Directory | Holds |
+| :--- | :--- |
+| `implementation/` | The build plan for work that *is* scheduled, phase by phase |
+| `optimization/` | Proposals to improve a feature that already ships |
+| `issues/` | A defect in something that exists |
+| `backlog/` | Something that does not exist, is not scheduled, and is referenced by a design |
+
+Rules:
+
+- Numbered `0N-<Slug>.md`, sequential, never renumbered or reused.
+- The first line states its status and what depends on it. A backlog doc that
+  nothing references is a note, not a specification — put it elsewhere or delete it.
+- It must say what the thing **must not** do, not only what it should. These docs
+  are read by whoever eventually builds the feature, often long after the
+  reasoning has been forgotten.
+- When the work is built, the doc does not move: update its status line to point
+  at the implementation, the same way an issue doc is closed rather than deleted.
+
 ---
 
 ## 3. Quick checklist before finishing any doc edit
@@ -260,6 +292,9 @@ hit exactly this).
 - [ ] Did I preserve every existing cross-reference and section number?
 - [ ] If this is a new numbered doc, did I check the highest existing number
       in that directory just now (not from memory)?
+- [ ] If this specifies work nobody is building yet, is it in `backlog/` (§2.9)
+      rather than in `implementation/` or `optimization/`, and does something
+      reference it?
 - [ ] If this is an issue doc, does `integration-test/STATUS.md` have a
       matching bug-log row and fix-history entry, added in this same session?
 - [ ] Did I avoid financial vocabulary and avoid weakening any anti-fraud/

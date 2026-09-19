@@ -223,6 +223,12 @@ one to reproduce it. Accepted — diagnosis can proceed from logs and job state,
 and "the technical administrator does not hold a student-data exit by default" is
 the more valuable property to keep.
 
+**The one apparent exception is not one.** After the historical-import window
+expires, only a system administrator can reopen it, from the server console
+(`11-DataImport.md` §6.3). That does not weaken this rule: the utility reopens
+the *window* and grants the operator no `imports.*` — **the switch is not the
+door**, and after reopening, only an SDC Admin can still perform an import.
+
 > **Not done here**: apart from import and export, `admin` and `sysadmin` keep
 > identical permissions. Whether the two roles should separate further — user
 > management, rule publication — is a separate question needing its own
@@ -252,9 +258,9 @@ year.
 
 This must be stated because it reads as counter-intuitive at first:
 
-> A Grade 9 teacher exports the 2023-2024 report. The rows are the Grade 9
-> students they teach now, and the Grade column on those rows reads "Grade 6",
-> because in that year they were in Grade 6.
+> A Grade 11 teacher exports the 2024-2025 report. The rows are the Grade 11
+> students they teach now, and the Grade column on those rows reads "Grade 9",
+> because in that year they were in Grade 9.
 
 The two columns point at different moments, and each is right:
 
@@ -267,6 +273,13 @@ The consequence is that a teacher exports *the history of the students they
 currently teach*, rather than *the history of that grade*. For a year-group
 responsibility that is the wanted behaviour: the teacher cares about how the
 students in front of them got here.
+
+**The stage boundary also bounds how far back anyone can look.** Grade 8 to
+grade 9 is graduation plus fresh intake (`13-AnnualRollover.md` §2.1), so a
+grade 9 student is an entirely new student record. A Grade 9 teacher selecting a
+year before that intake therefore gets **zero rows** — in that year the person
+existed as a different record, outside this teacher's scope. That is the correct
+answer, not missing data.
 
 The derivation rule for the Grade column is in `12-DataExport.md` §5.
 

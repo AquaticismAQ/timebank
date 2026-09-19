@@ -160,7 +160,59 @@ magnitude.
 
 ---
 
-## 6. Idempotency and duplicate submission
+## 6. The 15-day window on historical import
+
+Historical record import is a **migration-era capability**: its purpose is to
+bring already-recognised hours in when the system goes live, and once that is
+done there is no next time. It is also the only bulk write in the system that
+credits the time-coin ledger directly.
+
+An entrance used once, which can alter the ledger, should not stay one click away
+after the migration is over.
+
+### 6.1 The rule
+
+- The **first** successful historical import opens a **15-day** window.
+- Further imports are allowed inside it; **later imports do not extend the
+  window**. The clock is started once, by the first one.
+- When the window expires, historical import is **closed permanently**.
+- Once closed, **the card disappears from the screen** rather than showing as
+  disabled — the same principle as §5.2: a control you cannot use should not be
+  visible.
+- The only way to reopen it is a **maintenance utility on the server console**,
+  run by a system administrator. That utility is not built; its specification is
+  `Docs/backlog/01-HistoricalImportReenableUtility.md`.
+
+### 6.2 Two things the interface must show
+
+**Before any import** — the card carries a warning stating that the first import
+opens a 15-day window, that the feature closes when it expires, and that only a
+system administrator can reopen it on the server. This must appear **before** the
+first import, or the administrator starts an irreversible clock without knowing
+it exists.
+
+**After an import** — the card shows a **countdown and the expiry date**. "Days
+remaining" alone is not enough: the countdown says how long is left, but only the
+date can be written into a migration plan.
+
+### 6.3 Why a system administrator reopens something they cannot use
+
+This reads as a contradiction: `10-RolesAndPermissions.md` §6.1 says a system
+administrator may not import any data, and here they are the one who reopens
+import.
+
+The two do not conflict, because **the switch is not the door**. The utility
+reopens the window and grants the operator no `imports.*` permission — after
+reopening, the import itself can still only be performed by an SDC Admin, still
+through §3's validate-then-confirm flow.
+
+Putting the reopen on a console rather than in the interface is what makes it a
+deliberate act requiring server access and leaving a trace, rather than a button
+that can be pressed on the day everyone is behind schedule.
+
+---
+
+## 7. Idempotency and duplicate submission
 
 Import jobs use an idempotency key to stop the same request being applied twice.
 But idempotency only covers "the same request was re-sent", not "the same file
@@ -174,7 +226,7 @@ mistake.
 
 ---
 
-## 7. Properties import must guarantee
+## 8. Properties import must guarantee
 
 | Property | How it holds |
 | :--- | :--- |
@@ -186,7 +238,7 @@ mistake.
 
 ---
 
-## 8. Deliberately not built
+## 9. Deliberately not built
 
 - **No incremental or differential import.** There is no "import only the changed
   rows" — knowing which rows changed needs a baseline, the baseline comes from
@@ -194,6 +246,8 @@ mistake.
 - **No scheduled automatic import.** An import requires a person who has read the
   error report and confirmed; a scheduled job has no such person.
 - **No mixed-type files.** One file, one type.
+- **No in-app "reopen historical import" control.** Reasoning in §6.3; such a
+  button is equivalent to having no window at all.
 - **No importing of usernames, passwords or roles.** Those are decided by the
   identity design, the activation flow and role assignment respectively — they
   are not contents of a roster file.
