@@ -3,6 +3,8 @@ package cn.timebank.lifecycle.infrastructure;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -45,7 +47,14 @@ public class AnnualRolloverRepository {
      * <p>The dates are passed in rather than computed here: the boundary is
      * configurable ({@code AcademicYearCalendar}), and a second copy of the
      * arithmetic in this class is exactly how the two would come to disagree.</p>
+     *
+     * <p>Its own transaction, so the year is committed before the run row that
+     * carries a foreign key to it is written on another connection. Committing
+     * early is safe because the insert is idempotent and a year that exists
+     * without a rollover having happened is harmless — it is not marked current
+     * until the run succeeds.</p>
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void ensureAcademicYear(String yearId, int startYear, LocalDate start, LocalDate end) {
         jdbcTemplate.update("""
                 insert ignore into academic_year (id, code, start_date, end_date, is_current, created_at, updated_at)

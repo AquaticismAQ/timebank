@@ -72,6 +72,8 @@ class AnnualRolloverIT extends AbstractIntegrationTest {
     private cn.timebank.lifecycle.infrastructure.AnnualRolloverRunRepository runRepository;
     @Autowired
     private cn.timebank.audit.application.AuditService auditService;
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private int currentYearStart() {
         LocalDate today = LocalDate.now();
@@ -304,8 +306,12 @@ class AnnualRolloverIT extends AbstractIntegrationTest {
         jdbc.update("delete from class where academic_year_id = :id", new MapSqlParameterSource("id", targetId));
         jdbc.update("delete from academic_year where id = :id", new MapSqlParameterSource("id", targetId));
 
+        // The transaction is opened explicitly by the service rather than by a
+        // Spring proxy, so a hand-built instance still runs the work
+        // transactionally — which is why the transaction manager is passed here.
         AnnualRolloverServiceImpl earlyStart = new AnnualRolloverServiceImpl(
-                repository, runRepository, auditService, new AcademicYearCalendar("08-20"));
+                repository, runRepository, auditService, new AcademicYearCalendar("08-20"),
+                transactionManager);
 
         // 25 August: before 1 September, so the default calendar would call this
         // the previous year and roll nothing new.

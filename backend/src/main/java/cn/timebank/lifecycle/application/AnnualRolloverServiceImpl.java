@@ -9,8 +9,9 @@ import cn.timebank.lifecycle.infrastructure.AnnualRolloverRunRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -52,31 +53,47 @@ class AnnualRolloverServiceImpl implements AnnualRolloverService {
     private final AnnualRolloverRunRepository runRepository;
     private final AuditService auditService;
     private final AcademicYearCalendar calendar;
+    /** The work's own transaction, opened explicitly so failure can be recorded after it closes. */
+    private final TransactionTemplate workTransaction;
 
     AnnualRolloverServiceImpl(AnnualRolloverRepository repository,
                                AnnualRolloverRunRepository runRepository,
                                AuditService auditService,
-                               AcademicYearCalendar calendar) {
+                               AcademicYearCalendar calendar,
+                               PlatformTransactionManager transactionManager) {
         this.repository = repository;
         this.runRepository = runRepository;
         this.auditService = auditService;
         this.calendar = calendar;
+        this.workTransaction = new TransactionTemplate(transactionManager);
+        workTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AnnualRolloverReportDto runIfDue(String triggeredBy) {
         return runFor(LocalDate.now(), triggeredBy);
     }
 
     /**
-     * The date is a parameter rather than read from a clock inside, so a test
-     * can drive a rollover on any 1 September without waiting for one. There is
-     * no {@code Clock} bean in this project — {@code CohortPurgeServiceImpl}
-     * calls {@code Instant.now()} directly — so this keeps the seam local
-     * rather than introducing a bean nothing else uses.
+     * The date is a parameter rather than read from a clock inside, so a test can
+     * drive a rollover on any turnover date without waiting for one. There is no
+     * {@code Clock} bean in this project — {@code CohortPurgeServiceImpl} calls
+     * {@code Instant.now()} directly — so this keeps the seam local rather than
+     * introducing a bean nothing else uses.
+     *
+     * <p><b>Not transactional itself</b> — it opens and closes the work's transaction
+     * explicitly, because recording a failure has to happen once that transaction
+     * is over.
+     *
+     * <p>The rollover holds {@code SELECT ... FOR UPDATE} on the target
+     * {@code academic_year} row for its whole duration, and InnoDB takes a lock on
+     * a referenced parent row when a child row is written. {@code
+     * annual_rollover_run} carries a foreign key to that year, so writing the
+     * failure from a separate transaction while the work's transaction still holds
+     * the parent blocks until the lock wait times out — a fifty-second stall
+     * ending in a second failure that buries the first. Writing it after the
+     * rollback has released the lock costs nothing and cannot contend.</p>
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     AnnualRolloverReportDto runFor(LocalDate today, String triggeredBy) {
         int targetStart = academicYearStartFor(today);
         String targetId = "ay_" + targetStart + "_" + (targetStart + 1);
@@ -93,7 +110,21 @@ class AnnualRolloverServiceImpl implements AnnualRolloverService {
         runRepository.start(runId, targetId, triggeredBy, Instant.now());
 
         try {
-            repository.lockAcademicYear(targetId);
+            return workTransaction.execute(status -> runWork(runId, targetId, previousId, targetStart, triggeredBy));
+        } catch (RuntimeException e) {
+            // The work's transaction has ended and released its locks by the time
+            // this runs, so the failure record is written without contention — and
+            // it survives, which is the whole point of the table (V30).
+            log.error("Annual rollover into {} failed", targetId, e);
+            runRepository.fail(runId, e.toString());
+            throw e;
+        }
+    }
+
+    /** The rollover proper. Runs inside {@code workTransaction}, so it is all-or-nothing. */
+    private AnnualRolloverReportDto runWork(String runId, String targetId, String previousId,
+                                             int targetStart, String triggeredBy) {
+        repository.lockAcademicYear(targetId);
 
             if (repository.hasSucceededFor(targetId)) {
                 runRepository.skip(runId);
@@ -149,14 +180,6 @@ class AnnualRolloverServiceImpl implements AnnualRolloverService {
                     accounts, classesCreated, skipped, inconsistent, promotedByGrade, emptyIntake,
                     emptyIntake.isEmpty() ? null
                             : "Awaiting roster import for " + String.join(", ", emptyIntake));
-        } catch (RuntimeException e) {
-            // The run row is written in its own transaction by the caller's
-            // rollback boundary, so record the failure before rethrowing —
-            // otherwise a failed rollover leaves no trace of having been tried.
-            log.error("Annual rollover into {} failed", targetId, e);
-            runRepository.fail(runId, e.toString());
-            throw e;
-        }
     }
 
     /**

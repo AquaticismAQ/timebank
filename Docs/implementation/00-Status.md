@@ -1170,3 +1170,15 @@ leaving an entry, which makes it the more important of the two halves that
 
 Not fixed here because it is unrelated to the doc pass that surfaced it, and
 bundling it in would make both harder to review.
+
+### 41.3 Annual rollover: failed runs now leave a trace (2026-09-20)
+
+Opened by the question of how the rollover recovers if the backend or the database goes away mid-run. The atomicity half was already sound — one transaction, no half-promoted school, now asserted by `AnnualRolloverFailureIT` against a before/after snapshot of every student. The evidence half was not: `fail()` was called inside the doomed transaction, so a `FAILED` row was written and immediately rolled back, and a failed turnover left nothing behind at all. `Docs/issues/110` has the detail.
+
+Fixed structurally rather than with an annotation: `runFor` is no longer `@Transactional` and opens the work's transaction through a `TransactionTemplate`, so the failure is recorded once that transaction has rolled back. The obvious alternative — `REQUIRES_NEW` on `fail()` — deadlocks, because the work holds `FOR UPDATE` on the `academic_year` row and InnoDB locks a referenced parent when a child row is written; it stalls for the full lock-wait and then fails a second time.
+
+Worth recording for the next person: reverting the annotation left the test **passing**, and reverting the structure made it fail after a 105-second timeout. The annotation was never the mechanism, and its Javadoc now says so instead of taking credit.
+
+One thing this pass got wrong first. The initial test built the service with `new`, which bypasses Spring's transactional proxy — every repository call auto-committed, graduated students stayed graduated, and it looked like proof that the rollover was not atomic. It was proof that a hand-built object has no transaction. Failure behaviour has to be driven through the container-managed bean. (The restructure incidentally removes that trap: the transaction is now explicit, so a hand-built instance gets one too.)
+
+**Open, and the reason the issue stays open:** a run that *succeeds against wrong inputs* still cannot be undone. There is no recorded before-state, and the idempotency guard blocks a corrective re-run, so recovery is a full database restore — which on a shared RDS instance means discarding everything else that happened since. Recording one before-row per student changed would turn that into a bounded reversal. Also open: no dry run, and a ShedLock window of 30 minutes that nobody has measured against a real roster.
