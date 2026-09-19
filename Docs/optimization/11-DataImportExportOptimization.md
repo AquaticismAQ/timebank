@@ -174,6 +174,40 @@ claimed job.
 **Rejected — new columns on `job`.** `params_json` exists for exactly this and is
 unused; four nullable columns that only one job kind ever populates is a worse schema.
 
+#### 2.6.1 Which filters a type has is part of the type, declared server-side
+
+The request above is a flat object with four nullable fields, and **nothing in that
+shape says which of them a given export accepts**. Left there, two things go wrong:
+
+- `POST /exports` would take a `classId` on Review History — an export with no class
+  dimension at all — and **silently ignore it**. A filter that is accepted and then
+  ignored is indistinguishable from one that works, which is precisely the failure
+  issue 093 §1 existed to remove.
+- the frontend would hard-code the filter set per type, so adding an export means
+  editing a list in two codebases, and the two are free to disagree.
+
+So the filter set is declared **once**, as part of the export type's definition:
+
+| Export type | Declared filters |
+| :--- | :--- |
+| `studentList`, `serviceRecords`, `studentCompletion`, `studentParticipation` | Academic Year, Grade, Class |
+| `projects` | Academic Year, Grade |
+| `reviewEfficiency` | Academic Year, Grade |
+| `reviewHistory` | Academic Year, Reviewer |
+
+`GET /exports/types` returns that catalogue — key, i18n title and description, and the
+filters the type declares — and the client renders only what it is told. `POST /exports`
+**rejects** a filter the type does not declare, with a field error, rather than
+accepting and dropping it.
+
+Hiding then needs no rule of its own: a card shows the filters its type declares, and a
+teacher's Grade filter is additionally narrowed to their bound grades (§4.3). Adding an
+eighth export type later changes one server-side definition, and the card appears with
+the right controls without a frontend edit.
+
+**This is a contract addition** (a new endpoint), not just an implementation detail —
+`APIContract.md` needs the same entry.
+
 **Rejected — query parameters on `POST /exports`.** The filters are part of what the
 job *is*, and the job row has to carry them anyway so the runner (a different thread,
 later) can see them. A body field and a stored field are then the same shape.
@@ -371,6 +405,8 @@ edit — it is a record of a past decision, not a live catalogue.
 Everything cross-cutting, landed against the two types phase 1 registered so it is
 provably exercised before four more types depend on it.
 
+- `GET /exports/types` (§2.6.1) plus `ExportTypeCatalog`, so the filter set is declared
+  once and the client stops hard-coding it. `APIContract.md` gains the entry.
 - `CreateExportRequest` grows `filters` (§2.6); `ExportServiceImpl` validates each id
   exists (a non-existent `academicYearId` is a 404, matching `/reports/*`'s established
   behaviour) and serializes to `params_json`.
@@ -505,6 +541,7 @@ date, because only a date goes into a migration plan — and, after expiry, **no
 | `backend/src/main/resources/db/migration/R__seed_permissions_and_roles.sql` | The seven rows + grants; remove `role_sysadmin`'s four import/export lines and `role_admin`'s `perm_exports_create` |
 | `…/dataexchange/web/ExportController.java` | Per-type `@PreAuthorize` |
 | `…/dataexchange/application/ExportServiceImpl.java` | New type set; filter validation + `params_json`; the `Self` refusal; §2.10's audit entry |
+| `…/dataexchange/application/ExportTypeCatalog.java` | New. §2.6.1's per-type filter declarations — the single source both `GET /exports/types` and the `POST` validation read |
 | `…/dataexchange/application/ExportJobRunner.java` | Loses every header literal and the five `writeXxx` report methods; becomes a dispatcher over per-type writers |
 | `…/dataexchange/application/ExportCsvWriter.java` | New (§2.8). Absorbs `csvLine` / `neutralizeFormulaInjection` / `FORMULA_TRIGGERS` unchanged |
 | `…/dataexchange/application/ExportScopeResolver.java` | New (§2.5) |
@@ -637,10 +674,14 @@ unmapped enum value into a column the design says holds one of three labels.
 Each with a recommendation and what it costs. None of these are invented answers — they
 are places the three design docs genuinely do not say.
 
+> **Resolved 2026-09-19: every recommendation below is accepted.** They are kept here
+> with their trade-offs rather than being folded silently into the phases, because the
+> cost of each choice is the part worth re-reading when one of them turns out wrong.
+
 | # | Question | Recommendation | Trade-off |
 | :--- | :--- | :--- | :--- |
 | Q-1 | Which `resource_type` does an export resolve its scope against? `teacher_scope_assignment` is keyed per resource type, and `12-DataExport.md` §4.4 says only "the data scope" | **`"students"`** — the export's subject is the student, so the student resource's binding is the honest one | Today all five managed types get identical grade sets (F-22), so the choice is unobservable. It becomes observable if per-resource bindings ever diverge, and then this decision is load-bearing and undocumented unless recorded now |
-| Q-2 | For a teacher, does `exports.reviewHistory` scope by *reviewer = self* only, or **also** by their student scope? §6.7 pins the Reviewer filter and says nothing about the students in those rows | **Reviewer-pinned only.** A teacher can only have decided on records that were in their scope at the time, so the extra filter is nearly always a no-op | The exception is not nearly-always: a teacher who moved grades has decisions on students now outside their scope. Reviewer-only shows them; adding the student filter hides a teacher's *own* past decisions from them, which reads as data loss. Prefer showing them |
+| Q-2 | For a teacher, does `exports.reviewHistory` scope by *reviewer = self* only, or **also** by their student scope? §6.7 pins the Reviewer filter and says nothing about the students in those rows | **Reviewer-pinned only** — *decided*, and note this is a scope predicate on the rows, not a filter control anyone sees. Adding the student scope on top would hide a teacher's *own* past decisions from them | The original reasoning here was that the extra predicate is "nearly always a no-op", which this column already disproved: a teacher who moves grades has decisions on students now outside their scope, so it is a no-op only until someone changes year group. The conclusion survives; the reason for it does not, and is corrected above |
 | Q-3 | How is `ESCALATE` exported? §6.7's `Decision` maps three values; the column has four (F-20) | Add **`Escalated`** as a fourth label, count it in §6.6's `Total Reviews`, and exclude it from all three rates | The three rates then do not sum to 100%, which invites "the numbers don't add up". The alternative — omitting escalations — hides real decisions from a file called Review History, which is worse. Document the non-summing explicitly in the card description |
 | Q-4 | May Student Completion's Academic Year be set to "All years"? §4.2 says it *defaults* to the current year and explains why an all-years rate is meaningless, but does not say the option is absent | **Remove the option for that one export.** §4.2's reasoning — "the denominator does not exist" — is an argument against the option existing, not just against it being the default | It makes one card's filter behave differently from the other six, which is a small inconsistency a user may read as a bug. Cheaper than producing a completion rate that means nothing |
 | Q-5 | Does the 15-day clock start at the first successful **commit**, or the first successful job **creation**? §6.1 says "the first successful historical import" | **First `COMMITTED` job.** A validated-but-abandoned job imported nothing, and starting an irreversible clock on an upload that was never confirmed is the opposite of §3's validate-then-confirm intent | An administrator who commits a tiny 3-row test file starts the real clock. The §6.2 warning must therefore say *any* successful import starts it, not "the real one" |
