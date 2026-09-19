@@ -350,35 +350,56 @@ gives two places to look for export, and the design says "two tabs", not "two pa
 Each phase ships on its own and leaves the system coherent. Phases 5 and 6 depend only
 on phase 1 and can be pulled forward if the window's deadline pressure demands it.
 
-### 3.0 Build status (2026-09-19)
+### 3.0 Build status (2026-09-20)
+
+**All six phases are built and verified on the local Docker stack.** Nothing is
+deployed to the shared test server yet.
 
 | Phase | State | Migration |
 | :--- | :--- | :--- |
-| 1 — permission split, two retirements | **Done**, backend and frontend | `V31` |
-| 2 — filters, student scope, column conventions | Not started — **the critical path** | — |
-| 3 — Student Completion, Student Participation | Not started (needs 2) | — |
-| 4 — Projects, Review Efficiency, Review History | Not started (needs 2) | — |
-| 5 — egress hygiene | **Done**: single-use links, output sweeping, and the audit entry on export creation (F-9) | `V33` |
-| 6 — the 15-day historical-import window | **Done**, backend and frontend | `V32` |
+| 1 — permission split, two retirements | Done, backend and frontend | `V31` |
+| 2 — filters, student scope, column conventions, shared CSV writer | Done | — |
+| 3 — Student Completion, Student Participation | Done | — |
+| 4 — Projects, Review Efficiency, Review History | Done | — |
+| 5 — egress hygiene, including F-9's audit entry | Done | `V33` |
+| 6 — the 15-day historical-import window | Done | `V32` |
 
-Phases 1, 5 and 6 were built in parallel and merged in migration order. Three
-things are worth carrying forward:
+Also done, from §2.12: Import and Export are separate tabs, each hidden without
+its own permission, and every other tab is gated too — granting teachers export
+made System Admin a page they open routinely, and it used to land them on a Users
+tab requiring a permission they lack.
 
-- **Phase 2 is now the only thing standing between the permissions and the
-  files.** All seven export permissions exist and the UI gates on them, but only
-  `studentList` and `serviceRecords` produce a file; the other five cards say
-  "not yet available". That is honest but it is a five-export regression against
-  what worked before, and phase 2 is what unblocks 3 and 4.
-- **`ExportJobRunner` still dispatches on the pre-split key `students`.**
-  `ExportServiceImpl` maps `studentList` → `students` for the stored
-  `resourceType` as a one-line stopgap; phase 2 owns deleting it. Until then a
-  `studentList` job reports `resourceType: "students"` and downloads as
-  `students.csv`.
-- **Parallel work hid a cross-phase break that neither branch could see.** Phase
-  5's retention tests exported `participation`, which phase 1 retired. Both
-  branches were green alone and went red the moment they met. Worth remembering
-  the next time this plan's phases are split across workers: a phase that passes
-  in isolation has not been tested against its siblings.
+**Verification.** 346 unit tests, 60 integration tests against real MySQL. All
+seven exports produced and inspected against the seeded roster through the
+browser. `Docs/issues/107` can be closed: no database ids, `No.` leads, Student
+Number precedes Student Name, and a 672-row Service Records file contains no
+occurrence of the string `null`, with coins reading `1` and `3.5` rather than
+`100` and `350`.
+
+**Four defects that only real data exposed**, each worth remembering because the
+test suite was green in every case:
+
+- **MySQL's `AVG()` is DECIMAL**, so Review Efficiency's `(Double)` cast threw at
+  run time. The integration test passed because its fixture left `submitted_at`
+  null, which made the average null and the cast unreachable — a fixture that
+  omits a column can make a whole column's arithmetic untested.
+- **An empty student set expands to `in ()`**, a syntax error. Reachable through
+  Projects Report, where a grade filter matching no students still has projects
+  to list — so the fix is zero participation, not zero rows.
+- **`grade.code` is the id again** (`grade_8`), so `Bound Grades` printed ids in
+  a column read by a person while the same information elsewhere read `Grade 8`.
+- **The projects test passed vacuously.** An integration schema contains no
+  projects, so a header-only assertion held while the row mapper was broken.
+
+**Two carried forward, not done:**
+
+- **R-4's session decision.** Permission codes are serialized into the session at
+  login, so `sysadmin` accounts that are logged in keep import/export until their
+  session ends. Revoking affected sessions versus documenting "re-login required"
+  is a roll-out call.
+- **Q-11's tense mismatch is unaddressed in the UI.** A past-year `studentList`
+  row pairs a derived historical `Grade` with a present-tense `Class`. The card
+  text should say so; it currently does not.
 
 ### 3.1 Phase 1 — The permission split, and the two retirements
 
