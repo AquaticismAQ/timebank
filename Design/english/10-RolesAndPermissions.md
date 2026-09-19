@@ -269,10 +269,35 @@ The two columns point at different moments, and each is right:
 - **The Grade column** answers "in the year this report covers, which grade was
   this student in" — a **historical fact**.
 
-The consequence is that a teacher exports *the history of the students they
-currently teach*, rather than *the history of that grade*. For a year-group
-responsibility that is the wanted behaviour: the teacher cares about how the
-students in front of them got here.
+### 7.2.1 Not every resource filters on the student's live grade
+
+The sentence above — "the students who are in Grade 9 today" — holds only for
+resources whose **subject is the student**.
+
+Grade is denormalised onto six tables, and scope filtering reads **each table's
+own column** (`13-AnnualRollover.md` §3.4). So the same teacher sees different
+populations on different screens:
+
+| Subject | Filtered on | What the teacher sees |
+| :--- | :--- | :--- |
+| Students, accounts | the student's / account's **live** grade | the students I teach today |
+| Service records, cases, proposals | the row's own **grade snapshot** | what happened inside my grade |
+
+The difference shows up the instant promotion runs: a student who has just come
+up from grade 8 carries a grade-8 snapshot on last year's records, so the **Grade
+9 teacher cannot see them**; conversely a student who has moved up to grade 10
+still carries grade-9 snapshots on last year's records, so the Grade 9 teacher
+**still can**.
+
+Both behaviours are defensible: filtering the review queue by snapshot is right —
+you review what happened in your grade — while "how are my current students
+doing" obviously wants filtering by student.
+
+**Exports therefore scope by the student** (`12-DataExport.md` §4.4): an export
+is a report *about students*, the rows are decided by the student, and that
+student's data is not trimmed because a given year's records hang off a different
+grade. Record-subject operational screens such as the review queue keep snapshot
+filtering and are unaffected.
 
 **The stage boundary also bounds how far back anyone can look.** Grade 8 to
 grade 9 is graduation plus fresh intake (`13-AnnualRollover.md` §2.1), so a

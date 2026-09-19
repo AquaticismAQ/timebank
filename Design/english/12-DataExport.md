@@ -148,6 +148,29 @@ receives Grade 9 only. A filter can never widen scope — only narrow within it.
 cannot see. Offering an option that returns nothing when selected just reads as a
 broken system.
 
+### 4.4 Exports always scope by the **student**
+
+Grade is denormalised onto service records, cases and proposals, and on those
+screens the system's scope filter reads **the row's own grade snapshot** rather
+than the student's live grade (`10-RolesAndPermissions.md` §7.2.1).
+
+**Exports do not inherit that filtering.** An export is a report *about
+students*:
+
+1. first resolve the **set of students** from the data scope — a teacher gets the
+   current students of their bound grades, an SDC Admin gets all;
+2. then take those students' data for the selected academic year, **regardless of
+   which grade those records were filed under at the time**.
+
+If snapshot filtering were inherited, a student who has just come up into grade 9
+would have their grade-8 hours vanish from a Grade 9 teacher's export while the
+student's own row remained in the table — the student present, their data absent,
+in the same file. That is not a narrower scope; it is a self-contradicting report.
+
+**Record-subject** operational screens such as the review queue are unaffected
+and keep snapshot filtering: there, "what happened inside my grade" is the
+correct reading.
+
 ---
 
 ## 5. Academic years, grades and graduated students

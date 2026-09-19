@@ -142,8 +142,40 @@ Nobody is watching, so:
   writes nothing a second time.
 - **A failure writes nothing partially and produces a failure report.** Failure
   is not silent.
-- **The process advances grade and status only** — it does not touch service
-  records, accounts or review history.
+- **The process rewrites "current state" only, never historical events** — what
+  follows and what does not is §3.4.
+
+### 3.4 Which grade snapshots follow, and which do not
+
+Grade and class **are not stored only on the student row**. They are denormalised
+onto six tables, and scope filtering reads **each table's own column**, not the
+student's live grade (`ServiceRecordScopeFields`, `CaseScopeFields`,
+`AccountScopeFields` and `ProposalScopeFields` all return `root.get("gradeId")`).
+
+So promotion has to answer a question first: do those snapshots follow? The
+answer splits along **current state** versus **historical event**:
+
+| Table | Nature | At promotion |
+| :--- | :--- | :--- |
+| `student` | current state | **rewritten** |
+| `account` | current state (one row per student, holds the balance) | **rewritten** |
+| `service_record` | historical event | left alone |
+| `case_record` | historical event | left alone |
+| `event_proposal` | historical event | left alone |
+| `class` | structure, per academic year | new rows for the year, §4 |
+| `grade_*_summary` | already keyed by (grade, year) | left alone |
+
+**`account` must follow, and this is the easiest one to miss.** A time-coin
+account is not a historical record; it is a continuing piece of current state. If
+its `grade_id` stays on the old grade, then the moment promotion completes a
+teacher loses access to their own students' accounts — the data is not gone, it
+has simply fallen outside their scope, and what it looks like from the outside is
+"the student's account has disappeared".
+
+**Historical events do not follow, because their grade is the fact they record.**
+A service record created in grade 8 should carry grade 8; rewriting it to grade 9
+falsifies what was true when it happened, and would make previous years' by-grade
+figures change retroactively.
 
 ---
 
@@ -241,6 +273,7 @@ itself without help:
 | Outcome | Ran / skipped because already run / failed |
 | Promoted | Broken down by grade |
 | Graduated | Stage 1 and stage 2 listed separately |
+| Account snapshots updated | `account` rows rewritten alongside the grade, §3.4 |
 | Skipped, and why | Not active, no class, class suffix unmatched |
 | Empty-grade notice | Grades 6 and 9 awaiting roster import |
 | Consistency check | Whether §5's derived grade matches the stored grade |
