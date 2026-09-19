@@ -63,7 +63,7 @@ public class ServiceRecordExportRepository {
      * present-tense.</p>
      */
     public List<ExportRow> page(String afterId, int limit, Set<String> studentIds,
-                                 Integer yearStart) {
+                                 LocalDate yearFrom, LocalDate yearTo) {
         StringBuilder sql = new StringBuilder("""
                 select sr.id, sr.student_id, s.student_number, s.display_name,
                        sr.grade_id, sr.class_id, sr.service_date,
@@ -84,13 +84,14 @@ public class ServiceRecordExportRepository {
             sql.append(" and sr.student_id in (:studentIds)");
             params.addValue("studentIds", studentIds);
         }
-        if (yearStart != null) {
-            // The academic year runs 1 September to 31 August, so a "year" is not
-            // a calendar year and a BETWEEN on calendar dates would put an
-            // autumn record in the wrong one.
+        if (yearFrom != null && yearTo != null) {
+            // The window comes from the academic_year row, not from arithmetic on
+            // the year number: the boundary is configurable, and a year keeps the
+            // dates it was created with, so recomputing here would drift the moment
+            // either changed.
             sql.append(" and sr.service_date >= :yearFrom and sr.service_date <= :yearTo");
-            params.addValue("yearFrom", LocalDate.of(yearStart, 9, 1));
-            params.addValue("yearTo", LocalDate.of(yearStart + 1, 8, 31));
+            params.addValue("yearFrom", yearFrom);
+            params.addValue("yearTo", yearTo);
         }
         sql.append(" order by sr.id asc limit :limit");
 

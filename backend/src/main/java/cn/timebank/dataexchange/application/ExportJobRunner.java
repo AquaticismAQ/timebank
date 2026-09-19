@@ -187,7 +187,7 @@ class ExportJobRunner {
         List<ServiceRecordExportRepository.ExportRow> chunk;
         do {
             chunk = serviceRecordExportRepository.page(afterId, CHUNK_SIZE, studentIds,
-                    scope.selectedYearIndex());
+                    scope.yearFrom(), scope.yearTo());
             for (ServiceRecordExportRepository.ExportRow row : chunk) {
                 afterId = row.id();
                 writer.row(row.studentNumber(), row.studentName(),
@@ -226,16 +226,27 @@ class ExportJobRunner {
             return 0;
         }
         int yearStart = scope.hasYear() ? scope.selectedYearIndex() : scope.currentYearIndex();
-        var required = studentReportRepository.requiredMinutesFor(yearStart).orElse(null);
+        // §4.2: this report is always one year. When the operator picked one we
+        // have its stored window; when they did not, the current year's window is
+        // read here rather than computed, for the same reason.
+        var window = scope.hasYearWindow()
+                ? new java.time.LocalDate[]{scope.yearFrom(), scope.yearTo()}
+                : scopeRepository.academicYearWindowFor(yearStart)
+                        .map(w -> new java.time.LocalDate[]{w.start(), w.end()})
+                        .orElse(new java.time.LocalDate[]{null, null});
+        java.time.LocalDate completionFrom = window[0];
+        java.time.LocalDate completionTo = window[1];
+        var required = studentReportRepository.requiredMinutesFor(completionTo).orElse(null);
 
         String afterId = null;
         List<StudentReportExportRepository.CompletionRow> chunk;
         do {
-            chunk = studentReportRepository.completionPage(afterId, CHUNK_SIZE, studentIds, yearStart);
+            chunk = studentReportRepository.completionPage(afterId, CHUNK_SIZE, studentIds,
+                    completionFrom, completionTo);
             for (var row : chunk) {
                 afterId = row.studentId();
                 ExportScope yearScope = new ExportScope(scope.restriction(), yearStart,
-                        scope.currentYearIndex(), scope.reviewerId());
+                        scope.currentYearIndex(), scope.reviewerId(), scope.yearFrom(), scope.yearTo());
                 GradeCell grade = gradeCell(row.gradeId(), row.enrollmentAcademicYearId(),
                         row.graduationYear(), yearScope, labels);
                 if (grade.excluded()) {
@@ -282,7 +293,7 @@ class ExportJobRunner {
         List<StudentReportExportRepository.ParticipationRow> chunk;
         do {
             chunk = studentReportRepository.participationPage(afterId, CHUNK_SIZE, studentIds,
-                    scope.selectedYearIndex());
+                    scope.yearFrom(), scope.yearTo());
             for (var row : chunk) {
                 afterId = row.studentId();
                 GradeCell grade = gradeCell(row.gradeId(), row.enrollmentAcademicYearId(),
@@ -314,7 +325,7 @@ class ExportJobRunner {
         List<ProjectReviewExportRepository.ProjectRow> chunk;
         do {
             chunk = projectReviewRepository.projectsPage(afterId, CHUNK_SIZE, studentIds,
-                    scope.selectedYearIndex(), gradeFilter);
+                    scope.yearFrom(), scope.yearTo(), gradeFilter);
             for (var row : chunk) {
                 afterId = row.id();
                 writer.row(row.title(), row.summary(), row.category(), row.organization(),
@@ -350,7 +361,7 @@ class ExportJobRunner {
         if (studentIds != null && studentIds.isEmpty()) {
             return 0;
         }
-        for (var row : projectReviewRepository.reviewerEfficiency(scope.selectedYearIndex(), studentIds)) {
+        for (var row : projectReviewRepository.reviewerEfficiency(scope.yearFrom(), scope.yearTo(), studentIds)) {
             writer.row(row.reviewerName(), roleLabel(row.reviewerRole()), row.boundGrades(),
                     row.total(), row.approved(), row.rejected(), row.returned(),
                     row.averageReviewMinutes() == null ? null
@@ -378,7 +389,7 @@ class ExportJobRunner {
         List<ProjectReviewExportRepository.ReviewHistoryRow> chunk;
         do {
             chunk = projectReviewRepository.reviewHistoryPage(afterId, CHUNK_SIZE,
-                    scope.selectedYearIndex(), scope.reviewerId(), studentIds);
+                    scope.yearFrom(), scope.yearTo(), scope.reviewerId(), studentIds);
             for (var row : chunk) {
                 afterId = row.id();
                 writer.row(row.reviewerName(), roleLabel(row.reviewerRole()), row.boundGrades(),

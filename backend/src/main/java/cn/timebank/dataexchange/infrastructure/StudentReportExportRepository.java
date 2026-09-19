@@ -58,7 +58,8 @@ public class StudentReportExportRepository {
                                     long approvedMinutes, long creditedUnits) {
     }
 
-    public List<CompletionRow> completionPage(String afterId, int limit, Set<String> studentIds, Integer yearStart) {
+    public List<CompletionRow> completionPage(String afterId, int limit, Set<String> studentIds,
+                                              LocalDate yearFrom, LocalDate yearTo) {
         StringBuilder sql = new StringBuilder("""
                 select s.id, s.student_number, s.display_name, s.grade_id, s.class_id,
                        s.enrollment_academic_year_id, s.graduation_year,
@@ -74,7 +75,7 @@ public class StudentReportExportRepository {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("afterId", afterId == null ? "" : afterId)
                 .addValue("limit", limit);
-        appendYearPredicate(sql, params, yearStart, "sr");
+        appendYearPredicate(sql, params, yearFrom, yearTo, "sr");
         sql.append(" where s.id > :afterId");
         appendStudentPredicate(sql, params, studentIds, "s");
         sql.append(" group by s.id order by s.id asc limit :limit");
@@ -99,7 +100,7 @@ public class StudentReportExportRepository {
      * would inflate the very gap this report exists to show.</p>
      */
     public List<ParticipationRow> participationPage(String afterId, int limit, Set<String> studentIds,
-                                                     Integer yearStart) {
+                                                     LocalDate yearFrom, LocalDate yearTo) {
         StringBuilder sql = new StringBuilder("""
                 select s.id, s.student_number, s.display_name, s.grade_id, s.class_id,
                        s.enrollment_academic_year_id, s.graduation_year,
@@ -114,20 +115,20 @@ public class StudentReportExportRepository {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("afterId", afterId == null ? "" : afterId)
                 .addValue("limit", limit);
-        appendYearPredicate(sql, params, yearStart, "sr");
+        appendYearPredicate(sql, params, yearFrom, yearTo, "sr");
         sql.append(") as participated_count,\n"
                 + "                       (select group_concat(distinct p.title order by p.title separator ', ')\n"
                 + "                          from service_record sr join project p on p.id = sr.project_id\n"
                 + "                         where sr.student_id = s.id and sr.status = 'APPROVED'\n");
-        appendYearPredicate(sql, params, yearStart, "sr");
+        appendYearPredicate(sql, params, yearFrom, yearTo, "sr");
         sql.append(") as participated_names,\n"
                 + "                       (select coalesce(sum(sr.duration_minutes), 0) from service_record sr\n"
                 + "                         where sr.student_id = s.id and sr.status = 'APPROVED'\n");
-        appendYearPredicate(sql, params, yearStart, "sr");
+        appendYearPredicate(sql, params, yearFrom, yearTo, "sr");
         sql.append(") as approved_minutes,\n"
                 + "                       (select coalesce(sum(sr.credited_units), 0) from service_record sr\n"
                 + "                         where sr.student_id = s.id and sr.status = 'APPROVED'\n");
-        appendYearPredicate(sql, params, yearStart, "sr");
+        appendYearPredicate(sql, params, yearFrom, yearTo, "sr");
         sql.append(") as credited_units\n"
                 + "                from student s\n"
                 + "                where s.id > :afterId\n");
@@ -152,14 +153,17 @@ public class StudentReportExportRepository {
      * actually held to. Resolved by {@code effective_from}, taking the latest
      * published version that had started by the end of the year in question.</p>
      */
-    public Optional<RequiredMinutes> requiredMinutesFor(int yearStart) {
+    public Optional<RequiredMinutes> requiredMinutesFor(LocalDate yearEnd) {
+        if (yearEnd == null) {
+            return Optional.empty();
+        }
         List<RequiredMinutes> rows = jdbcTemplate.query("""
                 select middle_annual_required_minutes, high_annual_required_minutes
                 from rule_version
                 where status = 'PUBLISHED' and effective_from <= :yearEnd
                 order by effective_from desc, published_at desc
                 limit 1
-                """, new MapSqlParameterSource("yearEnd", LocalDate.of(yearStart + 1, 8, 31)),
+                """, new MapSqlParameterSource("yearEnd", yearEnd),
                 (rs, i) -> new RequiredMinutes(rs.getInt("middle_annual_required_minutes"),
                         rs.getInt("high_annual_required_minutes")));
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
@@ -190,12 +194,12 @@ public class StudentReportExportRepository {
      * record in the wrong one.
      */
     private void appendYearPredicate(StringBuilder sql, MapSqlParameterSource params,
-                                      Integer yearStart, String alias) {
-        if (yearStart != null) {
+                                      LocalDate yearFrom, LocalDate yearTo, String alias) {
+        if (yearFrom != null && yearTo != null) {
             sql.append(" and ").append(alias).append(".service_date >= :yearFrom")
                .append(" and ").append(alias).append(".service_date <= :yearTo");
-            params.addValue("yearFrom", LocalDate.of(yearStart, 9, 1));
-            params.addValue("yearTo", LocalDate.of(yearStart + 1, 8, 31));
+            params.addValue("yearFrom", yearFrom);
+            params.addValue("yearTo", yearTo);
         }
     }
 }

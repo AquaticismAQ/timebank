@@ -41,6 +41,43 @@ public class ExportScopeRepository {
         return years.isEmpty() ? java.time.LocalDate.now().getYear() : years.get(0);
     }
 
+    /**
+     * One academic year's real extent, as stored on its row.
+     *
+     * <p>Read rather than computed from the configured boundary
+     * ({@code AcademicYearCalendar}). That setting decides what <em>new</em> years
+     * look like; a year students already have records in keeps the dates it was
+     * created with. Recomputing here would make a year filter disagree with the
+     * year row the moment the setting changed — or the moment anyone edited a
+     * year's dates by hand — and the export would silently include or drop a
+     * September.</p>
+     */
+    public Optional<AcademicYearWindow> academicYearWindow(String academicYearId) {
+        List<AcademicYearWindow> rows = jdbcTemplate.query(
+                "select year(start_date) as start_year, start_date, end_date from academic_year where id = :id",
+                new MapSqlParameterSource("id", academicYearId),
+                (rs, i) -> new AcademicYearWindow(rs.getInt("start_year"),
+                        rs.getObject("start_date", java.time.LocalDate.class),
+                        rs.getObject("end_date", java.time.LocalDate.class)));
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    /** A year's identity (the calendar year it starts in) together with its actual first and last day. */
+    public record AcademicYearWindow(int startYear, java.time.LocalDate start, java.time.LocalDate end) {
+    }
+
+    /** The stored window of the year that begins in {@code startYear}, for callers that know only the number. */
+    public Optional<AcademicYearWindow> academicYearWindowFor(int startYear) {
+        List<AcademicYearWindow> rows = jdbcTemplate.query(
+                "select year(start_date) as start_year, start_date, end_date from academic_year"
+                        + " where year(start_date) = :y order by start_date limit 1",
+                new MapSqlParameterSource("y", startYear),
+                (rs, i) -> new AcademicYearWindow(rs.getInt("start_year"),
+                        rs.getObject("start_date", java.time.LocalDate.class),
+                        rs.getObject("end_date", java.time.LocalDate.class)));
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
     public Optional<Integer> academicYearStartYear(String academicYearId) {
         List<Integer> years = jdbcTemplate.queryForList(
                 "select year(start_date) from academic_year where id = :id",

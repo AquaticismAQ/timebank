@@ -47,7 +47,8 @@ class ExportScopeResolver {
      */
     ExportScope resolve(TimeBankPrincipal principal, ExportFilters filters) {
         int currentYearIndex = scopeRepository.currentAcademicYearStartYear();
-        Integer selectedYearIndex = resolveSelectedYear(filters.academicYearId(), currentYearIndex);
+        ExportScopeRepository.AcademicYearWindow selectedYear = resolveSelectedYear(filters.academicYearId());
+        Integer selectedYearIndex = selectedYear == null ? null : selectedYear.startYear();
 
         ScopeDescriptor descriptor =
                 dataScopeResolver.resolve(principal, "students", principal.hasSchoolWideVisibility());
@@ -85,7 +86,9 @@ class ExportScopeResolver {
         ExportScope.Restriction restriction =
                 new ExportScope.Restriction(boundGradeIds, boundClassIds, gradeFilter, classFilter);
         return new ExportScope(restriction.isEmpty() ? null : restriction,
-                selectedYearIndex, currentYearIndex, resolveReviewer(principal, filters.reviewerId()));
+                selectedYearIndex, currentYearIndex, resolveReviewer(principal, filters.reviewerId()),
+                selectedYear == null ? null : selectedYear.start(),
+                selectedYear == null ? null : selectedYear.end());
     }
 
     /**
@@ -154,11 +157,11 @@ class ExportScopeResolver {
      * year that matches no academic year is a 404, matching {@code /reports/*}
      * rather than silently falling back.</p>
      */
-    private Integer resolveSelectedYear(String academicYearId, int currentYearIndex) {
+    private ExportScopeRepository.AcademicYearWindow resolveSelectedYear(String academicYearId) {
         if (academicYearId == null) {
             return null;
         }
-        return scopeRepository.academicYearStartYear(academicYearId)
+        return scopeRepository.academicYearWindow(academicYearId)
                 .orElseThrow(() -> ApiException.notFound("Academic year not found: " + academicYearId));
     }
 }

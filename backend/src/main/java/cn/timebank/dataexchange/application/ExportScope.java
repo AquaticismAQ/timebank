@@ -1,5 +1,6 @@
 package cn.timebank.dataexchange.application;
 
+import java.time.LocalDate;
 import java.util.Set;
 
 /**
@@ -27,8 +28,14 @@ import java.util.Set;
  *                          already come, and only their present grade is stored
  * @param reviewerId        Review History's reviewer filter, already forced to the
  *                          caller for a teacher (§6.7); {@code null} means all
+ * @param yearFrom          first day of the selected academic year, read from its
+ *                          {@code academic_year} row rather than computed from the
+ *                          configured boundary
+ * @param yearTo            last day of the same year, same source; both {@code null}
+ *                          when no year is selected
  */
-record ExportScope(Restriction restriction, Integer selectedYearIndex, int currentYearIndex, String reviewerId) {
+record ExportScope(Restriction restriction, Integer selectedYearIndex, int currentYearIndex, String reviewerId,
+                    LocalDate yearFrom, LocalDate yearTo) {
 
     /**
      * How the student set is narrowed.
@@ -53,5 +60,18 @@ record ExportScope(Restriction restriction, Integer selectedYearIndex, int curre
 
     boolean hasYear() {
         return selectedYearIndex != null;
+    }
+
+    /**
+     * True when a real date window is known for the selected year.
+     *
+     * <p>Deliberately separate from {@link #hasYear()}, because the two can
+     * differ: a job row written before the window was recorded carries a year
+     * index and no dates. A query must then filter on nothing rather than invent a
+     * boundary — a guessed 1 September would be a confident wrong answer for a
+     * school whose year runs to different dates.</p>
+     */
+    boolean hasYearWindow() {
+        return yearFrom != null && yearTo != null;
     }
 }

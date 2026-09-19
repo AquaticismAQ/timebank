@@ -42,7 +42,10 @@ repo/
     │                             numbered 0N-<slug>.md, largest number = most recent
     ├── issues/                    One doc per real defect found via live-verification or reported directly by
     │                             a maintainer, numbered 0NN-<slug>.md sequentially, never renumbered/reused
-    ├── operations/                Deployment environment, runbooks, version management for the live system
+    ├── operations/                Deployment environment, runbooks, version management for the live system.
+    │                             Configuration.md is the reference for every runtime setting the server reads
+    │                             (/etc/timebank-backend.env); DeploymentEnv.md covers the workstation's own
+    │                             ~/.timebank.env — the two are different files with overlapping names
     ├── backlog/                   Work that is specified but not built and has no target release,
     │                             numbered 0N-<Slug>.md — see §2.9
     └── cost-estimation/           Deployment cost estimates (DeploymentCostEstimate.md + _CN.md)

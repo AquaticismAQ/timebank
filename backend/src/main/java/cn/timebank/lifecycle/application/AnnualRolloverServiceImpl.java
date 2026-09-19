@@ -51,13 +51,16 @@ class AnnualRolloverServiceImpl implements AnnualRolloverService {
     private final AnnualRolloverRepository repository;
     private final AnnualRolloverRunRepository runRepository;
     private final AuditService auditService;
+    private final AcademicYearCalendar calendar;
 
     AnnualRolloverServiceImpl(AnnualRolloverRepository repository,
                                AnnualRolloverRunRepository runRepository,
-                               AuditService auditService) {
+                               AuditService auditService,
+                               AcademicYearCalendar calendar) {
         this.repository = repository;
         this.runRepository = runRepository;
         this.auditService = auditService;
+        this.calendar = calendar;
     }
 
     @Override
@@ -83,7 +86,8 @@ class AnnualRolloverServiceImpl implements AnnualRolloverService {
         // carries a foreign key to it, and a deployment seeded two years ago has
         // no row for the year now starting. Creating it is therefore the first
         // step, not part of the work the run row is recording.
-        repository.ensureAcademicYear(targetId, targetStart);
+        repository.ensureAcademicYear(targetId, targetStart,
+                calendar.startOf(targetStart), calendar.endOf(targetStart));
 
         String runId = OpaqueIds.generate("aro");
         runRepository.start(runId, targetId, triggeredBy, Instant.now());
@@ -156,12 +160,13 @@ class AnnualRolloverServiceImpl implements AnnualRolloverService {
     }
 
     /**
-     * Academic years start on 1 September, so anything from September onward
-     * belongs to the year named for the calendar year it starts in — the same
-     * rule {@code R__seed_base_data.sql} uses, kept identical deliberately.
+     * Which academic year a date belongs to, from the configured boundary
+     * ({@link AcademicYearCalendar}) rather than a hardcoded 1 September. The
+     * seed bootstraps its first two years on the default, so an unconfigured
+     * deployment behaves exactly as before.
      */
     private int academicYearStartFor(LocalDate today) {
-        return today.getMonthValue() >= 9 ? today.getYear() : today.getYear() - 1;
+        return calendar.academicYearStartFor(today);
     }
 
     /**

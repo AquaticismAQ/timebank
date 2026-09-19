@@ -69,7 +69,7 @@ public class ProjectReviewExportRepository {
      * took part.</p>
      */
     public List<ProjectRow> projectsPage(String afterId, int limit, Set<String> studentIds,
-                                          Integer yearStart, String gradeFilter) {
+                                          LocalDate yearFrom, LocalDate yearTo, String gradeFilter) {
         StringBuilder sql = new StringBuilder("""
                 select p.id, p.title, p.summary, p.location, p.status, p.start_at, p.end_at,
                        p.recognized_minutes, p.capacity, p.eligible_grade_ids,
@@ -112,11 +112,13 @@ public class ProjectReviewExportRepository {
                 + "                  left join organization o on o.id = p.organization_id\n"
                 + "                  left join user u on u.id = p.owner_id\n"
                 + "                where p.id > :afterId\n");
-        if (yearStart != null) {
+        if (yearFrom != null && yearTo != null) {
             // Scheduled inside the year, matching /reports/top-projects' own rule.
+            // The window is the stored one; `yearTo` is the year's last day, so the
+            // exclusive upper bound is the start of the day after it.
             sql.append(" and p.start_at >= :yearFrom and p.start_at < :yearTo");
-            params.addValue("yearFrom", LocalDate.of(yearStart, 9, 1).atStartOfDay());
-            params.addValue("yearTo", LocalDate.of(yearStart + 1, 9, 1).atStartOfDay());
+            params.addValue("yearFrom", yearFrom.atStartOfDay());
+            params.addValue("yearTo", yearTo.plusDays(1).atStartOfDay());
         }
         if (gradeFilter != null) {
             // eligible_grade_ids is a JSON array, so this is a JSON membership
@@ -155,7 +157,7 @@ public class ProjectReviewExportRepository {
      * a file called Review History, which is worse — so the card text says the
      * rates do not add up rather than leaving a reader to discover it.</p>
      */
-    public List<ReviewerRow> reviewerEfficiency(Integer yearStart, Set<String> studentIds) {
+    public List<ReviewerRow> reviewerEfficiency(LocalDate yearFrom, LocalDate yearTo, Set<String> studentIds) {
         StringBuilder sql = new StringBuilder("""
                 select rd.reviewer_id,
                        u.display_name as reviewer_name,
@@ -180,7 +182,7 @@ public class ProjectReviewExportRepository {
                 where 1 = 1
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource();
-        appendDecisionYear(sql, params, yearStart);
+        appendDecisionYear(sql, params, yearFrom, yearTo);
         appendStudentFilter(sql, params, studentIds, "sr.student_id");
         sql.append(" group by rd.reviewer_id, u.display_name, r.code order by total desc, u.display_name asc");
 
@@ -199,7 +201,8 @@ public class ProjectReviewExportRepository {
      * lived only in a dropdown would be bypassed by anyone willing to edit a
      * request body.</p>
      */
-    public List<ReviewHistoryRow> reviewHistoryPage(String afterId, int limit, Integer yearStart,
+    public List<ReviewHistoryRow> reviewHistoryPage(String afterId, int limit,
+                                                     LocalDate yearFrom, LocalDate yearTo,
                                                      String reviewerId, Set<String> studentIds) {
         StringBuilder sql = new StringBuilder("""
                 select rd.id, rd.decision, rd.created_at, rd.reason_code, rd.comment,
@@ -227,7 +230,7 @@ public class ProjectReviewExportRepository {
             sql.append(" and rd.reviewer_id = :reviewerId");
             params.addValue("reviewerId", reviewerId);
         }
-        appendDecisionYear(sql, params, yearStart);
+        appendDecisionYear(sql, params, yearFrom, yearTo);
         appendStudentFilter(sql, params, studentIds, "sr.student_id");
         sql.append(" order by rd.id asc limit :limit");
 
@@ -243,11 +246,12 @@ public class ProjectReviewExportRepository {
     }
 
     /** A decision belongs to the year it was <em>taken</em> in, not the year the service happened (§4). */
-    private void appendDecisionYear(StringBuilder sql, MapSqlParameterSource params, Integer yearStart) {
-        if (yearStart != null) {
+    private void appendDecisionYear(StringBuilder sql, MapSqlParameterSource params,
+                                     LocalDate yearFrom, LocalDate yearTo) {
+        if (yearFrom != null && yearTo != null) {
             sql.append(" and rd.created_at >= :decisionFrom and rd.created_at < :decisionTo");
-            params.addValue("decisionFrom", LocalDate.of(yearStart, 9, 1).atStartOfDay());
-            params.addValue("decisionTo", LocalDate.of(yearStart + 1, 9, 1).atStartOfDay());
+            params.addValue("decisionFrom", yearFrom.atStartOfDay());
+            params.addValue("decisionTo", yearTo.plusDays(1).atStartOfDay());
         }
     }
 

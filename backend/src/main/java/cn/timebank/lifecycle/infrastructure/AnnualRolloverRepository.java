@@ -41,16 +41,20 @@ public class AnnualRolloverRepository {
      * Creates the target academic year if it does not exist. A deployment seeded
      * two years ago has no row for the year now starting, and the rollover
      * cannot promote into a year that is not there.
+     *
+     * <p>The dates are passed in rather than computed here: the boundary is
+     * configurable ({@code AcademicYearCalendar}), and a second copy of the
+     * arithmetic in this class is exactly how the two would come to disagree.</p>
      */
-    public void ensureAcademicYear(String yearId, int startYear) {
+    public void ensureAcademicYear(String yearId, int startYear, LocalDate start, LocalDate end) {
         jdbcTemplate.update("""
                 insert ignore into academic_year (id, code, start_date, end_date, is_current, created_at, updated_at)
                 values (:id, :code, :start, :end, 0, now(3), now(3))
                 """, new MapSqlParameterSource()
                 .addValue("id", yearId)
                 .addValue("code", startYear + "-" + (startYear + 1))
-                .addValue("start", LocalDate.of(startYear, 9, 1))
-                .addValue("end", LocalDate.of(startYear + 1, 8, 31)));
+                .addValue("start", start)
+                .addValue("end", end));
     }
 
     /**

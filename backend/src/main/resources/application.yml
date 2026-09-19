@@ -164,6 +164,24 @@ timebank:
         # runs, oldest expiry first. A whole school's import lapsing at once is
         # the case this exists for.
         batch-limit: ${TIMEBANK_ACTIVATION_EXPIRY_SWEEP_BATCH_LIMIT:500}
+  lifecycle:
+    # Design/*/13-AnnualRollover.md §2 — the day a school year turns over, and so
+    # the day promotion and graduation run. `MM-DD`, default 1 September.
+    #
+    # 1 September is a convention rather than a law, and this was hardcoded in
+    # three places before. It now decides two things and only two: which academic
+    # year "today" falls in, and the start/end dates of academic years the
+    # rollover creates. Existing academic_year rows keep the dates they were
+    # created with, and every query that scopes data to a year reads those stored
+    # dates — so changing this never reinterprets a year students already have
+    # records in. R__seed_base_data.sql bootstraps its first two years at 1
+    # September regardless (a repeatable SQL migration cannot read this), so on a
+    # school that configures something else the first rolled-over year is the
+    # first to follow it.
+    #
+    # An unreadable value, or 02-29, refuses startup rather than falling back —
+    # see AcademicYearCalendar for why that is stricter than the window below.
+    academic-year-start: ${TIMEBANK_ACADEMIC_YEAR_START:09-01}
   import:
     # 11-DataImport.md §6.1 — the window the first successful historical import
     # opens, after which historical import is closed permanently. 15 is the

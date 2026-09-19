@@ -42,6 +42,12 @@ class ExportJobParameters {
             payload.put("selectedYearIndex", scope.selectedYearIndex());
             payload.put("currentYearIndex", scope.currentYearIndex());
             payload.put("reviewerId", scope.reviewerId());
+            // The year's real first and last day, carried rather than recomputed
+            // in the job: the boundary is configurable and a stored year keeps the
+            // dates it was created with, so recomputing on the job thread could
+            // widen or narrow the file relative to what was authorised.
+            payload.put("yearFrom", scope.yearFrom() == null ? null : scope.yearFrom().toString());
+            payload.put("yearTo", scope.yearTo() == null ? null : scope.yearTo().toString());
             ExportScope.Restriction restriction = scope.restriction();
             if (restriction != null) {
                 // `restricted` is written explicitly rather than inferred from the
@@ -66,7 +72,7 @@ class ExportJobParameters {
             // A job written before filters existed, or one hand-inserted by a test.
             // Unrestricted with no year is the pre-filter behaviour, and the only
             // defensible reading of "no parameters were recorded".
-            return new ExportScope(null, null, java.time.LocalDate.now().getYear(), null);
+            return new ExportScope(null, null, java.time.LocalDate.now().getYear(), null, null, null);
         }
         try {
             Map<String, Object> payload = objectMapper.readValue(paramsJson, new TypeReference<>() {
@@ -84,7 +90,8 @@ class ExportJobParameters {
                         (String) payload.get("classFilter"));
             }
             return new ExportScope(restriction, selectedYear,
-                    currentYear == null ? java.time.LocalDate.now().getYear() : currentYear, reviewerId);
+                    currentYear == null ? java.time.LocalDate.now().getYear() : currentYear, reviewerId,
+                    asDate(payload.get("yearFrom")), asDate(payload.get("yearTo")));
         } catch (Exception e) {
             throw new IllegalStateException("Could not read export parameters: " + paramsJson, e);
         }
@@ -99,6 +106,11 @@ class ExportJobParameters {
     @SuppressWarnings("unchecked")
     private static Set<String> asIdSet(Object value) {
         return value == null ? null : new LinkedHashSet<>((List<String>) value);
+    }
+
+    /** A job written before the window was recorded has no dates; null is then the honest answer. */
+    private static java.time.LocalDate asDate(Object value) {
+        return value == null ? null : java.time.LocalDate.parse(value.toString());
     }
 
     private static Integer asInteger(Object value) {

@@ -64,6 +64,15 @@ class AnnualRolloverIT extends AbstractIntegrationTest {
     @Autowired
     private AnnualRolloverServiceImpl impl;
 
+    // Injected so the configured-boundary test can build a second service with a
+    // different calendar; the real one is wired from application.yml.
+    @Autowired
+    private cn.timebank.lifecycle.infrastructure.AnnualRolloverRepository repository;
+    @Autowired
+    private cn.timebank.lifecycle.infrastructure.AnnualRolloverRunRepository runRepository;
+    @Autowired
+    private cn.timebank.audit.application.AuditService auditService;
+
     private int currentYearStart() {
         LocalDate today = LocalDate.now();
         return today.getMonthValue() >= 9 ? today.getYear() : today.getYear() - 1;
@@ -269,5 +278,50 @@ class AnnualRolloverIT extends AbstractIntegrationTest {
         // §3.2: grades 6 and 9 come from the roster import, so being empty right
         // after a rollover is expected and must be stated, not discovered.
         assertThat(report.emptyIntakeGrades()).contains("grade_6", "grade_9");
+    }
+
+    /**
+     * The configured boundary actually moves the rollover, and moves the dates of
+     * the year it creates.
+     *
+     * <p>Without this the setting is a knob that cannot be shown to do anything:
+     * every other test here drives 1 September, which is also the default, so they
+     * would all pass against a build that ignored the configuration entirely. This
+     * one drives <b>25 August</b> — a date that is the *previous* academic year
+     * under the default and the *new* one under a 20 August boundary — so the two
+     * behaviours are distinguishable.</p>
+     */
+    @Test
+    void aConfiguredBoundaryMovesBothTheTriggerAndTheYearItCreates() {
+        // A year far enough out that no other test in this class rolls into it, so
+        // this one neither depends on nor disturbs their shared target.
+        int target = currentYearStart() + 5;
+        String targetId = "ay_" + target + "_" + (target + 1);
+        jdbc.update("delete from annual_rollover_run where academic_year_id = :id",
+                new MapSqlParameterSource("id", targetId));
+        // Classes reference the year, so they go first or the delete hits the
+        // foreign key rather than cleaning up.
+        jdbc.update("delete from class where academic_year_id = :id", new MapSqlParameterSource("id", targetId));
+        jdbc.update("delete from academic_year where id = :id", new MapSqlParameterSource("id", targetId));
+
+        AnnualRolloverServiceImpl earlyStart = new AnnualRolloverServiceImpl(
+                repository, runRepository, auditService, new AcademicYearCalendar("08-20"));
+
+        // 25 August: before 1 September, so the default calendar would call this
+        // the previous year and roll nothing new.
+        AnnualRolloverReportDto report = earlyStart.runFor(LocalDate.of(target, 8, 25), "test-config");
+
+        assertThat(report.academicYearId())
+                .as("25 August belongs to the year starting that August once the boundary moves")
+                .isEqualTo(targetId);
+
+        var row = jdbc.queryForMap("select start_date, end_date from academic_year where id = :id",
+                new MapSqlParameterSource("id", targetId));
+        assertThat(row.get("start_date").toString())
+                .as("the created year begins on the configured boundary, not 1 September")
+                .isEqualTo(target + "-08-20");
+        assertThat(row.get("end_date").toString())
+                .as("and ends the day before the next one begins, with no gap")
+                .isEqualTo((target + 1) + "-08-19");
     }
 }
