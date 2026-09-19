@@ -310,7 +310,13 @@ export function StudentList() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-foreground">{t('admin.students.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('admin.students.count', { count: students.length })}</p>
+          {/* The roster's size, not this page's. `students.length` is 20 —
+              whatever the page holds — while the pagination control beside it
+              already renders the real figure from the same response, so the
+              headline said "20 名学生" under a list of 56 (issue 108). */}
+          <p className="text-sm text-muted-foreground">
+            {t('admin.students.count', { count: page?.totalItems ?? students.length })}
+          </p>
         </div>
       </div>
 
