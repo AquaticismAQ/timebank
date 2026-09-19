@@ -30,7 +30,7 @@ globs:
 
 ## Seeded Test Accounts
 
-See `Docs/TestAccounts.md` for real seeded accounts: `admin001`, `student001`, `student002`, `teacher001`. The login page's old mock "demo accounts" card was removed 2026-08-07.
+See `Docs/TestAccounts.md` for real seeded accounts. Staff have readable names (`admin001`, `teacher001`); **student logins are 8 random digits**, not `studentNNN` — that is only the fixture handle (issue 105). The login page's old mock "demo accounts" card was removed 2026-08-07.
 
 The server also carries a full seeded dataset (`integration-test/`, README + STATUS.md) — projects/records/proposals in every workflow status — so screens aren't empty during a live test. Check `integration-test/STATUS.md` before assuming a bug is new.
 

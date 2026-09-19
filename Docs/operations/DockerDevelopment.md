@@ -185,7 +185,7 @@ The dev proxy rewrites the `Origin` header to the proxy target
 `http://localhost:28080`, which is already allow-listed.
 
 Log in with any account the seeder printed — `admin001` for the admin portal,
-`student001` for the student one.
+one of the 8-digit numbers for the student one — student logins are random digits by design (issue 105), so read them off the seeder's output rather than guessing.
 
 Containerising the frontend would mean rebuilding an image on every edit and
 losing hot reload — for a dev server that watches files, a container is
