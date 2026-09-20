@@ -90,6 +90,29 @@ Idempotent: a second pass cancels nothing and reports what it skipped.
 Driven through the API rather than the browser, unlike everything else here:
 cleanup is maintenance, not a workflow anyone is being shown.
 
+## Making it watchable
+
+A demonstration is not a passing test played slowly. `src/harness/stage.ts` wraps
+every interaction so it goes **say it → point at it → do it → pause**:
+
+- **Said first.** `现在打开项目中心`, `现在点击立即报名`, `现在填写服务日期`. An
+  audience cannot follow a click they were not told was coming, and account
+  switches especially — on screen a login is a half-second flicker.
+- **Pointed at.** A red ring is drawn around the target and a round cursor moves
+  to its centre, both in the brand colour, with a short transition so the pointer
+  is seen arriving rather than teleporting.
+- **Paused after**, half a second, so the result can be taken in. Skipped
+  entirely when the `pace` gate is off, so `verify` loses nothing.
+
+The pointer is decoration and never fails a run — but if it stops working the
+run says so once, because decoration that quietly disappears looks fine.
+
+Worth knowing if you touch it: `page.evaluate` given a **string** evaluates it as
+an expression and *ignores any argument*. The first version of the spotlight
+passed the target's rectangle as an argument, so it built the drawing function
+and never called it, and the `catch` meant nothing said so. The box is
+interpolated into the expression instead.
+
 ## The window
 
 Headed runs open at the display's full width, positioned at the top-left, and

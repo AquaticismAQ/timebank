@@ -9,6 +9,7 @@ import { Narrator } from './narrator.js';
 import { SlotAllocator } from './slots.js';
 import type { Flow, FlowContext, Gate } from './types.js';
 import { signIn } from '../steps/auth.js';
+import { bindStage } from './stage.js';
 
 export interface RunOutcome {
   flowId: string;
@@ -81,6 +82,13 @@ export async function runFlow(
       }
 
       const page = await browser.open(role);
+      // The stage needs the narrator and the profile's pacing; binding here
+      // keeps every step function's signature as it was.
+      bindStage(page, {
+        narrator,
+        paced: gates.has('pace'),
+        visible: !config.headless,
+      });
       // Once per role per run. The context persists, so a later switch back is a
       // tab change rather than another trip through the login form.
       if (!page.url().includes(prefix)) {

@@ -1,5 +1,6 @@
 import type { Page } from 'playwright';
 import { assertContains, assertThat } from '../harness/assert.js';
+import { tap, type, visit } from '../harness/stage.js';
 
 /**
  * The create-project modal.
@@ -39,28 +40,28 @@ export interface NewProject {
  * can never be registered for and the next phase would hang with no way forward.
  */
 export async function createAndPublishProject(page: Page, baseUrl: string, project: NewProject): Promise<void> {
-  await page.goto(`${baseUrl}/admin/projects`, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: '新建项目' }).click();
+  await visit(page, `${baseUrl}/admin/projects`, '项目管理页面');
+  await tap(page.getByRole('button', { name: '新建项目' }), '新建项目');
   await page.getByText('新建志愿服务项目').waitFor({ state: 'visible' });
 
-  await field(page, '项目名称 *').fill(project.title);
-  await field(page, '项目摘要').fill(project.summary);
-  await field(page, '详细描述').fill(project.description);
-  await field(page, '认定时长').fill(String(project.recognizedHours));
-  await field(page, '地点').fill(project.location);
-  await field(page, '名额上限').fill(String(project.capacity));
+  await type(field(page, '项目名称 *'), '项目名称', project.title);
+  await type(field(page, '项目摘要'), '项目摘要', project.summary);
+  await type(field(page, '详细描述'), '详细描述', project.description);
+  await type(field(page, '认定时长'), '认定时长', String(project.recognizedHours));
+  await type(field(page, '地点'), '服务地点', project.location);
+  await type(field(page, '名额上限'), '名额上限', String(project.capacity));
 
   const now = new Date();
-  await field(page, '报名开放').fill(localDateTime(minutesFrom(now, -60)));
-  await field(page, '报名截止').fill(localDateTime(minutesFrom(now, 60 * 24 * 7)));
-  await field(page, '活动开始').fill(localDateTime(minutesFrom(now, 60 * 24 * 8)));
-  await field(page, '活动结束').fill(localDateTime(minutesFrom(now, 60 * 24 * 8 + 120)));
+  await type(field(page, '报名开放'), '报名开放时间', localDateTime(minutesFrom(now, -60)));
+  await type(field(page, '报名截止'), '报名截止时间', localDateTime(minutesFrom(now, 60 * 24 * 7)));
+  await type(field(page, '活动开始'), '活动开始时间', localDateTime(minutesFrom(now, 60 * 24 * 8)));
+  await type(field(page, '活动结束'), '活动结束时间', localDateTime(minutesFrom(now, 60 * 24 * 8 + 120)));
 
   for (const grade of project.eligibleGradeNames) {
-    await page.getByRole('button', { name: grade, exact: true }).click();
+    await tap(page.getByRole('button', { name: grade, exact: true }), `适用年级：${grade}`);
   }
 
-  await page.getByRole('button', { name: '发布', exact: true }).click();
+  await tap(page.getByRole('button', { name: '发布', exact: true }), '发布');
   // The modal closes on success and stays open on a field error, so its absence
   // is the signal — waiting on the toast would race its own dismissal.
   await page.getByText('新建志愿服务项目').waitFor({ state: 'hidden', timeout: 20_000 });
@@ -68,7 +69,7 @@ export async function createAndPublishProject(page: Page, baseUrl: string, proje
 
 /** Reads a project's status from its row in the management list, not from any create response. */
 export async function readProjectStatus(page: Page, baseUrl: string, title: string): Promise<string> {
-  await page.goto(`${baseUrl}/admin/projects`, { waitUntil: 'domcontentloaded' });
+  await visit(page, `${baseUrl}/admin/projects`, '项目管理页面');
   const card = await findProjectCard(page, baseUrl, title);
   // The status badge is the card's first line. Read from the row rather than
   // trusted from the create response, because `registrationOpen` is time-derived
@@ -84,10 +85,10 @@ export async function readProjectStatus(page: Page, baseUrl: string, title: stri
  */
 export async function findProjectCard(page: Page, baseUrl: string, title: string) {
   if (!page.url().includes('/admin/projects')) {
-    await page.goto(`${baseUrl}/admin/projects`, { waitUntil: 'domcontentloaded' });
+    await visit(page, `${baseUrl}/admin/projects`, '项目管理页面');
   }
   const search = page.getByPlaceholder('搜索项目...');
-  await search.fill(title);
+  await type(search, '搜索框', title);
   await search.press('Enter');
   // Narrowed by the owner line as well as the title. Filtering on the title
   // alone and taking `.last()` returns the innermost match — which is the title

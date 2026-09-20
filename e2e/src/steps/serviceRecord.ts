@@ -1,4 +1,5 @@
 import type { Locator, Page } from 'playwright';
+import { choose, narrate, tap, type, visit } from '../harness/stage.js';
 import { assertContains, assertThat } from '../harness/assert.js';
 
 /**
@@ -36,18 +37,18 @@ export interface RecordDraft {
  * pressing Next is what validates the step you are leaving (issue 058/066).
  */
 export async function createDraft(page: Page, baseUrl: string, draft: RecordDraft): Promise<void> {
-  await page.goto(`${baseUrl}/student/records`, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: '新建记录' }).first().click();
+  await visit(page, `${baseUrl}/student/records`, '服务记录页面');
+  await tap(page.getByRole('button', { name: '新建记录' }).first(), '新建记录');
 
   // Step 0 — source. `学校项目` is what makes the record derive its organization,
   // category and supervisor from the project rather than asking for them. It is
   // already selected by default; clicked anyway, so the demo shows the choice
   // being made and the step does not depend on that default staying put.
-  await page.getByText('学校项目', { exact: true }).click();
+  await tap(page.getByText('学校项目', { exact: true }), '学校项目');
   await next(page);
 
   // Step 1 — which project, when.
-  await page.locator('select').first().selectOption({ label: draft.projectTitle });
+  await choose(page.locator('select').first(), '刚才报名的项目', { label: draft.projectTitle });
 
   // Choosing a project prefills the date and times from the project's own
   // schedule, and that prefill is an effect — it lands *after* the change event.
@@ -59,12 +60,12 @@ export async function createDraft(page: Page, baseUrl: string, draft: RecordDraf
   // that holds at either speed.
   const serviceDate = field(page, '服务日期 *');
   await waitUntilFilled(page, serviceDate, '服务日期');
-  await serviceDate.fill(draft.date);
+  await type(serviceDate, '服务日期', draft.date);
   await pickTime(page, '开始时间 *', draft.startHHMM);
   await pickTime(page, '结束时间 *', draft.endHHMM);
-  await field(page, '服务内容描述 *').fill(draft.description);
+  await type(field(page, '服务内容描述 *'), '服务内容描述', draft.description);
 
-  await page.getByRole('button', { name: '保存草稿' }).click();
+  await tap(page.getByRole('button', { name: '保存草稿' }), '保存草稿');
   await page.getByText('草稿已保存').waitFor({ state: 'visible', timeout: 15_000 });
 }
 
@@ -77,8 +78,8 @@ export async function createDraft(page: Page, baseUrl: string, draft: RecordDraf
 export async function editDraftDescription(page: Page, baseUrl: string, projectTitle: string, newDescription: string): Promise<void> {
   await openDraftForEditing(page, baseUrl, projectTitle);
   await next(page);
-  await field(page, '服务内容描述 *').fill(newDescription);
-  await page.getByRole('button', { name: '保存草稿' }).click();
+  await type(field(page, '服务内容描述 *'), '更详细的服务内容描述', newDescription);
+  await tap(page.getByRole('button', { name: '保存草稿' }), '保存草稿');
   await page.getByText('草稿已保存').waitFor({ state: 'visible', timeout: 15_000 });
 }
 
@@ -95,14 +96,17 @@ export async function uploadEvidenceAndSubmit(page: Page, baseUrl: string, proje
   await next(page);   // details → evidence
 
   // The input is `hidden` behind a drop zone; setInputFiles drives it directly,
-  // which is what a file chooser would do anyway.
-  await page.locator('input[type="file"]').setInputFiles(filePath);
+  // which is what a file chooser would do anyway. Announced all the same,
+  // because on screen a file simply appears and an audience needs telling why.
+  const fileInput = page.locator('input[type="file"]');
+  say(page, '现在上传服务的佐证材料');
+  await fileInput.setInputFiles(filePath);
   const fileName = filePath.split('/').pop()!;
   await page.getByText(fileName, { exact: false }).waitFor({ state: 'visible', timeout: 60_000 });
 
   await next(page);   // evidence → declaration
   const confirm = page.getByRole('button', { name: '确认提交' });
-  await confirm.click();
+  await tap(confirm, '确认提交');
   // The wizard closing is the signal, not the toast. Toasts auto-dismiss, so
   // waiting on one makes the step depend on winning a race it does not control —
   // the submit itself had already succeeded when this first timed out.
@@ -139,7 +143,7 @@ export async function assertRecordDescription(page: Page, baseUrl: string, proje
 /** The row carries the record number, not the filename — so this checks the detail view. */
 export async function assertEvidenceShown(page: Page, baseUrl: string, recordNumber: string, fileName: string): Promise<void> {
   await gotoRecords(page, baseUrl);
-  await recordRow(page, recordNumber).getByRole('button', { name: '查看' }).click();
+  await tap(recordRow(page, recordNumber).getByRole('button', { name: '查看' }), '查看详情');
   // Wait for the dialog, not just for the click. Reading the page straight after
   // clicking races the render and fails against a detail view that is in fact
   // correct — which is how this read the first time.
@@ -148,7 +152,7 @@ export async function assertEvidenceShown(page: Page, baseUrl: string, recordNum
   const body = await page.locator('body').innerText();
   assertThat(body.length > 0, '记录详情应当可以打开');
   assertContains(body, fileName, `记录详情应当显示已上传的佐证文件：${fileName}`);
-  await page.getByRole('button', { name: '关闭' }).click();
+  await tap(page.getByRole('button', { name: '关闭' }), '关闭');
 }
 
 /**
@@ -162,7 +166,7 @@ export async function assertEvidenceShown(page: Page, baseUrl: string, recordNum
  * does, and it is one a student has too.
  */
 async function gotoRecords(page: Page, baseUrl: string): Promise<void> {
-  await page.goto(`${baseUrl}/student/records`, { waitUntil: 'domcontentloaded' });
+  await visit(page, `${baseUrl}/student/records`, '服务记录页面');
   const pageSize = page.locator('select').filter({ hasText: '100' }).last();
   await pageSize.waitFor({ state: 'visible', timeout: 15_000 });
   await pageSize.selectOption('100');
@@ -194,7 +198,7 @@ async function openDraftForEditing(page: Page, baseUrl: string, projectTitle: st
   await gotoRecords(page, baseUrl);
   const row = recordRow(page, projectTitle, RECORD_STATUS.draft);
   await row.waitFor({ state: 'visible', timeout: 15_000 });
-  await row.getByRole('button', { name: '编辑' }).click();
+  await tap(row.getByRole('button', { name: '编辑' }), '编辑');
 }
 
 /** Polled from Node rather than in the page, so this file typechecks without the DOM lib. */
@@ -212,7 +216,12 @@ function field(page: Page, labelZh: string) {
 }
 
 async function next(page: Page): Promise<void> {
-  await page.getByRole('button', { name: '下一步' }).click();
+  await tap(page.getByRole('button', { name: '下一步' }), '下一步');
+}
+
+/** For the few actions that are not a click on something visible. */
+function say(page: Page, zh: string): void {
+  narrate(page, zh);
 }
 
 /**

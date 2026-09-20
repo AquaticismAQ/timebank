@@ -1,5 +1,6 @@
 import type { Page } from 'playwright';
 import { assertContains, assertThat } from '../harness/assert.js';
+import { tap, type, visit } from '../harness/stage.js';
 import { findProjectCard, waitForSingleResult } from './project.js';
 
 /**
@@ -10,23 +11,23 @@ import { findProjectCard, waitForSingleResult } from './project.js';
  * project on a busy day would otherwise be off the end of the first page.
  */
 export async function registerForProject(page: Page, baseUrl: string, title: string): Promise<void> {
-  await page.goto(`${baseUrl}/student/projects`, { waitUntil: 'domcontentloaded' });
+  await visit(page, `${baseUrl}/student/projects`, '项目中心');
   const search = page.getByPlaceholder('搜索项目、组织、地点...');
-  await search.fill(title);
+  await type(search, '搜索框', title);
   await search.press('Enter');
 
   await waitForSingleResult(page, title);
   const card = studentCard(page, title);
-  await card.getByRole('button', { name: '立即报名' }).click();
+  await tap(card.getByRole('button', { name: '立即报名' }), '立即报名');
   // The button becomes the registered badge in place, so its arrival is the
   // signal the registration landed — a toast would race its own dismissal.
   await card.getByText('已报名').waitFor({ state: 'visible', timeout: 15_000 });
 }
 
 export async function assertStudentSeesRegistered(page: Page, baseUrl: string, title: string): Promise<void> {
-  await page.goto(`${baseUrl}/student/projects`, { waitUntil: 'domcontentloaded' });
+  await visit(page, `${baseUrl}/student/projects`, '项目中心');
   const search = page.getByPlaceholder('搜索项目、组织、地点...');
-  await search.fill(title);
+  await type(search, '搜索框', title);
   await search.press('Enter');
   await waitForSingleResult(page, title);
   const card = studentCard(page, title);
@@ -50,8 +51,8 @@ export async function assertStudentSeesRegistered(page: Page, baseUrl: string, t
 export async function openRegistrantList(page: Page, baseUrl: string, title: string): Promise<void> {
   const card = await findProjectCard(page, baseUrl, title);
   // The row menu is the icon-only button inside the card.
-  await card.locator('button').filter({ hasText: /^$/ }).first().click();
-  await page.getByText('报名名单', { exact: true }).click();
+  await tap(card.locator('button').filter({ hasText: /^$/ }).first(), '项目的更多操作');
+  await tap(page.getByText('报名名单', { exact: true }), '报名名单');
   await page.getByRole('button', { name: '关闭' }).waitFor({ state: 'visible', timeout: 15_000 });
 }
 

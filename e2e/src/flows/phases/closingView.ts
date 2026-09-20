@@ -1,4 +1,5 @@
 import { assertThat } from '../../harness/assert.js';
+import { visit } from '../../harness/stage.js';
 import type { Phase } from '../../harness/types.js';
 
 /** Hours as the portal prints them: one decimal place, trailing `.0` dropped. */
@@ -20,7 +21,7 @@ export const closingView: Phase = {
   titleZh: '学生看到自己的服务时长与时间币',
   async run(ctx) {
     const page = await ctx.as('student');
-    await page.goto(`${ctx.config.baseUrl}/student/home`, { waitUntil: 'domcontentloaded' });
+    await visit(page, `${ctx.config.baseUrl}/student/home`, '学生首页');
 
     const minutes = ctx.state.minutesAfter as number;
     const coins = ctx.state.balanceAfter as number;

@@ -1,5 +1,6 @@
 import type { Page } from 'playwright';
 import { assertThat } from '../harness/assert.js';
+import { choose, tap, type, visit } from '../harness/stage.js';
 
 export type Decision = 'approve' | 'return' | 'reject';
 
@@ -21,13 +22,13 @@ const REASON_VALUE: Record<'return' | 'reject', string> = {
 export async function decideOnRecord(
   page: Page, baseUrl: string, projectTitle: string, recordNumber: string, decision: Decision, comment: string,
 ): Promise<void> {
-  await page.goto(`${baseUrl}/admin/audit`, { waitUntil: 'domcontentloaded' });
+  await visit(page, `${baseUrl}/admin/audit`, '审核中心');
 
   // Found by project title, because that is what the queue row shows
   // (`item.projectTitle || item.organizationName`). The search box above the list
   // matches students and organizations, so a record number typed into it finds
   // nothing at all.
-  await page.getByText(projectTitle, { exact: false }).first().click();
+  await tap(page.getByText(projectTitle, { exact: false }).first(), '这条待审核的记录');
 
   // Cross-check we opened the record we meant to. One project can have several
   // records once the return and reject branches have run, and deciding on the
@@ -36,20 +37,21 @@ export async function decideOnRecord(
   // and again in the detail fields.
   await page.getByText(recordNumber, { exact: false }).first().waitFor({ state: 'visible', timeout: 15_000 });
 
-  await page.getByRole('button', { name: BUTTON[decision], exact: true }).last().waitFor({ state: 'visible', timeout: 15_000 });
-  await page.getByRole('button', { name: BUTTON[decision], exact: true }).last().click();
+  const action = page.getByRole('button', { name: BUTTON[decision], exact: true }).last();
+  await action.waitFor({ state: 'visible', timeout: 15_000 });
+  await tap(action, BUTTON[decision]);
 
   if (decision !== 'approve') {
     // The confirm button stays disabled until both are given, so skipping either
     // would hang on a click that can never land rather than failing clearly.
-    await page.locator('select').last().selectOption(REASON_VALUE[decision]);
+    await choose(page.locator('select').last(), '原因类别', REASON_VALUE[decision]);
   }
-  await page.locator('textarea').last().fill(comment);
+  await type(page.locator('textarea').last(), '审核意见', comment);
   // The confirm button is two interpolated strings with a literal space between
   // them (`{t('confirm')} {t('approve')}`), so its accessible name is 确认 通过
   // rather than 确认通过 — an exact match on the joined word never lands.
   const confirm = page.getByRole('button', { name: new RegExp(`确认\\s*${BUTTON[decision]}`) });
-  await confirm.click();
+  await tap(confirm, `确认${BUTTON[decision]}`);
   // Wait for the dialog to go, not for the toast. The toast is real but it
   // auto-dismisses, so waiting on it makes the step depend on losing a race it
   // is not in control of — an approval that landed correctly failed here once
@@ -65,7 +67,7 @@ export async function decideOnRecord(
  * specific and is what a reviewer actually observes.
  */
 export async function assertRecordLeftTheQueue(page: Page, baseUrl: string, recordNumber: string): Promise<void> {
-  await page.goto(`${baseUrl}/admin/audit`, { waitUntil: 'domcontentloaded' });
+  await visit(page, `${baseUrl}/admin/audit`, '审核中心');
   await page.waitForTimeout(1500);
   const body = await page.locator('body').innerText();
   assertThat(!body.includes(recordNumber), `审核完成后，该记录不应当再出现在待审核队列中：${recordNumber}`);
