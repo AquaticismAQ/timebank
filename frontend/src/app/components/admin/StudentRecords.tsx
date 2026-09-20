@@ -16,6 +16,10 @@ import { minutesToHours } from '../../lib/format';
  * other admin screen already uses via the new `filter[studentId]` param, rather than a dedicated
  * sub-resource endpoint (matches the precedent `api.accounts.get(studentId)` already set).
  */
+// list-conventions: no-search — one student's records, in a modal reached from the roster.
+// The search that matters happened on the way in; `/service-records` does support `search`,
+// so add one here if this ever becomes a page rather than a look-up.
+
 export function StudentRecords({ studentId, studentName, onClose }: { studentId: string; studentName: string; onClose: () => void }) {
   const { t } = useTranslation();
   const [expandedId, setExpandedId] = useState<string | null>(null);

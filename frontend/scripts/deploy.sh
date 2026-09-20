@@ -35,6 +35,12 @@ pnpm install --frozen-lockfile
 echo "deploy.sh: type-checking (Vite's esbuild transform strips types without checking them)..."
 npx -y -p typescript tsc --noEmit -p tsconfig.json
 
+# Issue 138: the search/filter/sort convention was documented in August and the
+# next list page built simply did not know about it. A document cannot catch
+# that; this can. Narrow on purpose — see the script's own header.
+echo "deploy.sh: checking list-page conventions..."
+node scripts/check-list-conventions.mjs
+
 echo "deploy.sh: building production bundle..."
 pnpm build
 

@@ -62,10 +62,55 @@ page errors     []
 Each control was exercised on the deployed page and each one changed the query
 the server received.
 
-## 5. What it must not do
+## 5. The guard, so the next page does not repeat it
+
+Aquaticism asked for one. A checklist line was the other option and is the weaker one:
+**the convention was already documented, and that is exactly what failed.**
+
+`frontend/scripts/check-list-conventions.mjs` runs in `deploy.sh` beside the type
+check. Every `usePagedApi`/`useUrlSyncedPagedApi` caller must offer a search box
+and an empty/error state — the two things every existing list already does, so it
+locks in what holds rather than demanding a refactor nobody asked for. Sort keys,
+page size and filter layout are deliberately **not** checked: they vary per
+screen, and a rule that fires on half the codebase gets switched off rather than
+obeyed.
+
+Opting out is expected and must be argued in the file:
+
+```tsx
+// list-conventions: no-search — `/notifications` takes no search parameter
+```
+
+Four exemptions exist today. Three are facts rather than opinions — the
+notifications, transactions and applications endpoints take no `search`
+parameter at all. The fourth, `StudentRecords`, is one student's records in a
+modal reached from the roster; `/service-records` *does* support search, so that
+exemption says to add one if it ever becomes a page.
+
+### Red-checked, and it found a bug in itself
+
+Two failure modes, both exercised:
+
+| Broken on purpose | Result |
+| :--- | :--- |
+| `ListSearchInput` removed from a compliant list | fails, naming the file |
+| An exemption with nothing after the dash | fails, "no reason given" |
+
+The second one **passed** at first. The reason-matching regex used `\s*`, which
+crosses a newline, so an empty exemption silently swallowed the next line of the
+file as its "reason" — it printed `const categoryColors: Record<string, string> = {`
+and exited 0. A guard that accepts a stray line of code as justification is worse
+than no guard. `[ \t]*` fixes it, and the comment in the script says why.
+
+Documented in the convention doc itself and in `Docs/README.md` §2.7.1.
+
+## 6. What it must not do
 
 - **Must not filter in the browser.** §2.
 - **Must not invent a second layout.** §3 — the convention exists precisely so
   two lists do not drift.
 - **Must not say "no cases" when a filter is hiding them.** §3.
 - **Must not add an endpoint.** §2 — everything needed was already there.
+- **Must not widen the guard to every convention.** §5 — a rule that fires on
+  half the codebase gets switched off.
+- **Must not accept an exemption with no reason.** §5.

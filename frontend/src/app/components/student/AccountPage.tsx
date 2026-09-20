@@ -20,6 +20,9 @@ import { isoToLocalDate } from '../../lib/datetime';
  * known codes get a translated label here and anything unrecognised falls
  * back to the raw code rather than to a blank cell.
  */
+// list-conventions: no-search — `/accounts/{id}/transactions` takes no search parameter, and a
+// ledger is read by date rather than by name.
+
 function useTxDescription() {
   const { t } = useTranslation();
   return (description: string) => {

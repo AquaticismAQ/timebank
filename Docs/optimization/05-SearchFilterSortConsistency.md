@@ -153,3 +153,31 @@
 - `AuditCenter.tsx`/`CaseReview.tsx`/`ProposalReview.tsx`：卡片右侧决定按钮组 + "查看详情" 文字按钮，替换为单个 `MoreHorizontal` 触发器；`Eye` 图标 import 移除（不再使用）。
 - 三页模态底部按 §5.2 方案 B 重写；`common.cancel` 复用既有 i18n key，未新增翻译。
 - 审核中心桌面表格"操作"列的按钮未动（§5.1 已说明原因）。
+
+## Enforcement (added 2026-09-20, issue 138)
+
+This document was written in August and every list built before it complies. The
+next one — the student's My Cases — did not, and nobody noticed until a
+maintainer did. **That is how a convention decays: not by being overruled, but by
+the next screen not knowing it exists**, and a document cannot catch it.
+
+`frontend/scripts/check-list-conventions.mjs` now runs in `frontend/scripts/deploy.sh`,
+beside the type check. Every component calling `usePagedApi`/`useUrlSyncedPagedApi`
+must offer a search box (`ListSearchInput`) and an empty/error state
+(`ListStateBanner`).
+
+It is deliberately narrow — those two are already true of every list, so it locks
+in what holds rather than demanding a refactor nobody asked for. Sort keys, page
+size and filter layout vary legitimately per screen, and **a rule that fires on
+half the codebase gets switched off rather than obeyed.**
+
+Opting out is expected, and has to be argued in the file:
+
+```tsx
+// list-conventions: no-search — `/notifications` takes no search parameter
+```
+
+An exemption with nothing after the dash fails the same as a missing control, and
+every exemption is printed on each run so they stay visible instead of quietly
+accumulating. Four exist today, each because the endpoint genuinely has no
+`search` parameter or the list is one record's detail in a dialog.

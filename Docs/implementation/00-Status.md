@@ -1516,3 +1516,11 @@ Issue 138, Aquaticism's report. The student's My Cases page had a row of status 
 It now carries Service Records' furniture down to the class names: search, status and type selects in §2.4's layout, a three-key sort grid per §2.5, an empty state that tells "no appeals" apart from "nothing matches" and offers a way out, and the page-size control it had been rendering without. Type options reuse the student-side wording rather than the admin twin.
 
 **Verified by the request, not the screen** — a client-side filter would look the same and be wrong: the sort button produced `sort=-createdAt`, the selects produced `filter[status]=DRAFT` and `filter[type]=SUPPLEMENT`, the search box produced `search=…`, and clearing dropped every parameter and restored the row. No page errors.
+
+### 41.34 A guard so the list convention stops decaying (2026-09-20)
+
+Follow-up to 41.33, at Aquaticism's request. A checklist line was the alternative and is the weaker one: **the convention was already documented, and that is precisely what failed** — My Cases was built after it and simply did not know it existed.
+
+`frontend/scripts/check-list-conventions.mjs` runs in `deploy.sh` beside the type check. Every `usePagedApi`/`useUrlSyncedPagedApi` caller must offer a search box and an empty/error state. Deliberately narrow: both are already true of every list, so it locks in what holds rather than demanding a refactor nobody asked for, and sort keys/page size/filter layout are left alone because they vary legitimately per screen — a rule that fires on half the codebase gets switched off rather than obeyed. Opting out is expected and must carry a reason in the file; four exist, three of them facts (the notifications, transactions and applications endpoints take no `search` parameter) and one a judgement about a modal.
+
+**Red-checking found a bug in the guard itself.** The empty-reason case passed at first: the reason regex used `\s*`, which crosses newlines, so an exemption with nothing after the dash swallowed the next line of the file as its justification — it printed `const categoryColors: Record<string, string> = {` and exited 0. A guard that accepts a stray line of code as a reason is worse than none. `[ \t]*` fixes it and the script says why in place.

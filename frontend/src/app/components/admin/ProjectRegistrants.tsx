@@ -11,6 +11,9 @@ import { ListStateBanner } from '../ListStateBanner';
 import { type ApplicationStatus } from '../../api/types';
 import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
+// list-conventions: no-search — `/applications` takes no search parameter, and this is one
+// project's registrants inside a dialog: the roster it came from is the thing you search.
+
 const STATUS_LABEL_KEY: Record<ApplicationStatus, string> = {
   pending: 'admin.projects.regStatusPending',
   confirmed: 'admin.projects.regStatusConfirmed',

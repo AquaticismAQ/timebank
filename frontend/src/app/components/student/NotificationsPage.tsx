@@ -8,6 +8,8 @@ import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { formatLocalInstant } from '../../lib/datetime';
 
+// list-conventions: no-search — `/notifications` takes no search parameter.
+
 const categoryColors: Record<string, string> = {
   review: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
   project: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',

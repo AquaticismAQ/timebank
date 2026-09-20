@@ -204,6 +204,16 @@ in this repo, not just `Design/`. Read `CONTRIBUTING.md` directly rather
 than relying on a paraphrase — it is the source of truth, this file only
 points at it.
 
+### 2.7.1 A new list page has a shape to match
+
+Any screen rendering a server-paginated list follows
+`Docs/optimization/05-SearchFilterSortConsistency.md` — search, filters, sort and
+an empty state that tells "nothing here" apart from "nothing matches". This is
+checked mechanically by `frontend/scripts/check-list-conventions.mjs`, which
+`deploy.sh` runs beside the type check, so a new page that misses it fails to
+deploy rather than shipping and being noticed months later (issue 138). Opting
+out is fine and must carry a reason in the file.
+
 ### 2.8 No real identifying data anywhere in this repo — docs, code, or commit messages
 
 This repo is intended to eventually go public. Real hostnames, credentials,
