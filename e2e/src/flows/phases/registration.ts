@@ -1,4 +1,4 @@
-import { assertRegistrantConfirmed, assertStudentSeesRegistered, openRegistrantList, registerForProject } from '../../steps/registration.js';
+import { assertRegistrantConfirmed, assertStudentSeesRegistered, closeRegistrantList, openRegistrantList, registerForProject } from '../../steps/registration.js';
 import type { Phase } from '../../harness/types.js';
 
 /**
@@ -26,5 +26,6 @@ export const registration: Phase = {
     // Said plainly because it is the product's actual rule and a viewer would
     // otherwise wonder where the approval step went.
     ctx.narrator.result('名额充足，报名即刻确认，学生可以开始服务');
+    await closeRegistrantList(adminPage);
   },
 };

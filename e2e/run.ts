@@ -8,6 +8,7 @@ import { FLOWS, findFlow } from './src/flows/index.js';
 import { Api } from './src/harness/api.js';
 import { cleanupPreviousRuns, describeCleanup } from './src/harness/cleanup.js';
 import { Speaker } from './src/harness/tts.js';
+import { setBeat } from './src/harness/stage.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -62,6 +63,9 @@ async function main(): Promise<number> {
   if (flag('dry-narrate')) {
     return dryNarrate(config.narrationDir, value('script'));
   }
+
+  // How long to hold still after each action. Only meaningful with `pace` on.
+  setBeat(Number(value('beat') ?? 1000));
 
   const runId = newRunId();
   const { speaker, reason } = gates.has('tts')

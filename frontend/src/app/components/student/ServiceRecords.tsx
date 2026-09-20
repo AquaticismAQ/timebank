@@ -56,8 +56,14 @@ const SORT_KEYS: SortKey[] = ['serviceDate', 'createdAt', 'status'];
 export function ServiceRecords() {
   const { t } = useTranslation();
   const { serviceCategories } = useDictionaries();
+  // Newest first by *creation*, not by service date. A student's own list is a
+  // work queue — the record they just filed, or the one that came back to them,
+  // is what they opened this page for. Sorting by service date instead buries a
+  // record written up for last month's session below every record for a more
+  // recent one, however long ago it was entered. Service date is still one click
+  // away on the sort row.
   const { items: records, page, loading, error, params, setFilter, setSearch, setSort, setPage, setPageSize, refetch } =
-    usePagedApi(api.serviceRecords.list, { sort: '-serviceDate' });
+    usePagedApi(api.serviceRecords.list, { sort: '-createdAt' });
   const [view, setView] = useState<ViewMode>('list');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [step, setStep] = useState(0);

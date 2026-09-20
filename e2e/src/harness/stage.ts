@@ -26,8 +26,18 @@ export function bindStage(page: Page, binding: Binding): void {
   BOUND.set(page, binding);
 }
 
-/** How long to hold still after an action, so a viewer can take it in. */
-const BEAT_MS = 500;
+/**
+ * How long to hold still after an action, so a viewer can take it in.
+ *
+ * Configurable (`--beat <ms>`) because the right value depends on the room and
+ * on whether the narration is being spoken over it. Half a second read as rushed
+ * once there was a pointer to follow.
+ */
+let beatMs = 1000;
+
+export function setBeat(ms: number): void {
+  beatMs = ms;
+}
 
 /**
  * Draws a pointer and a highlight box over whatever is about to be used.
@@ -100,7 +110,25 @@ async function point(locator: Locator): Promise<void> {
 
 async function beat(page: Page): Promise<void> {
   const binding = BOUND.get(page);
-  if (binding?.paced) await page.waitForTimeout(BEAT_MS);
+  if (binding?.paced) await page.waitForTimeout(beatMs);
+}
+
+/**
+ * Clears the ring and pointer once the action has happened.
+ *
+ * The box marks what is *about* to be used. Leaving it up afterwards covers the
+ * very thing the pause exists to let people look at — a filled field, a new row,
+ * a changed status.
+ */
+async function unpoint(page: Page): Promise<void> {
+  const binding = BOUND.get(page);
+  if (!binding?.visible) return;
+  await page.evaluate(`(() => {
+    for (const id of ['__e2e_cursor', '__e2e_ring']) {
+      const el = document.getElementById(id);
+      if (el) el.style.opacity = '0';
+    }
+  })()`).catch(() => {});
 }
 
 function say(page: Page, zh: string): void {
@@ -128,6 +156,7 @@ export async function tap(locator: Locator, whatZh: string): Promise<void> {
   say(page, `现在点击${whatZh}`);
   await point(locator);
   await locator.click();
+  await unpoint(page);
   await beat(page);
 }
 
@@ -136,6 +165,7 @@ export async function type(locator: Locator, fieldZh: string, value: string): Pr
   say(page, `现在填写${fieldZh}`);
   await point(locator);
   await locator.fill(value);
+  await unpoint(page);
   await beat(page);
 }
 
@@ -146,5 +176,6 @@ export async function choose(
   say(page, `现在选择${fieldZh}`);
   await point(locator);
   await locator.selectOption(option as never);
+  await unpoint(page);
   await beat(page);
 }

@@ -1,6 +1,6 @@
 import type { Slot } from '../../harness/slots.js';
 import type { FlowContext } from '../../harness/types.js';
-import { createDraft, readLatestRecord, uploadEvidenceAndSubmit } from '../../steps/serviceRecord.js';
+import { createDraft, readLatestRecord, submitDraft } from '../../steps/serviceRecord.js';
 
 /**
  * Files one submitted record against the run's project.
@@ -27,7 +27,9 @@ export async function fileRecordForBranch(
     description: descriptionZh,
     evidenceFile: evidence,
   });
-  await uploadEvidenceAndSubmit(page, ctx.config.baseUrl, title, evidence);
+  // Straight to submitted: the draft-and-return detour is worth showing once,
+  // in the main phase, not again for each branch.
+  await submitDraft(page, ctx.config.baseUrl, title, evidence);
   const record = await readLatestRecord(ctx.api);
   ctx.narrator.note(`record: ${record.recordNumber} (${slot.date} ${slot.startHHMM}-${slot.endHHMM})`);
   return { recordNumber: record.recordNumber, minutes: record.durationMinutes };

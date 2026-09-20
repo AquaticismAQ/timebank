@@ -61,6 +61,17 @@ export async function openRegistrantList(page: Page, baseUrl: string, title: str
  * confirmed, and nothing is left awaiting confirmation. Checking only for the
  * word would pass on a list showing somebody else.
  */
+/**
+ * Closes the registrant list.
+ *
+ * Separate from the assertion so the dialog stays up while the narration about
+ * it is being spoken, and comes down before the demonstration moves on — a modal
+ * left open over the next phase is the audience still looking at the last one.
+ */
+export async function closeRegistrantList(page: Page): Promise<void> {
+  await tap(page.getByRole('button', { name: '关闭' }), '关闭');
+}
+
 export async function assertRegistrantConfirmed(page: Page, studentName: string): Promise<void> {
   // The dialog frame renders before its list arrives, so it is briefly open and
   // empty — indistinguishable from a project nobody signed up for. Waiting for

@@ -70,78 +70,88 @@ export async function createDraft(page: Page, baseUrl: string, draft: RecordDraf
 }
 
 /**
- * Reopens the saved draft, changes its description, and saves again.
+ * Reopens the draft once and takes it all the way to submitted.
  *
- * The point is the read-back in {@link assertRecordDescription}: a form that
- * silently drops an edit looks identical to one that saved it.
- */
-export async function editDraftDescription(page: Page, baseUrl: string, projectTitle: string, newDescription: string): Promise<void> {
-  await openDraftForEditing(page, baseUrl, projectTitle);
-  await next(page);
-  await type(field(page, '服务内容描述 *'), '更详细的服务内容描述', newDescription);
-  await tap(page.getByRole('button', { name: '保存草稿' }), '保存草稿');
-  await page.getByText('草稿已保存').waitFor({ state: 'visible', timeout: 15_000 });
-}
-
-/**
- * Attaches the evidence file and submits.
+ * One pass, deliberately. An earlier version opened the draft three separate
+ * times — once to edit, once to read the edit back, once to upload and submit —
+ * which as a demonstration is the same screen three times over and reads as the
+ * script being stuck rather than as a student working.
  *
- * Evidence is not optional: submission is refused without at least one file in
- * `READY` state (`ServiceRecordServiceImpl:581`), so the wait for the filename to
- * appear is waiting for a real upload to finish, not a cosmetic delay.
+ * The persistence check still happens, and is stronger for being first: what was
+ * saved is read back *before* anything is changed, so the draft is proven to
+ * have survived rather than merely to be editable.
  */
-export async function uploadEvidenceAndSubmit(page: Page, baseUrl: string, projectTitle: string, filePath: string): Promise<string> {
+export async function continueDraftAndSubmit(
+  page: Page, baseUrl: string, projectTitle: string,
+  draft: { savedDescription: string; finalDescription: string; evidenceFile: string },
+): Promise<string> {
   await openDraftForEditing(page, baseUrl, projectTitle);
   await next(page);   // source → details
-  await next(page);   // details → evidence
 
-  // The input is `hidden` behind a drop zone; setInputFiles drives it directly,
-  // which is what a file chooser would do anyway. Announced all the same,
-  // because on screen a file simply appears and an audience needs telling why.
-  const fileInput = page.locator('input[type="file"]');
-  say(page, '现在上传服务的佐证材料');
-  await fileInput.setInputFiles(filePath);
-  const fileName = filePath.split('/').pop()!;
-  await page.getByText(fileName, { exact: false }).waitFor({ state: 'visible', timeout: 60_000 });
+  const description = field(page, '服务内容描述 *');
+  assertContains(await description.inputValue(), draft.savedDescription,
+    '重新打开草稿后，应当看到之前保存的内容');
+  await type(description, '更详细的服务内容描述', draft.finalDescription);
+
+  await next(page);   // details → evidence
+  const fileName = await attachEvidence(page, draft.evidenceFile);
 
   await next(page);   // evidence → declaration
   const confirm = page.getByRole('button', { name: '确认提交' });
   await tap(confirm, '确认提交');
   // The wizard closing is the signal, not the toast. Toasts auto-dismiss, so
-  // waiting on one makes the step depend on winning a race it does not control —
-  // the submit itself had already succeeded when this first timed out.
+  // waiting on one makes the step depend on winning a race it does not control.
+  await confirm.waitFor({ state: 'hidden', timeout: 25_000 });
+  return fileName;
+}
+
+/** Straight from draft to submitted, with no edit — what the branch phases need. */
+export async function submitDraft(
+  page: Page, baseUrl: string, projectTitle: string, evidenceFile: string,
+): Promise<string> {
+  await openDraftForEditing(page, baseUrl, projectTitle);
+  await next(page);
+  await next(page);
+  const fileName = await attachEvidence(page, evidenceFile);
+  await next(page);
+  const confirm = page.getByRole('button', { name: '确认提交' });
+  await tap(confirm, '确认提交');
   await confirm.waitFor({ state: 'hidden', timeout: 25_000 });
   return fileName;
 }
 
 /**
- * @param key a record number once one exists, or the project title while the
- *   record is still the project's only draft
+ * Attaches the file and waits for it to be usable.
+ *
+ * Evidence is not optional: submission is refused without at least one file in
+ * `READY` state (`ServiceRecordServiceImpl:581`), so this wait is waiting for a
+ * real upload to finish rather than a cosmetic delay.
  */
+async function attachEvidence(page: Page, filePath: string): Promise<string> {
+  const fileName = filePath.split('/').pop()!;
+  narrate(page, '现在上传服务的佐证材料');
+  await page.locator('input[type="file"]').setInputFiles(filePath);
+  await page.getByText(fileName, { exact: false }).waitFor({ state: 'visible', timeout: 60_000 });
+  return fileName;
+}
+
 export async function assertRecordStatus(page: Page, baseUrl: string, key: string, expectedZh: string): Promise<void> {
   const text = await recordRowText(page, baseUrl, key, expectedZh === RECORD_STATUS.draft ? RECORD_STATUS.draft : undefined);
   assertContains(text, expectedZh, `该服务记录应当处于「${expectedZh}」状态`);
 }
 
 /**
- * Reads the description back through the edit form.
+ * Opens the record's detail view and checks both facts there.
  *
- * The record list is a table of project, category, date, duration, status and
- * coins — the description is not on it, so asserting against the list would
- * always fail. Reopening the draft is also the honest check: it is what a
- * student does to see whether their edit stuck, and a save that silently drops
- * the change looks identical to one that worked.
+ * One dialog rather than two trips: the detail view carries the description *and*
+ * the attached file, so this is where a dropped edit and a lost upload would both
+ * show — and it is the screen a student opens to check their own work. The record
+ * list itself carries neither; it is a table of project, category, date,
+ * duration, status and coins.
  */
-export async function assertRecordDescription(page: Page, baseUrl: string, projectTitle: string, expected: string): Promise<void> {
-  await openDraftForEditing(page, baseUrl, projectTitle);
-  await next(page);
-  const actual = await field(page, '服务内容描述 *').inputValue();
-  assertContains(actual, expected, '重新打开草稿后应当看到刚刚保存的服务内容描述');
-  await page.goto(`${baseUrl}/student/records`, { waitUntil: 'domcontentloaded' });
-}
-
-/** The row carries the record number, not the filename — so this checks the detail view. */
-export async function assertEvidenceShown(page: Page, baseUrl: string, recordNumber: string, fileName: string): Promise<void> {
+export async function assertRecordDetail(
+  page: Page, baseUrl: string, recordNumber: string, expect: { description: string; fileName: string },
+): Promise<void> {
   await gotoRecords(page, baseUrl);
   await tap(recordRow(page, recordNumber).getByRole('button', { name: '查看' }), '查看详情');
   // Wait for the dialog, not just for the click. Reading the page straight after
@@ -149,27 +159,58 @@ export async function assertEvidenceShown(page: Page, baseUrl: string, recordNum
   // correct — which is how this read the first time.
   await page.getByText('服务记录详情').waitFor({ state: 'visible', timeout: 15_000 });
   await page.getByText('证明材料').waitFor({ state: 'visible', timeout: 15_000 });
+
   const body = await page.locator('body').innerText();
-  assertThat(body.length > 0, '记录详情应当可以打开');
-  assertContains(body, fileName, `记录详情应当显示已上传的佐证文件：${fileName}`);
+  assertContains(body, expect.description, '记录详情应当显示修改后的服务内容描述');
+  assertContains(body, expect.fileName, `记录详情应当显示已上传的佐证文件：${expect.fileName}`);
   await tap(page.getByRole('button', { name: '关闭' }), '关闭');
 }
 
 /**
- * Opens the record list with every row on one page.
+ * Opens the record list.
  *
- * The list holds 20 rows by default, sorted by service date descending, and the
- * records a run files are dated in the past — so by the third run this student's
- * newest records sit below the fold and the row simply is not there. Searching
- * does not help: the record search matches student and organization names, not
- * project titles or record numbers. Raising the page size is the control that
- * does, and it is one a student has too.
+ * The newest record is on top because the page now sorts by creation time by
+ * default — which was a product fix rather than something for this suite to
+ * arrange. The run had been clicking the sort control itself, and a test that
+ * rearranges a screen before it can find anything is describing a defect, not
+ * working around one: a student filing a record for last month's session would
+ * equally have watched it land below thirty newer ones.
+ *
+ * The page size is still raised, so a row is present even when something else
+ * is on top. Searching would not help either way: the record search matches
+ * student and organization names, not project titles or record numbers.
  */
 async function gotoRecords(page: Page, baseUrl: string): Promise<void> {
-  await visit(page, `${baseUrl}/student/records`, '服务记录页面');
+  // Idempotent, because several assertions in a row each want this list. Saying
+  // "now open the service records page" three times over, to an audience already
+  // looking at it, reads as the script having lost its place.
+  if (!page.url().includes('/student/records')) {
+    await visit(page, `${baseUrl}/student/records`, '服务记录页面');
+  } else {
+    // Already here, so no announcement — but still reloaded, because the list
+    // was rendered before whatever just happened elsewhere. Skipping the refresh
+    // as well as the narration meant a record that had just been approved was
+    // still being read as submitted.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+  }
+
   const pageSize = page.locator('select').filter({ hasText: '100' }).last();
   await pageSize.waitFor({ state: 'visible', timeout: 15_000 });
-  await pageSize.selectOption('100');
+  if ((await pageSize.inputValue()) !== '100') {
+    await pageSize.selectOption('100');
+  }
+
+  // One click is enough: the component sets descending whenever the key changes
+  // (`nextDesc = sortKey === key ? !sortDesc : true`), and the default sort is by
+  // service date — so switching to creation time lands on newest-first directly.
+  // Asked of the URL, not the button. These lists sync their sort into the query
+  // string, so `sort=-createdAt` is settled the moment the page has loaded —
+  // whereas the button's own arrow is rendered by React a beat later, and reading
+  // it straight after a reload says "not sorted" about a list that is.
+  if (!page.url().includes('sort=-createdAt')) {
+    await tap(page.getByRole('button', { name: /创建时间/ }), '按创建时间排序，最新的排在最前面');
+    await page.waitForURL(url => url.search.includes('sort=-createdAt'), { timeout: 10_000 });
+  }
   await page.waitForTimeout(800);
 }
 
