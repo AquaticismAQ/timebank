@@ -1418,7 +1418,7 @@
       "lowMonth": "Low Month",
       "lowValue": "February · 90h",
       "lowNote": "Reduced activity during winter break",
-      "popularProjects": "Popular Projects Participation",
+      "participationByCategory": "Participation by Service Category",
       "popularRanking": "Popular Projects Ranking",
       "participants": "people · {{hours}}h total",
       "chartTotal": "Total",

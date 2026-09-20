@@ -91,6 +91,39 @@ public class ReportQueryRepository {
                 new MonthMinutesRow(rs.getString("ym"), rs.getInt("minutes")));
     }
 
+    public record CategoryParticipationRow(String categoryId, long participants, long totalMinutes) {
+    }
+
+    /**
+     * Participation grouped by the project's service category (issue 134).
+     *
+     * <p>Counts enrolments rather than distinct students — see
+     * {@code TopProjectsReportDto.CategoryFigure} for why a pie needs the
+     * additive one. The year window is the project's {@code start_at}, matching
+     * {@link #topProjects}, so the same project belongs to the same year in
+     * both halves of this report.</p>
+     */
+    public List<CategoryParticipationRow> participationByCategory(LocalDate start, LocalDate end) {
+        String sql = """
+                select p.category_id as category_id,
+                       count(*) as participants,
+                       (select coalesce(sum(sr.duration_minutes), 0) from service_record sr
+                         join project p2 on p2.id = sr.project_id
+                         where p2.category_id = p.category_id and sr.status = 'APPROVED'
+                           and sr.service_date between :start and :end) as total_minutes
+                from project p
+                join enrollment e on e.project_id = p.id and e.status in ('CONFIRMED', 'COMPLETED')
+                where p.start_at >= :startAt and p.start_at < :endAtExclusive
+                group by p.category_id
+                order by participants desc
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("start", start).addValue("end", end)
+                .addValue("startAt", start.atStartOfDay()).addValue("endAtExclusive", end.plusDays(1).atStartOfDay());
+        return jdbcTemplate.query(sql, params, (rs, rowNum) -> new CategoryParticipationRow(
+                rs.getString("category_id"), rs.getLong("participants"), rs.getLong("total_minutes")));
+    }
+
     public record DayMinutesRow(String day, int minutes) {
     }
 

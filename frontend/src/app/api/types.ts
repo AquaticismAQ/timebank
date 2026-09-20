@@ -571,6 +571,8 @@ export interface ReportData {
   serviceHoursByMonth: { month: string; hours: number }[];
   /** Every day of the academic year, empty ones included — the trend line is drawn from these (issue 133). Minutes, not hours: a day is often a fraction of one. */
   serviceHoursByDay: { day: string; minutes: number }[];
+  /** Participation grouped by service category — the pie's source (issue 134). Enrolments, so the slices add up. */
+  participationByCategory: { categoryId: string; participants: number; totalMinutes: number }[];
   /** Minutes on the wire; render with `minutesToHours`. Issue 093 §9: this was
    *  `totalHours: Math.round(minutes / 60)`, which reported 150 minutes as 3h. */
   topProjects: { title: string; participants: number; totalMinutes: number }[];

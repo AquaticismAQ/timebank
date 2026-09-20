@@ -1418,7 +1418,7 @@
       "lowMonth": "低谷月份",
       "lowValue": "2月 · 90h",
       "lowNote": "寒假期间活动减少",
-      "popularProjects": "热门项目参与人数",
+      "participationByCategory": "各类服务参与分布",
       "popularRanking": "热门项目榜",
       "participants": "人 · {{hours}}h 累计",
       "chartTotal": "总人数",

@@ -22,7 +22,7 @@ export function ReportsPage() {
   // read: the fetch below had `[]` dependencies and `api.reports.data()` took
   // no argument. The options now come from `/academic-years` and the selection
   // is what the report endpoints are scoped by.
-  const { academicYears, loading: dictionariesLoading } = useDictionaries();
+  const { academicYears, serviceCategories, loading: dictionariesLoading } = useDictionaries();
   const [yearFilter, setYearFilter] = useState('');
 
   // Most recent year first — `/academic-years` returns them unordered.
@@ -113,9 +113,22 @@ export function ReportsPage() {
     ? monthsWithHours.reduce((a, b) => (b.hours < a.hours ? b : a))
     : null;
 
-  const pieData = data.topProjects.map((p, i) => ({
-    name: p.title.slice(0, 8),
-    value: p.participants,
+  /**
+   * Slices are service categories, not individual projects (issue 134).
+   *
+   * A pie of projects was ten titles truncated to eight characters, four of
+   * them the same generated name — it could not be read, and "which project"
+   * is what the table beside it already answers. "Which kind of service" is the
+   * question a pie is for, and there are six categories rather than ten
+   * look-alike titles.
+   *
+   * Names come from the dictionary, so they follow the reader's language; the
+   * server sends ids and counts. An unknown id falls back to the id rather than
+   * vanishing from the chart.
+   */
+  const pieData = data.participationByCategory.map(c => ({
+    name: serviceCategories.find(sc => sc.id === c.categoryId)?.name ?? c.categoryId,
+    value: c.participants,
   }));
 
   return (
@@ -330,14 +343,14 @@ export function ReportsPage() {
 
       {activeTab === 'projects' && (
         <div className="space-y-4">
-          {data.topProjects.length === 0 ? (
+          {data.topProjects.length === 0 && pieData.length === 0 ? (
             <div className="bg-card border border-border rounded-2xl">
               <ListStateBanner error={null} empty emptyLabel={t('admin.reports.noProjectData')} />
             </div>
           ) : (
             <>
               <div className="bg-card border border-border rounded-2xl p-4">
-                <h3 className="text-foreground mb-4">{t('admin.reports.popularProjects')}</h3>
+                <h3 className="text-foreground mb-4">{t('admin.reports.participationByCategory')}</h3>
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
                     <Pie key="pie" data={pieData} cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="value" label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}>

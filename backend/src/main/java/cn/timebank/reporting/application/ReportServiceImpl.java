@@ -190,7 +190,11 @@ class ReportServiceImpl implements ReportService {
                 queryRepository.topProjects(10, year.startDate(), year.endDate()).stream()
                 .map(r -> new TopProjectsReportDto.ProjectFigure(r.projectId(), r.title(), r.participants(), r.totalMinutes()))
                 .toList();
-        return new TopProjectsReportDto(Instant.now(), year.id(), figures);
+        List<TopProjectsReportDto.CategoryFigure> byCategory =
+                queryRepository.participationByCategory(year.startDate(), year.endDate()).stream()
+                        .map(r -> new TopProjectsReportDto.CategoryFigure(r.categoryId(), r.participants(), r.totalMinutes()))
+                        .toList();
+        return new TopProjectsReportDto(Instant.now(), year.id(), figures, byCategory);
     }
 
     private String reviewerName(String reviewerId) {

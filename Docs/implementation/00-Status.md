@@ -1462,3 +1462,11 @@ Axis ticks are the first day of each month — a value the axis actually holds �
 **Verified** with the cross-check that matters — the two resolutions agree on the year's total, 240h counted both ways — plus the rendered chart: heading 服务时长趋势, twelve month ticks from 2026-09 to 2027-08, and 365 curve segments.
 
 **I broke the Reports page on the way and should record how.** The first version put the derived series behind `useMemo` *below* the `if (!data || !stats) return` guard; hooks after a conditional return run on some renders and not others, React threw #310, and the page went blank — deployed in that state for a few minutes. They are plain consts now. The lesson is about the check rather than the slip: `tsc` passes a hooks-order violation happily, and only loading the page and reading the console found it.
+
+### 41.29 The participation pie is sliced by category, not by project (2026-09-20)
+
+Issue 134, Aquaticism's request. The pie had ten slices labelled with project titles cut to eight characters — four of them the same generated `[AUTO] 2` name at 4% each — and it duplicated the Top Projects table sitting directly beside it, less legibly. A pie's job here is *which kind of service does this school do*: 70% community service says something, `Neighbou 19%` does not.
+
+`GET /reports/top-projects` now also returns `byCategory`. The count is **enrolments, not distinct students**: a pie is parts of a whole, and distinct-students-per-category would double-count anyone serving in two, leaving percentages of nothing in particular. Counted this way the slices sum to exactly the participation the project rows describe. Category **ids** travel, not names — the client holds the dictionary and renders in the reader's language (issue 121's division of labour) — and the year window is the project's `start_at`, matching `topProjects`, so a project belongs to the same year in both halves of one report.
+
+**Verified**: the API returns five categories totalling 77, and the chart renders 社区服务 70% · 校园服务 12% · 环保服务 9% · 公益服务 6% · 教育服务 3% — five full names, no truncation, no duplicate wedges. A page-error check is now part of verifying this page, after issue 133's hooks-order fault took it down behind a passing `tsc`.
