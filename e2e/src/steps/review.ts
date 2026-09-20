@@ -104,3 +104,34 @@ export async function assertRecordLeftTheQueue(page: Page, baseUrl: string, reco
   const body = await page.locator('body').innerText();
   assertThat(!body.includes(recordNumber), `审核完成后，该记录不应当再出现在待审核队列中：${recordNumber}`);
 }
+
+export type ProposalDecision = 'approve' | 'requestChanges';
+
+const PROPOSAL_BUTTON: Record<ProposalDecision, string> = {
+  approve: '通过', requestChanges: '要求修改',
+};
+
+/**
+ * A teacher reads a student's proposal and decides on it.
+ *
+ * Unlike a service record, the comment is where the work happens on a
+ * `requestChanges`: the student only gets one sentence explaining what to fix,
+ * so a demonstration that leaves it blank is showing a rejection without a
+ * reason. It is written here even though the field is optional.
+ */
+export async function decideOnProposal(
+  page: Page, baseUrl: string, title: string, decision: ProposalDecision, comment: string,
+): Promise<void> {
+  await visit(page, `${baseUrl}/admin/proposals`, '活动审核页面');
+  await tap(page.getByText(title, { exact: false }).first(), '这份待审核的提案');
+
+  const action = page.getByRole('button', { name: PROPOSAL_BUTTON[decision], exact: true }).last();
+  await action.waitFor({ state: 'visible', timeout: 15_000 });
+  await tap(action, PROPOSAL_BUTTON[decision]);
+
+  await type(page.locator('textarea').last(), '给学生的审核意见', comment);
+  const confirm = page.getByRole('button', { name: '提交', exact: true }).last();
+  await tap(confirm, '提交');
+  // The dialog closing is the signal, not the toast — toasts auto-dismiss.
+  await confirm.waitFor({ state: 'hidden', timeout: 25_000 });
+}

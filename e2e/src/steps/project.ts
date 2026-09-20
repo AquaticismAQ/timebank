@@ -144,3 +144,20 @@ function localDateTime(d: Date): string {
 function minutesFrom(base: Date, minutes: number): Date {
   return new Date(base.getTime() + minutes * 60_000);
 }
+
+/**
+ * Publishes the draft an approved proposal generated.
+ *
+ * The project already exists by the time this runs: approving a proposal creates
+ * it and backfills `approvedProjectId` in the same transaction, so there is
+ * nothing to fill in — only a draft to release. Published from the row menu,
+ * which is the one path a teacher has for a project they did not author.
+ */
+export async function publishGeneratedProject(page: Page, baseUrl: string, title: string): Promise<void> {
+  const card = await findProjectCard(page, baseUrl, title);
+  await tap(card.locator('button').filter({ hasText: /^$/ }).first(), '项目的更多操作');
+  await tap(page.getByText('发布', { exact: true }).last(), '发布');
+  // The card re-renders with its new status; waiting for the menu item to go is
+  // what says the action was taken rather than merely clicked.
+  await page.getByText('发布', { exact: true }).last().waitFor({ state: 'hidden', timeout: 20_000 });
+}

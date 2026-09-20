@@ -17,17 +17,22 @@ pnpm e2e --list                           # flows, profiles, gates
 pnpm selftest                             # the harness's own pure-logic checks
 ```
 
-## Running the demonstration
+## Running the demonstrations
 
 ```bash
-./demo-project.sh                 # narrated, full screen, browser left open
+./demo-project.sh                 # the school runs an activity: create → register → record → approve
+./demo-proposal.sh                # a student proposes one: propose → changes → revise → approve → publish
 ./demo-project.sh --cleanup       # tidy earlier [AUTO] runs first
 ./demo-project.sh --no-gate tts   # silent
 ./demo-project.sh --beat 1500     # slower pauses
 ```
 
-`demo-project.sh` is **not in git** — it carries the test-server account
-credentials, so it is gitignored and refuses to run if that ever stops being
+The two flows show the workflow from opposite ends, and the proposal one is the
+better answer to "what can a student actually start?" — it is the only place the
+review is visibly a conversation rather than a gate.
+
+Neither launcher is **in git** — it carries the test-server account
+credentials, so both are gitignored and refuse to run if that ever stops being
 true, or if it is found tracked. This repo has twice rewritten its history to
 remove leaked data; a credential file that quietly became trackable is how a
 third would start.

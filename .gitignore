@@ -69,3 +69,4 @@ e2e/narration/
 
 # Demo launcher — holds test-server account credentials, never commit it
 e2e/demo-project.sh
+e2e/demo-proposal.sh

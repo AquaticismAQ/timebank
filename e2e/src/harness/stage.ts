@@ -170,7 +170,7 @@ export async function type(locator: Locator, fieldZh: string, value: string): Pr
 }
 
 export async function choose(
-  locator: Locator, fieldZh: string, option: string | { label: string },
+  locator: Locator, fieldZh: string, option: string | { label: string } | { index: number },
 ): Promise<void> {
   const page = locator.page();
   say(page, `现在选择${fieldZh}`);
