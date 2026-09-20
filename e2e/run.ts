@@ -7,6 +7,9 @@ import { ALL_GATES, PROFILES, resolveGates } from './src/harness/profiles.js';
 import { FLOWS, findFlow } from './src/flows/index.js';
 import { Api } from './src/harness/api.js';
 import { cleanupPreviousRuns, describeCleanup } from './src/harness/cleanup.js';
+import { Speaker } from './src/harness/tts.js';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * `pnpm e2e [flow-id] [options]`
@@ -52,8 +55,20 @@ async function main(): Promise<number> {
     if (cleanupOnly) return 0;
   }
 
+  // `--dry-narrate` reads a script back aloud and touches nothing, for checking
+  // the wording and the timing before the day. It speaks a real narration file
+  // rather than pretending to run the flow, because the text is produced as the
+  // phases execute — there is no script until a run has made one.
+  if (flag('dry-narrate')) {
+    return dryNarrate(config.narrationDir, value('script'));
+  }
+
   const runId = newRunId();
-  const narrator = new Narrator(config.narrationDir, runId);
+  const { speaker, reason } = gates.has('tts')
+    ? Speaker.locate(config.repoRoot)
+    : { speaker: null, reason: 'tts gate off' };
+  if (gates.has('tts')) console.log(`  ${reason}`);
+  const narrator = new Narrator(config.narrationDir, runId, speaker);
   const browser = new BrowserHarness(config);
   await browser.start();
 
@@ -68,6 +83,33 @@ async function main(): Promise<number> {
     await browser.finish();
   }
   return outcomes.every(o => o.ok) ? 0 : 1;
+}
+
+/** Speaks a previously written script, line by line, without opening a browser. */
+function dryNarrate(narrationDir: string, explicitPath?: string): number {
+  const path = explicitPath ?? newestScript(narrationDir);
+  if (!path) {
+    console.error('No narration script to read. Run the flow once first, or pass --script <path>.');
+    return 1;
+  }
+  const { speaker, reason } = Speaker.locate(join(narrationDir, '..', '..'));
+  console.log(`  ${reason}`);
+  console.log(`  reading ${path}\n`);
+  const lines = readFileSync(path, 'utf8').split('\n').map(l => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    console.log(`  ${line}`);
+    speaker?.say(line);
+  }
+  return 0;
+}
+
+function newestScript(narrationDir: string): string | null {
+  try {
+    const files = readdirSync(narrationDir).filter(f => f.endsWith('.txt')).sort();
+    return files.length > 0 ? join(narrationDir, files[files.length - 1]) : null;
+  } catch {
+    return null;
+  }
 }
 
 function report(outcomes: RunOutcome[], scriptPath: string, profile: string, gates: string[]): void {

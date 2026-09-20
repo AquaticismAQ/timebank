@@ -26,6 +26,13 @@ export const preflight: Phase = {
     assertThat(studentPage.url().includes('/student'), '学生应当能够登录并进入学生端');
     ctx.narrator.result('管理员与学生账号均可登录');
 
+    if (ctx.has('tts')) {
+      // Checked here rather than discovered mid-demo: a cold TTS start is about
+      // six seconds per line, so the answer to a stopped server is to start it,
+      // not to wait for it.
+      ctx.narrator.note('TTS: enabled for this run');
+    }
+
     ctx.narrator.step('确认学生所在年级');
     // The project is made eligible for exactly this grade, so it has to be known
     // before anything is created — and a student with no grade would otherwise

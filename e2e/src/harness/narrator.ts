@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Speaker } from './tts.js';
 
 /**
  * Says what is happening, twice: to the console for whoever is running it, and to
@@ -13,7 +14,17 @@ import { join } from 'node:path';
 export class Narrator {
   private readonly file: string;
 
-  constructor(narrationDir: string, private readonly runId: string, private readonly quiet = false) {
+  /**
+   * @param speaker when present, every spoken line is also said aloud, blocking.
+   *   The file is written either way — it is the script, and reviewing the
+   *   wording should not require a working speaker.
+   */
+  constructor(
+    narrationDir: string,
+    private readonly runId: string,
+    private readonly speaker: Speaker | null = null,
+    private readonly quiet = false,
+  ) {
     mkdirSync(narrationDir, { recursive: true });
     this.file = join(narrationDir, `${runId}.txt`);
   }
@@ -41,6 +52,9 @@ export class Narrator {
   private write(console_: string, spoken: string): void {
     if (!this.quiet) console.log(`${stamp()} ${console_}`);
     appendFileSync(this.file, `${spoken}\n`, 'utf8');
+    // Said after the line is printed and written, so a crash mid-speech still
+    // leaves a complete script behind.
+    this.speaker?.say(spoken);
   }
 
   get scriptPath(): string {

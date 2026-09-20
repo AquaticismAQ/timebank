@@ -148,9 +148,37 @@ phases. If a new flow needs a step that does not exist, put it in `src/steps/` s
 the next flow gets it too — a flow file should read as prose about the workflow,
 not as Playwright calls.
 
-## Narration
+## Narration and voice
 
-Every phase is announced to the console and appended to `narration/<runId>.txt`.
-That file is the **script**: prose only, no timestamps or ids, because it is what
-gets spoken aloud once the wording has been reviewed. Speaking it is the `tts`
-gate, wired to the local Qwen3 server (`../tts`).
+Every line is announced to the console and appended to `narration/<runId>.txt`.
+That file is the **script**: prose only, no timestamps or ids. It is written on
+every run, with or without a working speaker, because reviewing the wording
+should not depend on audio.
+
+With the `tts` gate on — the `demo` profile's default — each line is also spoken
+through the local Qwen3 server (`../tts`).
+
+```bash
+python qwen_serve.py start     # in ../tts, before the demo
+pnpm e2e                       # narrated
+pnpm e2e --no-gate tts         # silent
+pnpm e2e --dry-narrate         # read the last script aloud, touch nothing
+pnpm e2e --dry-narrate --script narration/260920-150455-XXXX.txt
+```
+
+Three things worth knowing:
+
+- **Speech blocks.** A line takes about four seconds, and the run waits for it.
+  That is deliberate: a fire-and-forget call runs ahead of the browser and
+  narrates the next step while the audience is still looking at the last one.
+  It roughly doubles a run's length, which for a demonstration is the point.
+- **Start the server first.** A cold start is about six seconds *per line*, so
+  the answer to a stopped server is to start it, not to wait for it. Preflight
+  reports whether it found one running.
+- **Losing the voice is never fatal.** If the server is missing or stops
+  responding, the run says so once and carries on silently. Stopping in front of
+  an audience is worse than finishing without sound.
+
+`--dry-narrate` reads a real script back rather than pretending to run the flow,
+because the text is produced as the phases execute — there is no script until a
+run has made one.
