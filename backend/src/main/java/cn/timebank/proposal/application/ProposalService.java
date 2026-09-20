@@ -25,7 +25,7 @@ public interface ProposalService {
      * nothing rather than throwing. {@code gradeId} matches the proposal's own snapshotted grade.
      */
     Page<ProposalDto> list(Pageable pageable, Authentication auth, String status, String categoryId, String gradeId,
-                            String search, String resolvedLanguage);
+                            String academicYearId, String search, String resolvedLanguage);
 
     ProposalDto getDetail(String id, Authentication auth, String resolvedLanguage);
 

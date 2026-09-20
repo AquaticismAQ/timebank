@@ -6,6 +6,7 @@ import { api } from '../../api/client';
 import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { usePermissions, useAuth } from '../../App';
 import { useUrlSyncedPagedApi } from '../../api/useApi';
+import { useAcademicYearFilter } from '../../api/useAcademicYearFilter';
 import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
@@ -64,6 +65,8 @@ export function ProposalReview() {
 
   const { items, page, loading, error, params, setSearch, setFilter, setSort, setPage, setPageSize, refetch } =
     useUrlSyncedPagedApi(api.eventProposals.list, { filter: { status: 'submitted' }, sort: '-plannedStartAt' });
+
+  const academicYearFilter = useAcademicYearFilter(params, setFilter);
 
   const sortKey = (params.sort?.replace(/^-/, '') as SortKey) ?? 'plannedStartAt';
   const sortDesc = params.sort?.startsWith('-') ?? true;
@@ -136,7 +139,7 @@ export function ProposalReview() {
             placeholder={t('admin.proposals.searchPlaceholder')}
           />
         </div>
-        <div className="grid grid-cols-3 gap-2 lg:contents">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 lg:contents">
           <select value={params.filter?.categoryId ?? 'all'} onChange={e => setFilter('categoryId', e.target.value === 'all' ? undefined : e.target.value)}
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.proposals.allCategories')}</option>
@@ -151,6 +154,14 @@ export function ProposalReview() {
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.proposals.allGrades')}</option>
             {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+          {/* Defaults to the current year (issue 115): a review queue is about
+              what is in front of you now, and past years piled in front of it are
+              noise. All years stays available so nothing becomes unreachable. */}
+          <select value={academicYearFilter.value} onChange={e => academicYearFilter.onChange(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.proposals.allAcademicYears')}</option>
+            {academicYearFilter.academicYears.map(y => <option key={y.id} value={y.id}>{y.code}</option>)}
           </select>
         </div>
       </div>

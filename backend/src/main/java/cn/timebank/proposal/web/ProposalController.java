@@ -64,7 +64,8 @@ public class ProposalController {
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
         Page<ProposalDto> page = proposalService.list(pageable, auth, query.filter("status"), query.filter("categoryId"),
-                query.filter("gradeId"), query.search(), resolveLanguage(acceptLanguage, auth));
+                query.filter("gradeId"), query.filter("academicYearId"), query.search(),
+                resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

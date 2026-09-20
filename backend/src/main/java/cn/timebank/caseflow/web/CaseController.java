@@ -52,7 +52,8 @@ public class CaseController {
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
         Page<CaseDto> page = caseService.list(pageable, auth, query.filter("status"), query.filter("type"),
-                query.filter("gradeId"), query.search(), resolveLanguage(acceptLanguage, auth));
+                query.filter("gradeId"), query.filter("academicYearId"), query.search(),
+                resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 

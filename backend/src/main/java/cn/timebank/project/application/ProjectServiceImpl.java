@@ -34,6 +34,7 @@ import cn.timebank.project.infrastructure.ProjectRevisionRepository;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.TimeBankPrincipal;
 import cn.timebank.student.application.AcademicStructureService;
+import cn.timebank.student.application.AcademicYearWindowResolver;
 import cn.timebank.student.application.dto.AcademicYearDto;
 import cn.timebank.student.application.dto.GradeDto;
 import cn.timebank.iam.application.UserService;
@@ -65,6 +66,7 @@ class ProjectServiceImpl implements ProjectService {
     private final ServiceCategoryService serviceCategoryService;
     private final OrganizationService organizationService;
     private final AcademicStructureService academicStructureService;
+    private final AcademicYearWindowResolver academicYearWindows;
     private final UserService userService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
@@ -74,6 +76,7 @@ class ProjectServiceImpl implements ProjectService {
                        EnrollmentReadRepository enrollmentReadRepository, ProjectArchiveReadinessRepository archiveReadinessRepository,
                        ServiceCategoryService serviceCategoryService,
                        OrganizationService organizationService, AcademicStructureService academicStructureService,
+                       AcademicYearWindowResolver academicYearWindows,
                        UserService userService, AuditService auditService, ObjectMapper objectMapper) {
         this.repository = repository;
         this.revisionRepository = revisionRepository;
@@ -83,6 +86,7 @@ class ProjectServiceImpl implements ProjectService {
         this.serviceCategoryService = serviceCategoryService;
         this.organizationService = organizationService;
         this.academicStructureService = academicStructureService;
+        this.academicYearWindows = academicYearWindows;
         this.userService = userService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
@@ -490,45 +494,22 @@ class ProjectServiceImpl implements ProjectService {
      */
     private Specification<Project> academicYearSpecification(String academicYearId, Authentication auth) {
         TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
-        AcademicYearDto year;
-        if (isStudent(principal)) {
-            year = currentAcademicYear();
-        } else if (academicYearId == null || academicYearId.isBlank()) {
-            // Absent means every year, unlike /reports/*, where it means the
-            // current one. This endpoint is shared by several screens and any
-            // future caller; narrowing it on a missing parameter would change
-            // behaviour nobody asked to change.
-            return null;
-        } else {
-            String wanted = academicYearId.trim();
-            year = academicStructureService.listAcademicYears().stream()
-                    .filter(y -> y.id().equals(wanted)).findFirst()
-                    // Never a silent fall back to the current year: a caller asking
-                    // for a year that does not exist has a bug, and answering with
-                    // another year's projects hides it behind rows that look real.
-                    .orElseThrow(() -> ApiException.notFound("No academic year with id " + wanted));
-        }
-        if (year == null) {
+        // Absent means every year for staff, unlike /reports/*, where it means the
+        // current one — this endpoint is shared by several screens and any future
+        // caller, so narrowing on a missing parameter would change behaviour
+        // nobody asked to change. An unknown id is a 404 either way; both rules
+        // live in the resolver now (issue 115).
+        AcademicYearWindowResolver.Window window = isStudent(principal)
+                ? academicYearWindows.currentOrNull()
+                : academicYearWindows.resolveOrNull(academicYearId);
+        if (window == null) {
             return null;
         }
-        Instant from = year.startDate().atStartOfDay(ZoneId.systemDefault()).toInstant();
-        // Exclusive upper bound at the start of the day after the year's last day,
-        // so a project starting at any time on that last day is still inside it.
-        Instant until = year.endDate().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
         return (root, query, cb) -> cb.and(
-                cb.greaterThanOrEqualTo(root.get("startAt"), from),
-                cb.lessThan(root.get("startAt"), until));
+                cb.greaterThanOrEqualTo(root.get("startAt"), window.fromInclusive()),
+                cb.lessThan(root.get("startAt"), window.untilExclusive()));
     }
 
-    /**
-     * The year flagged current. Returns null rather than throwing if none is —
-     * that is a seeding fault, and failing every project list because of it would
-     * turn a misconfiguration into an outage.
-     */
-    private AcademicYearDto currentAcademicYear() {
-        return academicStructureService.listAcademicYears().stream()
-                .filter(AcademicYearDto::current).findFirst().orElse(null);
-    }
 
     private boolean isStudent(TimeBankPrincipal principal) {
         return principal.roleCodes().contains("student");

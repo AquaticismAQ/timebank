@@ -1248,3 +1248,15 @@ The split is derived in `lib/gradeStages.ts` from `GET /lifecycle/config`'s exit
 **Verified live on each distinct host**: the Create User dialog's teacher grade bonding and the project create form both show 六/七/八 then 九/十/十一/十二; the student edit dialog and the activation-slips picker both show `optgroup`s "6–8" (3 options) and "9–12" (4). The project edit form is the same component with the same props and was not opened by hand — recorded as such rather than glossed.
 
 Filter dropdowns were deliberately left flat: they are not dialogs, and Student Management's already carries the graduate `optgroup`, where a second grouping axis would compete with it.
+
+### 41.11 Case Review and Proposal Review scoped to an academic year (2026-09-20)
+
+Issue 115. Both gained `filter[academicYearId]` and a year dropdown defaulting to the current year with an All years option — the same treatment Project Management got in issue 112, for the same reason: a review queue buried under every past term is not a queue.
+
+The two are dated **differently on purpose**. A case belongs to the year it was filed (`createdAt`), because a case is an action taken about something else and has no event of its own; `createdAt` rather than `submittedAt` because drafts have no `submittedAt` and would otherwise vanish from every year. A proposal belongs to the year its **planned event** falls in (`plannedStartAt`), because approval generates the official project in the same transaction and `/projects` scopes that project by `startAt` — dating the proposal by when it was written would let it and the project it becomes land in different years.
+
+**No student pin here**, unlike the Project Center: both endpoints also serve the students' own history, and last year's appeal is something a student is entitled to read. The current-year default lives in the two review screens instead.
+
+Three copies of the year-window logic would have been three chances to drift, so it was extracted to `AcademicYearWindowResolver` in the module that owns academic years, and `ProjectServiceImpl` moved onto it in the same change (its ITs re-run unchanged). Deliberately not merged with `ReportAcademicYearResolver`, whose absent-means-current rule is right for a report and wrong for a shared list.
+
+**Verified live** on both resources: no parameter and the current year each return 4, a past year returns 0, an unknown id returns 404; both screens load on 2026-2027 with the year in the URL, and a copied link naming 2025-2026 opens on 2025-2026 rather than being overwritten by the default. The live server holds nothing outside the current year, so the past-year-hidden half rests on `CaseAndProposalAcademicYearScopeIT`, whose two proposals share a `created_at` and differ only in planned date — it fails if the implementation keys on creation. Red-checked: removing both specifications fails 4 of 6 while the two "absent means every year" tests still pass.

@@ -8,6 +8,7 @@ import cn.timebank.common.error.ApiException;
 import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.common.idempotency.IdempotencyService;
 import cn.timebank.common.pagination.FilterSpecifications;
+import cn.timebank.student.application.AcademicYearWindowResolver;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.organization.application.OrganizationService;
 import cn.timebank.organization.application.ServiceCategoryService;
@@ -67,6 +68,7 @@ class ProposalServiceImpl implements ProposalService {
     private final ServiceCategoryService serviceCategoryService;
     private final OrganizationService organizationService;
     private final AcademicStructureService academicStructureService;
+    private final AcademicYearWindowResolver academicYearWindows;
     private final UserService userService;
     private final AuditService auditService;
     private final DataScopeResolver dataScopeResolver;
@@ -79,6 +81,7 @@ class ProposalServiceImpl implements ProposalService {
                         ProposalReviewEventRepository reviewEventRepository, StudentService studentService,
                         ServiceCategoryService serviceCategoryService, OrganizationService organizationService,
                         AcademicStructureService academicStructureService,
+                        AcademicYearWindowResolver academicYearWindows,
                         UserService userService, AuditService auditService, DataScopeResolver dataScopeResolver,
                         IdempotencyService idempotencyService, ObjectMapper objectMapper,
                         ProposalApprovalTransaction approvalTransaction) {
@@ -89,6 +92,7 @@ class ProposalServiceImpl implements ProposalService {
         this.serviceCategoryService = serviceCategoryService;
         this.organizationService = organizationService;
         this.academicStructureService = academicStructureService;
+        this.academicYearWindows = academicYearWindows;
         this.userService = userService;
         this.auditService = auditService;
         this.dataScopeResolver = dataScopeResolver;
@@ -100,15 +104,42 @@ class ProposalServiceImpl implements ProposalService {
     @Override
     @Transactional(readOnly = true)
     public Page<ProposalDto> list(Pageable pageable, Authentication auth, String status, String categoryId,
-                                   String gradeId, String search, String resolvedLanguage) {
+                                   String gradeId, String academicYearId, String search, String resolvedLanguage) {
         Specification<EventProposal> filterSpec = FilterSpecifications.and(
                 FilterSpecifications.equalToEnum("status", ProposalStatus.class, status),
                 FilterSpecifications.equalTo("categoryId", categoryId),
                 FilterSpecifications.equalTo("gradeId", gradeId),
+                academicYearSpecification(academicYearId),
                 FilterSpecifications.searchAnyContains(search, "title"));
         Specification<EventProposal> spec = FilterSpecifications.and(scopeSpecification(auth), filterSpec);
         Page<EventProposal> page = repository.findAll(spec, pageable);
         return page.map(p -> toDto(p, resolvedLanguage));
+    }
+
+
+    /**
+     * {@code filter[academicYearId]} — a proposal belongs to the year its
+     * <b>planned event</b> falls in (issue 115).
+     *
+     * <p>{@code plannedStartAt}, not {@code createdAt}, because approving a
+     * proposal generates the official project in the same transaction and
+     * {@code GET /projects} scopes that project by its {@code startAt} (issue
+     * 112). Dating the proposal by when it was written would let a proposal and
+     * the project it became land in different years — two screens disagreeing
+     * about one event, which is exactly what issue 112 forbade.</p>
+     *
+     * <p>Absent means every year, and an unknown id is a 404 — both in
+     * {@link AcademicYearWindowResolver}, shared with projects and cases. No
+     * student pin: a student must be able to read their own past proposals.</p>
+     */
+    private Specification<EventProposal> academicYearSpecification(String academicYearId) {
+        AcademicYearWindowResolver.Window window = academicYearWindows.resolveOrNull(academicYearId);
+        if (window == null) {
+            return null;
+        }
+        return (root, query, cb) -> cb.and(
+                cb.greaterThanOrEqualTo(root.get("plannedStartAt"), window.fromInclusive()),
+                cb.lessThan(root.get("plannedStartAt"), window.untilExclusive()));
     }
 
     @Override

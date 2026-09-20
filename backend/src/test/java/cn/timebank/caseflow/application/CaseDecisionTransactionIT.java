@@ -286,14 +286,14 @@ class CaseDecisionTransactionIT extends AbstractIntegrationTest {
 
         // owner: sees it in their own list, and can fetch it
         var ownerList = caseService.list(PageRequest.of(0, 50), studentAuth(student.id()),
-                null, null, null, null, "zh-CN");
+                null, null, null, null, null, "zh-CN");
         assertThat(ownerList.getContent()).extracting(CaseDto::id).contains(draft.id());
         assertThat(caseService.getDetail(draft.id(), studentAuth(student.id()), "zh-CN").id())
                 .isEqualTo(draft.id());
 
         // admin: absent from the unfiltered list a reviewer actually loads
         var adminList = caseService.list(PageRequest.of(0, 50), staffAuth("admin"),
-                null, null, null, null, "zh-CN");
+                null, null, null, null, null, "zh-CN");
         assertThat(adminList.getContent()).extracting(CaseDto::id).doesNotContain(draft.id());
 
         // admin: and not reachable by id either

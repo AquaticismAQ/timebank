@@ -23,6 +23,7 @@ import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.idempotency.IdempotencyService;
 import cn.timebank.common.pagination.FilterSpecifications;
+import cn.timebank.student.application.AcademicYearWindowResolver;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.DataScopeResolver;
 import cn.timebank.security.application.DataScopeSpecifications;
@@ -60,6 +61,7 @@ class CaseServiceImpl implements CaseService {
     private final StudentService studentService;
     private final ServiceRecordService serviceRecordService;
     private final AcademicStructureService academicStructureService;
+    private final AcademicYearWindowResolver academicYearWindows;
     private final AuditService auditService;
     private final DataScopeResolver dataScopeResolver;
     private final IdempotencyService idempotencyService;
@@ -70,6 +72,7 @@ class CaseServiceImpl implements CaseService {
     CaseServiceImpl(CaseRepository repository, CaseRevisionRepository revisionRepository,
                     CaseDecisionEventRepository decisionEventRepository, StudentService studentService,
                     ServiceRecordService serviceRecordService, AcademicStructureService academicStructureService,
+                    AcademicYearWindowResolver academicYearWindows,
                     AuditService auditService, DataScopeResolver dataScopeResolver,
                     IdempotencyService idempotencyService, ObjectMapper objectMapper,
                     CaseDecisionTransaction decisionTransaction) {
@@ -79,6 +82,7 @@ class CaseServiceImpl implements CaseService {
         this.studentService = studentService;
         this.serviceRecordService = serviceRecordService;
         this.academicStructureService = academicStructureService;
+        this.academicYearWindows = academicYearWindows;
         this.auditService = auditService;
         this.dataScopeResolver = dataScopeResolver;
         this.idempotencyService = idempotencyService;
@@ -88,11 +92,13 @@ class CaseServiceImpl implements CaseService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<CaseDto> list(Pageable pageable, Authentication auth, String status, String type, String gradeId, String search, String resolvedLanguage) {
+    public Page<CaseDto> list(Pageable pageable, Authentication auth, String status, String type, String gradeId,
+                               String academicYearId, String search, String resolvedLanguage) {
         Specification<Case> filterSpec = FilterSpecifications.and(
                 FilterSpecifications.equalToEnum("status", CaseStatus.class, status),
                 FilterSpecifications.equalToEnum("type", CaseType.class, type),
                 FilterSpecifications.equalTo("gradeId", gradeId),
+                academicYearSpecification(academicYearId),
                 FilterSpecifications.searchAnyContains(search, "title"));
         Specification<Case> spec = FilterSpecifications.and(
                 scopeSpecification(auth), draftsVisibleOnlyToTheirOwner(auth), filterSpec);
@@ -100,6 +106,38 @@ class CaseServiceImpl implements CaseService {
         Map<String, Integer> gradeSequenceById = gradeSequenceById(resolvedLanguage);
         Map<String, String> classNameById = classNameById();
         return page.map(c -> toDto(c, resolvedLanguage, gradeSequenceById, classNameById));
+    }
+
+
+    /**
+     * {@code filter[academicYearId]} — a case belongs to the year it was
+     * <b>filed</b> (issue 115).
+     *
+     * <p>A case has no event of its own to date it by: unlike a project or a
+     * proposal it is an action taken about something else, and its only dates are
+     * {@code createdAt}, {@code submittedAt} and {@code updatedAt}. Filing is the
+     * one of those that cannot change afterwards, and it is the question Case
+     * Review actually asks — "what came in this year".</p>
+     *
+     * <p>{@code createdAt} rather than {@code submittedAt} because a draft has no
+     * {@code submittedAt}, and a student's own case list shows drafts. Keying on a
+     * nullable column would drop every draft out of every year. The two differ only
+     * for a case drafted either side of the turnover date, which is a rarity worth
+     * the drafts staying visible.</p>
+     *
+     * <p>Absent means every year, and an unknown id is a 404 — both in
+     * {@link AcademicYearWindowResolver}, shared with projects and proposals so the
+     * three cannot drift. No student pin here, unlike the Project Center: a student
+     * must be able to read their own past appeals.</p>
+     */
+    private Specification<Case> academicYearSpecification(String academicYearId) {
+        AcademicYearWindowResolver.Window window = academicYearWindows.resolveOrNull(academicYearId);
+        if (window == null) {
+            return null;
+        }
+        return (root, query, cb) -> cb.and(
+                cb.greaterThanOrEqualTo(root.get("createdAt"), window.fromInclusive()),
+                cb.lessThan(root.get("createdAt"), window.untilExclusive()));
     }
 
     @Override

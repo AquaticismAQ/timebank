@@ -681,6 +681,14 @@ A consequence worth knowing: a `supervisorKind: "student"` peer supervisor's con
 
 `directory.read` is deliberately narrower than `students.read`: it's the permission `role_student` holds (students otherwise have no way to look up another student's or teacher's id), and its response never carries `studentNumber`/`status`/`graduationYear`/contact fields the way `/students`'s own list response does. `search` is required and results are capped at a small page size (20) — this is a typeahead, not a directory browse.
 
+
+**`filter[academicYearId]` on `GET /cases` and `GET /event-proposals` (added 2026-09-20, issue 115).** Each is scoped by the date that defines *its* year, and the two are deliberately different:
+
+- **A case belongs to the year it was filed** (`createdAt`). A case has no event of its own — it is an action taken about something else, and filing is its only date that cannot change afterwards. `createdAt` rather than `submittedAt` because a draft has no `submittedAt` and a student's own case list shows drafts; keying on a nullable column would drop every draft out of every year.
+- **A proposal belongs to the year its planned event falls in** (`plannedStartAt`). Approving a proposal generates the official project in the same transaction, and `GET /projects` scopes that project by `startAt` (§4.2). Dating the proposal by when it was written would let a proposal and the project it became land in different years — two screens disagreeing about one event.
+
+As on `/projects`: **absent means every year**, and an **unknown id is a 404** rather than a silent fall back. Unlike `/projects` there is **no student pin** — both endpoints serve the students' own case and proposal history, and a pinned year would hide someone's own past from them. The current-year default on Case Review and Proposal Review therefore lives in those screens, not in the API.
+
 ### 4.10 Organizations & Service Categories
 
 | Method | Path | Permission | Description |

@@ -17,7 +17,8 @@ import java.util.List;
 public interface CaseService {
 
     /** {@code status}/{@code type}/{@code gradeId}/{@code search} are contract §2.7's filter/search — {@code search} matches case title, {@code gradeId} matches the case's own snapshotted grade (Docs/optimization/04-DataViewOptimization.md §4.1 introduced status/type/search; gradeId added alongside CaseDto's grade fields). */
-    Page<CaseDto> list(Pageable pageable, Authentication auth, String status, String type, String gradeId, String search, String resolvedLanguage);
+    Page<CaseDto> list(Pageable pageable, Authentication auth, String status, String type, String gradeId,
+                        String academicYearId, String search, String resolvedLanguage);
 
     CaseDto getDetail(String id, Authentication auth, String resolvedLanguage);
 
