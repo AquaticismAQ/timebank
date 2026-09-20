@@ -18,6 +18,7 @@ import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { ConfirmDeleteDialog } from '../shared/ConfirmDeleteDialog';
 import { ServiceRecordDetail } from './ServiceRecordDetail';
 import { OverlapBlockedDialog } from '../shared/OverlapBlockedDialog';
+import { reportLocalizedValidity, clearCustomValidity } from '../../lib/validity';
 import { TimeInput } from '../shared/TimeInput';
 import { CaseFilingModal } from './CaseFilingModal';
 import { ListSearchInput } from '../ListSearchInput';
@@ -163,6 +164,10 @@ export function ServiceRecords() {
   // source step entirely and is disabled until the window is filled in.
   const canSaveDraft = !!formData.serviceDate && !!formData.startTime && !!formData.endTime;
   useLayoutEffect(() => {
+    // Retract any message a failed "Next" left behind first, or it would count
+    // as a failure here forever and keep the button disabled (see `validity.ts`
+    // — `TimeInput`'s React-driven proxy never fires the event that clears it).
+    clearCustomValidity(formRef.current);
     setNextEnabled(formRef.current?.checkValidity() ?? false);
   }, [step, formData]);
 
@@ -376,6 +381,9 @@ export function ServiceRecords() {
 
   const handleSubmitRecord = async (e: React.FormEvent) => {
     e.preventDefault();
+    // The form is `noValidate`, so this is the check — the browser no longer
+    // makes one of its own on submit (issue 118).
+    if (!reportLocalizedValidity(formRef.current, t)) return;
     setSaving(true);
     let savedRecordId: string | null = null;
     try {
@@ -576,7 +584,11 @@ export function ServiceRecords() {
           ))}
         </div>
 
-        <form ref={formRef} onSubmit={handleSubmitRecord} className="space-y-4">
+        {/* `noValidate` turns off the browser's *automatic* submit-time check,
+            which would otherwise beat us to it with its own English message —
+            explicit `checkValidity()`/`reportValidity()` calls still work, and
+            `handleSubmitRecord` makes one. */}
+        <form ref={formRef} onSubmit={handleSubmitRecord} noValidate className="space-y-4">
           {/* Step 0: Source */}
           {step === 0 && (
             <div className="space-y-4">
@@ -908,7 +920,7 @@ export function ServiceRecords() {
               // flip that very node's `type` to "submit" before the in-flight
               // click's default action ran — submitting the record immediately
               // and skipping the confirm/declaration step entirely (issue 066).
-              <button key="next" type="button" disabled={!nextEnabled} onClick={() => { if (formRef.current?.reportValidity()) setStep(s => s + 1); }}
+              <button key="next" type="button" disabled={!nextEnabled} onClick={() => { if (reportLocalizedValidity(formRef.current, t)) setStep(s => s + 1); }}
                 className="flex-1 py-3 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white hover:opacity-90 transition-opacity text-sm disabled:opacity-50">
                 {t('common.next')}
               </button>

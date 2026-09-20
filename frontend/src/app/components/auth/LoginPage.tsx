@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Navigate, Link } from 'react-router';
 import { Eye, EyeOff, Clock, KeyRound, Sun, Moon, Monitor } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { reportLocalizedValidity } from '../../lib/validity';
 import { useAuth, useTheme } from '../../App';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
@@ -15,6 +16,7 @@ export function LoginPage() {
   const { login, user } = useAuth();
   const { theme, setTheme } = useTheme();
 
+  const formRef = useRef<HTMLFormElement>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
@@ -36,6 +38,7 @@ export function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!reportLocalizedValidity(formRef.current, t)) return;
     setError('');
     setLoading(true);
     const ok = await login(username, password);
@@ -107,7 +110,10 @@ export function LoginPage() {
 
         {/* Login card */}
         <div className="bg-card border border-border rounded-2xl shadow-lg p-8">
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {/* `noValidate` moves the check into `handleSubmit`, where the
+              message can be translated — nothing else here validates, so it
+              is a move rather than a removal (issue 118). */}
+          <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-5">
             <div>
               <label htmlFor="username" className="block text-sm text-foreground mb-2">
                 {t('auth.login.accountPlaceholder')}

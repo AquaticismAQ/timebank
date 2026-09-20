@@ -15,6 +15,7 @@ import { ListStateBanner } from '../ListStateBanner';
 import { SearchPicker, CREATE_NEW_ID, type SearchPickerOption } from '../SearchPicker';
 import { useAuth } from '../../App';
 import { isoToLocalDate } from '../../lib/datetime';
+import { reportLocalizedValidity } from '../../lib/validity';
 import { ListSearchInput } from '../ListSearchInput';
 
 const colorMap: Record<string, string> = {
@@ -211,15 +212,14 @@ export function EventProposals() {
   /**
    * Whether this step may be left.
    *
-   * Two checks, because one is not enough. `reportValidity()` covers the native
-   * controls and shows the browser's own message on the offending field — but it
-   * cannot see a `SearchPicker`, and the mentor teacher is both a picker and one
-   * of the few things the API refuses a proposal without. Left to
-   * `reportValidity` alone it would stay exactly as unenforced as everything
-   * else was (issue 117).
+   * Two checks, because one is not enough. The first covers the native controls
+   * and points at the offending field — but it cannot see a `SearchPicker`, and
+   * the mentor teacher is both a picker and one of the few things the API
+   * refuses a proposal without. Left to constraint validation alone it would
+   * stay exactly as unenforced as everything else was (issue 117).
    */
   const canLeaveStep = (): boolean => {
-    if (formRef.current && !formRef.current.reportValidity()) return false;
+    if (!reportLocalizedValidity(formRef.current, t)) return false;
     if (STEP_KEYS[step] === 'organization' && formData.mentorTeacherOption.length === 0) {
       toast.error(t('student.proposals.mentorRequired'));
       return false;
@@ -366,7 +366,7 @@ export function EventProposals() {
         </div>
 
         {/* Step content */}
-        {/* A real <form>, so `reportValidity()` has something to ask. Each step
+        {/* A real <form>, so the validity check has something to ask. Each step
             mounts only its own fields, so the check has to happen on the step
             being *left* — a check at the end sees none of the earlier ones
             (the same reasoning as `ServiceRecords.tsx`, issues 058/066). */}

@@ -213,7 +213,12 @@ export function ActivationPage() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl shadow-lg p-6 sm:p-8">
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {/* `noValidate` because `handleSubmit` already checks every field with
+              a localized message of its own, and the browser's own is English
+              whatever the page language (issue 118). Neither is reachable today
+              — `canSubmit` disables the button until everything holds — so this
+              only decides which one wins if that gate is ever loosened. */}
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
             <div>
               <label htmlFor="activation-code" className="block text-sm text-foreground mb-2">
                 {t('auth.activation.codeLabel')}

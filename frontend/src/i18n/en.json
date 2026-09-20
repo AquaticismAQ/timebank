@@ -75,7 +75,14 @@
     "download": "Download",
     "evidenceNoPreview": "This file type can't be previewed in the browser — download it to open it.",
     "evidenceDownloadFailed": "Couldn't prepare that file for download. Please try again.",
-    "optional": "optional"
+    "optional": "optional",
+    "validation": {
+      "required": "Please fill out this field",
+      "select": "Please select an item in the list",
+      "min": "Please enter {{min}} or more",
+      "max": "Please enter {{max}} or less",
+      "invalid": "Please enter a valid value"
+    }
   },
   "layout": {
     "admin": {

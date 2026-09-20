@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { reportLocalizedValidity } from '../lib/validity';
 import { PAGE_SIZE_OPTIONS } from '../lib/pagination';
 import {
   Pagination,
@@ -34,6 +35,7 @@ export function PageControls({
   // removes.
 }) {
   const { t } = useTranslation();
+  const jumpFormRef = useRef<HTMLFormElement>(null);
   const [jumpValue, setJumpValue] = useState('');
   const enhanced = pageSize !== undefined && onPageSizeChange !== undefined;
   const showPager = !!page && page.totalPages > 1;
@@ -55,6 +57,7 @@ export function PageControls({
   };
   const submitJump = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!reportLocalizedValidity(jumpFormRef.current, t)) return;
     const n = Number(jumpValue);
     if (Number.isInteger(n) && n >= 1 && n <= page.totalPages) {
       onPageChange(n);
@@ -101,7 +104,7 @@ export function PageControls({
             </PaginationContent>
           </Pagination>
           {enhanced && (
-            <form onSubmit={submitJump} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <form ref={jumpFormRef} onSubmit={submitJump} noValidate className="flex items-center gap-1.5 text-xs text-muted-foreground">
               {t('common.list.pageJump')}
               <input
                 type="number" min={1} max={page.totalPages} value={jumpValue}
