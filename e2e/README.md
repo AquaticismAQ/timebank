@@ -68,6 +68,28 @@ residue stays. Two consequences worth knowing:
   will see records dated earlier than the project they belong to, which the
   backend permits and which looks odd on screen.
 
+### `--cleanup`
+
+```bash
+pnpm e2e --cleanup-only        # tidy earlier runs, run no flow
+pnpm e2e --cleanup             # tidy first, then run
+```
+
+It acts **only** on things whose title begins with `[AUTO]`, which is the entire
+safety mechanism and is deliberately not configurable — this runs against a
+shared server holding a curated dataset (`integration-test/STATUS.md`).
+Idempotent: a second pass cancels nothing and reports what it skipped.
+
+| What | Why |
+| :--- | :--- |
+| Cancels `[AUTO]` projects | They can never auto-archive: archive requires every confirmed student's record to be terminal, and a returned record never is |
+| Deletes stray drafts | A run that died mid-flight leaves one, and a draft is the only record that may ever be physically deleted |
+| **Counts, but cannot touch, submitted records** | They are sitting in a teacher's queue. Deciding them would put a review in the audit log that nobody made |
+| **Counts, but cannot touch, approved and returned records** | Immutable by design, and each still holds its service time window |
+
+Driven through the API rather than the browser, unlike everything else here:
+cleanup is maintenance, not a workflow anyone is being shown.
+
 ## The browser is left open
 
 Pass or fail. The end state — the approved record, the changed balance — is the

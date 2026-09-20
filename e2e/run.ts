@@ -5,6 +5,8 @@ import { newRunId } from './src/harness/runId.js';
 import { runFlow, type RunOutcome } from './src/harness/runner.js';
 import { ALL_GATES, PROFILES, resolveGates } from './src/harness/profiles.js';
 import { FLOWS, findFlow } from './src/flows/index.js';
+import { Api } from './src/harness/api.js';
+import { cleanupPreviousRuns, describeCleanup } from './src/harness/cleanup.js';
 
 /**
  * `pnpm e2e [flow-id] [options]`
@@ -38,6 +40,17 @@ async function main(): Promise<number> {
     slowMo: Number(value('slow-mo') ?? (gates.has('pace') ? 250 : 0)),
     evidenceDir: value('evidence-dir'),
   });
+
+  const cleanupOnly = flag('cleanup-only');
+  if (cleanupOnly || flag('cleanup')) {
+    const adminApi = await Api.loginAs(config, config.admin.username, config.admin.password);
+    const studentApi = await Api.loginAs(config, config.student.username, config.student.password);
+    console.log('\ncleaning up earlier [AUTO] runs...');
+    for (const line of describeCleanup(await cleanupPreviousRuns(adminApi, studentApi))) {
+      console.log(`  ${line}`);
+    }
+    if (cleanupOnly) return 0;
+  }
 
   const runId = newRunId();
   const narrator = new Narrator(config.narrationDir, runId);

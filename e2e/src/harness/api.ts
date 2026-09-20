@@ -32,6 +32,19 @@ export class Api {
     return body.data;
   }
 
+  /** Write helpers, used only by cleanup — everything a *user* does goes through the browser. */
+  async post<T>(path: string, body: unknown): Promise<T> {
+    const res = await this.request('POST', path, body);
+    if (!res.ok) throw new Error(`POST ${path} failed: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+    const parsed = await res.json() as { data: T };
+    return parsed.data;
+  }
+
+  async delete(path: string): Promise<void> {
+    const res = await this.request('DELETE', path);
+    if (!res.ok) throw new Error(`DELETE ${path} failed: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+  }
+
   private async request(method: string, path: string, body?: unknown): Promise<Response> {
     const headers: Record<string, string> = { 'Accept-Language': 'zh-CN' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -41,6 +54,10 @@ export class Api {
     const xsrf = this.cookies.get('XSRF-TOKEN');
     if (xsrf) headers['X-XSRF-TOKEN'] = xsrf;
 
+    // Submission and review decisions require an idempotency key; cancel and
+    // delete do not, but sending one costs nothing and makes a retried cleanup
+    // safe rather than merely unlikely to be retried.
+    if (method !== 'GET') headers['Idempotency-Key'] = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const res = await fetch(`${this.baseUrl}/api/v1${path}`, {
       method,
       headers,
