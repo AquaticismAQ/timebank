@@ -38,14 +38,21 @@ export class SlotAllocator {
 
   /** Each ~2h, inside a plausible school day, so the demo reads as real service. */
   private static readonly DAILY_SLOTS: Array<[string, string]> = [
-    ['09:00', '11:00'], ['13:00', '15:00'], ['15:30', '17:30'], ['19:00', '20:30'],
+    // All two hours, so every record a run files is worth the same and the demo
+    // does not silently change its own numbers between runs.
+    ['09:00', '11:00'], ['13:00', '15:00'], ['15:30', '17:30'], ['19:00', '21:00'],
   ];
 
   constructor(private readonly api: Api, private readonly studentId: string) {}
 
   async load(): Promise<void> {
+    // `page[size]`, not `size` — the plain name is silently ignored and the
+    // request comes back with the default 20 rows. That is invisible and
+    // dangerous here: the allocator would believe the student had only twenty
+    // records, hand out a window one of the others already occupies, and the run
+    // would die at submit with OVERLAPPING_RECORD looking like a product fault.
     const rows = await this.api.get<ServiceRecordRow[]>(
-      `/service-records?size=200&filter%5BstudentId%5D=${encodeURIComponent(this.studentId)}`,
+      `/service-records?page%5Bsize%5D=200&filter%5BstudentId%5D=${encodeURIComponent(this.studentId)}`,
     );
     this.taken = rows
       .filter(r => SlotAllocator.BLOCKING.has(r.status.toUpperCase()))

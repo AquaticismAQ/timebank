@@ -3,6 +3,11 @@ import { preflight } from './phases/preflight.js';
 import { createProject } from './phases/createProject.js';
 import { registration } from './phases/registration.js';
 import { serviceRecord } from './phases/serviceRecord.js';
+import { approve } from './phases/approve.js';
+import { closingView } from './phases/closingView.js';
+import { returnBranch } from './phases/returnBranch.js';
+import { rejectBranch } from './phases/rejectBranch.js';
+import { auditTrail } from './phases/auditTrail.js';
 
 /**
  * The project lifecycle, end to end: a teacher creates and publishes a project, a
@@ -20,5 +25,10 @@ export const projectWorkflow: Flow = {
     createProject,
     registration,
     serviceRecord,
+    approve,
+    closingView,
+    returnBranch,
+    rejectBranch,
+    auditTrail,
   ],
 };

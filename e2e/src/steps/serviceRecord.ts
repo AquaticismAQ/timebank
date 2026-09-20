@@ -1,4 +1,4 @@
-import type { Page } from 'playwright';
+import type { Locator, Page } from 'playwright';
 import { assertContains, assertThat } from '../harness/assert.js';
 
 /**
@@ -48,7 +48,18 @@ export async function createDraft(page: Page, baseUrl: string, draft: RecordDraf
 
   // Step 1 — which project, when.
   await page.locator('select').first().selectOption({ label: draft.projectTitle });
-  await field(page, '服务日期 *').fill(draft.date);
+
+  // Choosing a project prefills the date and times from the project's own
+  // schedule, and that prefill is an effect — it lands *after* the change event.
+  // Filling the date first therefore works only while something else is slow
+  // enough to let the effect run in between: with `--slow-mo` it passes, without
+  // it the prefill overwrites the slot with the project's start date, which is in
+  // the future, and submission is refused for a reason that never appears on
+  // screen. Waiting for the prefill and then overwriting it is the only ordering
+  // that holds at either speed.
+  const serviceDate = field(page, '服务日期 *');
+  await waitUntilFilled(page, serviceDate, '服务日期');
+  await serviceDate.fill(draft.date);
   await pickTime(page, '开始时间 *', draft.startHHMM);
   await pickTime(page, '结束时间 *', draft.endHHMM);
   await field(page, '服务内容描述 *').fill(draft.description);
@@ -90,14 +101,22 @@ export async function uploadEvidenceAndSubmit(page: Page, baseUrl: string, proje
   await page.getByText(fileName, { exact: false }).waitFor({ state: 'visible', timeout: 60_000 });
 
   await next(page);   // evidence → declaration
-  await page.getByRole('button', { name: '确认提交' }).click();
-  await page.getByText('服务记录已提交，待审核').waitFor({ state: 'visible', timeout: 20_000 });
+  const confirm = page.getByRole('button', { name: '确认提交' });
+  await confirm.click();
+  // The wizard closing is the signal, not the toast. Toasts auto-dismiss, so
+  // waiting on one makes the step depend on winning a race it does not control —
+  // the submit itself had already succeeded when this first timed out.
+  await confirm.waitFor({ state: 'hidden', timeout: 25_000 });
   return fileName;
 }
 
-export async function assertRecordStatus(page: Page, baseUrl: string, projectTitle: string, expectedZh: string): Promise<void> {
-  const text = await recordRowText(page, baseUrl, projectTitle);
-  assertContains(text, expectedZh, `该项目的服务记录应当处于「${expectedZh}」状态`);
+/**
+ * @param key a record number once one exists, or the project title while the
+ *   record is still the project's only draft
+ */
+export async function assertRecordStatus(page: Page, baseUrl: string, key: string, expectedZh: string): Promise<void> {
+  const text = await recordRowText(page, baseUrl, key, expectedZh === RECORD_STATUS.draft ? RECORD_STATUS.draft : undefined);
+  assertContains(text, expectedZh, `该服务记录应当处于「${expectedZh}」状态`);
 }
 
 /**
@@ -118,8 +137,9 @@ export async function assertRecordDescription(page: Page, baseUrl: string, proje
 }
 
 /** The row carries the record number, not the filename — so this checks the detail view. */
-export async function assertEvidenceShown(page: Page, baseUrl: string, projectTitle: string, fileName: string): Promise<void> {
-  await recordRow(page, baseUrl, projectTitle).getByRole('button', { name: '查看' }).click();
+export async function assertEvidenceShown(page: Page, baseUrl: string, recordNumber: string, fileName: string): Promise<void> {
+  await gotoRecords(page, baseUrl);
+  await recordRow(page, recordNumber).getByRole('button', { name: '查看' }).click();
   // Wait for the dialog, not just for the click. Reading the page straight after
   // clicking races the render and fails against a detail view that is in fact
   // correct — which is how this read the first time.
@@ -131,23 +151,60 @@ export async function assertEvidenceShown(page: Page, baseUrl: string, projectTi
   await page.getByRole('button', { name: '关闭' }).click();
 }
 
-/** The table row for one project's record. Scoped by title so a second draft cannot be picked up. */
-function recordRow(page: Page, baseUrl: string, projectTitle: string) {
-  return page.locator('tr').filter({ hasText: projectTitle });
+/**
+ * Opens the record list with every row on one page.
+ *
+ * The list holds 20 rows by default, sorted by service date descending, and the
+ * records a run files are dated in the past — so by the third run this student's
+ * newest records sit below the fold and the row simply is not there. Searching
+ * does not help: the record search matches student and organization names, not
+ * project titles or record numbers. Raising the page size is the control that
+ * does, and it is one a student has too.
+ */
+async function gotoRecords(page: Page, baseUrl: string): Promise<void> {
+  await page.goto(`${baseUrl}/student/records`, { waitUntil: 'domcontentloaded' });
+  const pageSize = page.locator('select').filter({ hasText: '100' }).last();
+  await pageSize.waitFor({ state: 'visible', timeout: 15_000 });
+  await pageSize.selectOption('100');
+  await page.waitForTimeout(800);
 }
 
-async function recordRowText(page: Page, baseUrl: string, projectTitle: string): Promise<string> {
-  await page.goto(`${baseUrl}/student/records`, { waitUntil: 'domcontentloaded' });
-  const row = recordRow(page, baseUrl, projectTitle);
+/**
+ * The table row for one record.
+ *
+ * A record number identifies exactly one row. A project title does not, once the
+ * branch phases have filed a second and third record against the same project —
+ * so a title is only usable together with a status that narrows it to one, which
+ * in practice means 草稿, since a project has at most one draft at a time.
+ */
+export function recordRow(page: Page, key: string, alsoContains?: string) {
+  const byKey = page.locator('tr').filter({ hasText: key });
+  return alsoContains ? byKey.filter({ hasText: alsoContains }) : byKey;
+}
+
+async function recordRowText(page: Page, baseUrl: string, key: string, alsoContains?: string): Promise<string> {
+  await gotoRecords(page, baseUrl);
+  const row = recordRow(page, key, alsoContains);
   await row.waitFor({ state: 'visible', timeout: 15_000 });
   return row.innerText();
 }
 
+/** The project's current draft — at most one, which is what makes the title enough here. */
 async function openDraftForEditing(page: Page, baseUrl: string, projectTitle: string): Promise<void> {
-  await page.goto(`${baseUrl}/student/records`, { waitUntil: 'domcontentloaded' });
-  const row = recordRow(page, baseUrl, projectTitle);
+  await gotoRecords(page, baseUrl);
+  const row = recordRow(page, projectTitle, RECORD_STATUS.draft);
   await row.waitFor({ state: 'visible', timeout: 15_000 });
   await row.getByRole('button', { name: '编辑' }).click();
+}
+
+/** Polled from Node rather than in the page, so this file typechecks without the DOM lib. */
+async function waitUntilFilled(page: Page, locator: Locator, what: string, timeoutMs = 15_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if ((await locator.inputValue()) !== '') return;
+    await page.waitForTimeout(200);
+  }
+  throw new Error(`${what} was never prefilled from the selected project`);
 }
 
 function field(page: Page, labelZh: string) {
@@ -175,4 +232,21 @@ async function pickTime(page: Page, labelZh: string, hhmm: string): Promise<void
   await columns.nth(0).getByRole('button', { name: hh, exact: true }).click();
   await columns.nth(1).getByRole('button', { name: mm, exact: true }).click();
   await page.keyboard.press('Escape');
+}
+
+/**
+ * The newest record on this student's file.
+ *
+ * Used to learn the record number a phase has just created. Reading it from the
+ * table would mean matching on the project title, which stops being unique the
+ * moment a second branch files another record against the same project.
+ */
+export async function readLatestRecord(api: import('../harness/api.js').Api): Promise<{
+  id: string; recordNumber: string; status: string; projectTitle: string; durationMinutes: number;
+}> {
+  const rows = await api.get<Array<{
+    id: string; recordNumber: string; status: string; projectTitle: string; durationMinutes: number;
+  }>>('/service-records?page%5Bsize%5D=1&sort=-createdAt');
+  if (rows.length === 0) throw new Error('No service record found for this student.');
+  return rows[0];
 }

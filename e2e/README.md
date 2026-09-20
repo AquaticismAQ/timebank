@@ -77,6 +77,27 @@ The process therefore **waits for Ctrl-C** rather than exiting.
 `--close` opts out, and `--headless` implies it. For anything unattended use
 `--profile verify --headless`, or the job will hang forever.
 
+## Things that bite, and why the code looks the way it does
+
+Every one of these cost a failing run to find, and several were failures against
+a system that was working correctly — so they are worth knowing before changing a
+step.
+
+| Trap | What it looks like | What the code does |
+| :--- | :--- | :--- |
+| **`page[size]`, not `size`** | A plain `size=200` is ignored and you get 20 rows. The slot allocator silently believed the student had twenty records and would hand out an occupied window | Every query uses `page%5Bsize%5D` |
+| **Choosing a project prefills the date** | The prefill is an effect, so it lands *after* the change event and overwrites a date filled too early — with the project's own start date, which is in the future, and submission is refused | Wait for the prefill, then overwrite it |
+| **Toasts auto-dismiss** | Waiting on one makes a step depend on winning a race it does not control. Three steps failed this way against actions that had already succeeded | Wait for the dialog or wizard to close instead |
+| **Lists render before their data** | A dialog is briefly open and empty, a home page shows `--h`, a detail view has no filename yet. Asserting on sight reports a fault that is not there | Wait for the row, the figure, or the dialog's own content |
+| **Search is asynchronous** | Acting straight after pressing Enter acts on the *unfiltered* list. A student once registered for a previous run's project while every assertion passed, because they were all reading the same wrong card | Wait for the list's own count to read `1 个项目` |
+| **One result makes every ancestor match** | With a single card on screen, `div:has-text(title)` matches the card *and* everything above it | Filter on a second string only the card carries, then take the innermost |
+| **Controlled inputs drop early fills** | Without `--slow-mo` the login form submits empty, the server says the credentials are wrong, and the run stalls 25s later waiting for a redirect | Wait for a fetched element, fill, read back, retry |
+| **Logins are throttled** | Re-authenticating on every role switch is about a dozen logins a run; they start being refused at a random phase | One context per role, signed in once, kept for the run |
+| **Coins are minimum accounting units** | Two recognised hours credit **200**, not 2 | `UNITS_PER_COIN = 100` |
+| **Credit follows the record, not the project** | A 90-minute session credits 150 even when the project says two hours | The expectation is derived from the record's own duration |
+| **Record search matches names only** | Not project titles, not record numbers, so it cannot find what a run created | Raise the page size to 100 instead |
+| **Status words differ from toast words** | The chip says 已提交 while the toast says 待审核; a returned record reads 退回, not 已退回 | `RECORD_STATUS` in `steps/serviceRecord.ts` |
+
 ## Adding a flow
 
 One file in `src/flows/`, one line in `src/flows/index.ts`. The runner owns gate

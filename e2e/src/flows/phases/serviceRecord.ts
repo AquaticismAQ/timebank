@@ -2,6 +2,8 @@ import {
   RECORD_STATUS, assertEvidenceShown, assertRecordDescription, assertRecordStatus,
   createDraft, editDraftDescription, uploadEvidenceAndSubmit,
 } from '../../steps/serviceRecord.js';
+import { readLatestRecord } from '../../steps/serviceRecord.js';
+import { readProgress } from '../../steps/account.js';
 import type { Slot } from '../../harness/slots.js';
 import type { Phase } from '../../harness/types.js';
 
@@ -19,6 +21,12 @@ export const serviceRecord: Phase = {
   async run(ctx) {
     const page = await ctx.as('student');
     const title = ctx.state.projectTitle as string;
+    // The baseline for the assertion the whole run exists to make. Taken before
+    // anything is filed, so an approval elsewhere cannot be mistaken for ours.
+    const before = await readProgress(ctx.api, ctx.state.studentId as string);
+    ctx.state.balanceBefore = before.timeCoinBalance;
+    ctx.state.minutesBefore = before.completedMinutes;
+    ctx.narrator.note(`baseline: ${before.completedMinutes} min approved, ${before.timeCoinBalance} coins`);
     const slot = (ctx.state.slots as Slot[])[0];
     const evidence = (ctx.state.evidenceFiles as string[])[0];
     const finalDescription = '在社区图书馆协助整理少儿阅览区书架，登记归还图书，并引导读者使用借阅机。';
@@ -43,8 +51,12 @@ export const serviceRecord: Phase = {
     ctx.narrator.step('上传佐证材料，提交审核');
     const fileName = await uploadEvidenceAndSubmit(page, ctx.config.baseUrl, title, evidence);
     ctx.state.evidenceFileName = fileName;
-    await assertEvidenceShown(page, ctx.config.baseUrl, title, fileName);
-    await assertRecordStatus(page, ctx.config.baseUrl, title, RECORD_STATUS.submitted);
+    const record = await readLatestRecord(ctx.api);
+    ctx.state.recordNumber = record.recordNumber;
+    ctx.state.recordMinutes = record.durationMinutes;
+    await assertEvidenceShown(page, ctx.config.baseUrl, record.recordNumber, fileName);
+    await assertRecordStatus(page, ctx.config.baseUrl, record.recordNumber, RECORD_STATUS.submitted);
+    ctx.narrator.note(`record: ${record.recordNumber}`);
     ctx.narrator.result('记录已提交，等待老师审核');
   },
 };

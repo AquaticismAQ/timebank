@@ -15,6 +15,7 @@ import type { Config } from './config.js';
  */
 export class BrowserHarness {
   private browser: Browser | null = null;
+  private readonly roles = new Map<string, { context: BrowserContext; page: Page }>();
   private current: { role: string; context: BrowserContext; page: Page } | null = null;
 
   constructor(private readonly config: Config) {}
@@ -27,10 +28,25 @@ export class BrowserHarness {
     });
   }
 
+  /**
+   * The page for a role, signed in once and kept for the whole run.
+   *
+   * Each role gets its own context, so their cookie jars cannot leak into one
+   * another — that isolation is the reason not to share one context, and it is
+   * preserved here. What is *not* done any more is closing a context on every
+   * switch: that meant re-authenticating at every phase boundary, roughly a
+   * dozen logins a run, which the server eventually throttles. The failures then
+   * look like wrong credentials at a random phase, and a demonstration that
+   * stops halfway with a login error is the worst way to find that out.
+   */
   async open(role: string): Promise<Page> {
     if (!this.browser) throw new Error('BrowserHarness.start() was not called');
-    if (this.current?.role === role) return this.current.page;
-    if (this.current) await this.current.context.close();
+    const existing = this.roles.get(role);
+    if (existing) {
+      this.current = { role, ...existing };
+      await existing.page.bringToFront();
+      return existing.page;
+    }
     const context = await this.browser.newContext({
       viewport: this.config.headless ? { width: 1600, height: 1000 } : null,
       locale: 'zh-CN',
@@ -49,6 +65,7 @@ export class BrowserHarness {
       localStorage.setItem(key, value);
     }, ['timebank-lang', 'zh'] as [string, string]);
     const page = await context.newPage();
+    this.roles.set(role, { context, page });
     this.current = { role, context, page };
     return page;
   }

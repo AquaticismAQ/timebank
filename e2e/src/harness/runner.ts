@@ -48,21 +48,25 @@ export async function runFlow(
   }
   const slots = new SlotAllocator(api, me.user.studentId);
   await slots.load();
+  const adminApi = await Api.loginAs(config, config.admin.username, config.admin.password);
+  const startedAt = new Date();
 
   const ctx: FlowContext = {
-    config, api, narrator, slots, runId,
+    config, api, adminApi, narrator, slots, runId,
     has: (gate: Gate) => gates.has(gate),
     as: async (role: 'admin' | 'student'): Promise<Page> => {
       const page = await browser.open(role);
       const account = role === 'admin' ? config.admin : config.student;
       const prefix = role === 'admin' ? '/admin' : '/student';
+      // Once per role per run. The context persists, so a later switch back is a
+      // tab change rather than another trip through the login form.
       if (!page.url().includes(prefix)) {
         await signIn(page, config.baseUrl, account, prefix);
       }
       return page;
     },
     page: () => browser.page(),
-    state: { studentId: me.user.studentId, studentName: me.user.displayName },
+    state: { studentId: me.user.studentId, studentName: me.user.displayName, startedAt },
   };
 
   narrator.phase(flow.titleZh);

@@ -1,6 +1,6 @@
 import type { Page } from 'playwright';
 import { assertContains, assertThat } from '../harness/assert.js';
-import { findProjectCard } from './project.js';
+import { findProjectCard, waitForSingleResult } from './project.js';
 
 /**
  * The student's side: find the project in the Project Center and register.
@@ -15,8 +15,8 @@ export async function registerForProject(page: Page, baseUrl: string, title: str
   await search.fill(title);
   await search.press('Enter');
 
+  await waitForSingleResult(page, title);
   const card = studentCard(page, title);
-  await card.waitFor({ state: 'visible', timeout: 15_000 });
   await card.getByRole('button', { name: '立即报名' }).click();
   // The button becomes the registered badge in place, so its arrival is the
   // signal the registration landed — a toast would race its own dismissal.
@@ -28,8 +28,8 @@ export async function assertStudentSeesRegistered(page: Page, baseUrl: string, t
   const search = page.getByPlaceholder('搜索项目、组织、地点...');
   await search.fill(title);
   await search.press('Enter');
+  await waitForSingleResult(page, title);
   const card = studentCard(page, title);
-  await card.waitFor({ state: 'visible', timeout: 15_000 });
   assertContains(await card.innerText(), '已报名', `学生端应当显示已报名：${title}`);
 }
 
@@ -52,7 +52,7 @@ export async function openRegistrantList(page: Page, baseUrl: string, title: str
   // The row menu is the icon-only button inside the card.
   await card.locator('button').filter({ hasText: /^$/ }).first().click();
   await page.getByText('报名名单', { exact: true }).click();
-  await page.getByText('报名名单', { exact: true }).last().waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByRole('button', { name: '关闭' }).waitFor({ state: 'visible', timeout: 15_000 });
 }
 
 /**
@@ -61,6 +61,13 @@ export async function openRegistrantList(page: Page, baseUrl: string, title: str
  * word would pass on a list showing somebody else.
  */
 export async function assertRegistrantConfirmed(page: Page, studentName: string): Promise<void> {
+  // The dialog frame renders before its list arrives, so it is briefly open and
+  // empty — indistinguishable from a project nobody signed up for. Waiting for
+  // either the row or the empty-state message is what tells those apart; reading
+  // the page straight after opening reported "no registrant" for a registration
+  // that was perfectly fine.
+  await page.getByText(studentName).or(page.getByText('暂无报名学生'))
+    .first().waitFor({ state: 'visible', timeout: 20_000 });
   const body = await page.locator('body').innerText();
   assertContains(body, studentName, `报名名单中应当出现该学生：${studentName}`);
   assertContains(body, '已确认', '该学生的报名应当处于已确认状态');
@@ -68,8 +75,9 @@ export async function assertRegistrantConfirmed(page: Page, studentName: string)
   assertThat(awaiting === 0, `名额充足时报名应当直接确认，但仍有 ${awaiting} 条待确认`);
 }
 
+/** Only called once the list has narrowed to this project (`waitForSingleResult`). */
 function studentCard(page: Page, title: string) {
   // Same shape as the admin card: filter on the title *and* a field only the
-  // card carries, so the match is the card rather than the title element.
+  // card carries, then take the innermost match — every ancestor contains both.
   return page.locator('div').filter({ hasText: title }).filter({ hasText: '查看详情' }).last();
 }

@@ -92,11 +92,37 @@ export async function findProjectCard(page: Page, baseUrl: string, title: string
   // Narrowed by the owner line as well as the title. Filtering on the title
   // alone and taking `.last()` returns the innermost match — which is the title
   // element itself, text `"[AUTO] … 社区图书馆志愿服务"` and nothing else. The
-  // card is the smallest element holding both the title and the footer, and
-  // that is unique.
+  // card is the smallest element holding both the title and the footer.
+  await waitForSingleResult(page, title);
   const card = page.locator('div').filter({ hasText: title }).filter({ hasText: '负责人' }).last();
   await card.waitFor({ state: 'visible', timeout: 15_000 });
   return card;
+}
+
+/**
+ * Waits for a search to actually narrow the list to one project.
+ *
+ * Both project lists print their own result count, and that header is the only
+ * unambiguous signal that the filter has been applied — counting cards does not
+ * work, because once the list holds a single card every ancestor element
+ * contains its text too.
+ *
+ * Without this wait, acting straight after pressing Enter acts on the
+ * *unfiltered* list, and with a run id in every `[AUTO]` title that list is full
+ * of near-identical cards. That is how a student came to register for a previous
+ * run's project while every assertion still passed — they were all reading the
+ * same wrong card.
+ */
+export async function waitForSingleResult(page: Page, what: string, timeoutMs = 15_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let seen = '';
+  while (Date.now() < deadline) {
+    seen = await page.locator('main').innerText().catch(() => '');
+    if (/(^|\s)1 个项目/.test(seen)) return;
+    await page.waitForTimeout(250);
+  }
+  const shown = seen.match(/\d+ 个项目/)?.[0] ?? '(no count shown)';
+  throw new Error(`Search for ${what} did not narrow to one project — list still says ${shown}`);
 }
 
 export async function assertProjectIsOpenForRegistration(page: Page, baseUrl: string, title: string): Promise<void> {

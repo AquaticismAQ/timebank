@@ -14,6 +14,8 @@ export type Gate = 'core' | 'branch:return' | 'branch:reject' | 'audit' | 'tts' 
 export interface FlowContext {
   readonly config: Config;
   readonly api: Api;
+  /** An admin-scoped API session, for reads a student is not allowed (audit logs). */
+  readonly adminApi: Api;
   readonly narrator: Narrator;
   readonly slots: SlotAllocator;
   readonly runId: string;
