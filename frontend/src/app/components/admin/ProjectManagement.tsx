@@ -152,14 +152,16 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, re
         </div>
 
         {/* Body */}
-        {/* A `fieldset` rather than a `readOnly` prop threaded through thirty
-            controls: `disabled` propagates to every descendant control natively,
-            including the grade buttons and the owner picker, and including any
-            field added here later — which is the useful half. A field that
-            accepts typing it cannot save is worse than either state.
-            `min-w-0` because a fieldset's default `min-inline-size: min-content`
-            breaks the grids inside it. */}
-        <fieldset disabled={readOnly} className="overflow-y-auto px-5 py-5 space-y-5 text-sm min-w-0 disabled:opacity-80">
+        {/* The scroll container stays a plain `div`: it is this dialog's flex
+            child, and a `fieldset` in that position does not size or scroll like
+            one — it overflowed the dialog and left the footer stranded mid-page.
+            So the fieldset sits *inside* it, as an ordinary block whose only job
+            is `disabled`, which propagates natively to every descendant control
+            — the grade buttons and the owner picker included, and any field
+            added here later, which is the useful half. A field that accepts
+            typing it cannot save is worse than either state. */}
+        <div className="overflow-y-auto px-5 py-5 text-sm">
+        <fieldset disabled={readOnly} className="space-y-5 min-w-0 border-0 m-0 p-0 disabled:opacity-80">
 
           {/* Basic info */}
           <section className="space-y-3">
@@ -313,6 +315,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, re
             </div>
           </section>
         </fieldset>
+        </div>
 
         {/* Footer */}
         <div className="px-5 py-4 border-t border-border shrink-0 flex gap-3">

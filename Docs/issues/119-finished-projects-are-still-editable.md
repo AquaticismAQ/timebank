@@ -107,6 +107,20 @@ exactly the two new integration tests fail and
 | 草稿 DRAFT | 编辑, 发布, 取消并归档 — **no** Copy to draft |
 | 已发布 / 进行中 | 报名名单, 编辑, 复制为草稿, 取消并归档 |
 
+**The dialog's layout.** The first attempt made the scroll container itself the
+`fieldset`, which broke it: a fieldset in that flex position does not size or
+scroll like the `div` it replaced, so the body overflowed the dialog and left
+the Close button stranded halfway down the page with nothing scrollable. The
+fieldset now sits *inside* the original `div`, doing nothing but `disabled`.
+
+```
+view: dialog fits the viewport: true       height 736 / 92vh = 736
+view: body scrolls: true                   scrolled to the bottom: true
+view: footer sits at the dialog's bottom: true   buttons ["关闭"]
+view: closes on click: true                still read-only: true
+edit: (same, unchanged)                    buttons ["取消","保存修改"]
+```
+
 **The read-only dialog, measured by trying to change it** rather than by reading
 a `disabled` attribute — which would have been the wrong measurement anyway, since
 a `fieldset`'s disabling is an inherited state that a descendant's own
