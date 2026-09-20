@@ -92,7 +92,7 @@ export async function runFlow(
       // Once per role per run. The context persists, so a later switch back is a
       // tab change rather than another trip through the login form.
       if (!page.url().includes(prefix)) {
-        await signIn(page, config.baseUrl, account, prefix);
+        await signIn(page, config.baseUrl, account, prefix, role === 'admin' ? 'dark' : 'light');
       }
       return page;
     },

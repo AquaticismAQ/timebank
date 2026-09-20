@@ -100,19 +100,32 @@ export class BrowserHarness {
       viewport: this.config.headless ? { width: 1600, height: 1000 } : null,
       locale: 'zh-CN',
     });
-    // Force the Chinese UI for the run, per context, by seeding the same
-    // localStorage key i18n reads at startup (`src/i18n/index.ts`).
+    // Seeded per context, before anything loads.
     //
-    // Deliberately not the in-app language switcher: that calls
-    // `PATCH /me/profile` and would permanently change a shared test account's
-    // preferred language as a side effect of running a test. The narration is
-    // Chinese and the selectors match the Chinese labels, so the UI has to be
-    // Chinese — but not at the cost of writing to someone else's account.
+    // **Language.** The narration is Chinese and the selectors match the Chinese
+    // labels, so the UI has to be Chinese. Deliberately not the in-app switcher:
+    // that calls `PATCH /me/profile` and would permanently change a shared test
+    // account's preferred language as a side effect of running a test.
+    //
+    // **Theme.** The teacher's browser is dark and the student's is light, so an
+    // audience can tell at a glance which side of the workflow they are looking
+    // at — the two portals are otherwise near-identical in layout.
+    //
+    // Both are `localStorage` writes because that is what the app reads at
+    // startup (`i18n/index.ts`, `App.tsx`'s ThemeProvider), and unlike the
+    // language the theme is stored *only* there — nothing is sent to the server.
+    //
+    // Playwright's own `colorScheme: 'dark'` would do nothing here: this app's
+    // `auto` follows the local hour, not `prefers-color-scheme`. Which is also
+    // why the student is pinned to `light` rather than left on `auto` — after
+    // 19:00 `auto` turns dark and the two roles stop being distinguishable.
+    //
     // The argument form, because this file is typechecked as Node: `window` has
     // no type here even though the function runs in the page.
-    await context.addInitScript(([key, value]: [string, string]) => {
-      localStorage.setItem(key, value);
-    }, ['timebank-lang', 'zh'] as [string, string]);
+    const theme = role === 'admin' ? 'dark' : 'light';
+    await context.addInitScript((settings: Array<[string, string]>) => {
+      for (const [key, value] of settings) localStorage.setItem(key, value);
+    }, [['timebank-lang', 'zh'], ['timebank-theme', theme]] as Array<[string, string]>);
     const page = await context.newPage();
     this.roles.set(role, { context, page });
     this.current = { role, context, page };

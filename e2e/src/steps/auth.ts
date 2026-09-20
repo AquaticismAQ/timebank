@@ -7,7 +7,9 @@ import { assertThat } from '../harness/assert.js';
  * localStorage: the login page is part of what is being demonstrated, and a
  * shortcut here would hide a broken one.
  */
-export async function signIn(page: Page, baseUrl: string, account: Account, expectPathPrefix: string): Promise<void> {
+export async function signIn(
+  page: Page, baseUrl: string, account: Account, expectPathPrefix: string, theme: 'light' | 'dark' = 'light',
+): Promise<void> {
   await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
 
   const username = page.getByPlaceholder(/用户名|Username/);
@@ -43,6 +45,20 @@ export async function signIn(page: Page, baseUrl: string, account: Account, expe
   const refused = badCredentials.waitFor({ state: 'visible', timeout: 25_000 })
     .then(() => { throw new Error(`登录被拒绝：${account.username}（用户名或密码错误）`); });
   await Promise.race([landed, refused]);
+
+  // Re-apply the presentation settings and reload.
+  //
+  // Logging in overwrites `timebank-lang` from the account's stored
+  // `preferredLanguage`, which is authoritative by design (`App.tsx` I3.4) — so
+  // the context's seeded values survive only until the next full navigation
+  // happens to re-run the init script. That made the run's language depend on
+  // what an account happened to be set to and on the order of the steps after
+  // it, which is no way to open a demonstration.
+  await page.evaluate(`(() => {
+    localStorage.setItem('timebank-lang', 'zh');
+    localStorage.setItem('timebank-theme', ${JSON.stringify(theme)});
+  })()`);
+  await page.reload({ waitUntil: 'domcontentloaded' });
   assertThat(
     page.url().includes(expectPathPrefix),
     `signing in as ${account.username} should land under ${expectPathPrefix}, landed on ${page.url()}`,
