@@ -200,17 +200,6 @@ async function gotoRecords(page: Page, baseUrl: string): Promise<void> {
     await pageSize.selectOption('100');
   }
 
-  // One click is enough: the component sets descending whenever the key changes
-  // (`nextDesc = sortKey === key ? !sortDesc : true`), and the default sort is by
-  // service date — so switching to creation time lands on newest-first directly.
-  // Asked of the URL, not the button. These lists sync their sort into the query
-  // string, so `sort=-createdAt` is settled the moment the page has loaded —
-  // whereas the button's own arrow is rendered by React a beat later, and reading
-  // it straight after a reload says "not sorted" about a list that is.
-  if (!page.url().includes('sort=-createdAt')) {
-    await tap(page.getByRole('button', { name: /创建时间/ }), '按创建时间排序，最新的排在最前面');
-    await page.waitForURL(url => url.search.includes('sort=-createdAt'), { timeout: 10_000 });
-  }
   await page.waitForTimeout(800);
 }
 
