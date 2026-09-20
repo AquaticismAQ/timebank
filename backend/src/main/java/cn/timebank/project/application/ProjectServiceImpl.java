@@ -371,7 +371,8 @@ class ProjectServiceImpl implements ProjectService {
     private static void requireEditable(Project project) {
         if (project.getStatus() == ProjectStatus.COMPLETED || project.getStatus() == ProjectStatus.ARCHIVED) {
             throw ApiException.stateConflict(
-                    "A project in status " + project.getStatus() + " cannot be edited.");
+                    "A project in status " + project.getStatus() + " cannot be edited.",
+                    List.of(new FieldErrorDetail("status", "PROJECT_NOT_EDITABLE", project.getStatus().name())));
         }
     }
 

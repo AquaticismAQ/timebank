@@ -4,6 +4,7 @@ import cn.timebank.audit.application.AuditEntry;
 import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.enrollment.application.dto.EnrollmentDto;
 import cn.timebank.enrollment.application.dto.EnrollmentRequests.BulkActionRequest;
@@ -91,7 +92,8 @@ class EnrollmentServiceImpl implements EnrollmentService {
         // committed by the time this transaction acquires the lock.
         ProjectCapacitySnapshot snapshot = projectService.lockForRegistration(projectId);
         if (!"REGISTRATION_OPEN".equals(snapshot.status())) {
-            throw ApiException.stateConflict("Registration is not open for this project.");
+            throw ApiException.stateConflict("Registration is not open for this project.",
+                    List.of(new FieldErrorDetail("projectId", "REGISTRATION_NOT_OPEN", "")));
         }
 
         // `enrollment` has a unique key on (project_id, student_id) and cancelling
@@ -103,7 +105,8 @@ class EnrollmentServiceImpl implements EnrollmentService {
         // decision about this student, not something they may clear themselves.
         Enrollment existing = repository.findByProjectIdAndStudentId(projectId, studentId).orElse(null);
         if (existing != null && existing.getStatus() != EnrollmentStatus.CANCELLED) {
-            throw ApiException.stateConflict("Already registered for this project.");
+            throw ApiException.stateConflict("Already registered for this project.",
+                    List.of(new FieldErrorDetail("projectId", "ALREADY_REGISTERED", "")));
         }
         boolean reRegistering = existing != null;
 
@@ -142,7 +145,8 @@ class EnrollmentServiceImpl implements EnrollmentService {
         }
         if (enrollment.getStatus() != EnrollmentStatus.PENDING && enrollment.getStatus() != EnrollmentStatus.CONFIRMED
                 && enrollment.getStatus() != EnrollmentStatus.WAITLISTED) {
-            throw ApiException.stateConflict("This application can no longer be cancelled.");
+            throw ApiException.stateConflict("This application can no longer be cancelled.",
+                    List.of(new FieldErrorDetail("status", "APPLICATION_NOT_CANCELLABLE", "")));
         }
         enrollment.setStatus(EnrollmentStatus.CANCELLED);
         enrollment.setCancelledAt(Instant.now());
@@ -159,7 +163,8 @@ class EnrollmentServiceImpl implements EnrollmentService {
     public EnrollmentDto confirm(String id, String actorId, String resolvedLanguage) {
         Enrollment enrollment = findOrThrow(id);
         if (enrollment.getStatus() != EnrollmentStatus.PENDING && enrollment.getStatus() != EnrollmentStatus.WAITLISTED) {
-            throw ApiException.stateConflict("Only a pending or waitlisted application can be confirmed.");
+            throw ApiException.stateConflict("Only a pending or waitlisted application can be confirmed.",
+                    List.of(new FieldErrorDetail("status", "APPLICATION_NOT_CONFIRMABLE", "")));
         }
         enrollment.setStatus(EnrollmentStatus.CONFIRMED);
         enrollment.setConfirmedAt(Instant.now());
@@ -174,7 +179,8 @@ class EnrollmentServiceImpl implements EnrollmentService {
     public EnrollmentDto reject(String id, String actorId, String resolvedLanguage) {
         Enrollment enrollment = findOrThrow(id);
         if (enrollment.getStatus() != EnrollmentStatus.PENDING && enrollment.getStatus() != EnrollmentStatus.WAITLISTED) {
-            throw ApiException.stateConflict("Only a pending or waitlisted application can be rejected.");
+            throw ApiException.stateConflict("Only a pending or waitlisted application can be rejected.",
+                    List.of(new FieldErrorDetail("status", "APPLICATION_NOT_REJECTABLE", "")));
         }
         enrollment.setStatus(EnrollmentStatus.REJECTED);
         repository.saveAndFlush(enrollment);
@@ -188,7 +194,8 @@ class EnrollmentServiceImpl implements EnrollmentService {
     public EnrollmentDto markComplete(String id, String actorId, String resolvedLanguage) {
         Enrollment enrollment = findOrThrow(id);
         if (enrollment.getStatus() != EnrollmentStatus.CONFIRMED) {
-            throw ApiException.stateConflict("Only a confirmed application can be marked complete.");
+            throw ApiException.stateConflict("Only a confirmed application can be marked complete.",
+                    List.of(new FieldErrorDetail("status", "APPLICATION_NOT_COMPLETABLE", "")));
         }
         enrollment.setStatus(EnrollmentStatus.COMPLETED);
         enrollment.setCompletedAt(Instant.now());

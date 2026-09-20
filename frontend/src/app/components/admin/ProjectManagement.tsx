@@ -6,7 +6,6 @@ import { type Project, type ProjectStatus, type Organization, type Grade } from 
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { useFieldErrors, FieldError, handleMutationError } from '../../api/useFieldErrors';
-import { ApiError } from '../../api/http';
 import { usePermissions } from '../../App';
 import { useDictionaries } from '../../api/useDictionaries';
 import { localDatetimeLocalToISO, isoToLocalDatetimeLocal, isoToLocalDate } from '../../lib/datetime';
@@ -594,18 +593,10 @@ export function ProjectManagement() {
       toast.success(t('admin.projects.toastAction', { action: labels[action] || action, title: proj.title }));
       refetch();
     } catch (err) {
-      // The one conflict a teacher is meant to read and act on, so the wording
-      // is ours: the server sends a coded field error carrying the count and
-      // an English sentence nobody should have to read (issue 120, the same
-      // arrangement `OVERLAPPING_RECORD` uses in ServiceRecords).
-      const unreviewed = err instanceof ApiError
-        ? err.fieldErrors?.find(f => f.code === 'UNREVIEWED_RECORDS')
-        : undefined;
-      if (unreviewed) {
-        toast.error(t('admin.projects.archiveBlockedUnreviewed', { count: Number(unreviewed.message) }));
-        refetch();
-        return;
-      }
+      // `UNREVIEWED_RECORDS` used to be unwrapped by hand here. It no longer
+      // needs to be: `handleMutationError` renders any coded field error from
+      // `errors.field.*`, so this one is now just a row in that table (issue
+      // 121). The point of a code is that nothing has to special-case it.
       handleMutationError(err, { refetch, fallbackMessage: t('common.unknownError') });
     }
   };
@@ -872,36 +863,43 @@ export function ProjectManagement() {
                 <div>
                   <label className={LABEL}>{t('admin.projects.verifiedHours')}</label>
                   <input type="number" min="0.5" step="0.5" value={Math.round((newForm.recognizedMinutes / 60) * 100) / 100} onChange={e => setNewForm(f => ({ ...f, recognizedMinutes: Number(e.target.value) * 60 }))} placeholder="2" className={INPUT} />
+                  <FieldError message={fieldErrors.getError('recognizedMinutes')} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>{t('admin.projects.startAt')}</label>
                   <input type="datetime-local" value={newForm.startAt} onChange={e => setNewForm(f => ({ ...f, startAt: e.target.value }))} className={INPUT} />
+                  <FieldError message={fieldErrors.getError('startAt')} />
                 </div>
                 <div>
                   <label className={LABEL}>{t('admin.projects.endAt')}</label>
                   <input type="datetime-local" value={newForm.endAt} onChange={e => setNewForm(f => ({ ...f, endAt: e.target.value }))} className={INPUT} />
+                  <FieldError message={fieldErrors.getError('endAt')} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>{t('admin.projects.regOpenAt')}</label>
                   <input type="datetime-local" value={newForm.registrationOpenAt} onChange={e => setNewForm(f => ({ ...f, registrationOpenAt: e.target.value }))} className={INPUT} />
+                  <FieldError message={fieldErrors.getError('registrationOpenAt')} />
                 </div>
                 <div>
                   <label className={LABEL}>{t('admin.projects.regCloseAt')}</label>
                   <input type="datetime-local" value={newForm.registrationCloseAt} onChange={e => setNewForm(f => ({ ...f, registrationCloseAt: e.target.value }))} className={INPUT} />
+                  <FieldError message={fieldErrors.getError('registrationCloseAt')} />
                 </div>
               </div>
               <div>
                 <label className={LABEL}>{t('admin.projects.location')}</label>
                 <input type="text" value={newForm.location} onChange={e => setNewForm(f => ({ ...f, location: e.target.value }))} placeholder={t('admin.projects.locationPlaceholder')} maxLength={255} className={INPUT} />
+                  <FieldError message={fieldErrors.getError('location')} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>{t('admin.projects.capacity')}</label>
                   <input type="number" min="1" value={newForm.capacity} onChange={e => setNewForm(f => ({ ...f, capacity: Number(e.target.value) }))} placeholder="20" className={INPUT} />
+                  <FieldError message={fieldErrors.getError('capacity')} />
                 </div>
                 <div>
                   <label className={LABEL}>{t('admin.projects.partnerOrg')}</label>

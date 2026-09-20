@@ -4,6 +4,7 @@ import cn.timebank.audit.application.AuditEntry;
 import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.file.application.dto.DownloadResult;
 import cn.timebank.file.application.dto.FileMetadataDto;
 import cn.timebank.file.application.dto.FileRequests.CreateUploadIntentRequest;
@@ -261,7 +262,8 @@ class FileServiceImpl implements FileService {
         boolean boundToSubmitted = referenceRepository.findRecordsReferencing(fileId).stream()
                 .anyMatch(ref -> !"DRAFT".equals(ref.status()));
         if (boundToSubmitted) {
-            throw ApiException.stateConflict("This file is bound to a submitted record and cannot be deleted.");
+            throw ApiException.stateConflict("This file is bound to a submitted record and cannot be deleted.",
+                    List.of(new FieldErrorDetail("evidenceFileIds", "FILE_BOUND_TO_RECORD", "")));
         }
         fileStorage.delete(file.getStorageKey());
         repository.delete(file);

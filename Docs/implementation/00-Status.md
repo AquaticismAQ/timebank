@@ -1316,3 +1316,17 @@ So `archive()` now throws a `409` carrying `fieldErrors: [{ field: "status", cod
 **One message, not a sweep.** Every other `ApiException` message is still English; that is the documented design, and the ones users routinely read should get this treatment one at a time, each with a code worth having.
 
 **Verified on the deployed server against a real blocked project**: the envelope carries the code and the count, the message no longer says "Cancel and archive", and clicking Archive in the UI produces the localized toast in both zh-CN and en with the count the server's own SQL computed. Red-checked by changing the emitted code — the new IT assertion fails, and only that one.
+
+### 41.17 Server errors now reach the user in their own language (2026-09-20)
+
+Issue 121, Aquaticism's answer to 120: the code idea is right, do it properly — and Copy to draft has the same problem.
+
+It did, and so did everything else. `handleMutationError` is the single funnel for 23 call sites and it toasted `err.message` verbatim; `useFieldErrors` stored Bean Validation's `"must not be null"` and printed it under the input; `'Refresh'` and `'Request failed.'` were hardcoded English literals in the frontend itself. Copy to draft was not specially broken — nothing was translated.
+
+`api/errorMessages.ts` now resolves in three tiers: a coded `fieldErrors[]` entry (`errors.field.<CODE>`), else the envelope's own code (`errors.code.<CODE>`), else the server's English as a shrinking remainder. **Tier 2 is what makes this a fix rather than a pile of special cases** — the ~120 `stateConflict`/`invalidRequest` sites with no code of their own now say something correct in the right language instead of a sentence written for a developer. Codes like `NOTBLANK`/`SIZE`/`REQUIRED` describe a field rather than a failure, so they are inline-only (`FIELD_ONLY_CODES`) and their requests fall to "check the fields marked below" — and the seven unmarked fields in the new-project dialog now render a `FieldError`, because that sentence has to be true.
+
+18 new backend codes, a first batch covering the everyday student/teacher conflicts (records, proposals, cases, registrations, project edit, rule publish, evidence files). The IAM/import/admin conflicts are still uncoded and fall to tier 2 — the obvious next batch. `UNREVIEWED_RECORDS` moved out of `ProjectManagement.tsx`'s bespoke `if` into the table, which is the test of whether this generalizes.
+
+**Verified on the deployed build in both languages**: the archive conflict still renders with its special case deleted (and with a localized Refresh action), a new code arrives in the envelope, and a validation failure produces a general toast plus four localized inline markers. The first attempt put a field-only message in the toast with no field named — found by reading the toast, and the reason `FIELD_ONLY_CODES` exists.
+
+**`mvn verify` fails 26 integration tests, identically before and after this change** (stash-and-rerun diff empty both ways). Pre-existing on `main`, listed in the issue doc, and worth their own investigation.

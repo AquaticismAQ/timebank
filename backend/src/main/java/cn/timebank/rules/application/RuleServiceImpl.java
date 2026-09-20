@@ -6,6 +6,7 @@ import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.cache.CacheConfig;
 import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.rules.application.dto.RuleRequests.CreateRuleRequest;
 import cn.timebank.rules.application.dto.RuleRequests.PublishRuleRequest;
 import cn.timebank.rules.application.dto.RuleRequests.UpdateRuleRequest;
@@ -111,7 +112,8 @@ class RuleServiceImpl implements RuleService {
     public RuleVersionDto publish(String id, PublishRuleRequest request, String actorId) {
         RuleVersion rule = findOrThrow(id);
         if (rule.getStatus() != RuleStatus.DRAFT) {
-            throw ApiException.stateConflict("Only a draft rule can be published.");
+            throw ApiException.stateConflict("Only a draft rule can be published.",
+                    List.of(new FieldErrorDetail("status", "RULE_NOT_PUBLISHABLE", "")));
         }
         ConcurrencyControl.checkVersion(rule.getVersion(), request.version());
         ValidationImpactDto validation = validate(id);

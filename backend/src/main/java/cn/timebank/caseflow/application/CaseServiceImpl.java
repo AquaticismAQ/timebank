@@ -21,6 +21,7 @@ import cn.timebank.caseflow.infrastructure.CaseRevisionRepository;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.common.idempotency.IdempotencyService;
 import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.student.application.AcademicYearWindowResolver;
@@ -176,7 +177,8 @@ class CaseServiceImpl implements CaseService {
     public CaseDto updateDraft(String id, UpdateCaseRequest request, Authentication auth, String resolvedLanguage) {
         Case c = findOwnedOrThrow(id, auth);
         if (c.getStatus() != CaseStatus.DRAFT && c.getStatus() != CaseStatus.NEEDS_INFORMATION) {
-            throw ApiException.stateConflict("Only a draft or needs-information case can be edited.");
+            throw ApiException.stateConflict("Only a draft or needs-information case can be edited.",
+                    List.of(new FieldErrorDetail("status", "CASE_NOT_EDITABLE", "")));
         }
         ConcurrencyControl.checkVersion(c.getVersion(), request.version());
         writeRevision(c, principalId(auth));
@@ -208,7 +210,8 @@ class CaseServiceImpl implements CaseService {
     private CaseDto doSubmit(String id, Authentication auth, String resolvedLanguage) {
         Case c = findOwnedOrThrow(id, auth);
         if (c.getStatus() != CaseStatus.DRAFT && c.getStatus() != CaseStatus.NEEDS_INFORMATION) {
-            throw ApiException.stateConflict("Only a draft or needs-information case can be submitted.");
+            throw ApiException.stateConflict("Only a draft or needs-information case can be submitted.",
+                    List.of(new FieldErrorDetail("status", "CASE_NOT_SUBMITTABLE", "")));
         }
         if (c.getTitle() == null || c.getTitle().isBlank()) {
             throw ApiException.invalidRequest("A title is required to submit a case.");
@@ -245,7 +248,8 @@ class CaseServiceImpl implements CaseService {
     public void deleteDraft(String id, Authentication auth) {
         Case c = findOwnedOrThrow(id, auth);
         if (c.getStatus() != CaseStatus.DRAFT) {
-            throw ApiException.stateConflict("Only a draft case can be deleted.");
+            throw ApiException.stateConflict("Only a draft case can be deleted.",
+                    List.of(new FieldErrorDetail("status", "CASE_NOT_DELETABLE", "")));
         }
         // A draft edited at least once has case_revision rows FK'd to it, so they
         // go first or the delete below fails on the constraint (issue 059).

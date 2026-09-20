@@ -1,16 +1,21 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { ApiError, mapApiError } from './http';
+import { apiErrorMessage, fieldErrorMessage } from './errorMessages';
+import i18n from '../../i18n';
 
 export function useFieldErrors() {
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  // The code is kept alongside the message, because the code is what carries
+  // the meaning: the message is the server's English sentence and is only the
+  // fallback for a code we have no wording for yet (issue 121).
+  const [errors, setErrors] = useState<Record<string, { code: string; message: string }>>({});
 
   const setFromApiError = useCallback((err: ApiError) => {
     const mapped = mapApiError(err);
     if (mapped.kind === 'field' && mapped.fieldErrors?.length) {
-      const next: Record<string, string> = {};
+      const next: Record<string, { code: string; message: string }> = {};
       for (const fe of mapped.fieldErrors) {
-        next[fe.field] = fe.message;
+        next[fe.field] = { code: fe.code, message: fe.message };
       }
       setErrors(next);
     }
@@ -26,11 +31,17 @@ export function useFieldErrors() {
 
   const clearAll = useCallback(() => setErrors({}), []);
 
-  /** Look up an error by API field name or frontend alias(es). */
+  /**
+   * Look up an error by API field name or frontend alias(es), localized.
+   *
+   * Resolved at call time rather than when it was stored, so switching language
+   * with a form open re-words the errors already on screen.
+   */
   const getError = useCallback(
     (...fields: string[]) => {
       for (const f of fields) {
-        if (errors[f]) return errors[f];
+        const e = errors[f];
+        if (e) return fieldErrorMessage(e.code, e.message);
       }
       return undefined;
     },
@@ -59,14 +70,15 @@ export function handleMutationError(
     if (mapped.kind === 'field') {
       opts.fieldErrors?.setFromApiError(err);
     }
+    const message = apiErrorMessage(err);
     if (mapped.kind === 'conflict' && opts.refetch) {
-      toast.error(mapped.message, {
-        action: { label: 'Refresh', onClick: () => opts.refetch!() },
+      toast.error(message, {
+        action: { label: i18n.t('common.refresh'), onClick: () => opts.refetch!() },
       });
     } else {
-      toast.error(mapped.message);
+      toast.error(message);
     }
     return;
   }
-  toast.error(opts.fallbackMessage ?? 'Request failed.');
+  toast.error(opts.fallbackMessage ?? i18n.t('common.unknownError'));
 }

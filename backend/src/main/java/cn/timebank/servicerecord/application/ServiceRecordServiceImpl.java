@@ -169,7 +169,8 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
     public ServiceRecordDto updateDraft(String id, UpdateServiceRecordRequest request, Authentication auth, String resolvedLanguage) {
         ServiceRecord record = findOwnedOrThrow(id, auth);
         if (record.getStatus() != ServiceRecordStatus.DRAFT && record.getStatus() != ServiceRecordStatus.RETURNED) {
-            throw ApiException.stateConflict("Only a draft or returned record can be edited.");
+            throw ApiException.stateConflict("Only a draft or returned record can be edited.",
+                    List.of(new FieldErrorDetail("status", "RECORD_NOT_EDITABLE", "")));
         }
         ConcurrencyControl.checkVersion(record.getVersion(), request.version());
         writeRevision(record, principalId(auth));
@@ -219,7 +220,8 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         ServiceRecord record = findOwnedOrThrow(id, auth);
         if (record.getStatus() != ServiceRecordStatus.DRAFT) {
             // Invariant 4: only a draft may ever be physically deleted.
-            throw ApiException.stateConflict("Only a draft record can be deleted.");
+            throw ApiException.stateConflict("Only a draft record can be deleted.",
+                    List.of(new FieldErrorDetail("status", "RECORD_NOT_DELETABLE", "")));
         }
         // A draft edited at least once has service_record_revision rows FK'd to it
         // (writeRevision, called from updateDraft) — delete those first or the
@@ -241,7 +243,8 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
     private ServiceRecordDto doSubmit(String id, Authentication auth, String resolvedLanguage) {
         ServiceRecord record = findOwnedOrThrow(id, auth);
         if (record.getStatus() != ServiceRecordStatus.DRAFT && record.getStatus() != ServiceRecordStatus.RETURNED) {
-            throw ApiException.stateConflict("Only a draft or returned record can be submitted.");
+            throw ApiException.stateConflict("Only a draft or returned record can be submitted.",
+                    List.of(new FieldErrorDetail("status", "RECORD_NOT_SUBMITTABLE", "")));
         }
         runSubmissionValidation(record);
 

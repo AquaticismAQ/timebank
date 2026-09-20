@@ -193,7 +193,8 @@ class ProposalServiceImpl implements ProposalService {
     public ProposalDto updateDraft(String id, UpdateProposalRequest request, Authentication auth, String resolvedLanguage) {
         EventProposal proposal = findOwnedOrThrow(id, auth);
         if (proposal.getStatus() != ProposalStatus.DRAFT && proposal.getStatus() != ProposalStatus.CHANGES_REQUESTED) {
-            throw ApiException.stateConflict("Only a draft or changes-requested proposal can be edited.");
+            throw ApiException.stateConflict("Only a draft or changes-requested proposal can be edited.",
+                    List.of(new FieldErrorDetail("status", "PROPOSAL_NOT_EDITABLE", "")));
         }
         ConcurrencyControl.checkVersion(proposal.getVersion(), request.version());
         writeRevision(proposal, principalId(auth));
@@ -255,7 +256,8 @@ class ProposalServiceImpl implements ProposalService {
     public void deleteDraft(String id, Authentication auth) {
         EventProposal proposal = findOwnedOrThrow(id, auth);
         if (proposal.getStatus() != ProposalStatus.DRAFT) {
-            throw ApiException.stateConflict("Only a draft proposal can be deleted.");
+            throw ApiException.stateConflict("Only a draft proposal can be deleted.",
+                    List.of(new FieldErrorDetail("status", "PROPOSAL_NOT_DELETABLE", "")));
         }
         repository.delete(proposal);
         auditService.record(new AuditEntry(principalId(auth), "eventProposals.create", "eventProposal.delete",
@@ -278,7 +280,8 @@ class ProposalServiceImpl implements ProposalService {
     private ProposalDto doSubmit(String id, Authentication auth, String resolvedLanguage) {
         EventProposal proposal = findOwnedOrThrow(id, auth);
         if (proposal.getStatus() != ProposalStatus.DRAFT && proposal.getStatus() != ProposalStatus.CHANGES_REQUESTED) {
-            throw ApiException.stateConflict("Only a draft or changes-requested proposal can be submitted.");
+            throw ApiException.stateConflict("Only a draft or changes-requested proposal can be submitted.",
+                    List.of(new FieldErrorDetail("status", "PROPOSAL_NOT_SUBMITTABLE", "")));
         }
         runSubmissionValidation(proposal);
 
