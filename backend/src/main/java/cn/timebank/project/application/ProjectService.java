@@ -27,7 +27,8 @@ public interface ProjectService {
      * project's {@code eligibleGradeIds} — a project can be eligible for
      * more than one grade, so this is "contains", not "equals".
      */
-    Page<ProjectDto> list(Pageable pageable, String status, String categoryId, String gradeId, String search,
+    Page<ProjectDto> list(Pageable pageable, String status, String categoryId, String gradeId,
+                           String academicYearId, String search,
                            Authentication auth, String resolvedLanguage);
 
     ProjectDto getDetail(String id, Authentication auth, String resolvedLanguage);

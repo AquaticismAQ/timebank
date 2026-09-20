@@ -311,7 +311,7 @@ const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['enrolledCount'];
 
 export function ProjectManagement() {
   const { t } = useTranslation();
-  const { grades, serviceCategories } = useDictionaries();
+  const { grades, serviceCategories, academicYears } = useDictionaries();
   const { hasPermission } = usePermissions();
   // Backend gates create/update/publish/archive/cancel on five distinct
   // permissions (ProjectController's @PreAuthorize) — role_teacher's seed
@@ -343,6 +343,14 @@ export function ProjectManagement() {
   const [filterStatus, setFilterStatus] = useState<ProjectStatus | 'all'>('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterGrade, setFilterGrade] = useState('all');
+  /**
+   * Issue 112: defaults to the current academic year rather than every year.
+   * A management screen is for running the year in progress, and as years
+   * accumulate an unscoped list buries it under closed projects. `all` stays
+   * available so a past project is still reachable — making existing data
+   * invisible would be worse than a longer list.
+   */
+  const [filterAcademicYear, setFilterAcademicYear] = useState<string>('');
   const [sortKey, setSortKey] = useState<SortKey>('createdAt');
   const [sortDesc, setSortDesc] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -378,6 +386,27 @@ export function ProjectManagement() {
   const handleCategoryChange = (value: string) => {
     setFilterCategory(value);
     setFilter('categoryId', value === 'all' ? undefined : value);
+  };
+
+  /**
+   * Applies the default once the year list arrives.
+   *
+   * The state cannot simply be initialised to the current year, because the
+   * dictionary is fetched — at first render there is no year to name. The guard on
+   * an already-chosen value matters: without it, the list reloading would reset an
+   * operator's deliberate choice of a past year back to the current one.
+   */
+  useEffect(() => {
+    if (filterAcademicYear !== '') return;
+    const current = academicYears.find(y => y.current);
+    if (!current) return;
+    setFilterAcademicYear(current.id);
+    setFilter('academicYearId', current.id);
+  }, [academicYears, filterAcademicYear]);
+
+  const handleAcademicYearChange = (value: string) => {
+    setFilterAcademicYear(value);
+    setFilter('academicYearId', value === 'all' ? undefined : value);
   };
 
   // Unlike Audit Center/Case Review/Proposal Review, projects have no
@@ -535,7 +564,7 @@ export function ProjectManagement() {
             placeholder={t('admin.projects.searchPlaceholder')}
           />
         </div>
-        <div className="grid grid-cols-3 gap-2 lg:contents">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 lg:contents">
           <select value={filterStatus} onChange={e => handleStatusChange(e.target.value as ProjectStatus | 'all')}
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.projects.allStatuses')}</option>
@@ -550,6 +579,11 @@ export function ProjectManagement() {
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.projects.allGrades')}</option>
             {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+          <select value={filterAcademicYear} onChange={e => handleAcademicYearChange(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('admin.projects.allAcademicYears')}</option>
+            {academicYears.map(y => <option key={y.id} value={y.id}>{y.code}</option>)}
           </select>
         </div>
       </div>

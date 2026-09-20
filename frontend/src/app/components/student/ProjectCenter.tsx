@@ -175,7 +175,13 @@ export function ProjectCenter() {
 
       {/* Search & filters — Docs/optimization/05-SearchFilterSortConsistency.md §2.4: search alone below lg:,
           filters as an Nx1 grid alongside it, merged into one row at lg: and up. Same layout as
-          ProjectManagement.tsx's admin view, minus the grade filter (not meaningful for a student's own view). */}
+          ProjectManagement.tsx's admin view, minus the grade filter (not meaningful for a student's own view).
+
+          Deliberately also minus the academic-year filter the admin view has (issue
+          112). This list is pinned to the current academic year by the server for
+          any student, whatever the request asks for, because last year's projects
+          are not joinable and this screen exists to answer "what can I sign up
+          for". A dropdown here would offer a choice the server overrules. */}
       <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
         <div className="relative lg:flex-1 lg:min-w-48">
           <ListSearchInput

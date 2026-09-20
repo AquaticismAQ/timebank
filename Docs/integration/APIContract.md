@@ -507,6 +507,12 @@ The admin "Registrants" screen (`GET /applications?filter[projectId]=`, §4.4) i
 
 `GET /projects`'s `filter[gradeId]` matches if the given grade appears **anywhere** in the project's `eligibleGradeIds` (§3.1) — "contains", not "equals", since a project can be eligible for more than one grade at once (unlike `EventProposal`/`Case`'s single-grade `filter[gradeId]`, §3.2/§3.6). Backed by a native `JSON_CONTAINS` query against `eligible_grade_ids` (a MySQL JSON column, not a normalized join table) rather than a JPA Criteria predicate, since Hibernate's `@Convert`-mapped collection columns can't express "array contains" as a Specification.
 
+**`filter[academicYearId]` (added 2026-09-20, issue 112):** a project belongs to the academic year its `startAt` falls in, the same rule `/reports/top-projects` (§4.13) and the `projects` export use, and the window comes from the stored `academic_year` row rather than being recomputed from the turnover date (which is configurable — `TIMEBANK_ACADEMIC_YEAR_START`). Three rules differ deliberately from `/reports/*`:
+
+- **Absent means every year**, not the current one. This endpoint is shared by several screens and any future caller, so a missing parameter must not narrow it.
+- **An unknown id is a 404**, never a silent fall back to the current year — answering with a different year's projects hides the caller's bug behind rows that look real, the same reasoning as `ReportAcademicYearResolver`'s.
+- **A student is pinned to the current academic year server-side**, whatever they pass. The Project Center is a "what can I join" screen and last year's projects are not joinable; enforcing it in the query means it cannot be sidestepped by editing a request. Consequently the Project Center carries no year control — a dropdown the server overrules would be a lie — while Project Management defaults to the current year and offers **All years**, so past data stays reachable.
+
 ### 4.3 Student Event Proposals
 
 | Method | Path | Permission | Description |

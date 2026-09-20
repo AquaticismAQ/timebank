@@ -499,6 +499,12 @@ queued → running → succeeded
 
 `GET /projects` 的 `filter[gradeId]` 只要该年级出现在项目的 `eligibleGradeIds`（见 §3.1）**任意位置**即匹配——是"包含"而非"等于"，因为一个项目可以同时适用于多个年级（与 `EventProposal`/`Case` 单一年级的 `filter[gradeId]` 不同，见 §3.2/§3.6）。该过滤基于对 `eligible_grade_ids`（一个 MySQL JSON 列，而非规范化的关联表）的原生 `JSON_CONTAINS` 查询实现，而非 JPA Criteria 谓词——因为 Hibernate 中 `@Convert` 映射的集合列无法在 Specification 里表达"数组包含"语义。
 
+**`filter[academicYearId]`（2026-09-20 新增，见问题 112）：** 项目归属于其 `startAt` 所落入的那个学年，与 `/reports/top-projects`（见 §4.13）和 `projects` 导出使用同一条规则；学年区间取自已存储的 `academic_year` 记录，而不是用换届日期重新推算（该日期是可配置的——`TIMEBANK_ACADEMIC_YEAR_START`）。有三条规则与 `/reports/*` 刻意不同：
+
+- **不传该参数表示所有学年**，而非当前学年。这个接口被多个页面以及将来任何调用方共用，缺省参数不应收窄结果。
+- **未知 id 返回 404**，绝不静默回落到当前学年——用另一个学年的项目来作答，会把调用方的缺陷藏在看起来真实的数据后面，这与 `ReportAcademicYearResolver` 的理由一致。
+- **学生由服务端固定在当前学年**，无论其传入什么。项目中心是"我能报名什么"的页面，上一学年的项目无法报名；在查询中强制执行意味着改写请求也绕不过去。因此项目中心不提供学年选择控件——一个会被服务端推翻的下拉框是在骗人——而项目管理默认当前学年并提供**全部学年**选项，使历史数据仍然可达。
+
 ### 4.3 学生活动提案
 
 | Method | Path | 权限 | 说明 |

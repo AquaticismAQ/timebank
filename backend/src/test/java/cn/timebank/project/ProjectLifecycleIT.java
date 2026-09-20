@@ -184,17 +184,17 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         ProjectDto published = projectService.publish(notDraft.id(), notDraft.version(), "usr_test_admin", "zh-CN");
 
         // status filter narrows results: the still-draft project is included, the published one is not.
-        Page<ProjectDto> draftOnly = projectService.list(PageRequest.of(0, 100), "DRAFT", null, null, null, adminAuth(), "zh-CN");
+        Page<ProjectDto> draftOnly = projectService.list(PageRequest.of(0, 100), "DRAFT", null, null, null, null, adminAuth(), "zh-CN");
         assertThat(draftOnly.getContent()).extracting(ProjectDto::id).contains(draftProject.id());
         assertThat(draftOnly.getContent()).extracting(ProjectDto::id).doesNotContain(published.id());
 
         // search matches title.
-        Page<ProjectDto> searchMatch = projectService.list(PageRequest.of(0, 100), null, null, null,
+        Page<ProjectDto> searchMatch = projectService.list(PageRequest.of(0, 100), null, null, null, null,
                 "Filter Test Draft Alpha", adminAuth(), "zh-CN");
         assertThat(searchMatch.getContent()).extracting(ProjectDto::id).containsExactly(draftProject.id());
 
         // an unmatched search returns an empty page, not an error.
-        Page<ProjectDto> searchNoMatch = projectService.list(PageRequest.of(0, 100), null, null, null,
+        Page<ProjectDto> searchNoMatch = projectService.list(PageRequest.of(0, 100), null, null, null, null,
                 "NoSuchProjectTitleXYZ", adminAuth(), "zh-CN");
         assertThat(searchNoMatch.getContent()).isEmpty();
     }

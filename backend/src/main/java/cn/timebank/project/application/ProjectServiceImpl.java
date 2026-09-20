@@ -34,6 +34,7 @@ import cn.timebank.project.infrastructure.ProjectRevisionRepository;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.security.application.TimeBankPrincipal;
 import cn.timebank.student.application.AcademicStructureService;
+import cn.timebank.student.application.dto.AcademicYearDto;
 import cn.timebank.student.application.dto.GradeDto;
 import cn.timebank.iam.application.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,6 +46,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -89,7 +91,8 @@ class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     // Not readOnly: syncTimeBasedStatus conditionally writes (the B2 lesson).
-    public Page<ProjectDto> list(Pageable pageable, String status, String categoryId, String gradeId, String search,
+    public Page<ProjectDto> list(Pageable pageable, String status, String categoryId, String gradeId,
+                                  String academicYearId, String search,
                                   Authentication auth, String resolvedLanguage) {
         // search only matches title: Project stores organizationId as a plain
         // string FK (no JPA relationship — cross-module joins aren't allowed
@@ -99,6 +102,7 @@ class ProjectServiceImpl implements ProjectService {
                 FilterSpecifications.equalToEnum("status", ProjectStatus.class, status),
                 FilterSpecifications.equalTo("categoryId", categoryId),
                 eligibleGradeSpecification(gradeId),
+                academicYearSpecification(academicYearId, auth),
                 FilterSpecifications.searchAnyContains(search, "title"));
         Page<Project> page = repository.findAll(FilterSpecifications.and(visibilitySpec(auth), filterSpec), pageable);
         page.getContent().forEach(this::syncTimeBasedStatus);
@@ -461,6 +465,73 @@ class ProjectServiceImpl implements ProjectService {
         Specification<Project> idSpec = (root, query, cb) -> cb.equal(root.get("id"), id);
         Specification<Project> combined = idSpec.and(visibilitySpec(auth));
         return repository.findOne(combined).orElseThrow(() -> ApiException.notFound("Project not found."));
+    }
+
+    /**
+     * Narrows the list to one academic year's projects (issue 112).
+     *
+     * <p><b>A project belongs to the year its {@code startAt} falls in.</b> There
+     * is no academic-year column on {@code project}, so the rule is derived — and
+     * it is deliberately the same rule {@code /reports/top-projects} and the
+     * {@code projects} export already use. Three definitions of "this year's
+     * projects" would be three chances for two screens to disagree about the same
+     * project.</p>
+     *
+     * <p>The window is the {@code academic_year} row's own {@code startDate} and
+     * {@code endDate}, never 1 September arithmetic: the turnover date is
+     * configurable and an existing year keeps the dates it was created with, so
+     * recomputing here would drift from the row the moment either changed.</p>
+     *
+     * <p><b>Students are pinned to the current year</b> whatever they ask for
+     * (§3.1). The Project Center is a "what can I join" screen and last year's
+     * projects are not joinable; enforcing that here rather than in the component
+     * means it cannot be sidestepped by editing a request, the same reasoning that
+     * pins a teacher's Review History to their own decisions.</p>
+     */
+    private Specification<Project> academicYearSpecification(String academicYearId, Authentication auth) {
+        TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
+        AcademicYearDto year;
+        if (isStudent(principal)) {
+            year = currentAcademicYear();
+        } else if (academicYearId == null || academicYearId.isBlank()) {
+            // Absent means every year, unlike /reports/*, where it means the
+            // current one. This endpoint is shared by several screens and any
+            // future caller; narrowing it on a missing parameter would change
+            // behaviour nobody asked to change.
+            return null;
+        } else {
+            String wanted = academicYearId.trim();
+            year = academicStructureService.listAcademicYears().stream()
+                    .filter(y -> y.id().equals(wanted)).findFirst()
+                    // Never a silent fall back to the current year: a caller asking
+                    // for a year that does not exist has a bug, and answering with
+                    // another year's projects hides it behind rows that look real.
+                    .orElseThrow(() -> ApiException.notFound("No academic year with id " + wanted));
+        }
+        if (year == null) {
+            return null;
+        }
+        Instant from = year.startDate().atStartOfDay(ZoneId.systemDefault()).toInstant();
+        // Exclusive upper bound at the start of the day after the year's last day,
+        // so a project starting at any time on that last day is still inside it.
+        Instant until = year.endDate().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+        return (root, query, cb) -> cb.and(
+                cb.greaterThanOrEqualTo(root.get("startAt"), from),
+                cb.lessThan(root.get("startAt"), until));
+    }
+
+    /**
+     * The year flagged current. Returns null rather than throwing if none is —
+     * that is a seeding fault, and failing every project list because of it would
+     * turn a misconfiguration into an outage.
+     */
+    private AcademicYearDto currentAcademicYear() {
+        return academicStructureService.listAcademicYears().stream()
+                .filter(AcademicYearDto::current).findFirst().orElse(null);
+    }
+
+    private boolean isStudent(TimeBankPrincipal principal) {
+        return principal.roleCodes().contains("student");
     }
 
     private Specification<Project> visibilitySpec(Authentication auth) {

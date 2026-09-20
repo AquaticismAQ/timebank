@@ -1192,3 +1192,15 @@ Issue 111 built and deployed, backend and frontend. No migration. `mustChangePas
 **`Docs/TestAccounts.md` was updated**: `10007944` (`student002`) no longer has its seeded password, because proving the path end to end meant really changing one. The file records that, and the other 51 credential rows are untouched.
 
 The four `accountSafety1` strings no longer tell users to visit the Student Affairs Office or contact an administrator — confirmed absent from the live page.
+
+### 41.5 Project lists scoped to an academic year (2026-09-20)
+
+Issue 112. `GET /projects` gained `filter[academicYearId]`; Project Management gained a year dropdown defaulting to the current year with an **All years** option; the student Project Center gained no control, because the server pins a student to the current year whatever they send.
+
+**No new definition of "this year's projects."** The rule is `start_at` inside the year's stored window, the same one `/reports/top-projects` and the projects export already use, and the window is read from the `academic_year` row rather than recomputed from 1 September — the turnover date is configurable now (`TIMEBANK_ACADEMIC_YEAR_START`), so arithmetic here would drift the moment it changed.
+
+Two deliberate asymmetries. **Absent means every year** for staff, not the current one as in `/reports/*`: this endpoint is shared by several screens and any future caller, and narrowing it on a missing parameter would change behaviour nobody asked to change. **An unknown id is a 404**, never a silent fall back — answering with a different year's projects hides the caller's bug behind rows that look real.
+
+**Verified against the Docker stack on data that spans two years** — the local DB holds 3 projects in 2025-2026 and 10 in 2026-2027, which is the only arrangement that can tell scoping from no scoping. Through the API: staff with no parameter 13 (3 past), current year 10 (0 past), 2025-2026 exactly those 3, an unknown id `404 No academic year with id …`; a student with no parameter 8 with 0 past, and **a student explicitly asking for 2025-2026 still got the same 8**. In the browser: the dropdown loads on 2026-2027 by default showing 10, 2025-2026 shows the 3 pre-September projects, All years shows 13, and the label renders in both bundles. The student Project Center shows 8, none of the three past-year titles, and has no year control among its filters.
+
+`ProjectAcademicYearScopeIT` covers the four behaviours; removing `academicYearSpecification` from the filter chain fails three of them while `absentMeansEveryYearForStaff` correctly still passes. `mvn test` 353, 0 failures.

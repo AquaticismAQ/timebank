@@ -53,7 +53,8 @@ public class ProjectController {
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
         Page<ProjectDto> page = projectService.list(pageable, query.filter("status"), query.filter("categoryId"),
-                query.filter("gradeId"), query.search(), auth, resolveLanguage(acceptLanguage, auth));
+                query.filter("gradeId"), query.filter("academicYearId"), query.search(),
+                auth, resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 
