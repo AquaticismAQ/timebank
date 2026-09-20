@@ -16,6 +16,7 @@ import cn.timebank.student.application.dto.GradeDto;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.stream.Collectors;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
@@ -149,7 +150,21 @@ class ReportServiceImpl implements ReportService {
         AcademicYearDto year = academicYearResolver.resolve(academicYearId);
         List<ServiceHoursReportDto.MonthFigure> byMonth = queryRepository.serviceMinutesByMonth(year.startDate(), year.endDate())
                 .stream().map(r -> new ServiceHoursReportDto.MonthFigure(r.month(), r.minutes() / 60)).toList();
-        return new ServiceHoursReportDto(Instant.now(), year.id(), byMonth);
+
+        // Every day in the year, empty ones included — see the DTO for why a
+        // sparse series would draw the wrong shape.
+        Map<String, Integer> minutesByDay = queryRepository.serviceMinutesByDay(year.startDate(), year.endDate())
+                .stream().collect(Collectors.toMap(ReportQueryRepository.DayMinutesRow::day,
+                        ReportQueryRepository.DayMinutesRow::minutes));
+        List<ServiceHoursReportDto.DayFigure> byDay = year.startDate()
+                .datesUntil(year.endDate().plusDays(1))
+                .map(d -> {
+                    String key = d.toString();
+                    return new ServiceHoursReportDto.DayFigure(key, minutesByDay.getOrDefault(key, 0));
+                })
+                .toList();
+
+        return new ServiceHoursReportDto(Instant.now(), year.id(), byMonth, byDay);
     }
 
     @Override

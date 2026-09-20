@@ -1448,3 +1448,17 @@ The columns come from different places: Service Hours is `progress.completedMinu
 Fixed by labelling the period — `Service Hours (This Year)` / `Time Coins (Total)`, 本学年服务时长 / 时间币余额（累计） — and not by changing any number. Showing coins for this year was rejected: the balance is lifetime by design, and a year-scoped coin figure would be a second differently-computed number claiming the same name.
 
 **Nothing was re-seeded**, in Docker or otherwise — the question was answerable from reads, and reads against real data also cover the drift a running server accumulates, which a fresh fixture would not. One gap noted for later: `seed.ts` Phase 7 already asserts this invariant and throws, but only for students carrying a `ref`; the bulk-generated roster is skipped. The measurements show it holds for them anyway.
+
+### 41.28 The service-hours trend is drawn a day at a time (2026-09-20)
+
+Issue 133, Aquaticism's request: keep month marks on the axis, draw the curve in days, rename the chart to *Service Hours Trend*.
+
+Twelve points across a school year says almost nothing — one busy weekend and a quiet fortnight average into the same flat line. The live data makes the case: 240 hours for the year, all of it on **18 days**, all in September.
+
+`GET /reports/service-hours` now carries both resolutions. `byMonth` stays for the Peak/Lowest **month** cards beside the chart — a statement about months, which a daily series would answer differently — and `byDay` (`{day, minutes}`) backs the curve. Minutes rather than hours because `byMonth`'s integer division rounds a 30-minute day to nothing, and durations are integer minutes everywhere else on the wire. Every day of the year is present including the empty ones: a line chart spaces points evenly however far apart their dates are, so a sparse series would draw a fortnight's gap the same width as a weekend.
+
+Axis ticks are the first day of each month — a value the axis actually holds — and per-point dots are off, since 365 of them is a band rather than a line. Renamed in the bundle as well as on screen (`monthlyHoursTrend` → `hoursTrend`), so the key does not keep saying "monthly".
+
+**Verified** with the cross-check that matters — the two resolutions agree on the year's total, 240h counted both ways — plus the rendered chart: heading 服务时长趋势, twelve month ticks from 2026-09 to 2027-08, and 365 curve segments.
+
+**I broke the Reports page on the way and should record how.** The first version put the derived series behind `useMemo` *below* the `if (!data || !stats) return` guard; hooks after a conditional return run on some renders and not others, React threw #310, and the page went blank — deployed in that state for a few minutes. They are plain consts now. The lesson is about the check rather than the slip: `tsc` passes a hooks-order violation happily, and only loading the page and reading the console found it.

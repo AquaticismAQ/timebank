@@ -1440,7 +1440,7 @@
       "colParticipationRate": "参与率",
       "colCompleted": "达标人数",
       "colCompletionRate": "达标率",
-      "monthlyHoursTrend": "月度服务时长趋势",
+      "hoursTrend": "服务时长趋势",
       "lowestMonth": "低谷月份",
       "topProjects": "热门项目",
       "people": "人",

@@ -749,6 +749,9 @@ queued → running → succeeded
 | `GET` | `/exports/{jobId}` | 创建者/管理员 | 查询导出任务 |
 | `GET` | `/exports/{jobId}/download` | 创建者/管理员 | 获取**一次性**下载地址 |
 
+
+**`/reports/service-hours` 的粒度（issue 133）。** 响应同时给出学年的两种粒度：`byMonth`（`{month, hours}`，整数小时）用于按月汇总，`byDay`（`{day, minutes}`，ISO `yyyy-MM-dd`）用于趋势曲线。`byDay` 覆盖**学年中的每一天，包括没有服务的零值日**——折线图会把各点等距排开而不管真实日期间隔，稀疏数列会把两周的空档画得和一个周末一样宽。使用分钟而非小时，是因为某一天的服务时长常常不足一小时。
+
 **`POST /exports` 按导出类型分别鉴权。** 所需权限是 `exports.` 加请求体中的
 `reportType`——即 `exports.studentList`、`exports.serviceRecords`、
 `exports.studentCompletion`、`exports.projects`、`exports.studentParticipation`、

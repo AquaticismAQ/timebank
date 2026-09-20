@@ -757,6 +757,9 @@ Effective rules cannot be modified in place; changes must create a new version.
 | `GET` | `/exports/{jobId}` | Creator/admin | Query export job |
 | `GET` | `/exports/{jobId}/download` | Creator/admin | Get a **single-use** download URL |
 
+
+**`/reports/service-hours` resolution (issue 133).** The response carries the academic year at two resolutions: `byMonth` (`{month, hours}`, integer hours) for month-level summaries, and `byDay` (`{day, minutes}`, ISO `yyyy-MM-dd`) for the trend line. `byDay` includes **every day of the year, zero-minute days included** — a line chart spaces its points evenly whatever their dates, so a sparse series would draw a fortnight's gap the same width as a weekend. Minutes rather than hours because a day's service is often a fraction of one.
+
 **`POST /exports` is authorised per report type.** The permission is
 `exports.` + the `reportType` in the body — `exports.studentList`,
 `exports.serviceRecords`, `exports.studentCompletion`, `exports.projects`,

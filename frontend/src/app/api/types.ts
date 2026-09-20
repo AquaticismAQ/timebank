@@ -569,6 +569,8 @@ export interface ReportData {
   participationByGrade: { grade: string; total: number; participated: number; rate: number }[];
   completionByGrade: { grade: string; total: number; completed: number; rate: number }[];
   serviceHoursByMonth: { month: string; hours: number }[];
+  /** Every day of the academic year, empty ones included — the trend line is drawn from these (issue 133). Minutes, not hours: a day is often a fraction of one. */
+  serviceHoursByDay: { day: string; minutes: number }[];
   /** Minutes on the wire; render with `minutesToHours`. Issue 093 §9: this was
    *  `totalHours: Math.round(minutes / 60)`, which reported 150 minutes as 3h. */
   topProjects: { title: string; participants: number; totalMinutes: number }[];

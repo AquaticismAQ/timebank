@@ -1116,7 +1116,7 @@ export const api = {
       const [participation, completion, serviceHours, topProjects] = await Promise.all([
         http.get<{ generatedAt: string; academicYearId: string; byGrade: { gradeName: string; totalStudents: number; participatedStudents: number; participationRate: number }[] }>('/reports/participation', query),
         http.get<{ byGrade: { gradeName: string; totalStudents: number; completedStudents: number; completionRate: number }[] }>('/reports/completion', query),
-        http.get<{ byMonth: { month: string; hours: number }[] }>('/reports/service-hours', query),
+        http.get<{ byMonth: { month: string; hours: number }[]; byDay?: { day: string; minutes: number }[] }>('/reports/service-hours', query),
         http.get<{ topProjects: { title: string; participants: number; totalMinutes: number }[] }>('/reports/top-projects', query),
       ]);
       return {
@@ -1125,6 +1125,9 @@ export const api = {
         participationByGrade: participation.byGrade.map(g => ({ grade: g.gradeName, total: g.totalStudents, participated: g.participatedStudents, rate: g.participationRate })),
         completionByGrade: completion.byGrade.map(g => ({ grade: g.gradeName, total: g.totalStudents, completed: g.completedStudents, rate: g.completionRate })),
         serviceHoursByMonth: serviceHours.byMonth,
+        // Daily points for the trend line, monthly ones for the peak/lowest
+        // cards beside it — two resolutions of the same year (issue 133).
+        serviceHoursByDay: serviceHours.byDay ?? [],
         topProjects: topProjects.topProjects.map(p => ({ title: p.title, participants: p.participants, totalMinutes: p.totalMinutes })),
       };
     },

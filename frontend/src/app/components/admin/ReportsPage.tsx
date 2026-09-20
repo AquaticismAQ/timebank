@@ -77,6 +77,27 @@ export function ReportsPage() {
   // ("April · 620h"), left over from before the endpoint existed, so they
   // contradicted the curve drawn beside them. Derived from the plotted series.
   const monthsWithHours = data.serviceHoursByMonth.filter(m => typeof m.hours === 'number');
+  /**
+   * Minutes on the wire, hours on the axis — a day is often a fraction of one.
+   *
+   * Plain consts, not `useMemo`: everything from here down sits *after* the
+   * `if (!data || !stats) return` above, so a hook here runs on some renders
+   * and not others — React counts them and throws (#310, and it took the whole
+   * page down when this was first written that way). A 365-element map is not
+   * worth a hook anyway.
+   */
+  const dailyHours = data.serviceHoursByDay.map(
+    d => ({ day: d.day, hours: Math.round((d.minutes / 60) * 100) / 100 }));
+  /** One tick per month: the first day of each, which is a value the axis actually holds. */
+  const seenMonths = new Set<string>();
+  const monthTicks = dailyHours
+    .filter(d => {
+      const ym = d.day.slice(0, 7);
+      if (seenMonths.has(ym)) return false;
+      seenMonths.add(ym);
+      return true;
+    })
+    .map(d => d.day);
   // Issue 093 §1. The card read `stats.totalServiceHours`, which
   // `GET /dashboards/admin` computes for the *current* academic year and has no
   // year parameter — so once the dropdown worked, a card labelled only "Total
@@ -267,18 +288,25 @@ export function ReportsPage() {
       {activeTab === 'hours' && (
         <div className="space-y-4">
           <div className="bg-card border border-border rounded-2xl p-4">
-            <h3 className="text-foreground mb-4">{t('admin.reports.monthlyHoursTrend')}</h3>
+            <h3 className="text-foreground mb-4">{t('admin.reports.hoursTrend')}</h3>
+            {/* Drawn a day at a time, labelled a month at a time (issue 133).
+                Twelve points across a school year is too coarse to read: a busy
+                weekend and a quiet fortnight average into the same flat line.
+                The axis keeps month ticks because a label per day is unreadable
+                and nobody navigates a year by date. */}
             <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={data.serviceHoursByMonth} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+              <LineChart data={dailyHours} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                 <CartesianGrid key="grid" strokeDasharray="3 3" stroke="currentColor" className="text-border" />
-                <XAxis key="xaxis" dataKey="month" tick={{ fontSize: 12 }} />
+                <XAxis key="xaxis" dataKey="day" tick={{ fontSize: 12 }}
+                  ticks={monthTicks} tickFormatter={d => d.slice(0, 7)} interval={0} minTickGap={0} />
                 <YAxis key="yaxis" tick={{ fontSize: 12 }} />
                 <Tooltip key="tooltip"
                   contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12 }}
                   labelStyle={{ color: 'var(--foreground)' }}
                   itemStyle={{ color: 'var(--foreground)' }}
                 />
-                <Line key="line" type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Service Hours (h)" />
+                {/* No per-point dot: 365 of them is a solid band, not a line. */}
+                <Line key="line" type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={2} dot={false} activeDot={{ r: 5 }} name={t('admin.reports.chartHours')} />
               </LineChart>
             </ResponsiveContainer>
           </div>

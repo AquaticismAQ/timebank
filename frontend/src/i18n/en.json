@@ -1440,7 +1440,7 @@
       "colParticipationRate": "Participation Rate",
       "colCompleted": "Completed",
       "colCompletionRate": "Completion Rate",
-      "monthlyHoursTrend": "Monthly Service Hours Trend",
+      "hoursTrend": "Service Hours Trend",
       "lowestMonth": "Lowest Month",
       "topProjects": "Top Projects",
       "people": "people",

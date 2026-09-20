@@ -91,6 +91,23 @@ public class ReportQueryRepository {
                 new MonthMinutesRow(rs.getString("ym"), rs.getInt("minutes")));
     }
 
+    public record DayMinutesRow(String day, int minutes) {
+    }
+
+    /** Approved service minutes per calendar day. Only days with service come back; the caller fills the rest (issue 133). */
+    public List<DayMinutesRow> serviceMinutesByDay(LocalDate start, LocalDate end) {
+        String sql = """
+                select date_format(sr.service_date, '%Y-%m-%d') as ymd, sum(sr.duration_minutes) as minutes
+                from service_record sr
+                where sr.status = 'APPROVED' and sr.service_date between :start and :end
+                group by ymd
+                order by ymd
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource().addValue("start", start).addValue("end", end);
+        return jdbcTemplate.query(sql, params, (rs, rowNum) ->
+                new DayMinutesRow(rs.getString("ymd"), rs.getInt("minutes")));
+    }
+
     public record ReviewerFigureRow(String reviewerId, long decisions, double avgHours) {
     }
 
