@@ -37,6 +37,8 @@ export async function decideOnRecord(
   // and again in the detail fields.
   await page.getByText(recordNumber, { exact: false }).first().waitFor({ state: 'visible', timeout: 15_000 });
 
+  await inspectEvidence(page);
+
   const action = page.getByRole('button', { name: BUTTON[decision], exact: true }).last();
   await action.waitFor({ state: 'visible', timeout: 15_000 });
   await tap(action, BUTTON[decision]);
@@ -66,6 +68,36 @@ export async function decideOnRecord(
  * other record carrying it; asserting this one is *gone* from the queue is
  * specific and is what a reviewer actually observes.
  */
+/**
+ * Opens the evidence tab and looks at the picture full size, then closes it.
+ *
+ * This is the part of the workflow the school most needs to see. Approving a
+ * record is a judgement about whether service actually happened, and the only
+ * thing standing behind that judgement is the photograph or the signed
+ * confirmation the student attached — a demonstration that clicks 通过 without
+ * ever opening the evidence shows a rubber stamp, which is the opposite of what
+ * this system is for.
+ *
+ * Tolerant of the tile not being there: a record whose evidence is still
+ * processing, or a PDF rendered without a thumbnail, should not stop a
+ * demonstration over something the teacher could simply skip.
+ */
+async function inspectEvidence(page: Page): Promise<void> {
+  const tab = page.getByRole('button', { name: '证明材料' }).first();
+  if (!(await tab.isVisible().catch(() => false))) return;
+  await tap(tab, '证明材料');
+
+  // The tile is the only button inside the evidence panel carrying the file's
+  // own name as its title.
+  const tile = page.locator('[title]').filter({ has: page.locator('img') }).first();
+  if (!(await tile.isVisible().catch(() => false))) return;
+
+  await tap(tile, '这张佐证照片，放大查看');
+  const close = page.getByRole('button', { name: '关闭' }).last();
+  await close.waitFor({ state: 'visible', timeout: 15_000 });
+  await tap(close, '关闭');
+}
+
 export async function assertRecordLeftTheQueue(page: Page, baseUrl: string, recordNumber: string): Promise<void> {
   await visit(page, `${baseUrl}/admin/audit`, '审核中心');
   await page.waitForTimeout(1500);
