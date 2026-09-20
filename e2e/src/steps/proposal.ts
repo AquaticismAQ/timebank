@@ -1,6 +1,6 @@
 import type { Page } from 'playwright';
 import { assertContains } from '../harness/assert.js';
-import { choose, narrate, tap, type, visit } from '../harness/stage.js';
+import { choose, field, narrate, tap, type, visit } from '../harness/stage.js';
 
 /**
  * The status chip text, from `labels.proposalStatus` in the zh bundle.
@@ -179,12 +179,6 @@ async function pickMentor(page: Page, query: string): Promise<void> {
   await option.click();
   await page.keyboard.press('Escape');
   narrate(page, `已选择指导教师：${chosen}`);
-}
-
-function field(page: Page, labelZh: string) {
-  return page.locator(
-    `xpath=//label[starts-with(normalize-space(.), "${labelZh}")]/following-sibling::*[self::input or self::textarea or self::select][1]`,
-  );
 }
 
 async function next(page: Page): Promise<void> {

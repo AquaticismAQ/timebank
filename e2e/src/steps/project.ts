@@ -1,6 +1,6 @@
 import type { Page } from 'playwright';
 import { assertContains, assertThat } from '../harness/assert.js';
-import { tap, type, visit } from '../harness/stage.js';
+import { field, tap, type, visit } from '../harness/stage.js';
 
 /**
  * The create-project modal.
@@ -12,10 +12,6 @@ import { tap, type, visit } from '../harness/stage.js';
  * something to defend against: the labels are also what gets spoken, so if they
  * move the narration was wrong too.
  */
-function field(page: Page, labelZh: string) {
-  return page.locator(`xpath=//label[normalize-space(.)="${labelZh}"]/following-sibling::*[self::input or self::textarea or self::select][1]`);
-}
-
 export interface NewProject {
   title: string;
   summary: string;

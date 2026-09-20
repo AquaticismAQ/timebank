@@ -1,5 +1,5 @@
 import type { Locator, Page } from 'playwright';
-import { choose, narrate, tap, type, visit } from '../harness/stage.js';
+import { choose, field, narrate, tap, type, visit } from '../harness/stage.js';
 import { assertContains, assertThat } from '../harness/assert.js';
 
 /**
@@ -239,10 +239,6 @@ async function waitUntilFilled(page: Page, locator: Locator, what: string, timeo
     await page.waitForTimeout(200);
   }
   throw new Error(`${what} was never prefilled from the selected project`);
-}
-
-function field(page: Page, labelZh: string) {
-  return page.locator(`xpath=//label[normalize-space(.)="${labelZh}"]/following-sibling::*[self::input or self::textarea or self::select][1]`);
 }
 
 async function next(page: Page): Promise<void> {

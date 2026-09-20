@@ -160,11 +160,50 @@ export async function tap(locator: Locator, whatZh: string): Promise<void> {
   await beat(page);
 }
 
+/**
+ * The control under a form label.
+ *
+ * <b>Matches the start of the label, not the whole of it</b>, and that is the
+ * point: labels grow suffixes. `认定时长` became `认定时长（小时）` when the
+ * field was given its unit (issue 132), and an exact match turned that into a
+ * thirty-second timeout in the middle of a demonstration. A required marker
+ * (`服务日期 *`) is the same shape of problem.
+ *
+ * There were three copies of this before (issue 140) — `project`, `proposal`
+ * and `serviceRecord` steps each had their own, and only the proposal one had
+ * been hardened. One copy cannot drift from another.
+ */
+export function field(page: Page, labelZh: string): Locator {
+  return page.locator(
+    `xpath=//label[starts-with(normalize-space(.), "${labelZh}")]`
+    + `/following-sibling::*[self::input or self::textarea or self::select][1]`,
+  );
+}
+
 export async function type(locator: Locator, fieldZh: string, value: string): Promise<void> {
   const page = locator.page();
   say(page, `现在填写${fieldZh}`);
   await point(locator);
-  await locator.fill(value);
+  try {
+    await locator.fill(value);
+  } catch (cause) {
+    // A renamed label otherwise surfaces as "Timeout 30000ms exceeded waiting
+    // for locator xpath=//label[...]", which says nothing about *why* the label
+    // is gone. Listing what is actually on screen turns a puzzle into a diff.
+    // Scoped to the open dialog when there is one — the labels behind it are
+    // not the ones this step was looking at. Flattened, because a label
+    // wrapping a <select> reports every option on its own line.
+    const dialog = page.locator('div.fixed.inset-0.z-50').last();
+    const scope = (await dialog.count()) > 0 ? dialog : page.locator('body');
+    const labels = await scope.locator('label').allInnerTexts()
+      .then(all => [...new Set(all.map(t => t.replace(/\s+/g, ' ').trim()).filter(Boolean))])
+      .catch(() => []);
+    throw new Error(
+      `Could not fill 「${fieldZh}」 — no form control under a label starting with it.\n`
+      + `  labels on screen: ${labels.length ? labels.join(' · ') : '(none)'}\n`
+      + `  if one of those is the field, the label was renamed: update the step, not the app.`,
+      { cause: cause as Error });
+  }
   await unpoint(page);
   await beat(page);
 }
