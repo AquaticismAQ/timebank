@@ -18,10 +18,14 @@ export interface CleanupReport {
   /** Records a run left in the review queue. Cleanup cannot touch these — see below. */
   stuckSubmitted: number;
   approvedOrReturned: number;
+  proposalsDeleted: number;
+  /** Proposals whose state has no way back to draft — see `cleanupProposals`. */
+  proposalsStuck: number;
 }
 
 interface ProjectRow { id: string; title: string; status: string; version: number }
 interface RecordRow { id: string; recordNumber: string; status: string; projectTitle: string }
+interface ProposalRow { id: string; title: string; status: string }
 
 /**
  * Tidies what earlier runs left behind, and claims nothing more than it does.
@@ -47,6 +51,7 @@ export async function cleanupPreviousRuns(
   const report: CleanupReport = {
     projectsCancelled: 0, projectsSkipped: 0, draftsDeleted: 0,
     stuckSubmitted: 0, approvedOrReturned: 0,
+    proposalsDeleted: 0, proposalsStuck: 0,
   };
 
   const projects = await adminApi.get<ProjectRow[]>(
@@ -83,14 +88,56 @@ export async function cleanupPreviousRuns(
     }
   }
 
+  await cleanupProposals(studentApi, report, exceptRunId);
   return report;
+}
+
+/**
+ * Retracts and deletes the proposals a run left behind.
+ *
+ * Only a draft may be deleted, and the only route back to draft is the owner
+ * withdrawing their own submission (`ProposalStateMachine`: SUBMITTED → DRAFT).
+ * So a submitted proposal takes two steps, and both are things the student who
+ * filed it is entitled to do.
+ *
+ * **Everything else is left alone and counted.** A proposal in CHANGES_REQUESTED
+ * can only move back to SUBMITTED, so deleting it would mean re-submitting it
+ * first — writing a submission into the history that nobody made, to tidy up.
+ * Approved and rejected ones are terminal by design. Since the demo flow ends in
+ * approval, most of what it leaves is exactly that: the proposal stays, while
+ * the project it generated is cancelled above.
+ */
+async function cleanupProposals(studentApi: Api, report: CleanupReport, exceptRunId?: string): Promise<void> {
+  const proposals = await studentApi.get<ProposalRow[]>('/event-proposals?page%5Bsize%5D=200');
+  for (const proposal of proposals) {
+    if (!proposal.title?.startsWith(AUTO_PREFIX)) continue;
+    if (exceptRunId && proposal.title.includes(exceptRunId)) continue;
+    const status = proposal.status.toUpperCase();
+
+    if (status === 'SUBMITTED') {
+      await studentApi.post(`/event-proposals/${proposal.id}/withdraw`, {});
+    } else if (status !== 'DRAFT') {
+      report.proposalsStuck++;
+      continue;
+    }
+    await studentApi.delete(`/event-proposals/${proposal.id}`);
+    report.proposalsDeleted++;
+  }
 }
 
 export function describeCleanup(report: CleanupReport): string[] {
   const lines = [
     `cancelled ${report.projectsCancelled} [AUTO] project(s), skipped ${report.projectsSkipped} already closed`,
     `deleted ${report.draftsDeleted} stray draft record(s)`,
+    `withdrew and deleted ${report.proposalsDeleted} [AUTO] proposal(s)`,
   ];
+  if (report.proposalsStuck > 0) {
+    lines.push(
+      `left ${report.proposalsStuck} proposal(s) that cannot be returned to draft — approved and rejected are `
+      + 'terminal, and one awaiting changes would have to be re-submitted first, which would put a submission '
+      + 'in the history that nobody made',
+    );
+  }
   if (report.stuckSubmitted > 0) {
     lines.push(
       `left ${report.stuckSubmitted} record(s) awaiting review — a submitted record needs a real decision, `
