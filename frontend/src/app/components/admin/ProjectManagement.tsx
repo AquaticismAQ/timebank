@@ -6,6 +6,7 @@ import { type Project, type ProjectStatus, type Organization, type Grade } from 
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { useFieldErrors, FieldError, handleMutationError } from '../../api/useFieldErrors';
+import { ApiError } from '../../api/http';
 import { usePermissions } from '../../App';
 import { useDictionaries } from '../../api/useDictionaries';
 import { localDatetimeLocalToISO, isoToLocalDatetimeLocal, isoToLocalDate } from '../../lib/datetime';
@@ -593,6 +594,18 @@ export function ProjectManagement() {
       toast.success(t('admin.projects.toastAction', { action: labels[action] || action, title: proj.title }));
       refetch();
     } catch (err) {
+      // The one conflict a teacher is meant to read and act on, so the wording
+      // is ours: the server sends a coded field error carrying the count and
+      // an English sentence nobody should have to read (issue 120, the same
+      // arrangement `OVERLAPPING_RECORD` uses in ServiceRecords).
+      const unreviewed = err instanceof ApiError
+        ? err.fieldErrors?.find(f => f.code === 'UNREVIEWED_RECORDS')
+        : undefined;
+      if (unreviewed) {
+        toast.error(t('admin.projects.archiveBlockedUnreviewed', { count: Number(unreviewed.message) }));
+        refetch();
+        return;
+      }
       handleMutationError(err, { refetch, fallbackMessage: t('common.unknownError') });
     }
   };

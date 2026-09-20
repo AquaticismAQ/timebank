@@ -40,6 +40,21 @@ public class ApiException extends RuntimeException {
         return new ApiException(ApiErrorCode.STATE_CONFLICT, message, List.of());
     }
 
+    /**
+     * A state conflict the client has to tell apart from the others.
+     *
+     * {@code message} is English, like every message this class carries — this
+     * backend has no {@code MessageSource} and does not author localized copy
+     * (see {@code iam.application.SlipCopy} for why). A conflict the user is
+     * meant to read therefore travels as a coded {@link FieldErrorDetail} and
+     * the client renders its own wording, the same way {@code OVERLAPPING_RECORD}
+     * already works. Contract §2.6 puts {@code fieldErrors} on the error envelope
+     * generally, not only on {@code VALIDATION_FAILED}.
+     */
+    public static ApiException stateConflict(String message, List<FieldErrorDetail> fieldErrors) {
+        return new ApiException(ApiErrorCode.STATE_CONFLICT, message, fieldErrors);
+    }
+
     public static ApiException invalidRequest(String message) {
         return new ApiException(ApiErrorCode.INVALID_REQUEST, message, List.of());
     }

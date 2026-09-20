@@ -1108,6 +1108,7 @@
       "toastCancelled": "项目「{{title}}」已取消并归档",
       "archive": "归档",
       "editTitle": "编辑项目",
+      "archiveBlockedUnreviewed": "暂时无法归档：还有 {{count}} 名已确认的同学的服务记录尚未审核，请先在报名名单中完成审核。",
       "view": "查看",
       "viewTitle": "项目详情",
       "copyToDraft": "复制为草稿",

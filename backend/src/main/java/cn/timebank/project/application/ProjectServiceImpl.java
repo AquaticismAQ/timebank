@@ -5,6 +5,7 @@ import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.concurrency.ConcurrencyControl;
 import cn.timebank.common.error.ApiException;
+import cn.timebank.common.error.FieldErrorDetail;
 import cn.timebank.common.i18n.LocalizedNames;
 import cn.timebank.common.pagination.FilterSpecifications;
 import cn.timebank.organization.application.OrganizationService;
@@ -261,8 +262,21 @@ class ProjectServiceImpl implements ProjectService {
         if (project.getStatus() == ProjectStatus.COMPLETED) {
             int unresolved = archiveReadinessRepository.countUnresolvedConfirmedStudents(project.getId());
             if (unresolved > 0) {
-                throw ApiException.stateConflict(unresolved + " confirmed student(s) still need their service "
-                        + "record reviewed before this project can be archived. Use Cancel and archive to override.");
+                // The count travels as a coded field error, not inside the
+                // sentence: the sentence is English-only (this backend authors
+                // no localized copy) and this one is meant to be read by a
+                // teacher, so the client renders its own wording around the
+                // number — the same arrangement `OVERLAPPING_RECORD` already
+                // uses. Issue 120.
+                //
+                // No longer says "Use Cancel and archive to override": that
+                // button was removed from a completed project in issue 119, and
+                // an error naming an action that does not exist is worse than
+                // one that names none. Reviewing the records is the way out.
+                throw ApiException.stateConflict(
+                        unresolved + " confirmed student(s) still need their service record reviewed "
+                                + "before this project can be archived.",
+                        List.of(new FieldErrorDetail("status", "UNREVIEWED_RECORDS", String.valueOf(unresolved))));
             }
         }
         ProjectStateMachine.transition(project, ProjectStatus.ARCHIVED, ActorRole.MANAGER);

@@ -1108,6 +1108,7 @@
       "toastCancelled": "Project \"{{title}}\" cancelled and archived",
       "archive": "Archive",
       "editTitle": "Edit Project",
+      "archiveBlockedUnreviewed": "Cannot archive yet — {{count}} confirmed student(s) still need their service record reviewed. Review them from the registrant list first.",
       "view": "View",
       "viewTitle": "Project Details",
       "copyToDraft": "Copy to Draft",

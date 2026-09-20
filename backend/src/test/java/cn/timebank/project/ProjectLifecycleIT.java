@@ -152,8 +152,18 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
                 null, now.minusSeconds(50), registrationOpen.version());
         ProjectDto updated = projectService.updateDraft(registrationOpen.id(), pushToPast, "usr_test_admin", true, "zh-CN");
 
+        // Issue 120: the count the client needs travels as a coded field error,
+        // not buried in an English sentence it would have to parse.
         assertThatThrownBy(() -> projectService.archive(updated.id(), updated.version(), "usr_test_admin", "zh-CN"))
-                .isInstanceOf(cn.timebank.common.error.ApiException.class);
+                .isInstanceOf(cn.timebank.common.error.ApiException.class)
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(cn.timebank.common.error.ApiException.class))
+                .satisfies(ex -> {
+                    assertThat(ex.fieldErrors()).extracting(cn.timebank.common.error.FieldErrorDetail::code)
+                            .containsExactly("UNREVIEWED_RECORDS");
+                    assertThat(ex.fieldErrors().get(0).message()).isEqualTo("1");
+                    // The sentence must not name an action that no longer exists.
+                    assertThat(ex.getMessage()).doesNotContain("Cancel and archive");
+                });
 
         // The override does not re-check the gate.
         ProjectDto reread = projectService.getDetail(updated.id(), adminAuth(), "zh-CN");
