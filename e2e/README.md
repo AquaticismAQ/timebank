@@ -107,7 +107,12 @@ pnpm e2e --cleanup             # tidy first, then run
 It acts **only** on things whose title begins with `[AUTO]`, which is the entire
 safety mechanism and is deliberately not configurable — this runs against a
 shared server holding a curated dataset (`integration-test/STATUS.md`).
-Idempotent: a second pass cancels nothing and reports what it skipped.
+Idempotent: a second pass cancels nothing, deletes nothing, and reports what it
+skipped.
+
+Because the proposal demo ends in approval, most of what *that* flow leaves is a
+proposal cleanup deliberately will not remove — while the project it generated is
+cancelled.
 
 | What | Why |
 | :--- | :--- |
@@ -115,6 +120,8 @@ Idempotent: a second pass cancels nothing and reports what it skipped.
 | Deletes stray drafts | A run that died mid-flight leaves one, and a draft is the only record that may ever be physically deleted |
 | **Counts, but cannot touch, submitted records** | They are sitting in a teacher's queue. Deciding them would put a review in the audit log that nobody made |
 | **Counts, but cannot touch, approved and returned records** | Immutable by design, and each still holds its service time window |
+| Withdraws and deletes `[AUTO]` proposals | Only a draft may be deleted, and the only route back to draft is the owner withdrawing their own submission — both things the student who filed it may do |
+| **Counts, but cannot touch, approved, rejected and changes-requested proposals** | The first two are terminal. The third can only move back to *submitted*, so deleting it would mean re-submitting it first — writing a submission into the history that nobody made, in order to tidy up |
 
 Driven through the API rather than the browser, unlike everything else here:
 cleanup is maintenance, not a workflow anyone is being shown.
