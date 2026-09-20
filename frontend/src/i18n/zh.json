@@ -844,6 +844,11 @@
       "updatedLabel": "更新"
     },
     "cases": {
+      "searchPlaceholder": "搜索标题",
+      "allTypes": "全部类型",
+      "sortSubmitted": "提交时间",
+      "sortCreated": "创建时间",
+      "sortStatus": "状态",
       "respond": "补充并重新提交",
       "respondTitle": "回复审核人",
       "respondQuestion": "审核人的问题：",

@@ -844,6 +844,11 @@
       "updatedLabel": "Updated"
     },
     "cases": {
+      "searchPlaceholder": "Search by title",
+      "allTypes": "All types",
+      "sortSubmitted": "Submitted",
+      "sortCreated": "Created",
+      "sortStatus": "Status",
       "respond": "Respond & Resubmit",
       "respondTitle": "Respond to the reviewer",
       "respondQuestion": "The reviewer asked:",

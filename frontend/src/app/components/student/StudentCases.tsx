@@ -7,6 +7,7 @@ import { ApiError, mapApiError, newIdempotencyKey } from '../../api/http';
 import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
+import { ListSearchInput } from '../ListSearchInput';
 import { CASE_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
 import { type Case, type CaseStatus, type TimelineEntry } from '../../api/types';
 import { formatLocalInstant, isoToLocalDate } from '../../lib/datetime';
@@ -45,9 +46,8 @@ export function StudentCases() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
-  const { items, page, loading, error, setPage, setFilter, refetch } =
+  const { items, page, params, loading, error, setPage, setPageSize, setFilter, setSearch, setSort, refetch } =
     usePagedApi(api.cases.list, { sort: '-submittedAt' });
-  const [statusFilter, setStatusFilter] = useState<CaseStatus | 'all'>('all');
   const [responding, setResponding] = useState<Case | null>(null);
   const [reply, setReply] = useState('');
   const [saving, setSaving] = useState(false);
@@ -59,9 +59,30 @@ export function StudentCases() {
   useEscapeToClose(() => setDeleting(null), Boolean(deleting));
   useEscapeToClose(() => setResponding(null), Boolean(responding));
 
-  const changeStatus = (value: CaseStatus | 'all') => {
-    setStatusFilter(value);
-    setFilter('status', value === 'all' ? undefined : value);
+  /**
+   * The same search/filter/sort furniture every other list has
+   * (`Docs/optimization/05-SearchFilterSortConsistency.md`, issue 138). This
+   * page shipped with a row of status chips and nothing else, so a student with
+   * a year of appeals could only scroll.
+   *
+   * Every control here is server-side — `/cases` already accepted `search`,
+   * `filter[status]`, `filter[type]` and these three sort keys; the page simply
+   * never sent them. Filtering the loaded page in the browser would have
+   * searched one page of results and called it a search.
+   */
+  const SORT_KEYS = ['submittedAt', 'createdAt', 'status'] as const;
+  type SortKey = typeof SORT_KEYS[number];
+  const sortKey = (params.sort?.replace(/^-/, '') as SortKey) ?? 'submittedAt';
+  const sortDesc = params.sort?.startsWith('-') ?? true;
+  const handleSortClick = (key: SortKey) => {
+    const nextDesc = sortKey === key ? !sortDesc : true;
+    setSort(nextDesc ? `-${key}` : key);
+  };
+  const hasActiveFilters = Boolean(params.search) || Boolean(params.filter?.status) || Boolean(params.filter?.type);
+  const clearFilters = () => {
+    setSearch('');
+    setFilter('status', undefined);
+    setFilter('type', undefined);
   };
 
   /** The reviewer's most recent question, quoted in the modal so the student answers *that*. */
@@ -131,19 +152,53 @@ export function StudentCases() {
         </button>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {STATUS_FILTERS.map(s => (
-          <button key={s} onClick={() => changeStatus(s)}
-            className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors ${
-              statusFilter === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
-            }`}>
-            {s === 'all' ? t('student.cases.allStatuses') : t(CASE_STATUS_LABELS[s].label)}
+      {/* Search & filters — 05-SearchFilterSortConsistency.md §2.4: search alone
+          below lg:, filters as an Nx1 grid alongside it, merged into one row at
+          lg: and up. Identical to Service Records, deliberately. */}
+      <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
+        <div className="relative lg:flex-1 lg:min-w-48">
+          <ListSearchInput
+            value={params.search ?? ''}
+            onCommit={setSearch}
+            placeholder={t('student.cases.searchPlaceholder')}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2 lg:contents">
+          <select value={params.filter?.status ?? 'all'} onChange={e => setFilter('status', e.target.value === 'all' ? undefined : e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('student.cases.allStatuses')}</option>
+            {STATUS_FILTERS.filter(s => s !== 'all').map(s => (
+              <option key={s} value={s}>{t(CASE_STATUS_LABELS[s].label)}</option>
+            ))}
+          </select>
+          <select value={params.filter?.type ?? 'all'} onChange={e => setFilter('type', e.target.value === 'all' ? undefined : e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
+            <option value="all">{t('student.cases.allTypes')}</option>
+            {/* The student-side wording, not the admin-side twin — same two
+                concepts, and this page belongs to the student. */}
+            <option value="appeal">{t('student.records.appeal')}</option>
+            <option value="supplement">{t('student.records.supplement')}</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Sort — always an Nx1 grid, no breakpoint condition (§2.5). */}
+      <div className="grid grid-cols-3 gap-2">
+        {SORT_KEYS.map(key => (
+          <button key={key} onClick={() => handleSortClick(key)}
+            className={`px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors ${sortKey === key ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+            {key === 'submittedAt' ? t('student.cases.sortSubmitted') : key === 'createdAt' ? t('student.cases.sortCreated') : t('student.cases.sortStatus')}
+            {sortKey === key && (sortDesc ? ' ↓' : ' ↑')}
           </button>
         ))}
       </div>
 
       <div className="space-y-2">
-        <ListStateBanner error={error} empty={!loading && items.length === 0} emptyLabel={t('student.records.noCases')} />
+        {/* "Nothing here" and "nothing matches" are different sentences, and the
+            second one needs a way out (§2.6). */}
+        <ListStateBanner error={error} empty={!loading && items.length === 0}
+          emptyLabel={t(hasActiveFilters ? 'common.list.emptyNoResults' : 'student.records.noCases')}
+          hasActiveFilters={hasActiveFilters} onClearFilters={clearFilters} />
         {items.map(c => {
           const isExpanded = expandedId === c.id;
           const status = CASE_STATUS_LABELS[c.status];
@@ -225,7 +280,7 @@ export function StudentCases() {
           );
         })}
       </div>
-      <PageControls page={page} onPageChange={setPage} />
+      <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
 
       {(filing || editing) && (
         <CaseFilingModal

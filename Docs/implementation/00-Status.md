@@ -1506,3 +1506,13 @@ Edges written down rather than left implicit: a project naming no eligible grade
 It runs inside the publish transaction after the flush — after, so a failed publish cannot leave notifications about a project nobody can see; inside, so a failed announcement rolls the publish back rather than half-announcing it. One row per recipient, which is a few hundred at most for this school; an outbox would be machinery nothing else here has.
 
 **Verified on the deployed server across four accounts**, publishing one project open to `grade_6`: the grade-6 student 61→62, their grade-6 teacher 8→9, a grades-10-12 teacher 0→0, and the administrator 8→8. The two zero-deltas are the point — a broadcast to everybody would have passed the first two rows and failed the design. Red-checked by removing the announcement.
+
+### 41.33 My Cases joins the search/filter/sort convention (2026-09-20)
+
+Issue 138, Aquaticism's report. The student's My Cases page had a row of status chips and nothing else — no search, no second filter, no sort, no page size, and an empty state that read the same whether the list was empty or a filter had hidden everything. `05-SearchFilterSortConsistency.md` settled that shape in August; this page arrived afterwards (issues 079–082) and missed it, which is how a convention usually decays — not by being overruled, but by the next screen not knowing about it.
+
+**Nothing was needed server-side**: `GET /cases` already accepted `search`, `filter[status]`, `filter[type]` and the three sort keys, and the page simply never sent them. Every control now goes to the server — filtering `items` in the browser would look identical and search one page of results, which is worse than no search at all once a list outgrows a page.
+
+It now carries Service Records' furniture down to the class names: search, status and type selects in §2.4's layout, a three-key sort grid per §2.5, an empty state that tells "no appeals" apart from "nothing matches" and offers a way out, and the page-size control it had been rendering without. Type options reuse the student-side wording rather than the admin twin.
+
+**Verified by the request, not the screen** — a client-side filter would look the same and be wrong: the sort button produced `sort=-createdAt`, the selects produced `filter[status]=DRAFT` and `filter[type]=SUPPLEMENT`, the search box produced `search=…`, and clearing dropped every parameter and restored the row. No page errors.
