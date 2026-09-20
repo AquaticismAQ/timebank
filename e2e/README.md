@@ -90,6 +90,26 @@ Idempotent: a second pass cancels nothing and reports what it skipped.
 Driven through the API rather than the browser, unlike everything else here:
 cleanup is maintenance, not a workflow anyone is being shown.
 
+## The window
+
+Headed runs open at the display's full width, positioned at the top-left, and
+print what they actually got:
+
+```
+viewport 1512x809, display 1512x982
+```
+
+That line exists because the first attempt at "full screen" was a lie. Under
+Playwright on macOS, **both `--start-fullscreen` and `--kiosk` are ignored** —
+the window comes up at Chromium's default size while the launch arguments claim
+otherwise, and nothing on screen contradicts them. Both were tried and measured;
+neither moved the viewport by a pixel, so neither is left in the code pretending.
+Explicit `--window-position` and `--window-size` do work.
+
+The remaining ~170px is the tab strip and omnibox — browser chrome, not window
+size. Removing it would take a CDP call; the window is big enough to present
+from as it is.
+
 ## The browser is left open
 
 Pass or fail. The end state — the approved record, the changed balance — is the

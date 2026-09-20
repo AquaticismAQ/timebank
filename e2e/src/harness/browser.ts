@@ -1,5 +1,36 @@
+import { execFileSync } from 'node:child_process';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import type { Config } from './config.js';
+
+/**
+ * The usable display area, so the window can be sized to it explicitly.
+ *
+ * `--start-fullscreen` alone does not work on macOS under Playwright — the
+ * window comes up at Chromium's own default size and the "full screen" is a
+ * claim in the launch arguments rather than anything on screen. Asking the
+ * window server for the real bounds and passing them is what actually fills the
+ * display.
+ *
+ * Falls back to a large-but-ordinary size on any platform that will not answer,
+ * rather than failing: a demonstration in a small window is worse than ideal,
+ * a demonstration that refuses to start is worse than that.
+ */
+function displayBounds(): { width: number; height: number } {
+  if (process.platform === 'darwin') {
+    try {
+      const out = execFileSync('osascript',
+        ['-e', 'tell application "Finder" to get bounds of window of desktop'],
+        { encoding: 'utf8', timeout: 5_000 });
+      const [, , right, bottom] = out.trim().split(',').map(n => Number(n.trim()));
+      if (Number.isFinite(right) && Number.isFinite(bottom) && right > 0 && bottom > 0) {
+        return { width: right, height: bottom };
+      }
+    } catch {
+      // fall through
+    }
+  }
+  return { width: 1920, height: 1080 };
+}
 
 /**
  * Owns the browser for the whole run.
@@ -21,12 +52,30 @@ export class BrowserHarness {
   constructor(private readonly config: Config) {}
 
   async start(): Promise<void> {
+    const screen = displayBounds();
     this.browser = await chromium.launch({
       headless: this.config.headless,
       slowMo: this.config.slowMo,
-      args: this.config.headless ? [] : ['--start-fullscreen'],
+      // Explicit position and size, because the flags that sound like they do
+      // this do not: under Playwright on macOS both `--start-fullscreen` and
+      // `--kiosk` are ignored, and the window comes up at Chromium's own default
+      // size. Both were tried and measured; neither changed the viewport by a
+      // pixel, so neither is left here pretending.
+      //
+      // This fills the display's width. The remaining ~170px is the tab strip
+      // and omnibox, which is browser chrome rather than window size — removing
+      // it would need CDP, and the window is big enough to present from.
+      args: this.config.headless ? [] : [
+        '--window-position=0,0',
+        `--window-size=${screen.width},${screen.height}`,
+      ],
     });
+    if (!this.config.headless) {
+      this.screen = screen;
+    }
   }
+
+  private screen: { width: number; height: number } | null = null;
 
   /**
    * The page for a role, signed in once and kept for the whole run.
@@ -67,8 +116,31 @@ export class BrowserHarness {
     const page = await context.newPage();
     this.roles.set(role, { context, page });
     this.current = { role, context, page };
+    await this.reportWindowSizeOnce(page);
     return page;
   }
+
+  /**
+   * Prints the size the window actually got, once, on the first page.
+   *
+   * Reported rather than assumed: the previous attempt at full screen passed
+   * `--start-fullscreen` and nothing else, which macOS ignores under Playwright,
+   * so the launch arguments claimed one thing and the screen showed another with
+   * nothing anywhere to contradict it.
+   */
+  private async reportWindowSizeOnce(page: Page): Promise<void> {
+    if (this.config.headless || this.reported) return;
+    this.reported = true;
+    const inner = await page.evaluate<{ w: number; h: number }>(
+      '({ w: window.innerWidth, h: window.innerHeight })',
+    ).catch(() => null);
+    if (!inner) return;
+    const fills = this.screen && inner.w >= this.screen.width - 40;
+    console.log(`    viewport ${inner.w}x${inner.h}, display ${this.screen?.width}x${this.screen?.height}`
+      + (fills ? '' : '  ← not filling the display'));
+  }
+
+  private reported = false;
 
   page(): Page {
     if (!this.current) throw new Error('No page open yet');
