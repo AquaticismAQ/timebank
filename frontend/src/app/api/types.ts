@@ -557,6 +557,9 @@ export interface AdminStats {
   approvedThisMonth: number;
   totalServiceHours: number;
   avgCompletionRate?: number;
+  /** The unscoped counterparts of `activeProjects` / `approvedThisMonth`, so one card can carry both readings (issue 136). Absent for a caller who is already school-wide. */
+  activeProjectsSchoolWide?: number;
+  approvedThisMonthSchoolWide?: number;
   reviewAvgDays: number;
 }
 

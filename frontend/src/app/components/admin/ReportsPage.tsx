@@ -8,6 +8,7 @@ const TOTAL_BAR_COLOR = '#94a3b8'; // slate-400 — visible in both light and da
 import { api } from '../../api/client';
 import { minutesToHours } from '../../lib/format';
 import { useDictionaries } from '../../api/useDictionaries';
+import { useAuth } from '../../App';
 import { ListStateBanner } from '../ListStateBanner';
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
@@ -43,7 +44,8 @@ export function ReportsPage() {
   // read: the fetch below had `[]` dependencies and `api.reports.data()` took
   // no argument. The options now come from `/academic-years` and the selection
   // is what the report endpoints are scoped by.
-  const { academicYears, serviceCategories, loading: dictionariesLoading } = useDictionaries();
+  const { academicYears, serviceCategories, grades, loading: dictionariesLoading } = useDictionaries();
+  const { user } = useAuth();
   /**
    * Which Top Projects list is showing (issue 135). Declared here with the
    * other hooks, above the `if (!data || !stats) return` guard below — a hook
@@ -145,6 +147,30 @@ export function ReportsPage() {
   // (Active Projects and Approved This Month below are deliberately left alone:
   // both name their own period and are "right now" figures, not year figures.)
   const totalServiceHours = monthsWithHours.reduce((sum, m) => sum + m.hours, 0);
+
+  /**
+   * The same four cards, read for the caller's own grades (issue 136).
+   *
+   * Hours come from the scoped day series this page already loads.
+   * Participation is filtered out of the per-grade breakdown rather than
+   * fetched again — the report already answers it a grade at a time, and a
+   * second endpoint would be a second definition of the same rate. The other
+   * two arrive scoped from the dashboard and needed their *school-wide*
+   * counterparts adding instead.
+   */
+  const myGradeNames = new Set(
+    (user?.scopeGradeIds ?? []).map(id => grades.find(g => g.id === id)?.name).filter(Boolean) as string[]);
+  const hasScopedCards = myGradeNames.size > 0;
+  const scopedServiceHours = Math.round(
+    data.serviceHoursByDayInScope.reduce((sum, d) => sum + d.minutes, 0) / 60);
+  const scopedParticipation = data.participationByGrade
+    .filter(g => myGradeNames.has(g.grade))
+    .reduce((acc, g) => ({ total: acc.total + g.total, participated: acc.participated + g.participated }),
+      { total: 0, participated: 0 });
+  const scopedParticipationRate = scopedParticipation.total > 0
+    ? scopedParticipation.participated / scopedParticipation.total
+    : null;
+  const pct = (rate: number | null) => (rate != null ? `${Math.round(rate * 100)}%` : '—');
   const peakMonth = monthsWithHours.length
     ? monthsWithHours.reduce((a, b) => (b.hours > a.hours ? b : a))
     : null;
@@ -200,17 +226,29 @@ export function ReportsPage() {
       {/* Key metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: t('admin.reports.totalServiceHours'), value: `${totalServiceHours.toLocaleString()}h`, icon: Clock, color: 'text-blue-500 bg-blue-100 dark:bg-blue-900/30' },
-          { label: t('admin.reports.participationRate'), value: participationRate != null ? `${Math.round(participationRate * 100)}%` : '—', icon: Users, color: 'text-green-500 bg-green-100 dark:bg-green-900/30' },
-          { label: t('admin.reports.activeProjects'), value: stats.activeProjects, icon: BarChart2, color: 'text-purple-500 bg-purple-100 dark:bg-purple-900/30' },
-          { label: t('admin.reports.approvedThisMonth'), value: stats.approvedThisMonth, icon: TrendingUp, color: 'text-orange-500 bg-orange-100 dark:bg-orange-900/30' },
+          { label: t('admin.reports.totalServiceHours'), value: `${totalServiceHours.toLocaleString()}h`, scoped: hasScopedCards ? `${scopedServiceHours.toLocaleString()}h` : null, icon: Clock, color: 'text-blue-500 bg-blue-100 dark:bg-blue-900/30' },
+          { label: t('admin.reports.participationRate'), value: pct(participationRate), scoped: hasScopedCards ? pct(scopedParticipationRate) : null, icon: Users, color: 'text-green-500 bg-green-100 dark:bg-green-900/30' },
+          // `stats.*` are already the caller's own grades (issue 127), so here
+          // the school-wide counterpart is the one that had to be added.
+          { label: t('admin.reports.activeProjects'), value: stats.activeProjectsSchoolWide ?? stats.activeProjects, scoped: hasScopedCards ? stats.activeProjects : null, icon: BarChart2, color: 'text-purple-500 bg-purple-100 dark:bg-purple-900/30' },
+          { label: t('admin.reports.approvedThisMonth'), value: stats.approvedThisMonthSchoolWide ?? stats.approvedThisMonth, scoped: hasScopedCards ? stats.approvedThisMonth : null, icon: TrendingUp, color: 'text-orange-500 bg-orange-100 dark:bg-orange-900/30' },
         ].map((item, i) => (
           <div key={i} className="bg-card border border-border rounded-xl p-4">
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-2 ${item.color}`}>
               <item.icon className="w-4 h-4" />
             </div>
+            {/* Two readings for a teacher, one for an administrator (issue
+                136). The school-wide figure keeps the large type because it is
+                the baseline; the scoped one is named, because an unlabelled
+                second number is a riddle. */}
             <div className="text-2xl font-semibold text-foreground">{item.value}</div>
-            <div className="text-xs text-muted-foreground">{item.label}</div>
+            {item.scoped != null && (
+              <div className="text-sm text-muted-foreground mt-0.5">
+                <span className="text-foreground font-medium">{item.scoped}</span>
+                <span className="ml-1.5">{t('admin.reports.myGrades')}</span>
+              </div>
+            )}
+            <div className="text-xs text-muted-foreground mt-1">{item.label}</div>
           </div>
         ))}
       </div>

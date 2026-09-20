@@ -1065,7 +1065,7 @@ export const api = {
         stats: {
           totalStudents: number; activeStudents: number; totalProjects: number; activeProjects: number;
           pendingReviews: number; approvedThisMonth: number; totalServiceHoursThisYear: number; reviewAvgHours?: number;
-          avgCompletionRate?: number;
+          avgCompletionRate?: number; activeProjectsSchoolWide?: number; approvedThisMonthSchoolWide?: number;
         };
         pendingReviews: ReviewQueueItem[];
         activeProjects: Project[];
@@ -1082,6 +1082,10 @@ export const api = {
           // Sent since issue 127; omitted (not zero) when no grade in scope has
           // a requirement to measure against, so the card shows an em dash.
           avgCompletionRate: dto.stats.avgCompletionRate,
+          // Present only for a grade-scoped caller (issue 136) — an
+          // administrator's scoped and unscoped figures are the same number.
+          activeProjectsSchoolWide: dto.stats.activeProjectsSchoolWide,
+          approvedThisMonthSchoolWide: dto.stats.approvedThisMonthSchoolWide,
           // `reviewAvgHours` is a nullable Double server-side and the
           // backend's global Jackson config omits null fields from the
           // wire entirely (application.yml `default-property-inclusion:

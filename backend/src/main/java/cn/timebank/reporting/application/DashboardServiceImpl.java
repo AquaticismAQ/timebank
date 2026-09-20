@@ -132,9 +132,21 @@ class DashboardServiceImpl implements DashboardService {
         Double reviewAvgHours = queryRepository.scopedOverallReviewAvgHours(year.startDate(), year.endDate(), scope);
         Double avgCompletionRate = scopedCompletionRate(scope, resolvedLanguage);
 
+        // The unscoped counterparts of two of the figures above, so the Reports
+        // page can put both readings on one card (issue 136). Only queried when
+        // the caller is *not* school-wide — for an administrator they would be
+        // the same numbers, and a second query for them is work done to say
+        // nothing.
+        boolean schoolWide = scope instanceof ScopeDescriptor.All;
+        ReportQueryRepository.AdminStatsRow wholeSchool = schoolWide ? row
+                : queryRepository.adminStats(monthStart, monthEnd, year.startDate(), year.endDate(),
+                        new ScopeDescriptor.All());
+
         AdminStatsDto stats = new AdminStatsDto(row.totalStudents(), row.activeStudents(), row.totalProjects(),
                 row.activeProjects(), pendingReviews, row.approvedThisMonth(), row.totalServiceHoursThisYear(),
-                reviewAvgHours, avgCompletionRate);
+                reviewAvgHours, avgCompletionRate,
+                schoolWide ? null : wholeSchool.activeProjects(),
+                schoolWide ? null : wholeSchool.approvedThisMonth());
 
         List<ReviewQueueItemDto> pendingReviewItems = reviewService.queue(PageRequest.of(0, 5), null, null, null, auth, resolvedLanguage).getContent();
         List<ProjectDto> activeProjects = projectService

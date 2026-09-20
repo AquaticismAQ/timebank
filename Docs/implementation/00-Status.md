@@ -1484,3 +1484,13 @@ On screen: two lines with a legend that only appears when there are two; two pie
 **Verified for both roles, the administrator as the control** — a change that showed everyone two of everything would pass a teacher-only check. teacher005 gets 2 lines, 2 pies, tabs that move the list from 10 rows to 4, and scoped totals that are strict subsets of the school's (5430 of 14400 minutes, 3 of 5 categories); admin001 gets one of each, no tabs, and empty scoped arrays. No page errors on either.
 
 Two process notes recorded in the issue doc: `mvn -o -q test-compile` piped through `grep` printed nothing and I took that for success — the remote deploy then failed on two unupdated test files, and the exit code had been there to check. And a `\(([^)]*)\)` regex stopped at a nested paren, turning `serviceHours(PAST_YEAR.id())` into `serviceHours(PAST_YEAR.id(, null))`.
+
+### 41.31 The report cards carry both readings (2026-09-20)
+
+Issue 136, Aquaticism's request: the four summary cards at the top of Reports should show the school's figure and the teacher's own grades'.
+
+Four cards, three different problems. **Total Service Hours** only needed the scoped series issue 135 had already added. **Participation Rate** needed nothing new — the per-grade report already answers it a grade at a time, so it is filtered rather than fetched again; a second endpoint would be a second definition of the same rate, and two screens disagreeing about "participation" is worse than one extra `filter`. **Active Projects** and **Approved This Month** were the interesting case: issue 127 made the dashboard stats scoped, so for a teacher those two were *already* their own grades' numbers, silently, under a heading that said nothing about scope. What had to be added there is the **school-wide** counterpart — `activeProjectsSchoolWide` / `approvedThisMonthSchoolWide`, null for a caller who is already school-wide, and not queried at all in that case.
+
+The school-wide figure keeps the large type with the scoped one named beneath it, because it is the baseline the other is read against and an unlabelled second number is a riddle.
+
+**Verified for both roles, the administrator as the control**: teacher005 reads 240h + 91h, 55% + 58%, 13 + 5, 108 + 39; admin001's cards are unchanged and the `*SchoolWide` fields are absent from their response. Participation is the figure worth noting — 58% against the school's 55%, so the scoped value is not merely a smaller copy, which is what a card showing a share rather than a total should do.

@@ -11,8 +11,15 @@ package cn.timebank.reporting.application.dto;
  * {@code avgCompletionRate} is a fraction in 0..1, or null where no grade in
  * scope has a published requirement to measure against. The frontend has read
  * this field since the card was built; it was never sent.
+ *
+ * <p>The two {@code *SchoolWide} figures are the unscoped counterparts of the
+ * fields above them, so the Reports page can show a teacher both readings on one
+ * card (issue 136). <b>Null for a caller who is already school-wide</b> — an
+ * administrator's scoped and unscoped figures are the same number, and printing
+ * it twice states nothing twice.</p>
  */
 public record AdminStatsDto(long totalStudents, long activeStudents, long totalProjects, long activeProjects,
                              long pendingReviews, long approvedThisMonth, long totalServiceHoursThisYear,
-                             Double reviewAvgHours, Double avgCompletionRate) {
+                             Double reviewAvgHours, Double avgCompletionRate,
+                             Long activeProjectsSchoolWide, Long approvedThisMonthSchoolWide) {
 }
