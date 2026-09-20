@@ -66,3 +66,6 @@ tmp/
 # e2e run output: screenshots and the per-run narration script
 e2e/artifacts/
 e2e/narration/
+
+# Demo launcher — holds test-server account credentials, never commit it
+e2e/demo-project.sh

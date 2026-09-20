@@ -17,6 +17,30 @@ pnpm e2e --list                           # flows, profiles, gates
 pnpm selftest                             # the harness's own pure-logic checks
 ```
 
+## Running the demonstration
+
+```bash
+./demo-project.sh                 # narrated, full screen, browser left open
+./demo-project.sh --cleanup       # tidy earlier [AUTO] runs first
+./demo-project.sh --no-gate tts   # silent
+./demo-project.sh --beat 1500     # slower pauses
+```
+
+`demo-project.sh` is **not in git** — it carries the test-server account
+credentials, so it is gitignored and refuses to run if that ever stops being
+true, or if it is found tracked. This repo has twice rewritten its history to
+remove leaked data; a credential file that quietly became trackable is how a
+third would start.
+
+It also does the things that are easy to forget and painful to discover
+mid-demonstration: checks the browser install, generates the evidence files if
+they are missing, and **starts the TTS server and waits for it** — a cold start
+is about six seconds *per line*, so discovering a stopped server during the demo
+means sitting through it rather than fixing it. Everything after the script name
+is passed straight to `pnpm e2e`.
+
+Without it, `pnpm e2e` does the same thing given the right environment.
+
 ## Profiles and gates
 
 A **gate** is a named capability; a **profile** is a set of gates. A phase
