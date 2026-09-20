@@ -140,3 +140,54 @@ Pre-existing and unrelated; `Docs/issues/109` covers the red ITs on `main`.
 - **Must not present the rollover date as editable.** It is not stored.
 - **Must not mix cohorts in one grade count**, which is the defect this exists
   to prevent.
+
+## 7. Follow-up: grade selectors split by stage (2026-09-20)
+
+Aquaticism, same day: the seven grades should lay out in two lines by segment, in
+every dialog that picks a grade, driven by the same `EXIT_LEVELS` this issue
+already publishes.
+
+Seven grades in one flat run read as an undifferentiated list when they are
+really two stages a student cannot cross — a grade-8 bond and a grade-9 bond
+mean different cohorts, and the control should say so before anyone clicks.
+
+`lib/gradeStages.ts` does the split: a stage is everything up to and including
+its exit level, which is what an exit level means. With `[8, 12]` and grades
+6…12 that is `[[6,7,8], [9,10,11,12]]`. Derived, never written down — a literal
+"6-8 / 9-12" would be the same second-source-of-truth mistake §2.3 exists to
+avoid.
+
+Two shapes, because a dropdown cannot be laid out in two lines:
+
+- **`GradePicker`** (the multi-select chip grid) renders one grid per stage,
+  stacked. Each stage is its own grid, so on a phone a stage may wrap within
+  itself but never runs into the next one; at `sm:` and up, four columns put a
+  6–8 / 9–12 school on exactly two lines.
+- **`GradeOptions`** (new, same file) renders one `<optgroup>` per stage for
+  single-select `<select>`s. The group label is the bare range — "6–8" — not a
+  stage name: the API publishes boundaries, and inventing "Middle School" here
+  would put back the hardcoded structure this removes.
+
+Both read the levels from the shared dictionary cache rather than from a prop,
+deliberately: a call site that forgot to pass them would silently render the old
+flat list. Both fall back to ungrouped when the config did not load.
+
+**Verified live**, in the browser, on each distinct host:
+
+| Where | Result |
+| :--- | :--- |
+| Create User dialog, teacher grade bonding | two rows — 六/七/八, then 九/十/十一/十二 |
+| Project create form, eligible grades | same two rows |
+| Student edit dialog, grade `<select>` | `optgroup` "6–8" (3) and "9–12" (4) |
+| Data Import → activation slips, grade `<select>` | same two groups, after "All grades" |
+
+The project **edit** form is the third `GradePicker` call site and was not
+opened by hand: it renders the same component with the same props as the create
+form above, and the split is computed inside the component, so there is no
+per-call-site path that could differ. Stated rather than glossed.
+
+**Filter dropdowns were left ungrouped** — Student Management, Audit Center,
+Case Review, Proposal Review, Time Coin Accounts, Project Management. They are
+not dialogs, which is what was asked for; and Student Management's already
+carries the graduate `optgroup` from §2.2, where a second grouping axis in one
+control would compete with it. Worth revisiting together rather than piecemeal.

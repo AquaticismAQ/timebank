@@ -8,6 +8,7 @@ import { useDictionaries } from '../../api/useDictionaries';
 import { downloadBlob } from '../../lib/download';
 import { formatClassName } from '../../lib/format';
 import { useEscapeToClose } from '../../lib/useEscapeToClose';
+import { GradeOptions } from '../GradePicker';
 
 /**
  * The admin entry point for `POST /users/activation-slips` (contract §4.15,
@@ -280,7 +281,9 @@ export function ActivationSlips() {
               onChange={e => { setGradeId(e.target.value); setClassId(''); }}
               className="w-full px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40">
               <option value="">{t('admin.system.slips.selectGrade')}</option>
-              {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              {/* Grouped by stage (issue 114): a slip run is per class, and the
+                  two stages are separate rosters. */}
+              <GradeOptions grades={grades} />
             </select>
           </div>
           <div>

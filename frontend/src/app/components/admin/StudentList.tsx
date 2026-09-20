@@ -14,6 +14,7 @@ import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { StudentRecords } from './StudentRecords';
 import { ListSearchInput } from '../ListSearchInput';
+import { GradeOptions } from '../GradePicker';
 import { useEscapeToClose } from '../../lib/useEscapeToClose';
 
 type SortKey = 'name' | 'gradeLevel' | 'completedHours' | 'timeCoinBalance';
@@ -630,7 +631,10 @@ export function StudentList() {
                       setEditForm(f => f && ({ ...f, gradeId, classId: stillValid ? f.classId : fallback }));
                     }}
                     className="w-full px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-[oklch(0.488_0.243_264.376)]/40">
-                    {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                    {/* Grouped by stage (issue 114) — moving a student between
+                        stages is not the same kind of edit as moving them within
+                        one, and the grouping says so before the save. */}
+                    <GradeOptions grades={grades} />
                   </select>
                 </div>
                 <div>

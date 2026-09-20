@@ -1238,3 +1238,13 @@ Student Management's grade filter gained a grouped pair of graduate options rath
 Green again, 7/7. It had been filed under issue 109's "one root cause, eight classes", and that was wrong: its two were *failures*, not errors, and came from `a0e9fa6` (2026-09-**16**, the day before plan 10) making student numbers store in one canonical case. Two tests asserted on their own input literal and went red that day.
 
 Established by bisecting rather than by reading — 6/6 green at `a0e9fa6~1`, 2 failures at `a0e9fa6`, clean worktree, real MySQL. Fixed by asserting on what `create` returned, so the tests no longer carry a second copy of the casing rule, plus one new test that pins the rule itself; removing the `toUpperCase` fails that test alone. Issue 109 now records the correction and the lesson for the seven still red: red at the same time is not red for the same reason.
+
+### 41.10 Grade selectors split by school stage (2026-09-20)
+
+Issue 114 §7, at Aquaticism's request. Every grade selector in a dialog now shows the seven grades as two blocks — 6–8 and 9–12 — instead of one flat run, because they are two stages a student cannot cross and the control should say so before anyone clicks.
+
+The split is derived in `lib/gradeStages.ts` from `GET /lifecycle/config`'s exit levels, not written down: a stage is everything up to and including its exit level. `GradePicker` renders one grid per stage (each its own grid, so they stay separate at every width); a new `GradeOptions` does the same as `<optgroup>`s for single-select dropdowns, labelled with the bare range rather than an invented stage name. Both read the levels from the shared dictionary cache rather than a prop, so a call site cannot forget to pass them, and both fall back to ungrouped if the config did not load.
+
+**Verified live on each distinct host**: the Create User dialog's teacher grade bonding and the project create form both show 六/七/八 then 九/十/十一/十二; the student edit dialog and the activation-slips picker both show `optgroup`s "6–8" (3 options) and "9–12" (4). The project edit form is the same component with the same props and was not opened by hand — recorded as such rather than glossed.
+
+Filter dropdowns were deliberately left flat: they are not dialogs, and Student Management's already carries the graduate `optgroup`, where a second grouping axis would compete with it.
