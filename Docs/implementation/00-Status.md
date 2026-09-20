@@ -1182,3 +1182,13 @@ Worth recording for the next person: reverting the annotation left the test **pa
 One thing this pass got wrong first. The initial test built the service with `new`, which bypasses Spring's transactional proxy — every repository call auto-committed, graduated students stayed graduated, and it looked like proof that the rollover was not atomic. It was proof that a hand-built object has no transaction. Failure behaviour has to be driven through the container-managed bean. (The restructure incidentally removes that trap: the transaction is now explicit, so a hand-built instance gets one too.)
 
 **Open, and the reason the issue stays open:** a run that *succeeds against wrong inputs* still cannot be undone. `13-AnnualRollover.md` §3.3.1 now specifies the before-state journal that would fix it, so this is a gap against a written design rather than an unrecorded idea. There is no recorded before-state, and the idempotency guard blocks a corrective re-run, so recovery is a full database restore — which on a shared RDS instance means discarding everything else that happened since. Recording one before-row per student changed would turn that into a bounded reversal. Also open: no dry run, and a ShedLock window of 30 minutes that nobody has measured against a real roster.
+
+### 41.4 Self-service password change deployed (2026-09-20)
+
+Issue 111 built and deployed, backend and frontend. No migration. `mustChangePassword` is kept — reserved for a future forced-rotation policy per Aquaticism — and `changeOwnPassword` now clears it, which that reserved feature needs: a prompt that survived the change answering it would trap the user.
+
+**Verified on the live server, in a browser, on a student account.** The entry is on the profile page; submit stays disabled until the policy passes, and four distinct weak shapes were each refused — too short, a single character class, long-but-guessable, and one containing the username — while an acceptable password enabled it. A wrong current password came back "Current password is incorrect." with the dialog still open and nothing changed. A correct change signed the user out to `/login`, after which the **old password returned 401 and the new one 200**, with a `user.changePassword` / `SELF_SERVICE` audit row and `must_change_password` reading 0.
+
+**`Docs/TestAccounts.md` was updated**: `10007944` (`student002`) no longer has its seeded password, because proving the path end to end meant really changing one. The file records that, and the other 51 credential rows are untouched.
+
+The four `accountSafety1` strings no longer tell users to visit the Student Affairs Office or contact an administrator — confirmed absent from the live page.
