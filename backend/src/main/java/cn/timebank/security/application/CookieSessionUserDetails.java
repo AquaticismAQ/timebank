@@ -24,6 +24,27 @@ import java.util.Set;
  */
 public class CookieSessionUserDetails implements UserDetails, TimeBankPrincipal, Serializable {
 
+    /**
+     * Pinned to the value the JVM computed for this class before {@link
+     * #email()} was added (issue 123), because <b>the default is derived from
+     * the method list, not just the fields</b>. Adding one accessor changed it
+     * from {@code 848046325616438304} to {@code -394976465083591385}, which
+     * made every blob already sitting in {@code SPRING_SESSION_ATTRIBUTES}
+     * unreadable — measured, not assumed:
+     *
+     * <pre>InvalidClassException: local class incompatible:
+     *   stream classdesc serialVersionUID = 848046325616438304,
+     *   local class serialVersionUID = -394976465083591385</pre>
+     *
+     * Every logged-in user would have met that on the first request after the
+     * deploy. Declaring the identifier is what makes an ordinary change to
+     * this class an ordinary deploy; keep it, and do not "regenerate" it.
+     * Removing or changing a <em>field</em> is the case that genuinely breaks
+     * compatibility, and then a migration has to be thought about rather than
+     * a number bumped.
+     */
+    private static final long serialVersionUID = 848046325616438304L;
+
     private final AuthenticatedUserView view;
 
     public CookieSessionUserDetails(AuthenticatedUserView view) {
@@ -97,5 +118,17 @@ public class CookieSessionUserDetails implements UserDetails, TimeBankPrincipal,
 
     public int sessionTimeoutMinutes() {
         return view.sessionTimeoutMinutes();
+    }
+
+    /**
+     * Nullable — email is optional on every account (issue 106 §1). Kept off
+     * {@link TimeBankPrincipal} on purpose, like {@link
+     * #sessionTimeoutMinutes()}: that interface is the contract Phase 3's
+     * second principal must also satisfy, and an optional field that one
+     * delivery path formats (issue 123's evidence watermark) is not part of
+     * it.
+     */
+    public String email() {
+        return view.email();
     }
 }

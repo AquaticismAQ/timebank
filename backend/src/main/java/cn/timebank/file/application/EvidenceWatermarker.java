@@ -63,9 +63,70 @@ public class EvidenceWatermarker {
      */
     private static final String PURPOSE = "Volunteer hours verification only";
 
-    /** @return e.g. {@code "admin001 · 2026-09-16 13:04:02 UTC · Volunteer hours verification only"}. */
-    public String describeViewer(String viewerAccount, Instant viewedAt) {
-        return viewerAccount + "  ·  " + TIMESTAMP.format(viewedAt) + "  ·  " + PURPOSE;
+    /**
+     * Names the viewer as a <em>person</em>, not as a login (issue 123). The
+     * mark is read by whoever a leaked copy reached — a parent, a partner
+     * organisation — and {@code admin001} means nothing to them.
+     *
+     * <p>{@code Name <email>} is RFC 5322's mailbox form: unambiguous about
+     * where the name ends, on an overlay that has no other punctuation cues.
+     * Where the account has no email — optional on every account, issue 106 §1
+     * — the mark falls back to {@code Name (username)} rather than rendering
+     * an empty pair of angle brackets. Something unique has to survive:
+     * display names are not unique and nothing in the schema makes them so,
+     * while {@code username} carries the table's only {@code UNIQUE} key.</p>
+     *
+     * @return e.g. {@code "Teacher Wei Chen <wei.chen@example-township-school.edu>  ·  2026-09-16 13:04:02 UTC  ·  Volunteer hours verification only"}
+     */
+    public String describeViewer(String displayName, String email, String username, Instant viewedAt) {
+        return identify(displayName, email, username) + "  ·  " + TIMESTAMP.format(viewedAt) + "  ·  " + PURPOSE;
+    }
+
+    /**
+     * The same mark, reduced to what a PDF can actually draw.
+     *
+     * <p>Standard-14 Helvetica is WinAnsi-encoded, so a Chinese display name —
+     * which in this school is most of them — cannot be drawn at all. Marking
+     * the PDF {@code ??? <wei.chen@…>} would put what looks like a rendering
+     * bug on every downloaded document, and a reader trying to work out who
+     * leaked a file learns nothing from three question marks.</p>
+     *
+     * <p>So an unrenderable name is <b>dropped rather than mangled</b>, and the
+     * mark falls back to the email — which identifies a person just as well,
+     * is unique in practice, and is ASCII. Only an account with no email falls
+     * through to the username. Images are unaffected: {@code Graphics2D} draws
+     * CJK correctly, and {@link #describeViewer} keeps the full form there.</p>
+     *
+     * @return e.g. {@code "wei.chen@example-township-school.edu  ·  2026-09-16 13:04:02 UTC  ·  Volunteer hours verification only"}
+     */
+    public String describeViewerForPdf(String displayName, String email, String username, Instant viewedAt) {
+        String identity = identify(displayName, email, username);
+        if (!isWinAnsi(identity)) {
+            identity = isBlank(email) ? username : email.trim();
+        }
+        return identity + "  ·  " + TIMESTAMP.format(viewedAt) + "  ·  " + PURPOSE;
+    }
+
+    private boolean isWinAnsi(String text) {
+        for (char c : text.toCharArray()) {
+            if (c < 32 || c > 255) return false;
+        }
+        return true;
+    }
+
+    private String identify(String displayName, String email, String username) {
+        if (isBlank(displayName)) {
+            // Cannot happen through the login path (`display_name` is NOT
+            // NULL), but an identity-less mark would be worse than an ugly one.
+            return isBlank(email) ? username : username + " <" + email.trim() + ">";
+        }
+        return isBlank(email)
+                ? displayName.trim() + " (" + username + ")"
+                : displayName.trim() + " <" + email.trim() + ">";
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**
@@ -171,8 +232,14 @@ public class EvidenceWatermarker {
 
     /**
      * Standard-14 Helvetica is WinAnsi-encoded and {@code showText} throws on
-     * anything outside it. Usernames are ASCII today, but a display name or a
-     * future CJK account would otherwise turn a viewable document into a 500.
+     * anything outside it, which would turn a viewable document into a 500.
+     *
+     * <p>A last-ditch guard, and it should now almost never fire: {@link
+     * #describeViewerForPdf} already drops an unrenderable name in favour of
+     * the email rather than letting it reach here and come out as {@code ???}.
+     * What remains is the case this cannot fix without a multi-megabyte
+     * CJK-capable font and its licence question — a non-ASCII *email*, say —
+     * where an ugly mark still beats a 500 on a viewable document.</p>
      */
     private String sanitizeForWinAnsi(String text) {
         StringBuilder sb = new StringBuilder(text.length());

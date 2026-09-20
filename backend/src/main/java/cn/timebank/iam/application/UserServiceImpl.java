@@ -530,7 +530,9 @@ class UserServiceImpl implements UserService {
                 user.getStatus() == UserStatus.ACTIVE && user.hasUsableCredential(),
                 user.isLocked(), user.getPreferredLanguage(),
                 roleCodes, permissionCodesOf(user), user.getStudentId(),
-                user.sessionTimeoutMinutes(defaultSessionTimeoutMinutes));
+                user.sessionTimeoutMinutes(defaultSessionTimeoutMinutes),
+                // Optional and often absent — see AuthenticatedUserView.email.
+                user.getEmail());
     }
 
     // scopeGradeIds is always empty here — this module can't reach security.application

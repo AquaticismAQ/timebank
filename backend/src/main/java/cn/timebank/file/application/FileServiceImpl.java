@@ -220,11 +220,19 @@ class FileServiceImpl implements FileService {
         // Read the stored bytes, mark a copy, hand back the copy. The stored
         // file is untouched and its sha256Hash still describes it — see
         // EvidenceWatermarker's class comment before "fixing" that mismatch.
-        String text = watermarker.describeViewer(principal.getUsername(), Instant.now());
+        // Name and email, not the login (issue 123) — the username is passed
+        // only as the fallback identifier for an account that has no email.
+        // The two formats get different marks on purpose: a PDF cannot draw a
+        // CJK name at all, so its mark drops the name rather than printing
+        // question marks at whoever is reading a leaked copy.
+        Instant viewedAt = Instant.now();
         byte[] stored = readAll(file.getStorageKey());
         byte[] marked = "application/pdf".equals(file.getDeclaredMimeType())
-                ? watermarker.watermarkPdf(stored, text)
-                : watermarker.watermarkImage(stored, imageFormatOf(file.getDeclaredMimeType()), text);
+                ? watermarker.watermarkPdf(stored, watermarker.describeViewerForPdf(
+                        principal.displayName(), principal.email(), principal.getUsername(), viewedAt))
+                : watermarker.watermarkImage(stored, imageFormatOf(file.getDeclaredMimeType()),
+                        watermarker.describeViewer(
+                                principal.displayName(), principal.email(), principal.getUsername(), viewedAt));
 
         return new DownloadResult(new java.io.ByteArrayInputStream(marked),
                 file.getOriginalFilename(), file.getDeclaredMimeType(), true);
