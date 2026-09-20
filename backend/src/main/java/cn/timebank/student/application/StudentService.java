@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -49,6 +50,16 @@ public interface StudentService {
      * scope-checked entry point for that.
      */
     StudentDetailDto getDetail(String id, String resolvedLanguage);
+
+    /**
+     * Active students in any of the given grades, ids only.
+     *
+     * Unscoped on purpose: the caller is the system announcing a published
+     * project to the year groups it is open to (issue 137), not an operator
+     * browsing a roster. No `Authentication` to scope by, and scoping it would
+     * mean a teacher's publish notified only their own pupils.
+     */
+    List<String> activeStudentIdsInGrades(Collection<String> gradeIds);
 
     /**
      * Scope-checked — {@code auth} resolves the caller's data scope (B1.7)

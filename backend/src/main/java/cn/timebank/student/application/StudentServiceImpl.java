@@ -32,6 +32,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.List;
@@ -101,6 +102,17 @@ class StudentServiceImpl implements StudentService {
             return FilterSpecifications.equalToEnum("status", StudentStatus.class, status);
         }
         return (root, query, cb) -> cb.notEqual(root.get("status"), StudentStatus.GRADUATED);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> activeStudentIdsInGrades(Collection<String> gradeIds) {
+        if (gradeIds == null || gradeIds.isEmpty()) {
+            return List.of();
+        }
+        return studentRepository.findByGradeIdInAndStatus(gradeIds, StudentStatus.ACTIVE).stream()
+                .map(Student::getId)
+                .toList();
     }
 
     @Override

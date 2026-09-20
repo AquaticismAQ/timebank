@@ -1,9 +1,12 @@
 package cn.timebank.student.infrastructure;
 
 import cn.timebank.student.domain.Student;
+import cn.timebank.student.domain.StudentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 
 /**
@@ -18,4 +21,7 @@ public interface StudentRepository extends JpaRepository<Student, String>, JpaSp
     Optional<Student> findByStudentNumber(String studentNumber);
 
     boolean existsByStudentNumber(String studentNumber);
+
+    /** Active students in any of these grades — the audience for a newly published project (issue 137). */
+    List<Student> findByGradeIdInAndStatus(Collection<String> gradeIds, StudentStatus status);
 }

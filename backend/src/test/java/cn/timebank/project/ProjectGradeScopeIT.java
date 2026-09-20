@@ -40,6 +40,10 @@ class ProjectGradeScopeIT extends AbstractIntegrationTest {
     private ProjectService projectService;
     @Autowired
     private StudentService studentService;
+    @Autowired
+    private cn.timebank.iam.application.UserService userService;
+    @Autowired
+    private cn.timebank.notification.application.NotificationService notificationService;
 
     @Test
     void aStudentSeesTheirOwnGradesProjectsAndNotAnotherGrades() {
@@ -171,6 +175,55 @@ class ProjectGradeScopeIT extends AbstractIntegrationTest {
 
         assertThat(projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN").status())
                 .isEqualTo("PUBLISHED");
+    }
+
+    /**
+     * Issue 137: publishing announces the project to the year groups it is open
+     * to — every active student in an eligible grade, and every staff account
+     * assigned to one.
+     */
+    @Test
+    void publishingNotifiesTheStudentsOfTheEligibleGrades() {
+        StudentDetailDto inGrade = createStudent("stu_notify_6", "Notified Grade Six", "grade_6", "class_6A");
+        StudentDetailDto otherGrade = createStudent("stu_notify_7", "Other Grade Seven", "grade_7", "class_7A");
+        // `POST /students` provisions no login of its own, so the fixture has to
+        // — a student with no account cannot be notified, which is the
+        // behaviour the notifier documents and skips over.
+        String inGradeUser = userService
+                .createPendingStudentAccount(inGrade.id(), inGrade.displayName(), "zh-CN", "usr_test_admin").userId();
+        String otherGradeUser = userService
+                .createPendingStudentAccount(otherGrade.id(), otherGrade.displayName(), "zh-CN", "usr_test_admin").userId();
+
+        long before = notificationService.unreadCount(inGradeUser);
+        long otherBefore = notificationService.unreadCount(otherGradeUser);
+
+        publishedFor("grade_6", "Announced to grade six");
+
+        assertThat(notificationService.unreadCount(inGradeUser))
+                .as("a student in an eligible grade hears about it")
+                .isEqualTo(before + 1);
+        assertThat(notificationService.unreadCount(otherGradeUser))
+                .as("a student in another grade does not — otherwise this is just a broadcast")
+                .isEqualTo(otherBefore);
+    }
+
+    /** A project naming no grade has no "corresponding grade" to announce to. */
+    @Test
+    void publishingAProjectWithNoEligibleGradesNotifiesNobody() {
+        StudentDetailDto student = createStudent("stu_notify_none", "Not Notified", "grade_6", "class_6A");
+        String userId = userService
+                .createPendingStudentAccount(student.id(), student.displayName(), "zh-CN", "usr_test_admin").userId();
+        long before = notificationService.unreadCount(userId);
+
+        Instant start = Instant.now().plus(5, ChronoUnit.DAYS);
+        ProjectDto draft = projectService.createDraft(new CreateProjectRequest(
+                        "No grades named " + System.nanoTime(), "summary", "description", "cat_campus", null, null,
+                        "ON_CAMPUS", start, start.plusSeconds(7200), "Hall", 5, 100,
+                        null, null, Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600)),
+                "usr_test_admin", false, "zh-CN");
+        projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
+
+        assertThat(notificationService.unreadCount(userId)).isEqualTo(before);
     }
 
     // ── fixture ──────────────────────────────────────────────────────────

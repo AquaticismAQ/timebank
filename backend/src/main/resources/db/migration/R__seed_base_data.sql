@@ -223,7 +223,11 @@ INSERT IGNORE INTO notification_template (id, code, title_zh, title_en, body_zh,
     -- B5's caseflow decisions are the third real writer of a notification row.
     ('tmpl_case_resolved', 'case.resolved', '申诉/补交已处理', 'Case Resolved', '你提交的申诉/补交材料已处理完毕。', 'Your appeal/supplement has been resolved.', NOW(3), NOW(3)),
     ('tmpl_case_needs_information', 'case.needsInformation', '申诉/补交需要补充信息', 'Case Needs More Information', '你提交的申诉/补交材料需要补充信息，请查看审核意见并重新提交。', 'Your appeal/supplement needs more information - please review the feedback and resubmit.', NOW(3), NOW(3)),
-    ('tmpl_case_rejected', 'case.rejected', '申诉/补交未通过', 'Case Rejected', '你提交的申诉/补交材料未通过，请查看审核意见。', 'Your appeal/supplement was rejected - please review the feedback.', NOW(3), NOW(3));
+    ('tmpl_case_rejected', 'case.rejected', '申诉/补交未通过', 'Case Rejected', '你提交的申诉/补交材料未通过，请查看审核意见。', 'Your appeal/supplement was rejected - please review the feedback.', NOW(3), NOW(3)),
+    -- Issue 137: publishing a project is the fourth real writer of a notification
+    -- row, and the first that fans out — it goes to every active student in the
+    -- project's eligible grades and every staff account assigned to one of them.
+    ('tmpl_project_published', 'project.published', '有新项目可以报名', 'A New Project Is Open', '本年级有新的志愿服务项目开放报名，去项目中心看看吧。', 'A new volunteer project is open to your grade - take a look in the Project Center.', NOW(3), NOW(3));
 
 -- System settings: a single fixed row (B5.5/B5.12).
 INSERT IGNORE INTO system_settings (id, notification_poll_interval_seconds, version, updated_at, updated_by) VALUES

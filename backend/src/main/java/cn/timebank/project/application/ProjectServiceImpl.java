@@ -72,6 +72,7 @@ class ProjectServiceImpl implements ProjectService {
     private final AcademicStructureService academicStructureService;
     private final AcademicYearWindowResolver academicYearWindows;
     private final StudentService studentService;
+    private final ProjectPublishNotifier publishNotifier;
     private final DataScopeResolver dataScopeResolver;
     private final UserService userService;
     private final AuditService auditService;
@@ -83,7 +84,8 @@ class ProjectServiceImpl implements ProjectService {
                        ServiceCategoryService serviceCategoryService,
                        OrganizationService organizationService, AcademicStructureService academicStructureService,
                        AcademicYearWindowResolver academicYearWindows,
-                       StudentService studentService, DataScopeResolver dataScopeResolver,
+                       StudentService studentService, ProjectPublishNotifier publishNotifier,
+                       DataScopeResolver dataScopeResolver,
                        UserService userService, AuditService auditService, ObjectMapper objectMapper) {
         this.repository = repository;
         this.revisionRepository = revisionRepository;
@@ -95,6 +97,7 @@ class ProjectServiceImpl implements ProjectService {
         this.academicStructureService = academicStructureService;
         this.academicYearWindows = academicYearWindows;
         this.studentService = studentService;
+        this.publishNotifier = publishNotifier;
         this.dataScopeResolver = dataScopeResolver;
         this.userService = userService;
         this.auditService = auditService;
@@ -280,6 +283,11 @@ class ProjectServiceImpl implements ProjectService {
         auditService.record(new AuditEntry(actorId, "projects.publish", "project.publish", "project", project.getId(),
                 null, null, null));
         repository.saveAndFlush(project);
+        // Tell the year groups it is open to (issue 137). After the flush, so a
+        // failed publish cannot leave notifications about a project nobody can
+        // see; inside the transaction, so a failed announcement rolls the
+        // publish back rather than half-announcing it.
+        publishNotifier.announce(project.getId(), project.getEligibleGradeIds());
         return toSingleDtoNoScope(project, actorId, resolvedLanguage);
     }
 

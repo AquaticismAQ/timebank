@@ -1494,3 +1494,15 @@ Four cards, three different problems. **Total Service Hours** only needed the sc
 The school-wide figure keeps the large type with the scoped one named beneath it, because it is the baseline the other is read against and an unlabelled second number is a riddle.
 
 **Verified for both roles, the administrator as the control**: teacher005 reads 240h + 91h, 55% + 58%, 13 + 5, 108 + 39; admin001's cards are unchanged and the `*SchoolWide` fields are absent from their response. Participation is the figure worth noting — 58% against the school's 55%, so the scoped value is not merely a smaller copy, which is what a card showing a share rather than a total should do.
+
+### 41.32 Publishing a project now tells the grades it is open to (2026-09-20)
+
+Issue 137, Aquaticism's request. Publishing changed a status and wrote an audit row; students found out by happening to open the Project Center. Every existing notification is a reply addressed to one person who did something — **this is the first that is news, and the first that fans out.**
+
+It goes to every active student in one of the project's `eligibleGradeIds` and every staff account assigned to one of those grades (the `serviceRecords` namespace, where a teacher's grades live — one set per teacher, not one per resource). **Administrators are deliberately excluded**: they are school-wide, so "the corresponding grade" is every grade, and a message on every publish is the thing that trains people to ignore the bell. A teacher assigned to two of the grades is still one person, so recipients are a set.
+
+Edges written down rather than left implicit: a project naming no eligible grade announces to nobody (it is visible to every student by issue 129, but telling the whole school on a technicality is not the request); a student with no account is skipped, since `POST /students` still provisions no login; a pending-activation student *is* notified, so it waits at first login. No de-duplication, because a project can only be published once.
+
+It runs inside the publish transaction after the flush — after, so a failed publish cannot leave notifications about a project nobody can see; inside, so a failed announcement rolls the publish back rather than half-announcing it. One row per recipient, which is a few hundred at most for this school; an outbox would be machinery nothing else here has.
+
+**Verified on the deployed server across four accounts**, publishing one project open to `grade_6`: the grade-6 student 61→62, their grade-6 teacher 8→9, a grades-10-12 teacher 0→0, and the administrator 8→8. The two zero-deltas are the point — a broadcast to everybody would have passed the first two rows and failed the design. Red-checked by removing the announcement.
