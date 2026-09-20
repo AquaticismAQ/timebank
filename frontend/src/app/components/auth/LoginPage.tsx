@@ -88,8 +88,9 @@ export function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo & brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg">
-            <Clock className="w-8 h-8 text-primary-foreground" />
+          {/* `brand`, not `primary`: the mark keeps one colour in both themes. */}
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand rounded-2xl mb-4 shadow-lg">
+            <Clock className="w-8 h-8 text-brand-foreground" />
           </div>
           <h1 className="text-foreground mb-1">{t('auth.login.title')}</h1>
           {/* School name leads at a larger size; the platform description sits on

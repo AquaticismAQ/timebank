@@ -29,8 +29,9 @@ function SidebarContent({ navItems, statsStrip, onNavClick, version, schoolName 
   return (
     <div className="flex flex-col h-full">
       <div className="h-12 px-4 border-b border-sidebar-border flex items-center gap-3 shrink-0">
-        <div className="w-7 h-7 bg-sidebar-primary rounded-lg flex items-center justify-center shrink-0">
-          <Clock className="w-4 h-4 text-sidebar-primary-foreground" />
+        {/* `brand`, not `sidebar-primary`: the mark keeps one colour in both themes. */}
+        <div className="w-7 h-7 bg-brand rounded-lg flex items-center justify-center shrink-0">
+          <Clock className="w-4 h-4 text-brand-foreground" />
         </div>
         <div className="flex items-baseline gap-1.5 min-w-0">
           <span className="text-sidebar-foreground font-semibold text-sm truncate">{t('common.appName')}</span>
@@ -183,7 +184,7 @@ export function AppShell({
               <Menu className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-primary" />
+              <Clock className="w-4 h-4 text-brand" />
               <span className="text-foreground text-sm font-medium">{t('common.appName')}</span>
             </div>
           </div>

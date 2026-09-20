@@ -10,6 +10,13 @@
   --popover-foreground: oklch(0.145 0 0);
   --primary: #030213;
   --primary-foreground: oklch(1 0 0);
+  /* The logo mark's own colour. Deliberately not overridden in `.dark` below and
+     deliberately separate from `--primary`, which is the UI's action colour and
+     does flip with the theme: a brand mark that changed colour between themes
+     would not be one mark. Used only by the clock badge in the login page and the
+     app shell. */
+  --brand: rgb(200, 50, 25);
+  --brand-foreground: oklch(1 0 0);
   --secondary: oklch(0.95 0.0058 264.53);
   --secondary-foreground: #030213;
   --muted: #ececf0;
@@ -87,6 +94,8 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
