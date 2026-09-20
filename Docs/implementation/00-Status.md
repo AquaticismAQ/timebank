@@ -1438,3 +1438,13 @@ The data was already on the client (`/me`'s `scopeGradeIds`, used by `StudentLis
 **Verified across four accounts and both languages** rather than one, since a card printing the same thing for everyone would pass a single-account check.
 
 **A false alarm worth recording**: an earlier run showed `Grade 10` on a Chinese page, and the obvious conclusion — a broken `Accept-Language` — was wrong. The app stores `zh` and maps exactly that to `zh-CN`; the English names came from the probe writing `timebank-lang=zh-CN` into `localStorage` directly, a value the app never writes. That also explains an earlier sighting of English category names on Chinese Project Management: same harness, not a defect.
+
+### 41.27 Hours and coins were never mismatched — the columns measure different periods (2026-09-20)
+
+Issue 132. Aquaticism asked whether the seeding scripts were wrong, because Student Management shows students with 13h of service and 168.5 coins. **They are not, and the ledger is exactly right.** Checked read-only against the live server for all seven students in the screenshot: every balance equals that student's *lifetime* approved hours to the cent, and equals the sum of the credits stamped on their individual records. 708MEA5B's 304.5 coins are 104 approved records across several years.
+
+The columns come from different places: Service Hours is `progress.completedMinutes`, **this academic year**, the same figure the Annual Progress bar beside it uses; Time Coins is the account balance, **lifetime**, derived from an immutable transaction ledger. Side by side under bare headings, a third-year student reads as a data fault.
+
+Fixed by labelling the period — `Service Hours (This Year)` / `Time Coins (Total)`, 本学年服务时长 / 时间币余额（累计） — and not by changing any number. Showing coins for this year was rejected: the balance is lifetime by design, and a year-scoped coin figure would be a second differently-computed number claiming the same name.
+
+**Nothing was re-seeded**, in Docker or otherwise — the question was answerable from reads, and reads against real data also cover the drift a running server accumulates, which a fresh fixture would not. One gap noted for later: `seed.ts` Phase 7 already asserts this invariant and throws, but only for students carrying a `ref`; the bulk-generated roster is skipped. The measurements show it holds for them anyway.

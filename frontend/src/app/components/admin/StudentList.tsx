@@ -477,6 +477,13 @@ export function StudentList() {
               <SortTh label={t('admin.students.sortName')} active={sortKey === 'name'} />
               <SortTh label={t('admin.students.sortGrade')} active={sortKey === 'gradeLevel'} />
               <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('admin.students.annualProgress')}</th>
+              {/* The two columns measure different periods and used to be
+                  labelled as if they did not: hours come from the *annual*
+                  progress projection (the same figure the bar beside them
+                  shows), coins are the *lifetime* ledger balance. Nothing was
+                  wrong with the data — 13h beside 168.5 coins is a student in
+                  their third year — but side by side under bare headings it
+                  reads as a mismatch (issue 132). */}
               <SortTh label={t('admin.students.sortHours')} active={sortKey === 'completedHours'} />
               <SortTh label={t('admin.students.sortCoins')} active={sortKey === 'timeCoinBalance'} />
               <th className="text-left px-4 py-3 text-xs text-muted-foreground font-medium">{t('admin.students.status')}</th>
