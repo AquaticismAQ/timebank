@@ -19,6 +19,14 @@ import { useEscapeToClose } from '../../lib/useEscapeToClose';
 type SortKey = 'name' | 'gradeLevel' | 'completedHours' | 'timeCoinBalance';
 
 /**
+ * Marks a graduate option in the one grade dropdown, so `grade_8` and
+ * "graduates of grade 8" stay distinguishable in a single `<select>` value
+ * (issue 114). Not a parsed id — `GRADUATE_PREFIX + gradeId` is assembled and
+ * split here and nowhere else, and the id inside it is passed through opaquely.
+ */
+const GRADUATE_PREFIX = 'graduated:';
+
+/**
  * Docs/issues/028: row-action color per action — icon + label, bordered,
  * never filled — matching the convention `SystemAdmin.tsx`/
  * `RoleManagement.tsx` established (`ACTION_BTN_BLUE`/etc.) for
@@ -56,9 +64,21 @@ export function StudentList() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const isAdmin = user?.roles?.includes('admin') ?? false;
-  const { grades, classes } = useDictionaries();
+  const { grades, classes, lifecycle } = useDictionaries();
 
   const [search, setSearch] = useState('');
+  /**
+   * One control answers "which people am I looking at" (issue 114).
+   *
+   * `all` or a grade id means **current students**; `GRADUATE_PREFIX + gradeId`
+   * means that grade's graduates. They share a dropdown because they are the same
+   * question asked twice, and because a separate status select would make four
+   * filters plus a search on one row for a cohort that is read rarely.
+   *
+   * The two cannot simply both be grade values: graduation leaves `gradeId` on
+   * the grade the student finished, so "Grade 8" would otherwise return this
+   * year's grade 8 *and* last year's graduates in one list.
+   */
   const [filterGrade, setFilterGrade] = useState('all');
   const [filterClass, setFilterClass] = useState('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'onTrack' | 'below50' | 'below25'>('all');
@@ -151,7 +171,12 @@ export function StudentList() {
 
   const handleGradeChange = (value: string) => {
     setFilterGrade(value);
-    setFilter('gradeId', value === 'all' ? undefined : value);
+    const graduateGradeId = value.startsWith(GRADUATE_PREFIX) ? value.slice(GRADUATE_PREFIX.length) : null;
+    setFilter('gradeId', graduateGradeId ?? (value === 'all' ? undefined : value));
+    // Absent means current students server-side, so only the graduate options
+    // ever name a status. Sending `active` for the rest would wrongly exclude
+    // `inactive` students, who are still on the roster.
+    setFilter('status', graduateGradeId ? 'graduated' : undefined);
     // A class belongs to exactly one grade — a class selected under the
     // previous grade is meaningless (or invalid) once the grade changes.
     setFilterClass('all');
@@ -171,6 +196,26 @@ export function StudentList() {
     }
     return grades;
   }, [grades, user]);
+
+  /**
+   * The grades a student can graduate from, read from `GET /lifecycle/config`
+   * rather than written here as `[8, 12]`. The backend graduates on
+   * `AnnualRolloverRepository.EXIT_LEVELS`; a second copy in this component would
+   * be a second source of truth for a fact only the rollover really owns, and it
+   * would be wrong on the day a school's stage structure differs.
+   *
+   * Empty if the config could not be loaded — no options rather than guessed
+   * ones, since a guess that disagrees with the rollover is worse than an absent
+   * feature.
+   */
+  const graduateGrades = useMemo(() => {
+    const exitLevels = lifecycle?.exitGradeLevels ?? [];
+    // `sequence` is the grade level (grade_8 → 8), which is also what the
+    // backend's exit levels are expressed in.
+    return availableGrades.filter(g => exitLevels.includes(g.sequence));
+  }, [availableGrades, lifecycle]);
+
+  const viewingGraduates = filterGrade.startsWith(GRADUATE_PREFIX);
 
   const availableClasses = useMemo(
     () => classes.filter(c => filterGrade === 'all' || c.gradeId === filterGrade),
@@ -277,6 +322,19 @@ export function StudentList() {
     });
   }, [students, filterStatus, sortKey, sortDesc]);
 
+  /**
+   * The purge dates for the cohorts actually on screen — 31 August of the year
+   * after each `graduationYear` (`13-AnnualRollover.md` §6). Derived from the rows
+   * rather than from today, so it names the deadline for what is being looked at;
+   * usually one date, two while both cohorts are still retained.
+   */
+  const retentionDates = useMemo(() => {
+    const years = new Set(
+      filtered.map(s => s.graduationYear).filter((y): y is number => typeof y === 'number'),
+    );
+    return [...years].sort((a, b) => a - b).map(y => `${y + 1}-08-31`).join(', ');
+  }, [filtered]);
+
   // Computed from the current page only (the real /students list is paginated, not fetched in full, and
   // there's no aggregate-stats endpoint) — these read as "on this page", not school-wide. `total` is kept
   // consistent with onTrack/atRisk (both page-only) rather than mixed with `page.totalItems`, so the
@@ -351,6 +409,20 @@ export function StudentList() {
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.students.allGrades')}</option>
             {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            {/* Grouped, not appended: these read as the same question about a
+                different set of people, and an ungrouped list would put
+                "Grade 8" and "Grade 8 graduates" next to each other with
+                nothing saying they are different cohorts. Absent entirely when
+                the config did not load — see `graduateGrades`. */}
+            {graduateGrades.length > 0 && (
+              <optgroup label={t('admin.students.graduatesGroup')}>
+                {graduateGrades.map(g => (
+                  <option key={g.id} value={GRADUATE_PREFIX + g.id}>
+                    {t('admin.students.gradeGraduates', { grade: g.name })}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           <select value={filterClass} onChange={e => handleClassChange(e.target.value)}
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
@@ -383,6 +455,17 @@ export function StudentList() {
 
       <div className="text-xs text-muted-foreground">{t('admin.students.count', { count: filtered.length })}</div>
 
+      {/* The retention deadline, stated where the graduates are read rather than
+          left in a design doc. A cohort's records are purged on 31 August of the
+          year after `graduationYear` (13-AnnualRollover.md §6) — roughly a year.
+          Without this, the first time anyone learns there was a deadline is when
+          a transcript request comes back empty. */}
+      {viewingGraduates && filtered.length > 0 && (
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-xs text-amber-800 dark:text-amber-300">
+          {t('admin.students.graduateRetentionNotice', { dates: retentionDates })}
+        </div>
+      )}
+
       <ListStateBanner error={error} empty={!loading && filtered.length === 0} emptyLabel="No students" />
 
       {/* Desktop: sortable table */}
@@ -404,8 +487,11 @@ export function StudentList() {
               const annualPct = (student.completedMinutes ?? 0) / (student.annualRequiredMinutes ?? 1);
               const atRisk = annualPct < 0.25;
               const belowHalf = annualPct < 0.5;
+              // Read off the row, not off the filter: a row says what it is
+              // regardless of how it was asked for.
+              const graduated = student.status === 'graduated';
               return (
-                <tr key={student.id} className={`hover:bg-muted/30 transition-colors ${atRisk ? 'bg-red-50/30 dark:bg-red-900/10' : ''}`}>
+                <tr key={student.id} className={`hover:bg-muted/30 transition-colors ${atRisk && !graduated ? 'bg-red-50/30 dark:bg-red-900/10' : ''}`}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center shrink-0">
@@ -432,20 +518,39 @@ export function StudentList() {
                   <td className="px-4 py-3 text-sm text-foreground">{student.completedMinutes !== undefined ? `${minutesToHours(student.completedMinutes)}h` : '—'}</td>
                   <td className="px-4 py-3 text-sm text-foreground">{student.timeCoinBalance !== undefined ? formatCoins(student.timeCoinBalance) : '—'}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[atRisk ? 'red' : belowHalf ? 'yellow' : 'green']}`}>
-                      {t(atRisk ? 'admin.students.critical' : belowHalf ? 'admin.students.behind' : 'admin.students.onTrack')}
-                    </span>
+                    {/* A graduate has no annual requirement left to be on track
+                        for, so the progress verdict is replaced rather than
+                        shown alongside — and the badge names the cohort year,
+                        which is what tells two graduated cohorts apart. */}
+                    {graduated ? (
+                      <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES.gray}`}>
+                        {t('admin.students.graduatedIn', { year: student.graduationYear ?? '—' })}
+                      </span>
+                    ) : (
+                      <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES[atRisk ? 'red' : belowHalf ? 'yellow' : 'green']}`}>
+                        {t(atRisk ? 'admin.students.critical' : belowHalf ? 'admin.students.behind' : 'admin.students.onTrack')}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
+                    {/* Records stays, and is the whole reason to look at a
+                        graduate — reading their history before it is purged.
+                        Edit and Remind go: the rollover deactivates the login,
+                        so a reminder reaches nobody and editing a left student's
+                        placement is changing history. */}
                     <div className="flex gap-1">
-                      <button onClick={() => openEdit(student)}
-                        className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.blue}`}>
-                        <Pencil className="w-3 h-3" /> {t('admin.students.edit')}
-                      </button>
-                      <button onClick={() => toast.success(t('admin.students.toastRemindSent', { name: student.name }))}
-                        className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.amber}`}>
-                        <Bell className="w-3 h-3" /> {t('admin.students.remind')}
-                      </button>
+                      {!graduated && (
+                        <>
+                          <button onClick={() => openEdit(student)}
+                            className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.blue}`}>
+                            <Pencil className="w-3 h-3" /> {t('admin.students.edit')}
+                          </button>
+                          <button onClick={() => toast.success(t('admin.students.toastRemindSent', { name: student.name }))}
+                            className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.amber}`}>
+                            <Bell className="w-3 h-3" /> {t('admin.students.remind')}
+                          </button>
+                        </>
+                      )}
                       <button onClick={() => setRecordsStudent(student)}
                         className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.cyan}`}>
                         <FileText className="w-3 h-3" /> {t('admin.students.records')}
@@ -598,9 +703,10 @@ export function StudentList() {
           const isExpanded = expandedId === student.id;
           const atRisk = annualPct < 0.25;
           const belowHalf = annualPct < 0.5;
+          const graduated = student.status === 'graduated';
 
           return (
-            <div key={student.id} className={`bg-card border rounded-xl overflow-hidden ${atRisk ? 'border-red-200 dark:border-red-800' : 'border-border'}`}>
+            <div key={student.id} className={`bg-card border rounded-xl overflow-hidden ${atRisk && !graduated ? 'border-red-200 dark:border-red-800' : 'border-border'}`}>
               <button className="w-full p-4 text-left" onClick={() => setExpandedId(isExpanded ? null : student.id)}>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center shrink-0">
@@ -610,7 +716,11 @@ export function StudentList() {
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
                       <span className="text-sm text-foreground font-medium">{student.name}</span>
                       <span className="text-xs text-muted-foreground">{formatGradeClass(student.gradeLevel, student.className)}</span>
-                      {atRisk && (
+                      {graduated ? (
+                        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES.gray}`}>
+                          {t('admin.students.graduatedIn', { year: student.graduationYear ?? '—' })}
+                        </span>
+                      ) : atRisk && (
                         <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR_CLASSES.red}`}>
                           {t('admin.students.critical')}
                         </span>
@@ -646,15 +756,21 @@ export function StudentList() {
                       <div className="flex justify-between"><span className="text-muted-foreground">{t('admin.students.enrolled')}</span><span className="text-foreground">{student.joinedAt}</span></div>
                     </div>
                   </div>
+                  {/* Same rule as the desktop row: Records survives, Edit and
+                      Remind do not, because the account is deactivated. */}
                   <div className="flex gap-2">
-                    <button onClick={() => openEdit(student)}
-                      className={`flex-1 py-2 rounded-lg border text-xs transition-colors flex items-center justify-center gap-1 ${ACTION_COLORS.blue}`}>
-                      <Pencil className="w-3 h-3" /> {t('admin.students.edit')}
-                    </button>
-                    <button onClick={() => toast.success(t('admin.students.toastRemindSent', { name: student.name }))}
-                      className={`flex-1 py-2 rounded-lg border text-xs transition-colors flex items-center justify-center gap-1 ${ACTION_COLORS.amber}`}>
-                      <Bell className="w-3 h-3" /> {t('admin.students.remind')}
-                    </button>
+                    {!graduated && (
+                      <>
+                        <button onClick={() => openEdit(student)}
+                          className={`flex-1 py-2 rounded-lg border text-xs transition-colors flex items-center justify-center gap-1 ${ACTION_COLORS.blue}`}>
+                          <Pencil className="w-3 h-3" /> {t('admin.students.edit')}
+                        </button>
+                        <button onClick={() => toast.success(t('admin.students.toastRemindSent', { name: student.name }))}
+                          className={`flex-1 py-2 rounded-lg border text-xs transition-colors flex items-center justify-center gap-1 ${ACTION_COLORS.amber}`}>
+                          <Bell className="w-3 h-3" /> {t('admin.students.remind')}
+                        </button>
+                      </>
+                    )}
                     <button onClick={() => setRecordsStudent(student)}
                       className={`flex-1 py-2 rounded-lg border text-xs transition-colors flex items-center justify-center gap-1 ${ACTION_COLORS.cyan}`}>
                       <FileText className="w-3 h-3" /> {t('admin.students.records')}

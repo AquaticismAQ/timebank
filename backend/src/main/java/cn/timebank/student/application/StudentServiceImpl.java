@@ -69,7 +69,7 @@ class StudentServiceImpl implements StudentService {
         Specification<Student> filterSpec = FilterSpecifications.and(
                 FilterSpecifications.equalTo("gradeId", gradeId),
                 FilterSpecifications.equalTo("classId", classId),
-                FilterSpecifications.equalToEnum("status", StudentStatus.class, status),
+                statusSpecification(status),
                 FilterSpecifications.searchAnyContains(search, "displayName", "studentNumber"));
         Page<Student> page = studentRepository.findAll(FilterSpecifications.and(scopeSpec, filterSpec), pageable);
         Map<String, Grade> grades = gradeRepository.findAll().stream()
@@ -77,6 +77,30 @@ class StudentServiceImpl implements StudentService {
         Map<String, SchoolClass> classes = classRepository.findAll().stream()
                 .collect(Collectors.toMap(SchoolClass::getId, Function.identity()));
         return page.map(s -> toListItem(s, grades, classes));
+    }
+
+    /**
+     * {@code filter[status]} — but an absent filter means <b>current students</b>,
+     * not everyone (issue 114).
+     *
+     * <p>Graduation leaves {@code gradeId} on the grade the student finished
+     * (`13-AnnualRollover.md` §3.1), so from the first rollover onward a list that
+     * includes graduates puts two cohorts in "grade 8" at once, and anyone
+     * counting their grade 8 gets roughly double with nothing on screen saying
+     * why. That is a wrong answer rather than extra context, which is why this
+     * narrows on an absent parameter where {@code GET /projects} deliberately does
+     * not (issue 112): there the extra rows were harmless history, here they
+     * collide inside a single number.</p>
+     *
+     * <p>Naming the status explicitly still reaches every value, {@code GRADUATED}
+     * included — the cohort is hidden by default, never unreachable, because data
+     * you cannot get back to is worse than a longer list.</p>
+     */
+    private Specification<Student> statusSpecification(String status) {
+        if (status != null && !status.isBlank()) {
+            return FilterSpecifications.equalToEnum("status", StudentStatus.class, status);
+        }
+        return (root, query, cb) -> cb.notEqual(root.get("status"), StudentStatus.GRADUATED);
     }
 
     @Override

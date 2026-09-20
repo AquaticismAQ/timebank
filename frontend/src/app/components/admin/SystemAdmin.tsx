@@ -1356,7 +1356,7 @@ export function SystemAdmin() {
   const [activeTab, setActiveTab] = useState<Tab>('users');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<RoleSummary[]>([]);
-  const { grades: allGrades, classes: allClasses, academicYears } = useDictionaries();
+  const { grades: allGrades, classes: allClasses, academicYears, lifecycle } = useDictionaries();
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
   const rulesApi = usePagedApi<RuleVersion>(api.rules.list, { sort: '-createdAt', pageSize: DEFAULT_PAGE_SIZE });
@@ -2582,6 +2582,23 @@ export function SystemAdmin() {
                 <span className="text-xs text-foreground">{item.value}</span>
               </div>
             ))}
+            {/* The turnover date — the day promotion and graduation run
+                (issue 114). Shown here because it is a fact about this school's
+                year, and read from `GET /lifecycle/config` rather than printed
+                as "September 1", which stops being true the moment a deployment
+                configures something else.
+
+                Deliberately not editable, even for a sysadmin who can edit every
+                other row in this card: it lives in the deployment's environment,
+                not the database, so a field here would be a control that saves
+                nothing. The note says where it does live instead. */}
+            <div className="flex items-center justify-between gap-4 px-4 py-3 border-t border-border">
+              <div className="min-w-0">
+                <div className="text-xs text-muted-foreground">{t('admin.system.academicYearStart')}</div>
+                <div className="text-[11px] text-muted-foreground/70">{t('admin.system.academicYearStartHint')}</div>
+              </div>
+              <span className="text-xs text-foreground shrink-0">{lifecycle?.academicYearStart ?? '—'}</span>
+            </div>
             {!isSysadmin && (
               <p className="px-4 py-3 text-xs text-muted-foreground/70">{t('admin.system.schoolInfoSysadminOnly')}</p>
             )}

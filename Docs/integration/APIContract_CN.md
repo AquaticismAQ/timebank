@@ -669,6 +669,8 @@ queued → running → succeeded
 
 一个需要知晓的连带影响：`supervisorKind: "student"` 的同伴主管，其联系方式现在通过该学生**关联的登录账号**解析，而非学籍邮箱；因此没有账号的纯名册学生仍会以 `CONTACT_MISSING` 失败，与此前行为一致。
 
+**`GET /students` 默认只返回在校学生（2026-09-20 变更，见问题 114）。** `filter[status]` 取 `StudentStatus` 名称（`ACTIVE`、`INACTIVE`、`GRADUATED`）；**不传该参数表示"除 `GRADUATED` 之外的全部"**。这与 `GET /projects`（见 §4.2）刻意相反——缺省参数在那里不收窄结果，在这里收窄，而两者并不矛盾：毕业会把 `gradeId` 保留在学生读完的那个年级上（见 `13-AnnualRollover.md` §3.1），因此自第一次学年轮转起，未过滤的列表会把两届学生同时放进"八年级"，任何清点八年级人数的人都会得到接近两倍的数字，而页面上没有任何说明。在 `/projects` 中多出来的行只是无害的历史；在这里它们混进了同一个数字。显式指定状态仍可取到任意取值，`GRADUATED` 也不例外——这一届是默认隐藏，绝非不可达。
+
 `directory.read` 刻意比 `students.read` 更窄：这是 `role_student` 持有的权限（学生原本没有任何方式查到其他学生或教师的 id），其响应从不携带 `/students` 列表响应中的 `studentNumber`/`status`/`graduationYear` 或联系方式字段。`search` 为必填参数，结果数量有上限（20 条）——这是一个联想搜索，不是目录浏览。
 
 ### 4.10 组织与服务类别
@@ -1076,6 +1078,31 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
 ```
 
 `version` 是一个语义化版本号字符串（`MAJOR.MINOR.PATCH`，可带 `-SNAPSHOT` 后缀），来源于后端构建本身（Maven 的 `spring-boot-maven-plugin` `build-info` 目标，在构建时将 `pom.xml` 的 `<version>` 写入 jar 包），从不在应用代码中手动维护。完整的版本/发布管理方案见 `Docs/operations/VersionManagement.md`，其中也说明了前端自己的 `package.json` 版本号如何与后端保持同步——尽管该端点（而非前端打包时的版本号）才是界面上任何版本展示的运行时真相来源。展示时前缀 `v`（如 `v0.1.1`）——接口本身返回不带前缀的原始版本号。
+
+---
+
+### 4.18 学校生命周期配置
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/lifecycle/config` | 已认证 | 属于配置而非存储的学年事实（2026-09-20 新增，见问题 114） |
+
+响应示例：
+
+```json
+{
+  "data": {
+    "exitGradeLevels": [8, 12],
+    "academicYearStart": "09-01"
+  }
+}
+```
+
+`exitGradeLevels` 是**结束某一学段**的年级——读完它意味着毕业而不是升级（见 `13-AnnualRollover.md` §2.1），升序排列。`academicYearStart` 为 `MM-DD`：学年换届的日期，也就是升级与毕业执行的日期。
+
+这个接口存在的意义是让任何客户端都不必重述这两个值。否则，提供"八年级毕业生／十二年级毕业生"选项的页面就会自带一份字面量，而没有任何机制让它与真正执行毕业的流程保持一致；学校信息卡片上写死的"9 月 1 日"，也会在某个部署改了配置的那一刻变成假话。
+
+**只读，且刻意没有写入路径。** 两个值都来自部署环境而非数据库（`TIMEBANK_ACADEMIC_YEAR_START`，见 `Docs/operations/DeploymentEnv.md`），因此 `PATCH` 只会是一个存不下任何东西的控件。权限为 `isAuthenticated()` 而非某个具体权限，与 `GET /academic-years` 一致：它同属关于学校的结构性事实，不涉及任何人和任何记录；给它加门禁，只会让某位教职工的年级筛选器悄悄少掉毕业生选项。
 
 ---
 

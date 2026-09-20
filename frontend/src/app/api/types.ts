@@ -360,6 +360,13 @@ export interface Student {
   classId: string;
   className: string;
   status: 'active' | 'inactive' | 'graduated';
+  /**
+   * The year the student leaves their stage — finishing grade 8 for a stage-1
+   * student, grade 12 for a stage-2 one. Also the retention key: a cohort's data
+   * is purged on 31 August of the following year
+   * (`Design/&#42;/13-AnnualRollover.md` §6), which is why the graduate view shows it.
+   */
+  graduationYear?: number;
   completedMinutes?: number;
   pendingMinutes?: number;
   annualRequiredMinutes?: number;
@@ -468,6 +475,18 @@ export interface AcademicYear {
   startDate: string;
   endDate: string;
   current: boolean;
+}
+
+/**
+ * `GET /lifecycle/config` — the two school-year facts that live in the
+ * deployment's environment rather than the database, published so no screen has
+ * to restate them (issue 114).
+ */
+export interface SchoolLifecycleConfig {
+  /** Grade levels that end a stage: finishing one graduates the student. Ascending. */
+  exitGradeLevels: number[];
+  /** `MM-DD`. The day the year turns over, and therefore the day promotion and graduation run. */
+  academicYearStart: string;
 }
 
 /** `GET /service-categories` — `name` is already resolved server-side per `Accept-Language`. */

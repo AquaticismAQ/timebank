@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import i18n from '../../i18n';
 import { api } from './client';
-import type { Grade, SchoolClass, AcademicYear, ServiceCategory } from './types';
+import type { Grade, SchoolClass, AcademicYear, ServiceCategory, SchoolLifecycleConfig } from './types';
 
 /**
  * Grades/classes/academic years/service categories (contract §2.10) barely
@@ -22,6 +22,7 @@ let cache: Promise<{
   classes: SchoolClass[];
   academicYears: AcademicYear[];
   serviceCategories: ServiceCategory[];
+  lifecycle: SchoolLifecycleConfig | null;
 }> | null = null;
 let cacheLanguage: string | null = null;
 
@@ -39,7 +40,14 @@ function loadDictionaries() {
       api.dictionaries.classes(),
       api.dictionaries.academicYears(),
       api.dictionaries.serviceCategories(),
-    ]).then(([grades, classes, academicYears, serviceCategories]) => ({ grades, classes, academicYears, serviceCategories }))
+      // Null rather than a fallback pair of literals if this fails: a screen
+      // that cannot learn the real exit grades must show no graduate options at
+      // all, not a guess that silently disagrees with the rollover (issue 114).
+      // Unlike the four above it carries no localized text, so re-fetching it on
+      // a language switch is wasted — one request per switch, not worth a second
+      // cache with its own invalidation to avoid.
+      api.dictionaries.lifecycleConfig().catch(() => null),
+    ]).then(([grades, classes, academicYears, serviceCategories, lifecycle]) => ({ grades, classes, academicYears, serviceCategories, lifecycle }))
       .catch(err => { cache = null; cacheLanguage = null; throw err; });
     cacheLanguage = lang;
   }
@@ -51,11 +59,12 @@ export interface Dictionaries {
   classes: SchoolClass[];
   academicYears: AcademicYear[];
   serviceCategories: ServiceCategory[];
+  lifecycle: SchoolLifecycleConfig | null;
   loading: boolean;
 }
 
 export function useDictionaries(): Dictionaries {
-  const [state, setState] = useState<Dictionaries>({ grades: [], classes: [], academicYears: [], serviceCategories: [], loading: true });
+  const [state, setState] = useState<Dictionaries>({ grades: [], classes: [], academicYears: [], serviceCategories: [], lifecycle: null, loading: true });
 
   useEffect(() => {
     let cancelled = false;

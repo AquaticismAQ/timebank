@@ -31,6 +31,7 @@ import type {
   Grade,
   SchoolClass,
   AcademicYear,
+  SchoolLifecycleConfig,
   ServiceCategory,
   TimelineEntry,
   Permission,
@@ -129,6 +130,7 @@ function fromStudentDto(dto: StudentListItemDtoWire): Student {
     classId: dto.classId,
     className: dto.className,
     status: dto.status.toLowerCase() as Student['status'],
+    graduationYear: dto.graduationYear,
     joinedAt: dto.joinedAt ?? '',
     version: dto.version,
   };
@@ -354,6 +356,18 @@ export const api = {
     },
     async serviceCategories(): Promise<ServiceCategory[]> {
       return http.get<ServiceCategory[]>('/service-categories');
+    },
+    /**
+     * The school-year facts that are configured rather than stored (issue 114):
+     * which grade levels graduate, and the day the year turns over.
+     *
+     * Fetched rather than hardcoded so the grade filter's graduate options and
+     * School Info's rollover date come from the same values the annual rollover
+     * actually runs on — a literal `[8, 12]` or `September 1` in a component is a
+     * second source of truth that nothing keeps in step.
+     */
+    async lifecycleConfig(): Promise<SchoolLifecycleConfig> {
+      return http.get<SchoolLifecycleConfig>('/lifecycle/config');
     },
   },
 

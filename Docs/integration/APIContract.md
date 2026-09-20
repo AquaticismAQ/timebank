@@ -677,6 +677,8 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 
 A consequence worth knowing: a `supervisorKind: "student"` peer supervisor's contact now resolves through that student's **linked login account** rather than a roster email, so a roster-only student with no account fails `CONTACT_MISSING` as before.
 
+**`GET /students` returns current students unless asked otherwise (changed 2026-09-20, issue 114).** `filter[status]` takes a `StudentStatus` name (`ACTIVE`, `INACTIVE`, `GRADUATED`); **an absent filter means everything except `GRADUATED`**. This narrows on a missing parameter where `GET /projects` deliberately does not (§4.2), and the difference is not an inconsistency: graduation leaves `gradeId` on the grade the student finished (`13-AnnualRollover.md` §3.1), so from the first rollover onward an unfiltered list puts two cohorts in "grade 8" at once and anyone counting their grade 8 gets roughly double with nothing saying why. On `/projects` the extra rows were harmless history; here they collide inside a single number. Naming the status explicitly still reaches every value, `GRADUATED` included — the cohort is hidden by default, never unreachable.
+
 `directory.read` is deliberately narrower than `students.read`: it's the permission `role_student` holds (students otherwise have no way to look up another student's or teacher's id), and its response never carries `studentNumber`/`status`/`graduationYear`/contact fields the way `/students`'s own list response does. `search` is required and results are capped at a small page size (20) — this is a typeahead, not a directory browse.
 
 ### 4.10 Organizations & Service Categories
@@ -1151,6 +1153,31 @@ Example response:
 ```
 
 `version` is a semver string (`MAJOR.MINOR.PATCH`, optionally `-SNAPSHOT`) sourced from the backend build itself (Maven's `spring-boot-maven-plugin` `build-info` goal, which stamps `pom.xml`'s `<version>` into the jar at build time) — never hand-maintained in application code. See `Docs/operations/VersionManagement.md` for the full versioning/release scheme, including how the frontend's own `package.json` version is kept in lockstep even though this endpoint (not the frontend bundle) is the runtime source of truth for anything displayed in the UI. Prefix with `v` for display (`v0.1.1`) — the API returns the bare number.
+
+---
+
+### 4.18 School Lifecycle Configuration
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `GET` | `/lifecycle/config` | Authenticated | The school-year facts that are configured rather than stored (added 2026-09-20, issue 114) |
+
+Example response:
+
+```json
+{
+  "data": {
+    "exitGradeLevels": [8, 12],
+    "academicYearStart": "09-01"
+  }
+}
+```
+
+`exitGradeLevels` are the grade levels that **end a stage** — finishing one graduates the student rather than promoting them (`13-AnnualRollover.md` §2.1), ascending. `academicYearStart` is `MM-DD`: the day the year turns over, and therefore the day promotion and graduation run.
+
+This exists so no client restates either value. A screen offering "grade 8 graduates / grade 12 graduates" would otherwise carry a second literal pair that nothing keeps in step with the process that actually graduates people, and a School Info card printing "September 1" becomes a lie the moment a deployment configures something else.
+
+**Read-only, and there is deliberately no write path.** Both values come from the deployment's environment rather than the database (`TIMEBANK_ACADEMIC_YEAR_START`, see `Docs/operations/DeploymentEnv.md`), so a `PATCH` would be a control that saves nothing. `isAuthenticated()` rather than a permission, matching `GET /academic-years`: it is the same class of structural fact about the school, names no person and no record, and gating it would only mean some staff member's grade filter silently loses its graduate options.
 
 ---
 
