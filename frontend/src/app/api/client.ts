@@ -767,6 +767,17 @@ export const api = {
   },
 
   accounts: {
+    /**
+     * Totals over every account the caller may see (issue 128).
+     *
+     * The page's three cards used to sum `items` — the twenty rows on screen —
+     * and label the result "Total Circulating Coins". Two people looking at the
+     * same school therefore read different totals, and neither was one.
+     */
+    async summary(): Promise<{ totalBalance: number; accountCount: number; accountsWithBalance: number; averageBalance: number }> {
+      return http.get('/accounts/summary');
+    },
+
     async list(params?: ListParams): Promise<PageResult<Account>> {
       const page = await http.getPage<AccountDtoWire>('/accounts', buildListQuery(params));
       return { data: page.data.map(fromAccountDto), page: page.page };
@@ -1054,6 +1065,7 @@ export const api = {
         stats: {
           totalStudents: number; activeStudents: number; totalProjects: number; activeProjects: number;
           pendingReviews: number; approvedThisMonth: number; totalServiceHoursThisYear: number; reviewAvgHours?: number;
+          avgCompletionRate?: number;
         };
         pendingReviews: ReviewQueueItem[];
         activeProjects: Project[];
@@ -1067,6 +1079,9 @@ export const api = {
           pendingReviews: dto.stats.pendingReviews,
           approvedThisMonth: dto.stats.approvedThisMonth,
           totalServiceHours: dto.stats.totalServiceHoursThisYear,
+          // Sent since issue 127; omitted (not zero) when no grade in scope has
+          // a requirement to measure against, so the card shows an em dash.
+          avgCompletionRate: dto.stats.avgCompletionRate,
           // `reviewAvgHours` is a nullable Double server-side and the
           // backend's global Jackson config omits null fields from the
           // wire entirely (application.yml `default-property-inclusion:

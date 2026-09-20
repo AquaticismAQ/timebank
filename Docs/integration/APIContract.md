@@ -712,6 +712,7 @@ As on `/projects`: **absent means every year**, and an **unknown id is a 404** r
 | Method | Path | Permission | Description |
 | --- | --- | --- | --- |
 | `GET` | `/accounts` | `accounts.read` | In-scope account list |
+| `GET` | `/accounts/summary` | `accounts.read` | Totals over every account the caller may see — `totalBalance`, `accountCount`, `accountsWithBalance`, `averageBalance`, all in minimum accounting units. Scoped identically to `GET /accounts`, so a teacher's figures cover their grades and an administrator's the school (issue 128) |
 | `GET` | `/accounts/{id}` | Owner/`accounts.read` | Account balance view |
 | `GET` | `/accounts/{id}/transactions` | Owner/`accounts.read` | Transactions |
 | `GET` | `/account-transactions/{id}` | Owner/`accounts.read` | Transaction detail |

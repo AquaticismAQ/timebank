@@ -2,6 +2,7 @@ package cn.timebank.account.web;
 
 import cn.timebank.account.application.AccountService;
 import cn.timebank.account.application.dto.AccountDto;
+import cn.timebank.account.application.dto.AccountSummaryDto;
 import cn.timebank.account.application.dto.AccountRequests.AdjustmentRequest;
 import cn.timebank.account.application.dto.AccountRequests.FreezeRequest;
 import cn.timebank.account.application.dto.AccountRequests.ReverseRequest;
@@ -53,6 +54,13 @@ public class AccountController {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
         Page<AccountDto> page = accountService.list(pageable, query.filter("studentId"), auth);
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
+    }
+
+    /** Totals over the caller's whole scope, so the page's summary cards stop summing a page (issue 128). */
+    @GetMapping("/accounts/summary")
+    @PreAuthorize("hasAuthority('accounts.read')")
+    public ApiResponse<AccountSummaryDto> summary(Authentication auth) {
+        return ApiResponse.of(accountService.summary(auth));
     }
 
     @GetMapping("/accounts/{id}")

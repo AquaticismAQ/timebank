@@ -168,25 +168,138 @@ public class ReportQueryRepository {
                                  long approvedThisMonth, long totalServiceHoursThisYear) {
     }
 
-    public AdminStatsRow adminStats(LocalDate monthStart, LocalDate monthEndExclusive, LocalDate yearStart, LocalDate yearEnd) {
-        String sql = """
-                select
-                    (select count(*) from student) as total_students,
-                    (select count(*) from student where status = 'ACTIVE') as active_students,
-                    (select count(*) from project) as total_projects,
-                    (select count(*) from project where status in ('PUBLISHED', 'REGISTRATION_OPEN', 'IN_PROGRESS')) as active_projects,
-                    (select count(*) from service_record where status = 'APPROVED'
-                        and updated_at >= :monthStart and updated_at < :monthEnd) as approved_this_month,
-                    (select coalesce(sum(duration_minutes), 0) from service_record where status = 'APPROVED'
-                        and service_date between :yearStart and :yearEnd) as year_minutes
-                """;
+    /**
+     * The dashboard's headline figures, over <em>what this caller may see</em>
+     * (issue 127).
+     *
+     * Every figure used to be school-wide, so a teacher scoped to two grades
+     * read the same six numbers as the head teacher — measured identically on
+     * the live server, down to the review average. A teacher's dashboard is for
+     * running their own grades.
+     *
+     * Three different scope shapes, because the three tables reach a grade
+     * differently: students carry it, service records reach it through their
+     * student, and a project has no owning student at all — it is in scope when
+     * one of the grades it is open to is.
+     */
+    public AdminStatsRow adminStats(LocalDate monthStart, LocalDate monthEndExclusive, LocalDate yearStart,
+                                    LocalDate yearEnd, ScopeDescriptor scope) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("monthStart", monthStart.atStartOfDay())
                 .addValue("monthEnd", monthEndExclusive.atStartOfDay())
                 .addValue("yearStart", yearStart).addValue("yearEnd", yearEnd);
+        String student = studentScopeClause(scope, "st", params);
+        String record = recordScopeClause(scope, "sr", params);
+        String project = projectScopeClause(scope, "p", params);
+
+        String sql = """
+                select
+                    (select count(*) from student st where 1 = 1%1$s) as total_students,
+                    (select count(*) from student st where st.status = 'ACTIVE'%1$s) as active_students,
+                    (select count(*) from project p where 1 = 1%3$s) as total_projects,
+                    (select count(*) from project p where p.status in ('PUBLISHED', 'REGISTRATION_OPEN', 'IN_PROGRESS')%3$s) as active_projects,
+                    (select count(*) from service_record sr where sr.status = 'APPROVED'
+                        and sr.updated_at >= :monthStart and sr.updated_at < :monthEnd%2$s) as approved_this_month,
+                    (select coalesce(sum(sr.duration_minutes), 0) from service_record sr where sr.status = 'APPROVED'
+                        and sr.service_date between :yearStart and :yearEnd%2$s) as year_minutes
+                """.formatted(student, record, project);
+
         return jdbcTemplate.queryForObject(sql, params, (rs, rowNum) -> new AdminStatsRow(
                 rs.getLong("total_students"), rs.getLong("active_students"), rs.getLong("total_projects"),
                 rs.getLong("active_projects"), rs.getLong("approved_this_month"), rs.getLong("year_minutes") / 60));
+    }
+
+    /**
+     * The dashboard's "average review time", over the same scope.
+     *
+     * A separate method rather than a parameter on {@code reviewEfficiency}
+     * because that one backs `GET /reports/review-efficiency`, whose shape is
+     * in the contract; the dashboard needs one number, scoped, and nothing else
+     * about that report changes.
+     *
+     * Carries the same stale-round guard {@link #reviewEfficiencyByReviewer}
+     * explains at length — without it a returned-then-resubmitted record
+     * contributes a negative duration.
+     */
+    public Double scopedOverallReviewAvgHours(LocalDate start, LocalDate end, ScopeDescriptor scope) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("start", start.atStartOfDay()).addValue("end", end.plusDays(1).atStartOfDay());
+        String sql = """
+                select avg(timestampdiff(second, sr.submitted_at, rd.created_at)) / 3600.0 as avg_hours
+                from review_decision rd
+                join service_record sr on sr.id = rd.service_record_id
+                where rd.created_at >= :start and rd.created_at < :end and sr.submitted_at is not null
+                  and rd.created_at >= sr.submitted_at%s
+                """.formatted(recordScopeClause(scope, "sr", params));
+        // Not `.stream().findFirst()`: `avg()` over no rows returns one row
+        // holding null, and `Optional.of(null)` throws. Caught by
+        // DashboardReportingIT, which has no decisions to average.
+        List<Double> rows = jdbcTemplate.query(sql, params, (rs, rowNum) -> {
+            double value = rs.getDouble("avg_hours");
+            return rs.wasNull() ? null : value;
+        });
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /** Grades a scope covers, for callers that filter per-grade figures rather than SQL rows. */
+    public Set<String> scopeGradeIds(ScopeDescriptor scope) {
+        return switch (scope) {
+            case ScopeDescriptor.All ignored -> Set.of();
+            case ScopeDescriptor.Grades grades -> grades.gradeIds();
+            case ScopeDescriptor.Classes classes -> Set.copyOf(jdbcTemplate.queryForList(
+                    "select distinct grade_id from class where id in (:classIds)",
+                    new MapSqlParameterSource("classIds", nonEmpty(classes.classIds())), String.class));
+            case ScopeDescriptor.Self ignored -> Set.of("__none__");
+            case ScopeDescriptor.Projects ignored -> Set.of("__none__");
+        };
+    }
+
+    private String studentScopeClause(ScopeDescriptor scope, String alias, MapSqlParameterSource params) {
+        return switch (scope) {
+            case ScopeDescriptor.All ignored -> "";
+            case ScopeDescriptor.Grades grades -> {
+                params.addValue("scopeGradeIds", nonEmpty(grades.gradeIds()));
+                yield " and " + alias + ".grade_id in (:scopeGradeIds)";
+            }
+            case ScopeDescriptor.Classes classes -> {
+                params.addValue("scopeClassIds", nonEmpty(classes.classIds()));
+                yield " and " + alias + ".class_id in (:scopeClassIds)";
+            }
+            // A dashboard with these figures is never reached by a principal
+            // scoped to itself or to projects, but "show them everything" is the
+            // wrong way to be wrong about it.
+            case ScopeDescriptor.Self ignored -> " and 1 = 0";
+            case ScopeDescriptor.Projects ignored -> " and 1 = 0";
+        };
+    }
+
+    /** A record is in scope when its student is. */
+    private String recordScopeClause(ScopeDescriptor scope, String alias, MapSqlParameterSource params) {
+        if (scope instanceof ScopeDescriptor.All) {
+            return "";
+        }
+        return " and exists (select 1 from student st where st.id = " + alias + ".student_id"
+                + studentScopeClause(scope, "st", params) + ")";
+    }
+
+    /**
+     * A project is in scope when one of the grades it is open to is — projects
+     * have no owning student, and `eligible_grade_ids` is a JSON array, so this
+     * is an overlap rather than a column comparison.
+     */
+    private String projectScopeClause(ScopeDescriptor scope, String alias, MapSqlParameterSource params) {
+        Set<String> gradeIds = scopeGradeIds(scope);
+        if (scope instanceof ScopeDescriptor.All) {
+            return "";
+        }
+        params.addValue("scopeGradeIdsJson", toJsonArray(gradeIds));
+        return " and json_overlaps(" + alias + ".eligible_grade_ids, cast(:scopeGradeIdsJson as json))";
+    }
+
+    private String toJsonArray(Set<String> ids) {
+        return nonEmpty(ids).stream()
+                .map(id -> "\"" + id.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
     }
 
     public long scopedActiveStudentCount(ScopeDescriptor scope) {

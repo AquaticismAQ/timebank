@@ -704,6 +704,7 @@ queued → running → succeeded
 | Method | Path | 权限 | 说明 |
 | --- | --- | --- | --- |
 | `GET` | `/accounts` | `accounts.read` | 权限范围账户列表 |
+| `GET` | `/accounts/summary` | `accounts.read` | 调用者可见范围内所有账户的合计——`totalBalance`、`accountCount`、`accountsWithBalance`、`averageBalance`，均以最小记账单位计。范围与 `GET /accounts` 完全一致：教师看到自己年级的合计，管理员看到全校（issue 128）|
 | `GET` | `/accounts/{id}` | 本人/`accounts.read` | 账户余额视图 |
 | `GET` | `/accounts/{id}/transactions` | 本人/`accounts.read` | 流水 |
 | `GET` | `/account-transactions/{id}` | 本人/`accounts.read` | 流水详情 |

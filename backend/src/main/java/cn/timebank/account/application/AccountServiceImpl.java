@@ -1,6 +1,15 @@
 package cn.timebank.account.application;
 
 import cn.timebank.account.application.dto.AccountDto;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.Tuple;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.EntityManager;
+import cn.timebank.account.application.dto.AccountSummaryDto;
 import cn.timebank.account.application.dto.AccountRequests.AdjustmentRequest;
 import cn.timebank.account.application.dto.AccountRequests.FreezeRequest;
 import cn.timebank.account.application.dto.AccountRequests.ReverseRequest;
@@ -42,6 +51,9 @@ class AccountServiceImpl implements AccountService {
     private final IdempotencyService idempotencyService;
     private final AccountScopeFields scopeFields = new AccountScopeFields();
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     AccountServiceImpl(AccountRepository accountRepository, AccountTransactionRepository transactionRepository,
                         AuditService auditService, DataScopeResolver dataScopeResolver,
                         IdempotencyService idempotencyService) {
@@ -59,6 +71,43 @@ class AccountServiceImpl implements AccountService {
         Specification<Account> filterSpec = FilterSpecifications.equalTo("studentId", studentId);
         Specification<Account> combined = FilterSpecifications.and(scopeSpec, filterSpec);
         return accountRepository.findAll(combined, pageable).map(this::toDto);
+    }
+
+    /**
+     * One aggregate query over the caller's whole scope (issue 128).
+     *
+     * Criteria rather than a derived method because Spring Data has no
+     * aggregate form of {@code JpaSpecificationExecutor}, and a Java fold over
+     * `findAll(spec)` would load every account in the school to add up three
+     * numbers — the thing {@code AdminStatsDto} already refuses to do.
+     *
+     * The predicate is the same {@link #scopeSpecification} the list uses, so
+     * the cards cannot disagree with the rows beneath them.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public AccountSummaryDto summary(Authentication auth) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<Account> root = query.from(Account.class);
+
+        Specification<Account> scopeSpec = scopeSpecification(auth);
+        Predicate scope = scopeSpec == null ? cb.conjunction() : scopeSpec.toPredicate(root, query, cb);
+
+        Expression<Integer> balance = root.get("balance");
+        query.multiselect(
+                cb.coalesce(cb.sum(balance), 0),
+                cb.count(root),
+                cb.sum(cb.<Integer>selectCase().when(cb.greaterThan(balance, 0), 1).otherwise(0)));
+        query.where(scope);
+
+        Tuple row = entityManager.createQuery(query).getSingleResult();
+        long total = ((Number) row.get(0)).longValue();
+        long count = ((Number) row.get(1)).longValue();
+        long withBalance = row.get(2) == null ? 0 : ((Number) row.get(2)).longValue();
+        // Integer division on purpose: coins are minimum accounting units and an
+        // average is still a quantity of them, never a float (contract §2.3).
+        return new AccountSummaryDto(total, count, withBalance, count == 0 ? 0 : total / count);
     }
 
     @Override

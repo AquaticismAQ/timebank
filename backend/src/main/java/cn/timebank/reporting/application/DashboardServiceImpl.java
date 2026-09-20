@@ -9,6 +9,7 @@ import cn.timebank.progress.application.ProgressService;
 import cn.timebank.project.application.ProjectService;
 import cn.timebank.project.application.dto.ProjectDto;
 import cn.timebank.reporting.application.dto.AdminStatsDto;
+import cn.timebank.reporting.application.dto.CompletionReportDto;
 import cn.timebank.reporting.application.dto.DashboardAdminDto;
 import cn.timebank.reporting.application.dto.DashboardStudentDto;
 import cn.timebank.reporting.application.dto.DashboardTeacherDto;
@@ -119,14 +120,21 @@ class DashboardServiceImpl implements DashboardService {
         AcademicYearDto year = academicYearResolver.resolve();
         LocalDate monthStart = YearMonth.now().atDay(1);
         LocalDate monthEnd = monthStart.plusMonths(1);
-        ReportQueryRepository.AdminStatsRow row = queryRepository.adminStats(monthStart, monthEnd, year.startDate(), year.endDate());
+        // Every figure below is the caller's own scope, not the school's (issue
+        // 127). `pendingReviews` already was — it is why a teacher's queue count
+        // was the one number on this dashboard that differed from an admin's.
+        ScopeDescriptor scope = resolveScope(auth);
+        ReportQueryRepository.AdminStatsRow row =
+                queryRepository.adminStats(monthStart, monthEnd, year.startDate(), year.endDate(), scope);
         long pendingReviews = reviewService.summary(auth).pendingCount();
         // `null` = the current academic year: the dashboard is a "right now"
         // view with no period selector of its own (issue 093 §1).
-        Double reviewAvgHours = reportService.reviewEfficiency(null).overallAvgHours();
+        Double reviewAvgHours = queryRepository.scopedOverallReviewAvgHours(year.startDate(), year.endDate(), scope);
+        Double avgCompletionRate = scopedCompletionRate(scope, resolvedLanguage);
 
         AdminStatsDto stats = new AdminStatsDto(row.totalStudents(), row.activeStudents(), row.totalProjects(),
-                row.activeProjects(), pendingReviews, row.approvedThisMonth(), row.totalServiceHoursThisYear(), reviewAvgHours);
+                row.activeProjects(), pendingReviews, row.approvedThisMonth(), row.totalServiceHoursThisYear(),
+                reviewAvgHours, avgCompletionRate);
 
         List<ReviewQueueItemDto> pendingReviewItems = reviewService.queue(PageRequest.of(0, 5), null, null, null, auth, resolvedLanguage).getContent();
         List<ProjectDto> activeProjects = projectService
@@ -141,6 +149,29 @@ class DashboardServiceImpl implements DashboardService {
                 .toList();
 
         return new DashboardAdminDto(Instant.now(), stats, pendingReviewItems, activeProjects);
+    }
+
+    /**
+     * The completion figure, averaged over the grades in scope.
+     *
+     * Built from the existing completion report rather than new SQL: it already
+     * computes a rate per grade against that grade's published requirement, and
+     * the only question the dashboard adds is *which* grades count. An empty
+     * scope-grade set means "everything", matching {@code ScopeDescriptor.All}.
+     *
+     * Unweighted across grades on purpose — this is "how are my grades doing",
+     * not a school total in which a large cohort should outvote a small one.
+     * Null where no grade in scope has a requirement to measure against, which
+     * the card renders as an em dash rather than 0%.
+     */
+    private Double scopedCompletionRate(ScopeDescriptor scope, String resolvedLanguage) {
+        Set<String> gradeIds = queryRepository.scopeGradeIds(scope);
+        List<Double> rates = reportService.completion(resolvedLanguage, null).byGrade().stream()
+                .filter(g -> gradeIds.isEmpty() || gradeIds.contains(g.gradeId()))
+                .filter(g -> g.requiredMinutes() > 0)
+                .map(CompletionReportDto.GradeFigure::completionRate)
+                .toList();
+        return rates.isEmpty() ? null : rates.stream().mapToDouble(Double::doubleValue).average().orElse(0);
     }
 
     private ScopeDescriptor resolveScope(Authentication auth) {

@@ -24,6 +24,17 @@ export function AccountManagement() {
   const canManage = hasPermission('accounts.adjust');
   const { items, page, loading, error, params, setPage, setPageSize, setSearch: setApiSearch, setFilter, refetch } = usePagedApi<Student>(api.students.list, {});
   const { grades, classes } = useDictionaries();
+  /**
+   * The summary cards' figures, aggregated server-side over the caller's whole
+   * scope (issue 128). Refetched alongside the list, because an adjustment or a
+   * reversal changes balances and a stale total is the same lie in a new form.
+   */
+  const [summary, setSummary] = useState<{ totalBalance: number; accountCount: number; accountsWithBalance: number; averageBalance: number } | null>(null);
+  const loadSummary = useCallback(() => {
+    api.accounts.summary().then(setSummary).catch(() => setSummary(null));
+  }, []);
+  useEffect(() => { loadSummary(); }, [loadSummary]);
+
   const [search, setSearch] = useState('');
   const [filterGrade, setFilterGrade] = useState('all');
   const [filterClass, setFilterClass] = useState('all');
@@ -149,26 +160,26 @@ export function AccountManagement() {
         </button>
       </div>
 
-      {/* Summary — computed from the current page only; there's no aggregate-stats endpoint and the
-          real /students list is paginated, not fetched in full (same caveat as StudentList.tsx). */}
+      {/* Summary — a real aggregate over everything the caller may see, from
+          `GET /accounts/summary` (issue 128). These cards used to sum `items`,
+          the rows on this page, and call the result a total: two people looking
+          at the same school read different figures and neither was one. */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="text-2xl font-semibold text-foreground">
-            {formatCoins(items.reduce((s, st) => s + getBalance(st), 0))}
+            {summary ? formatCoins(summary.totalBalance) : '—'}
           </div>
           <div className="text-xs text-muted-foreground">{t('admin.accounts.totalCirculating')}</div>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="text-2xl font-semibold text-foreground">
-            {items.filter(s => getBalance(s) > 0).length}
+            {summary ? summary.accountsWithBalance : '—'}
           </div>
           <div className="text-xs text-muted-foreground">{t('admin.accounts.accountsWithBalance')}</div>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <div className="text-2xl font-semibold text-foreground">
-            {items.length > 0
-              ? formatCoins(Math.round(items.reduce((s, st) => s + getBalance(st), 0) / items.length))
-              : formatCoins(0)}
+            {summary ? formatCoins(summary.averageBalance) : '—'}
           </div>
           <div className="text-xs text-muted-foreground">{t('admin.accounts.avgBalance')}</div>
         </div>
@@ -354,6 +365,11 @@ export function AccountManagement() {
                     setAdjustAmount('');
                     setAdjustReason('');
                     setAdjustNote('');
+                    // An adjustment moves a balance, so both the rows and the
+                    // totals above them are now wrong. Neither was refreshed
+                    // before (issue 128).
+                    refetch();
+                    loadSummary();
                   } catch (err) {
                     if (err instanceof ApiError) toast.error(mapApiError(err).message);
                     else toast.error(t('common.unknownError'));

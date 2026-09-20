@@ -547,7 +547,7 @@ export interface TeacherDirectoryEntry {
   displayName: string;
 }
 
-/** `avgCompletionRate` is never populated — the real `AdminStatsDto` has no aggregate completion rate (`/reports/completion` has a per-grade one); optional so the dashboard omits it rather than faking a value. */
+/** `avgCompletionRate` is the mean over the grades in the caller's scope, 0..1, and is omitted rather than zero when none of them has a published requirement to measure against (issue 127). Every figure here is scoped to the caller: a teacher's dashboard covers their grades, an administrator's the school. */
 export interface AdminStats {
   totalStudents: number;
   activeStudents: number;

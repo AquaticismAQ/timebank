@@ -1,6 +1,7 @@
 package cn.timebank.account.application;
 
 import cn.timebank.account.application.dto.AccountDto;
+import cn.timebank.account.application.dto.AccountSummaryDto;
 import cn.timebank.account.application.dto.AccountRequests.AdjustmentRequest;
 import cn.timebank.account.application.dto.AccountRequests.FreezeRequest;
 import cn.timebank.account.application.dto.AccountRequests.ReverseRequest;
@@ -14,6 +15,13 @@ public interface AccountService {
 
     /** {@code studentId} is contract §13.1's account-by-student resolution path (frontend `accounts.get`). */
     Page<AccountDto> list(Pageable pageable, String studentId, Authentication auth);
+
+    /**
+     * Totals over every account the caller may see — not over a page of them
+     * (issue 128). Scoped identically to {@link #list}, so a teacher's figure
+     * covers their grades and an administrator's covers the school.
+     */
+    AccountSummaryDto summary(Authentication auth);
 
     AccountDto getById(String id, Authentication auth);
 
