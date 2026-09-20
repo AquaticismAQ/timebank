@@ -44,18 +44,21 @@ export async function createAndPublishProject(page: Page, baseUrl: string, proje
   await tap(page.getByRole('button', { name: '新建项目' }), '新建项目');
   await page.getByText('新建志愿服务项目').waitFor({ state: 'visible' });
 
+  // Filled in the order the dialog presents them, top to bottom. The form is
+  // taller than the modal and scrolls, so filling out of order makes the view
+  // jump up and down — which to anyone watching looks like the script hunting
+  // for fields rather than a teacher working through a form.
+  const now = new Date();
   await type(field(page, '项目名称 *'), '项目名称', project.title);
   await type(field(page, '项目摘要'), '项目摘要', project.summary);
   await type(field(page, '详细描述'), '详细描述', project.description);
   await type(field(page, '认定时长'), '认定时长', String(project.recognizedHours));
-  await type(field(page, '地点'), '服务地点', project.location);
-  await type(field(page, '名额上限'), '名额上限', String(project.capacity));
-
-  const now = new Date();
-  await type(field(page, '报名开放'), '报名开放时间', localDateTime(minutesFrom(now, -60)));
-  await type(field(page, '报名截止'), '报名截止时间', localDateTime(minutesFrom(now, 60 * 24 * 7)));
   await type(field(page, '活动开始'), '活动开始时间', localDateTime(minutesFrom(now, 60 * 24 * 8)));
   await type(field(page, '活动结束'), '活动结束时间', localDateTime(minutesFrom(now, 60 * 24 * 8 + 120)));
+  await type(field(page, '报名开放'), '报名开放时间', localDateTime(minutesFrom(now, -60)));
+  await type(field(page, '报名截止'), '报名截止时间', localDateTime(minutesFrom(now, 60 * 24 * 7)));
+  await type(field(page, '地点'), '服务地点', project.location);
+  await type(field(page, '名额上限'), '名额上限', String(project.capacity));
 
   for (const grade of project.eligibleGradeNames) {
     await tap(page.getByRole('button', { name: grade, exact: true }), `适用年级：${grade}`);
