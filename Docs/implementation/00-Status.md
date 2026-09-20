@@ -1260,3 +1260,13 @@ The two are dated **differently on purpose**. A case belongs to the year it was 
 Three copies of the year-window logic would have been three chances to drift, so it was extracted to `AcademicYearWindowResolver` in the module that owns academic years, and `ProjectServiceImpl` moved onto it in the same change (its ITs re-run unchanged). Deliberately not merged with `ReportAcademicYearResolver`, whose absent-means-current rule is right for a report and wrong for a shared list.
 
 **Verified live** on both resources: no parameter and the current year each return 4, a past year returns 0, an unknown id returns 404; both screens load on 2026-2027 with the year in the URL, and a copied link naming 2025-2026 opens on 2025-2026 rather than being overwritten by the default. The live server holds nothing outside the current year, so the past-year-hidden half rests on `CaseAndProposalAcademicYearScopeIT`, whose two proposals share a `created_at` and differ only in planned date — it fails if the implementation keys on creation. Red-checked: removing both specifications fails 4 of 6 while the two "absent means every year" tests still pass.
+
+### 41.12 A proposal's budget field stopped emptying itself (2026-09-20)
+
+Issue 116, found by the proposal demonstration. The student form carried two fields — 物资与场地需求 and 预算或其他支持需求 — over the backend's single `resourceNeeds`. Saving joined them with a newline; loading put the whole value in the first and left the second blank. So a student who filled both, got changes requested, and reopened their proposal found the budget box empty and its text appended to materials.
+
+The code said this was safe because an unedited resave rejoins to the same stored string. True, and beside the point: it reasons about whether the database survives, when the complaint is that a student's writing is not where they put it.
+
+No split rule fixes it — both fields are multi-line, so splitting on the first newline loses a multi-line materials tail and splitting on the last loses a multi-line budget head. The join threw the boundary away. So the form now matches the data: one field, one column, no migration, and an existing `"materials\nbudget"` reads back as the two lines the student typed.
+
+**The demonstration asserts it every run**: reopening a returned proposal reads the field back and checks the original text survived. Red-checked against text that was never written. Worth noting the flow passed end to end before that guard existed — a run that only checks each status is reached will watch someone's work vanish without complaint.

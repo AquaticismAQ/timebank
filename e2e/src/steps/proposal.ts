@@ -39,7 +39,6 @@ export interface NewProposal {
   durationHours: number;
   volunteers: number;
   contact: string;
-  budget: string;
   proof: string;
 }
 
@@ -86,8 +85,7 @@ export async function createAndSubmitProposal(page: Page, baseUrl: string, p: Ne
 
   // 4 — 安全与资源
   await type(field(page, '风险识别与安全措施'), '风险识别与安全措施', p.risk);
-  await type(field(page, '物资与场地需求'), '物资与场地需求', p.materials);
-  await type(field(page, '预算或其他支持需求'), '预算或其他支持需求', p.budget);
+  await type(field(page, '物资、场地与预算需求'), '物资、场地与预算需求', p.materials);
   await next(page);
 
   // 5 — 招募与认定
@@ -118,7 +116,9 @@ export async function submitForReview(page: Page): Promise<void> {
 }
 
 /** Reopens a returned proposal, revises the part the teacher asked about, and sends it back. */
-export async function reviseAndResubmit(page: Page, baseUrl: string, title: string, revisedRisk: string): Promise<void> {
+export async function reviseAndResubmit(
+  page: Page, baseUrl: string, title: string, revisedRisk: string, expectResourcesIntact?: string,
+): Promise<void> {
   await visit(page, `${baseUrl}/student/proposals`, '发起志愿活动页面');
   const row = proposalRow(page, title);
   await row.waitFor({ state: 'visible', timeout: 15_000 });
@@ -128,6 +128,18 @@ export async function reviseAndResubmit(page: Page, baseUrl: string, title: stri
   // than jumped because the wizard validates the step you are leaving — there is
   // no way past a step with an empty required field, which is the point of it.
   for (let i = 0; i < 3; i++) await next(page);
+
+  // Everything the student wrote is still here. This is issue 116's regression
+  // guard: the resource-needs box used to come back empty after a review,
+  // because the form kept two fields over one backend column and never split
+  // them on the way in. A flow that only checks the proposal reaches the next
+  // status would pass with the student's text silently gone.
+  if (expectResourcesIntact) {
+    const resources = await field(page, '物资、场地与预算需求').inputValue();
+    assertContains(resources, expectResourcesIntact,
+      '被退回后重新打开提案时，之前填写的物资、场地与预算需求应当原样保留');
+  }
+
   await type(field(page, '风险识别与安全措施'), '补充后的风险识别与安全措施', revisedRisk);
   for (let i = 0; i < 2; i++) await next(page);
   await submitForReview(page);

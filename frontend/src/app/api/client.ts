@@ -468,7 +468,7 @@ export const api = {
       // (objective/expectedOutcome/format/capacity/safetyPlan/
       // resourceNeeds/recruitmentPlan/evidencePlan vs goal/
       // expectedOutcomes/activityFormat/estimatedCapacity/riskMeasures/
-      // materialNeeds+budgetNeeds/recruitmentMethod/proofMethod) and a
+      // materialNeeds/recruitmentMethod/proofMethod) and a
       // handful of fields — myRole, reviewerName,
       // feedback, linkedProjectId/Title,
       // eligibility — genuinely don't exist on the backend at all (no
@@ -479,11 +479,13 @@ export const api = {
       // edit form straight from this list data, and an unmapped field
       // isn't just "missing," it's the literal string "undefined" landing
       // in a real saved proposal if the student doesn't happen to retype
-      // it. `materialNeeds`/`budgetNeeds` stay a lossy split of one
-      // backend field (whole value into materialNeeds, budgetNeeds
-      // blank) — an unedited resave rejoins to the same original string
-      // since `formToApiData`'s `.filter(Boolean).join('\n')` drops the
-      // blank half, so this doesn't lose data on a no-touch edit.
+      // `materialNeeds` is `resourceNeeds`, one to one. It used to be
+      // half of a lossy split with `budgetNeeds`, justified here on the
+      // grounds that an unedited resave rejoined to the same stored
+      // string — true, and beside the point: the student reopened their
+      // proposal to find the budget box empty and its text moved into
+      // materials. Issue 116; the form now has one field, as the
+      // backend does.
       const filter = { ...params?.filter };
       if (filter.status) filter.status = toBackendEnum(filter.status);
       const page = await http.getPage<ProposalDtoWire>('/event-proposals', buildListQuery({ ...params, filter }));
@@ -524,7 +526,7 @@ export const api = {
         newOrganizationName: data.newOrganizationName,
         externalContact: data.contactInfo,
         safetyPlan: data.riskMeasures,
-        resourceNeeds: [data.materialNeeds, data.budgetNeeds].filter(Boolean).join('\n'),
+        resourceNeeds: data.materialNeeds,
         recruitmentPlan: data.recruitmentMethod,
         proposedRecognizedMinutes,
         evidencePlan: data.proofMethod,
@@ -554,7 +556,7 @@ export const api = {
         newOrganizationName: data.newOrganizationName,
         externalContact: data.contactInfo,
         safetyPlan: data.riskMeasures,
-        resourceNeeds: [data.materialNeeds, data.budgetNeeds].filter(Boolean).join('\n'),
+        resourceNeeds: data.materialNeeds,
         recruitmentPlan: data.recruitmentMethod,
         proposedRecognizedMinutes,
         evidencePlan: data.proofMethod,
@@ -1531,7 +1533,6 @@ function fromProposalDto(dto: ProposalDtoWire): EventProposal {
     estimatedCapacity: dto.capacity ?? 0,
     riskMeasures: dto.safetyPlan ?? '',
     materialNeeds: dto.resourceNeeds ?? '',
-    budgetNeeds: '',
     recruitmentMethod: dto.recruitmentPlan ?? '',
     proofMethod: dto.evidencePlan ?? '',
     contactInfo: dto.externalContact ?? '',

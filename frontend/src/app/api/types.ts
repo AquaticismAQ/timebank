@@ -622,7 +622,6 @@ export interface EventProposal {
   newOrganizationName?: string;
   riskMeasures: string;
   materialNeeds: string;
-  budgetNeeds: string;
   recruitmentMethod: string;
   eligibility: string;
   proofMethod: string;

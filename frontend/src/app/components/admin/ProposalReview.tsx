@@ -213,7 +213,7 @@ export function ProposalReview() {
 
       <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
 
-      {/* Detail workbench (04-DataViewOptimization.md §5.2) — renders fields (coOrganizers/mentorTeacher/partnerOrg/riskMeasures/materialNeeds/budgetNeeds/recruitmentMethod/proofMethod) that already existed on EventProposal/ProposalDto but had no admin consumer before this. */}
+      {/* Detail workbench (04-DataViewOptimization.md §5.2) — renders fields (coOrganizers/mentorTeacher/partnerOrg/riskMeasures/materialNeeds/recruitmentMethod/proofMethod) that already existed on EventProposal/ProposalDto but had no admin consumer before this. */}
       {(() => {
         const detailProposal = items.find(i => i.id === detailId);
         if (!detailId || !detailProposal) return null;
@@ -261,7 +261,6 @@ export function ProposalReview() {
                 <Field label={t('student.proposals.detailLabels.proofMethod')} value={detailProposal.proofMethod} />
                 <div className="sm:col-span-2"><Field label={t('student.proposals.detailLabels.riskMeasures')} value={detailProposal.riskMeasures} /></div>
                 <div className="sm:col-span-2"><Field label={t('student.proposals.detailLabels.materialNeeds')} value={detailProposal.materialNeeds} /></div>
-                <div className="sm:col-span-2"><Field label={t('student.proposals.detailLabels.budgetNeeds')} value={detailProposal.budgetNeeds} /></div>
               </dl>
             ),
           },

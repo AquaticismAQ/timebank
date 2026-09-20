@@ -62,7 +62,6 @@ const EMPTY_FORM = {
   contactInfo: '',
   riskMeasures: '',
   materialNeeds: '',
-  budgetNeeds: '',
   recruitmentMethod: '',
   eligibility: '',
   proofMethod: '',
@@ -137,7 +136,6 @@ export function EventProposals() {
         contactInfo: template.contactInfo,
         riskMeasures: template.riskMeasures,
         materialNeeds: template.materialNeeds,
-        budgetNeeds: template.budgetNeeds,
         recruitmentMethod: template.recruitmentMethod,
         eligibility: template.eligibility,
         proofMethod: template.proofMethod,
@@ -181,7 +179,6 @@ export function EventProposals() {
     contactInfo: formData.contactInfo,
     riskMeasures: formData.riskMeasures,
     materialNeeds: formData.materialNeeds,
-    budgetNeeds: formData.budgetNeeds,
     recruitmentMethod: formData.recruitmentMethod,
     eligibility: formData.eligibility,
     proofMethod: formData.proofMethod,
@@ -259,7 +256,6 @@ export function EventProposals() {
     contactInfo: 'externalContact',
     riskMeasures: 'safetyPlan',
     materialNeeds: 'resourceNeeds',
-    budgetNeeds: 'resourceNeeds',
     recruitmentMethod: 'recruitmentPlan',
     eligibility: 'eligibility',
     proofMethod: 'evidencePlan',
@@ -438,9 +434,13 @@ export function EventProposals() {
           {step === 3 && (
             <>
               {field(t('student.proposals.riskMeasures'), 'riskMeasures', { placeholder: t('student.proposals.riskPlaceholder'), rows: 5, maxLength: 2000 })}
-              {/* materialNeeds+budgetNeeds are joined with '\n' into the single backend resourceNeeds field (length 1000) — split the budget evenly, leaving room for the join separator. */}
-              {field(t('student.proposals.materialNeeds'), 'materialNeeds', { placeholder: t('student.proposals.materialPlaceholder'), rows: 3, maxLength: 500 })}
-              {field(t('student.proposals.budgetNeeds'), 'budgetNeeds', { placeholder: t('student.proposals.budgetPlaceholder'), rows: 3, maxLength: 499 })}
+              {/* One field, because the backend has one (`resourceNeeds`). This used
+                  to be two boxes joined with '\n' on save and never split on
+                  load, so a student who filled both reopened their proposal to
+                  find the budget box empty and its text appended to materials
+                  (issue 116). No split rule survives both fields being
+                  multi-line, so the form matches the data instead. */}
+              {field(t('student.proposals.materialNeeds'), 'materialNeeds', { placeholder: t('student.proposals.materialPlaceholder'), rows: 5, maxLength: 1000 })}
             </>
           )}
 
@@ -620,7 +620,6 @@ export function EventProposals() {
                 rows: [
                   [t('student.proposals.riskMeasures'), p.riskMeasures],
                   [t('student.proposals.materialNeeds'), p.materialNeeds],
-                  [t('student.proposals.budgetNeeds'), p.budgetNeeds],
                 ],
               },
               {

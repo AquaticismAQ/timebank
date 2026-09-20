@@ -15,6 +15,9 @@ import type { Flow, Phase } from '../harness/types.js';
  */
 const PLANNED_DAYS_AHEAD = 21;
 
+/** Written once, checked again after the teacher sends the proposal back. */
+const RESOURCE_NEEDS = '手工材料一套（彩纸、剪刀、胶水），场地由敬老院活动室提供；预计费用约 200 元，申请学生会支持。';
+
 function plannedDate(): string {
   const d = new Date();
   d.setDate(d.getDate() + PLANNED_DAYS_AHEAD);
@@ -44,11 +47,10 @@ const propose: Phase = {
       durationHours: 2,
       volunteers: 6,
       contact: 'alex.li@example-township-school.edu',
-      budget: '手工材料约 200 元，申请学生会支持。',
       proof: '签到表与带队教师确认函',
       // Left thin on purpose: this is the point the teacher asks about.
       risk: '注意安全。',
-      materials: '手工材料一套，由学生会提供。',
+      materials: RESOURCE_NEEDS,
       recruitment: '班级群公告与学生会渠道',
       eligibility: '全校学生均可，需提前参加一次简短培训。',
     });
@@ -80,7 +82,10 @@ const revise: Phase = {
     ctx.narrator.step('学生按照老师的意见补充安全方案');
     await reviseAndResubmit(page, ctx.config.baseUrl, title,
       '往返由学校统一安排校车，全程由带队教师陪同；现场分三组，每组一名联络员；'
-      + '老人如出现不适，立即通知院方护理人员并停止活动，同时电话联系带队教师与家长。');
+      + '老人如出现不适，立即通知院方护理人员并停止活动，同时电话联系带队教师与家长。',
+      // Checked on the way past: a returned proposal must still hold everything
+      // the student wrote before it was sent back (issue 116).
+      RESOURCE_NEEDS);
     await assertProposalStatus(page, ctx.config.baseUrl, title, PROPOSAL_STATUS.submitted);
     ctx.narrator.result('提案已重新提交');
   },
