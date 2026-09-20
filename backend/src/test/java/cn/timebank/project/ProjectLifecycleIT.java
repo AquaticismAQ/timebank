@@ -164,6 +164,84 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         assertThat(cancelled.status()).isEqualTo("ARCHIVED");
     }
 
+    /**
+     * Issue 119. A completed project's recognised hours are already credited to
+     * students' accounts, and an archived one is terminal — neither may be
+     * edited. Before this, {@code updateDraft} had no status guard at all
+     * despite its name, so both went through.
+     */
+    @Test
+    void updateIsRejectedOnACompletedProject() {
+        Instant now = Instant.now();
+        CreateProjectRequest request = new CreateProjectRequest(
+                "Frozen Test Project", "summary", "description", "cat_campus", null, null, "ON_CAMPUS",
+                now.plusSeconds(7200), now.plusSeconds(10800), "Hall", 1, 100, null, null,
+                now.minusSeconds(60), now.plusSeconds(3600));
+        ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto registrationOpen = projectService.getDetail(published.id(), adminAuth(), "zh-CN");
+
+        // A confirmed registrant is what makes the cascade end at COMPLETED
+        // rather than self-archiving at the registration-close boundary.
+        StudentDetailDto student = studentService.create(
+                new CreateStudentRequest("stu_frozen_test", "Frozen Test Student", "grade_6", "class_6A",
+                        "ay_2025_2026", 2029, LocalDate.of(2025, 9, 1)),
+                "usr_test_admin", "zh-CN");
+        enrollmentService.register(registrationOpen.id(), new RegisterRequest(null), studentAuth(student.id()), "zh-CN");
+
+        // Still REGISTRATION_OPEN at this point, so this edit is allowed — the
+        // guard reads the status *before* the new dates apply, which is what
+        // lets a live project be corrected into the past at all.
+        UpdateProjectRequest pushToPast = new UpdateProjectRequest(
+                null, null, null, null, null, null, null,
+                now.minusSeconds(40), now.minusSeconds(20), null, null, null, null, null,
+                null, now.minusSeconds(50), registrationOpen.version());
+        ProjectDto updated = projectService.updateDraft(registrationOpen.id(), pushToPast, "usr_test_admin", true, "zh-CN");
+        ProjectDto completed = projectService.getDetail(updated.id(), adminAuth(), "zh-CN");
+        assertThat(completed.status()).isEqualTo("COMPLETED");
+
+        UpdateProjectRequest renameIt = new UpdateProjectRequest(
+                "Renamed After Completion", null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, completed.version());
+        assertThatThrownBy(() -> projectService.updateDraft(completed.id(), renameIt, "usr_test_admin", true, "zh-CN"))
+                .isInstanceOf(cn.timebank.common.error.ApiException.class)
+                .hasMessageContaining("cannot be edited");
+
+        // ...and the title really is untouched, not merely reported as rejected.
+        assertThat(projectService.getDetail(completed.id(), adminAuth(), "zh-CN").title())
+                .isEqualTo("Frozen Test Project");
+    }
+
+    @Test
+    void updateIsRejectedOnAnArchivedProject() {
+        ProjectDto draft = createDraft("Archived Edit Test", Instant.now().plusSeconds(1000), Instant.now().plusSeconds(2000));
+        ProjectDto archived = projectService.cancel(draft.id(),
+                new CancelProjectRequest("Discarding this draft.", draft.version()), "usr_test_admin", "zh-CN");
+        assertThat(archived.status()).isEqualTo("ARCHIVED");
+
+        UpdateProjectRequest renameIt = new UpdateProjectRequest(
+                "Renamed After Archiving", null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, archived.version());
+        assertThatThrownBy(() -> projectService.updateDraft(archived.id(), renameIt, "usr_test_admin", true, "zh-CN"))
+                .isInstanceOf(cn.timebank.common.error.ApiException.class)
+                .hasMessageContaining("cannot be edited");
+        assertThat(projectService.getDetail(archived.id(), adminAuth(), "zh-CN").title())
+                .isEqualTo("Archived Edit Test");
+    }
+
+    /** The other half of issue 119's guard: a live project is still correctable. */
+    @Test
+    void updateIsStillAllowedOnAPublishedProject() {
+        ProjectDto draft = createDraft("Editable While Live", Instant.now().plusSeconds(1000), Instant.now().plusSeconds(2000));
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+
+        UpdateProjectRequest moveIt = new UpdateProjectRequest(
+                null, null, null, null, null, null, null,
+                null, null, "Library, second floor", null, null, null, null, null, null, published.version());
+        ProjectDto updated = projectService.updateDraft(published.id(), moveIt, "usr_test_admin", true, "zh-CN");
+        assertThat(updated.location()).isEqualTo("Library, second floor");
+    }
+
     @Test
     void cancelArchivesALivePublishedProjectDirectlyWithoutPassingThroughClosed() {
         ProjectDto draft = createDraft(Instant.now().plusSeconds(1000), Instant.now().plusSeconds(2000));

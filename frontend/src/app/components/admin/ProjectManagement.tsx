@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Search, MapPin, Clock, Users, MoreHorizontal, CheckCircle, X, Edit, Archive } from 'lucide-react';
+import { Plus, Search, MapPin, Clock, Users, MoreHorizontal, CheckCircle, X, Edit, Archive, Eye, Copy } from 'lucide-react';
 import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
 import { type Project, type ProjectStatus, type Organization, type Grade } from '../../api/types';
 import { toast } from 'sonner';
@@ -92,6 +92,19 @@ function toForm(p: Project, grades: Grade[]): EditForm {
   };
 }
 
+/**
+ * The two statuses no edit may touch, matching the guard the API enforces
+ * (`ProjectServiceImpl.requireEditable`, issue 119).
+ *
+ * A completed project's recognised hours are already credited to students'
+ * accounts, so changing them would leave every transaction citing it
+ * disagreeing with it; an archived one is terminal. Everything else — including
+ * a published or running project — stays editable, because a live project still
+ * needs its location corrected sometimes.
+ */
+const READ_ONLY_STATUSES: ProjectStatus[] = ['completed', 'archived'];
+const isReadOnly = (status: ProjectStatus) => READ_ONLY_STATUSES.includes(status);
+
 interface EditModalProps {
   project: Project;
   form: EditForm;
@@ -99,11 +112,13 @@ interface EditModalProps {
   onClose: () => void;
   onSave: () => void;
   organizations: Organization[];
+  /** Renders the same dialog as a detail view: every field disabled, no Save. */
+  readOnly?: boolean;
   getFieldError?: (...fields: string[]) => string | undefined;
   onFieldEdit?: (field: string) => void;
 }
 
-function EditModal({ project, form, onChange, onClose, onSave, organizations, getFieldError, onFieldEdit }: EditModalProps) {
+function EditModal({ project, form, onChange, onClose, onSave, organizations, readOnly, getFieldError, onFieldEdit }: EditModalProps) {
   const { t } = useTranslation();
   const { grades, serviceCategories } = useDictionaries();
   const { hasPermission } = usePermissions();
@@ -127,15 +142,24 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
 
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
-          <Edit className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
+          {readOnly
+            ? <Eye className="w-5 h-5 text-muted-foreground shrink-0" />
+            : <Edit className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />}
           <div className="flex-1 min-w-0">
-            <h3 className="text-foreground leading-tight">{t('admin.projects.editTitle')}</h3>
+            <h3 className="text-foreground leading-tight">{t(readOnly ? 'admin.projects.viewTitle' : 'admin.projects.editTitle')}</h3>
             <p className="text-xs text-muted-foreground truncate">{project.title}</p>
           </div>
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto px-5 py-5 space-y-5 text-sm">
+        {/* A `fieldset` rather than a `readOnly` prop threaded through thirty
+            controls: `disabled` propagates to every descendant control natively,
+            including the grade buttons and the owner picker, and including any
+            field added here later — which is the useful half. A field that
+            accepts typing it cannot save is worse than either state.
+            `min-w-0` because a fieldset's default `min-inline-size: min-content`
+            breaks the grids inside it. */}
+        <fieldset disabled={readOnly} className="overflow-y-auto px-5 py-5 space-y-5 text-sm min-w-0 disabled:opacity-80">
 
           {/* Basic info */}
           <section className="space-y-3">
@@ -288,16 +312,18 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, ge
               </div>
             </div>
           </section>
-        </div>
+        </fieldset>
 
         {/* Footer */}
         <div className="px-5 py-4 border-t border-border shrink-0 flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent">
-            {t('common.cancel')}
+            {t(readOnly ? 'common.close' : 'common.cancel')}
           </button>
-          <button onClick={onSave} className="flex-1 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity">
-            {t('admin.projects.saveChanges')}
-          </button>
+          {!readOnly && (
+            <button onClick={onSave} className="flex-1 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity">
+              {t('admin.projects.saveChanges')}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -443,6 +469,58 @@ export function ProjectManagement() {
     fieldErrors.clearAll();
     setEditProject(proj);
     setEditForm(toForm(proj, grades));
+  };
+
+  /**
+   * Copies a project into a fresh draft, then opens it (issue 119 §3).
+   *
+   * A plain `POST /projects` — there is nothing to compute server-side that the
+   * create path does not already do, so this needs no endpoint of its own.
+   *
+   * It opens the draft for editing rather than just announcing it, because the
+   * copy carries the original's dates and those are in the past. Published
+   * untouched, `syncTimeBasedStatus` would walk it to ARCHIVED inside the same
+   * request — registration window elapsed, nobody enrolled — and the copy would
+   * be gone with no error shown. Opening it puts the dates in front of you.
+   *
+   * It may also not appear in the list behind you: the academic-year filter is a
+   * window on `startAt`, so a copy of last year's project is filed under last
+   * year and the default current-year filter hides it. The dialog is what makes
+   * that survivable.
+   */
+  const copyToDraft = async (proj: Project) => {
+    setMenuOpenId(null);
+    fieldErrors.clearAll();
+    try {
+      const created = await api.projects.create({
+        // The marker keeps two otherwise identical rows tellable apart; `title`
+        // is `@Size(max = 255)` on the way in, so the suffix cannot push it over.
+        title: `${proj.title} ${t('admin.projects.copySuffix')}`.slice(0, 255),
+        summary: proj.summary,
+        description: proj.description,
+        categoryId: proj.categoryId,
+        organizationId: proj.organizationId || undefined,
+        ownerId: proj.ownerId || undefined,
+        deliveryScope: proj.deliveryScope,
+        startAt: proj.startAt,
+        endAt: proj.endAt,
+        location: proj.location,
+        capacity: proj.capacity,
+        recognizedMinutes: proj.recognizedMinutes,
+        // `eligibleGrades` reads back as localized grade *names* but create
+        // expects ids — the same conversion `toForm` does, and for the same
+        // reason: sending names as ids silently corrupts the list.
+        eligibleGrades: proj.eligibleGrades.map(name => grades.find(g => g.name === name)?.id ?? name),
+        evidenceRequirements: proj.evidenceRequirements,
+        registrationOpenAt: proj.registrationOpenAt,
+        registrationCloseAt: proj.registrationCloseAt,
+      });
+      toast.success(t('admin.projects.toastCopied', { title: created.title }));
+      refetch();
+      openEdit(created);
+    } catch (err) {
+      handleMutationError(err, { fieldErrors, refetch, fallbackMessage: t('common.unknownError') });
+    }
   };
 
   const buildNewProjectPayload = () => ({
@@ -670,10 +748,24 @@ export function ProjectManagement() {
                           <Users className="w-3.5 h-3.5" /> {t('admin.projects.registrants')}
                         </button>
                       )}
-                      {canUpdate && (
+                      {/* Read-only statuses offer View instead, and to everyone
+                          who can see the page — reading a finished project's
+                          details needs no update right (issue 119). */}
+                      {isReadOnly(proj.status) ? (
+                        <button onClick={() => handleAction(proj, 'edit')}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-accent">
+                          <Eye className="w-3.5 h-3.5" /> {t('admin.projects.view')}
+                        </button>
+                      ) : canUpdate && (
                         <button onClick={() => handleAction(proj, 'edit')}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-accent">
                           <Edit className="w-3.5 h-3.5" /> {t('admin.projects.edit')}
+                        </button>
+                      )}
+                      {canManage && proj.status !== 'draft' && (
+                        <button onClick={() => copyToDraft(proj)}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-accent">
+                          <Copy className="w-3.5 h-3.5" /> {t('admin.projects.copyToDraft')}
                         </button>
                       )}
                       {canPublish && proj.status === 'draft' && (
@@ -688,7 +780,12 @@ export function ProjectManagement() {
                           <Archive className="w-3.5 h-3.5" /> {t('admin.projects.archive')}
                         </button>
                       )}
-                      {canCancel && proj.status !== 'archived' && (
+                      {/* Not on a completed project: you cannot abandon
+                          something that has already finished. That also gives up
+                          the documented override for archiving a completed
+                          project whose confirmed students still have unreviewed
+                          records — Aquaticism's call, recorded in issue 119 §2. */}
+                      {canCancel && proj.status !== 'archived' && proj.status !== 'completed' && (
                         <button onClick={() => openCancel(proj)}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
                           <X className="w-3.5 h-3.5" /> {t('admin.projects.cancelAndArchive')}
@@ -720,6 +817,7 @@ export function ProjectManagement() {
           onClose={() => { setEditProject(null); setEditForm(null); }}
           onSave={saveEdit}
           organizations={organizations}
+          readOnly={isReadOnly(editProject.status)}
           getFieldError={fieldErrors.getError}
           onFieldEdit={fieldErrors.clearField}
         />

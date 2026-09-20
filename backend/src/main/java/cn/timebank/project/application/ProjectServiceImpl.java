@@ -190,6 +190,11 @@ class ProjectServiceImpl implements ProjectService {
     @Transactional
     public ProjectDto updateDraft(String id, UpdateProjectRequest request, String actorId, boolean actorIsAdmin, String resolvedLanguage) {
         Project project = findOrThrow(id);
+        // Before the guard below, so it judges the status the project actually
+        // has rather than the one last written: a project whose end date has
+        // passed is COMPLETED whether or not anything has read it since.
+        syncTimeBasedStatus(project);
+        requireEditable(project);
         ConcurrencyControl.checkVersion(project.getVersion(), request.version());
         writeRevision(project, actorId);
 
@@ -335,6 +340,25 @@ class ProjectServiceImpl implements ProjectService {
     public Map<String, String> titlesOf(List<String> projectIds) {
         return repository.findAllById(projectIds).stream()
                 .collect(Collectors.toMap(Project::getId, Project::getTitle));
+    }
+
+    /**
+     * The two statuses no edit may touch (issue 119).
+     *
+     * COMPLETED because its recognised hours are already credited to students'
+     * accounts — changing them afterwards leaves every transaction citing this
+     * project disagreeing with it, and transactions are immutable by design.
+     * ARCHIVED because it is terminal. Every other status is fair game: a
+     * published or running project may still need its location corrected.
+     *
+     * Not a {@code ProjectStateMachine} edge, because editing is not a
+     * transition — the status does not change, which is precisely the point.
+     */
+    private static void requireEditable(Project project) {
+        if (project.getStatus() == ProjectStatus.COMPLETED || project.getStatus() == ProjectStatus.ARCHIVED) {
+            throw ApiException.stateConflict(
+                    "A project in status " + project.getStatus() + " cannot be edited.");
+        }
     }
 
     // --- time-based status sync (B4.2's scope decision — see plan/status doc) ---
