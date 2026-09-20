@@ -35,6 +35,19 @@ export class BrowserHarness {
       viewport: this.config.headless ? { width: 1600, height: 1000 } : null,
       locale: 'zh-CN',
     });
+    // Force the Chinese UI for the run, per context, by seeding the same
+    // localStorage key i18n reads at startup (`src/i18n/index.ts`).
+    //
+    // Deliberately not the in-app language switcher: that calls
+    // `PATCH /me/profile` and would permanently change a shared test account's
+    // preferred language as a side effect of running a test. The narration is
+    // Chinese and the selectors match the Chinese labels, so the UI has to be
+    // Chinese — but not at the cost of writing to someone else's account.
+    // The argument form, because this file is typechecked as Node: `window` has
+    // no type here even though the function runs in the page.
+    await context.addInitScript(([key, value]: [string, string]) => {
+      localStorage.setItem(key, value);
+    }, ['timebank-lang', 'zh'] as [string, string]);
     const page = await context.newPage();
     this.current = { role, context, page };
     return page;

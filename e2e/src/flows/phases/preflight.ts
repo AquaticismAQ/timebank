@@ -26,6 +26,17 @@ export const preflight: Phase = {
     assertThat(studentPage.url().includes('/student'), '学生应当能够登录并进入学生端');
     ctx.narrator.result('管理员与学生账号均可登录');
 
+    ctx.narrator.step('确认学生所在年级');
+    // The project is made eligible for exactly this grade, so it has to be known
+    // before anything is created — and a student with no grade would otherwise
+    // fail much later, at registration, looking like a permissions problem.
+    const student = await ctx.api.get<{ gradeId: string }>(`/students/${ctx.state.studentId as string}`);
+    const grades = await ctx.api.get<Array<{ id: string; name: string }>>('/grades');
+    const grade = grades.find(g => g.id === student.gradeId);
+    assertThat(Boolean(grade), `学生应当有所属年级（gradeId=${student.gradeId}）`);
+    ctx.state.studentGradeName = grade!.name;
+    ctx.narrator.result(`该学生就读于${grade!.name}`);
+
     ctx.narrator.step('检查佐证材料');
     const needed = recordCount(ctx.has('branch:return'), ctx.has('branch:reject'));
     const files = pickEvidenceFiles(ctx.config.evidenceDir, needed);

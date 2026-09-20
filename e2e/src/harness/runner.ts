@@ -42,7 +42,7 @@ export async function runFlow(
   const api = await Api.loginAs(config, config.student.username, config.student.password);
   // `/me` nests the account under `user` — the envelope is {data:{user:{…}}},
   // not {data:{…}}.
-  const me = await api.get<{ user: { studentId: string | null } }>('/me');
+  const me = await api.get<{ user: { studentId: string | null; displayName: string } }>('/me');
   if (!me.user.studentId) {
     throw new Error(`${config.student.username} has no linked student record — cannot allocate service windows.`);
   }
@@ -62,7 +62,7 @@ export async function runFlow(
       return page;
     },
     page: () => browser.page(),
-    state: {},
+    state: { studentId: me.user.studentId, studentName: me.user.displayName },
   };
 
   narrator.phase(flow.titleZh);
