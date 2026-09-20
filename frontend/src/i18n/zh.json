@@ -654,6 +654,7 @@
       "coOrganizers": "共同组织者",
       "coOrganizersPlaceholder": "按姓名搜索同学（可选）",
       "mentorTeacher": "拟邀请指导教师",
+      "mentorRequired": "请先选择拟邀请的指导教师",
       "mentorTeacherPlaceholder": "教师姓名，如尚未确定可填\"待确定\"",
       "partnerOrg": "合作组织（如有）",
       "partnerOrgPlaceholder": "搜索已有合作组织，或输入新名称",

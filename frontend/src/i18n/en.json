@@ -654,6 +654,7 @@
       "coOrganizers": "Co-organizers",
       "coOrganizersPlaceholder": "Search classmates by name (optional)",
       "mentorTeacher": "Mentor Teacher",
+      "mentorRequired": "Please choose a mentor teacher before continuing",
       "mentorTeacherPlaceholder": "Teacher name, or \"TBD\" if not yet confirmed",
       "partnerOrg": "Partner Organization (if any)",
       "partnerOrgPlaceholder": "Search existing organizations, or type a new name",

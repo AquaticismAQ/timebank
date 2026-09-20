@@ -75,6 +75,7 @@ export function EventProposals() {
   const [view, setView] = useState<ViewMode>('list');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
+  const formRef = useRef<HTMLFormElement>(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [declared, setDeclared] = useState(false);
   // Which real proposal (if any) handleSaveDraft/handleSubmit should PATCH
@@ -207,6 +208,25 @@ export function EventProposals() {
     }
   };
 
+  /**
+   * Whether this step may be left.
+   *
+   * Two checks, because one is not enough. `reportValidity()` covers the native
+   * controls and shows the browser's own message on the offending field — but it
+   * cannot see a `SearchPicker`, and the mentor teacher is both a picker and one
+   * of the few things the API refuses a proposal without. Left to
+   * `reportValidity` alone it would stay exactly as unenforced as everything
+   * else was (issue 117).
+   */
+  const canLeaveStep = (): boolean => {
+    if (formRef.current && !formRef.current.reportValidity()) return false;
+    if (STEP_KEYS[step] === 'organization' && formData.mentorTeacherOption.length === 0) {
+      toast.error(t('student.proposals.mentorRequired'));
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async () => {
     if (!declared) { toast.error(t('student.proposals.checkDeclaration')); return; }
     setSaving(true);
@@ -272,11 +292,17 @@ export function EventProposals() {
     return (
     <div>
       <label className="block text-xs text-muted-foreground mb-1.5">
-        {label}{opts?.required !== false && <span className="text-destructive ml-0.5">*</span>}
+        {/* Opt-in, and enforced. This used to star every field and require none
+            of them (issue 117): the asterisk is a promise, so it is now shown
+            only where the control really is `required`, and the set is the one
+            the API refuses without — marking more would have the form reject
+            what the contract accepts. */}
+        {label}{opts?.required && <span className="text-destructive ml-0.5">*</span>}
       </label>
       {opts?.rows ? (
         <textarea
           rows={opts.rows}
+          required={opts?.required}
           value={String(formData[key])}
           onChange={e => { fieldErrors.clearField(apiField); setFormData(f => ({ ...f, [key]: e.target.value })); }}
           placeholder={opts.placeholder}
@@ -286,6 +312,11 @@ export function EventProposals() {
       ) : (
         <input
           type={opts?.type || 'text'}
+          required={opts?.required}
+          // A required number must also be a positive one: `capacity` is
+          // `@Positive` and recognised minutes cannot be zero, and `required`
+          // alone happily accepts 0.
+          min={opts?.required && opts?.type === 'number' ? 1 : undefined}
           value={String(formData[key])}
           onChange={e => { fieldErrors.clearField(apiField); setFormData(f => ({ ...f, [key]: opts?.type === 'number' ? Number(e.target.value) : e.target.value })); }}
           placeholder={opts?.placeholder}
@@ -335,11 +366,16 @@ export function EventProposals() {
         </div>
 
         {/* Step content */}
-        <div className="bg-card border border-border rounded-2xl p-5 mb-4 space-y-4">
+        {/* A real <form>, so `reportValidity()` has something to ask. Each step
+            mounts only its own fields, so the check has to happen on the step
+            being *left* — a check at the end sees none of the earlier ones
+            (the same reasoning as `ServiceRecords.tsx`, issues 058/066). */}
+        <form ref={formRef} onSubmit={e => e.preventDefault()}
+          className="bg-card border border-border rounded-2xl p-5 mb-4 space-y-4">
 
           {step === 0 && (
             <>
-              {field(t('student.proposals.eventName'), 'title', { placeholder: t('student.proposals.eventNamePlaceholder'), maxLength: 255 })}
+              {field(t('student.proposals.eventName'), 'title', { placeholder: t('student.proposals.eventNamePlaceholder'), maxLength: 255, required: true })}
               <div>
                 <label className="block text-xs text-muted-foreground mb-1.5">{t('student.proposals.serviceCategory')}<span className="text-destructive ml-0.5">*</span></label>
                 <select value={formData.categoryId} onChange={e => setFormData(f => ({ ...f, categoryId: e.target.value }))}
@@ -356,13 +392,13 @@ export function EventProposals() {
           {step === 1 && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {field(t('student.proposals.plannedDate'), 'plannedDate', { type: 'date' })}
+                {field(t('student.proposals.plannedDate'), 'plannedDate', { type: 'date', required: true })}
                 {field(t('student.proposals.location'), 'location', { placeholder: t('student.proposals.locationPlaceholder'), maxLength: 255 })}
               </div>
               {field(t('student.proposals.activityFormat'), 'activityFormat', { placeholder: t('student.proposals.formatPlaceholder'), maxLength: 64 })}
               <div className="grid grid-cols-2 gap-4">
-                {field(t('student.proposals.estimatedDuration'), 'estimatedDurationHours', { type: 'number' })}
-                {field(t('student.proposals.estimatedVolunteers'), 'estimatedCapacity', { type: 'number' })}
+                {field(t('student.proposals.estimatedDuration'), 'estimatedDurationHours', { type: 'number', required: true })}
+                {field(t('student.proposals.estimatedVolunteers'), 'estimatedCapacity', { type: 'number', required: true })}
               </div>
               {field(t('student.proposals.targetParticipants'), 'targetParticipants', { placeholder: t('student.proposals.participantsPlaceholder'), maxLength: 500 })}
               {field(t('student.proposals.volunteerTasks'), 'volunteerTasks', { placeholder: t('student.proposals.tasksPlaceholder'), rows: 4, maxLength: 1000 })}
@@ -449,7 +485,7 @@ export function EventProposals() {
               {field(t('student.proposals.recruitmentMethod'), 'recruitmentMethod', { placeholder: t('student.proposals.recruitmentPlaceholder'), maxLength: 1000 })}
               {field(t('student.proposals.eligibility'), 'eligibility', { placeholder: t('student.proposals.eligibilityPlaceholder') })}
               {field(t('student.proposals.verificationMethod'), 'proofMethod', { placeholder: t('student.proposals.verificationPlaceholder'), maxLength: 1000 })}
-              {field(t('student.proposals.suggestedHours'), 'suggestedHours', { type: 'number' })}
+              {field(t('student.proposals.suggestedHours'), 'suggestedHours', { type: 'number', required: true })}
             </>
           )}
 
@@ -493,7 +529,7 @@ export function EventProposals() {
               </div>
             </div>
           )}
-        </div>
+        </form>
 
         {/* Navigation */}
         <div className="flex gap-3">
@@ -509,12 +545,12 @@ export function EventProposals() {
             {t('student.proposals.saveDraft')}
           </button>
           {step < STEP_KEYS.length - 1 ? (
-            <button onClick={() => setStep(s => s + 1)}
+            <button onClick={() => { if (canLeaveStep()) setStep(s => s + 1); }}
               className="px-5 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity">
               {t('common.next')}
             </button>
           ) : (
-            <button onClick={handleSubmit}
+            <button onClick={() => { if (canLeaveStep()) handleSubmit(); }}
               className="px-5 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90 transition-opacity flex items-center gap-1.5">
               <Send className="w-4 h-4" /> {t('student.proposals.submitForReview')}
             </button>

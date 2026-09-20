@@ -1270,3 +1270,13 @@ The code said this was safe because an unedited resave rejoins to the same store
 No split rule fixes it — both fields are multi-line, so splitting on the first newline loses a multi-line materials tail and splitting on the last loses a multi-line budget head. The join threw the boundary away. So the form now matches the data: one field, one column, no migration, and an existing `"materials\nbudget"` reads back as the two lines the student typed.
 
 **The demonstration asserts it every run**: reopening a returned proposal reads the field back and checks the original text survived. Red-checked against text that was never written. Worth noting the flow passed end to end before that guard existed — a run that only checks each status is reached will watch someone's work vanish without complaint.
+
+### 41.13 A proposal's required markers now mean something (2026-09-20)
+
+Issue 117, found by Aquaticism while watching the proposal demonstration. `EventProposals.tsx`'s `field()` helper printed a red asterisk on every field it rendered — no call site ever passed `required: false` — and then rendered the control without a `required` attribute. There was no `<form>`, no `reportValidity()` anywhere in the file, and so nothing was checked when a step was left or when the proposal was submitted. Sixteen fields claimed to be mandatory and none was.
+
+The two layers also disagreed about which fields those are. The API refuses a proposal without six things — title, category, planned start/end, capacity, supervisor and recognised minutes — and accepts every other field empty. So `required` became opt-in and is now applied to the control, and the asterisk is shown only on that set: marking more would have the form reject what the contract accepts, which is a second undocumented rule no other client would know about.
+
+Validation runs on the step being *left*, since each step mounts only its own fields — the same reasoning `ServiceRecords.tsx` already records for issues 058/066. The mentor teacher needed its own check on top: it is a `SearchPicker` rather than a native control, so `reportValidity()` cannot see it, and it is one of the six the API genuinely requires.
+
+**Verified by leaving fields empty on the deployed build**, not by reading the code: an empty 活动名称 holds the wizard on step 1 with the browser's own message, filling it advances, and reaching 组织安排 without a mentor holds there and says why. The demonstration still passes end to end, which is the same check from the other direction — a complete proposal is not obstructed.
