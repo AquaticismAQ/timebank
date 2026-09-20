@@ -54,8 +54,8 @@ public class ReportController {
     @GetMapping("/api/v1/reports/service-hours")
     @PreAuthorize("hasAuthority('reports.read')")
     public ApiResponse<ServiceHoursReportDto> serviceHours(
-            @RequestParam(value = "academicYearId", required = false) String academicYearId) {
-        return ApiResponse.of(reportService.serviceHours(academicYearId));
+            @RequestParam(value = "academicYearId", required = false) String academicYearId, Authentication auth) {
+        return ApiResponse.of(reportService.serviceHours(academicYearId, auth));
     }
 
     @GetMapping("/api/v1/reports/review-efficiency")
@@ -68,8 +68,8 @@ public class ReportController {
     @GetMapping("/api/v1/reports/top-projects")
     @PreAuthorize("hasAuthority('reports.read')")
     public ApiResponse<TopProjectsReportDto> topProjects(
-            @RequestParam(value = "academicYearId", required = false) String academicYearId) {
-        return ApiResponse.of(reportService.topProjects(academicYearId));
+            @RequestParam(value = "academicYearId", required = false) String academicYearId, Authentication auth) {
+        return ApiResponse.of(reportService.topProjects(academicYearId, auth));
     }
 
     private String resolveLanguage(String acceptLanguage, Authentication auth) {

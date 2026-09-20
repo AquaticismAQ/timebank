@@ -97,7 +97,10 @@ class ReportYearScopeTest {
 
     private final ReportServiceImpl reportService = new ReportServiceImpl(
             queryRepository, summaryRepository, academicStructureService, ruleResolutionService, userService,
-            new ReportAcademicYearResolver(academicStructureService));
+            new ReportAcademicYearResolver(academicStructureService),
+            // A null principal resolves to All, which is what these year-scope
+            // assertions are about — the grade split has its own test.
+            (principal, resourceType, grantAll) -> new cn.timebank.security.application.ScopeDescriptor.All());
 
     {
         when(academicStructureService.listAcademicYears()).thenReturn(List.of(PAST_YEAR, CURRENT_YEAR));
@@ -153,8 +156,8 @@ class ReportYearScopeTest {
 
     @Test
     void serviceHoursBucketsAreDisjointBetweenTwoYears() {
-        ServiceHoursReportDto past = reportService.serviceHours(PAST_YEAR.id());
-        ServiceHoursReportDto current = reportService.serviceHours(CURRENT_YEAR.id());
+        ServiceHoursReportDto past = reportService.serviceHours(PAST_YEAR.id(), null);
+        ServiceHoursReportDto current = reportService.serviceHours(CURRENT_YEAR.id(), null);
 
         assertThat(past.byMonth()).extracting(ServiceHoursReportDto.MonthFigure::month).containsExactly("2025-03");
         assertThat(current.byMonth()).extracting(ServiceHoursReportDto.MonthFigure::month)
@@ -176,8 +179,8 @@ class ReportYearScopeTest {
 
     @Test
     void topProjectsListsOnlyProjectsScheduledInTheYearAsked() {
-        TopProjectsReportDto past = reportService.topProjects(PAST_YEAR.id());
-        TopProjectsReportDto current = reportService.topProjects(CURRENT_YEAR.id());
+        TopProjectsReportDto past = reportService.topProjects(PAST_YEAR.id(), null);
+        TopProjectsReportDto current = reportService.topProjects(CURRENT_YEAR.id(), null);
 
         assertThat(past.topProjects()).extracting(TopProjectsReportDto.ProjectFigure::projectId)
                 .containsExactly("prj_past");
@@ -192,9 +195,9 @@ class ReportYearScopeTest {
         List<Runnable> calls = List.of(
                 () -> reportService.participation("en", "ay_no_such"),
                 () -> reportService.completion("en", "ay_no_such"),
-                () -> reportService.serviceHours("ay_no_such"),
+                () -> reportService.serviceHours("ay_no_such", null),
                 () -> reportService.reviewEfficiency("ay_no_such"),
-                () -> reportService.topProjects("ay_no_such"));
+                () -> reportService.topProjects("ay_no_such", null));
 
         for (Runnable call : calls) {
             assertThatThrownBy(call::run)
@@ -267,7 +270,7 @@ class ReportYearScopeTest {
                     : List.of(new ReportQueryRepository.ReviewerFigureRow("usr_reviewer", decisions, 4.0));
         });
 
-        when(repository.topProjects(anyInt(), any(), any())).thenAnswer(invocation -> {
+        when(repository.topProjects(anyInt(), any(), any(), any())).thenAnswer(invocation -> {
             LocalDate start = invocation.getArgument(1);
             LocalDate end = invocation.getArgument(2);
             return PROJECTS.stream().filter(p -> inWindow(p.startsOn(), start, end))

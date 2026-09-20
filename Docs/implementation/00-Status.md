@@ -1470,3 +1470,17 @@ Issue 134, Aquaticism's request. The pie had ten slices labelled with project ti
 `GET /reports/top-projects` now also returns `byCategory`. The count is **enrolments, not distinct students**: a pie is parts of a whole, and distinct-students-per-category would double-count anyone serving in two, leaving percentages of nothing in particular. Counted this way the slices sum to exactly the participation the project rows describe. Category **ids** travel, not names — the client holds the dictionary and renders in the reader's language (issue 121's division of labour) — and the year window is the project's `start_at`, matching `topProjects`, so a project belongs to the same year in both halves of one report.
 
 **Verified**: the API returns five categories totalling 77, and the chart renders 社区服务 70% · 校园服务 12% · 环保服务 9% · 公益服务 6% · 教育服务 3% — five full names, no truncation, no duplicate wedges. A page-error check is now part of verifying this page, after issue 133's hooks-order fault took it down behind a passing `tsc`.
+
+### 41.30 Reports now let a teacher read their grades against the school (2026-09-20)
+
+Issue 135, Aquaticism's request in three parts: a second line on the service-hours trend, a second category pie, and two tabs on Top Projects. Issue 127 had already scoped the dashboard's headline numbers; the reports were still school-wide for everybody, so a teacher responsible for three year groups could see the school's totals and nothing about the cohort they can actually act on.
+
+Each figure **keeps** its school-wide form and gains a scoped one — `byDayInScope`, `topProjectsInScope`, `byCategoryInScope` — because the school-wide figure is the baseline being read against. **All three are empty for a school-wide caller**: an administrator already sees everything, and a second identical line, pie and tab are three controls that do nothing.
+
+The substantive choice is that the scoped figures count through the **enrolled student**, not the project's eligible grades. A project open to four year groups is not four times any one teacher's — "participation in my grades" is about who took part, not who was allowed to, and scoping by eligibility would have credited a school-wide project to every teacher it was open to.
+
+On screen: two lines with a legend that only appears when there are two; two pies side by side rather than stacked, drawn by one shared component so they cannot drift; two tabs on the existing list, defaulting to the school.
+
+**Verified for both roles, the administrator as the control** — a change that showed everyone two of everything would pass a teacher-only check. teacher005 gets 2 lines, 2 pies, tabs that move the list from 10 rows to 4, and scoped totals that are strict subsets of the school's (5430 of 14400 minutes, 3 of 5 categories); admin001 gets one of each, no tabs, and empty scoped arrays. No page errors on either.
+
+Two process notes recorded in the issue doc: `mvn -o -q test-compile` piped through `grep` printed nothing and I took that for success — the remote deploy then failed on two unupdated test files, and the exit code had been there to check. And a `\(([^)]*)\)` regex stopped at a nested paren, turning `serviceHours(PAST_YEAR.id())` into `serviceHours(PAST_YEAR.id(, null))`.

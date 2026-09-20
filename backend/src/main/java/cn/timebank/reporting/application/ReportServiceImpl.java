@@ -1,6 +1,10 @@
 package cn.timebank.reporting.application;
 
 import cn.timebank.iam.application.UserService;
+import org.springframework.security.core.Authentication;
+import cn.timebank.security.application.ScopeDescriptor;
+import cn.timebank.security.application.DataScopeResolver;
+import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.reporting.application.dto.CompletionReportDto;
 import cn.timebank.reporting.application.dto.ParticipationReportDto;
 import cn.timebank.reporting.application.dto.ReviewEfficiencyReportDto;
@@ -33,16 +37,19 @@ class ReportServiceImpl implements ReportService {
     private final RuleResolutionService ruleResolutionService;
     private final UserService userService;
     private final ReportAcademicYearResolver academicYearResolver;
+    private final DataScopeResolver dataScopeResolver;
 
     ReportServiceImpl(ReportQueryRepository queryRepository, SummaryRepository summaryRepository,
                        AcademicStructureService academicStructureService, RuleResolutionService ruleResolutionService,
-                       UserService userService, ReportAcademicYearResolver academicYearResolver) {
+                       UserService userService, ReportAcademicYearResolver academicYearResolver,
+                       DataScopeResolver dataScopeResolver) {
         this.queryRepository = queryRepository;
         this.summaryRepository = summaryRepository;
         this.academicStructureService = academicStructureService;
         this.ruleResolutionService = ruleResolutionService;
         this.userService = userService;
         this.academicYearResolver = academicYearResolver;
+        this.dataScopeResolver = dataScopeResolver;
     }
 
     @Override
@@ -146,25 +153,23 @@ class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public ServiceHoursReportDto serviceHours(String academicYearId) {
+    public ServiceHoursReportDto serviceHours(String academicYearId, Authentication auth) {
         AcademicYearDto year = academicYearResolver.resolve(academicYearId);
         List<ServiceHoursReportDto.MonthFigure> byMonth = queryRepository.serviceMinutesByMonth(year.startDate(), year.endDate())
                 .stream().map(r -> new ServiceHoursReportDto.MonthFigure(r.month(), r.minutes() / 60)).toList();
 
         // Every day in the year, empty ones included — see the DTO for why a
         // sparse series would draw the wrong shape.
-        Map<String, Integer> minutesByDay = queryRepository.serviceMinutesByDay(year.startDate(), year.endDate())
-                .stream().collect(Collectors.toMap(ReportQueryRepository.DayMinutesRow::day,
-                        ReportQueryRepository.DayMinutesRow::minutes));
-        List<ServiceHoursReportDto.DayFigure> byDay = year.startDate()
-                .datesUntil(year.endDate().plusDays(1))
-                .map(d -> {
-                    String key = d.toString();
-                    return new ServiceHoursReportDto.DayFigure(key, minutesByDay.getOrDefault(key, 0));
-                })
-                .toList();
+        List<ServiceHoursReportDto.DayFigure> byDay =
+                filledDays(year, new ScopeDescriptor.All());
 
-        return new ServiceHoursReportDto(Instant.now(), year.id(), byMonth, byDay);
+        // The caller's own grades, as a second series to read the school
+        // against (issue 135). Empty when they *are* the school.
+        ScopeDescriptor scope = resolveScope(auth);
+        List<ServiceHoursReportDto.DayFigure> byDayInScope =
+                scope instanceof ScopeDescriptor.All ? List.of() : filledDays(year, scope);
+
+        return new ServiceHoursReportDto(Instant.now(), year.id(), byMonth, byDay, byDayInScope);
     }
 
     @Override
@@ -184,17 +189,48 @@ class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public TopProjectsReportDto topProjects(String academicYearId) {
+    public TopProjectsReportDto topProjects(String academicYearId, Authentication auth) {
         AcademicYearDto year = academicYearResolver.resolve(academicYearId);
-        List<TopProjectsReportDto.ProjectFigure> figures =
-                queryRepository.topProjects(10, year.startDate(), year.endDate()).stream()
+        List<TopProjectsReportDto.ProjectFigure> figures = projectFigures(year, new ScopeDescriptor.All());
+        List<TopProjectsReportDto.CategoryFigure> byCategory = categoryFigures(year, new ScopeDescriptor.All());
+
+        ScopeDescriptor scope = resolveScope(auth);
+        boolean schoolWide = scope instanceof ScopeDescriptor.All;
+        return new TopProjectsReportDto(Instant.now(), year.id(), figures, byCategory,
+                schoolWide ? List.of() : projectFigures(year, scope),
+                schoolWide ? List.of() : categoryFigures(year, scope));
+    }
+
+    private List<ServiceHoursReportDto.DayFigure> filledDays(AcademicYearDto year, ScopeDescriptor scope) {
+        Map<String, Integer> minutesByDay = queryRepository.serviceMinutesByDay(year.startDate(), year.endDate(), scope)
+                .stream().collect(Collectors.toMap(ReportQueryRepository.DayMinutesRow::day,
+                        ReportQueryRepository.DayMinutesRow::minutes));
+        return year.startDate().datesUntil(year.endDate().plusDays(1))
+                .map(d -> {
+                    String key = d.toString();
+                    return new ServiceHoursReportDto.DayFigure(key, minutesByDay.getOrDefault(key, 0));
+                })
+                .toList();
+    }
+
+    private List<TopProjectsReportDto.ProjectFigure> projectFigures(AcademicYearDto year, ScopeDescriptor scope) {
+        return queryRepository.topProjects(10, year.startDate(), year.endDate(), scope).stream()
                 .map(r -> new TopProjectsReportDto.ProjectFigure(r.projectId(), r.title(), r.participants(), r.totalMinutes()))
                 .toList();
-        List<TopProjectsReportDto.CategoryFigure> byCategory =
-                queryRepository.participationByCategory(year.startDate(), year.endDate()).stream()
-                        .map(r -> new TopProjectsReportDto.CategoryFigure(r.categoryId(), r.participants(), r.totalMinutes()))
-                        .toList();
-        return new TopProjectsReportDto(Instant.now(), year.id(), figures, byCategory);
+    }
+
+    private List<TopProjectsReportDto.CategoryFigure> categoryFigures(AcademicYearDto year, ScopeDescriptor scope) {
+        return queryRepository.participationByCategory(year.startDate(), year.endDate(), scope).stream()
+                .map(r -> new TopProjectsReportDto.CategoryFigure(r.categoryId(), r.participants(), r.totalMinutes()))
+                .toList();
+    }
+
+    /** The same resolution the dashboard uses — grades are assigned under `serviceRecords`, and there is one set of them per teacher. */
+    private ScopeDescriptor resolveScope(Authentication auth) {
+        if (auth == null || !(auth.getPrincipal() instanceof CookieSessionUserDetails principal)) {
+            return new ScopeDescriptor.All();
+        }
+        return dataScopeResolver.resolve(principal, "serviceRecords", principal.hasSchoolWideVisibility());
     }
 
     private String reviewerName(String reviewerId) {

@@ -10,8 +10,14 @@ import java.util.List;
  * report with no period at all: it ranked every project ever run and summed
  * every approved record against them, under a header naming one year.
  */
+/*
+ * `topProjectsInScope` / `byCategoryInScope` are the same two figures narrowed
+ * to the caller's own grades (issue 135). **Both empty for anyone school-wide**:
+ * an administrator would otherwise be shown the identical table and pie twice.
+ */
 public record TopProjectsReportDto(Instant generatedAt, String academicYearId,
-                                    List<ProjectFigure> topProjects, List<CategoryFigure> byCategory) {
+                                    List<ProjectFigure> topProjects, List<CategoryFigure> byCategory,
+                                    List<ProjectFigure> topProjectsInScope, List<CategoryFigure> byCategoryInScope) {
 
     public record ProjectFigure(String projectId, String title, long participants, long totalMinutes) {
     }

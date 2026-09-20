@@ -1,6 +1,7 @@
 package cn.timebank.reporting.application;
 
 import cn.timebank.reporting.application.dto.CompletionReportDto;
+import org.springframework.security.core.Authentication;
 import cn.timebank.reporting.application.dto.ParticipationReportDto;
 import cn.timebank.reporting.application.dto.ReviewEfficiencyReportDto;
 import cn.timebank.reporting.application.dto.ServiceHoursReportDto;
@@ -34,7 +35,8 @@ public interface ReportService {
     CompletionReportDto completion(String resolvedLanguage, String academicYearId);
 
     /** Approved minutes bucketed by month, over service dates inside the selected year. */
-    ServiceHoursReportDto serviceHours(String academicYearId);
+    /** Carries a second, grade-scoped series for a teacher to read the school against (issue 135); empty for a school-wide caller. */
+    ServiceHoursReportDto serviceHours(String academicYearId, Authentication auth);
 
     /**
      * Review decisions <em>taken</em> inside the selected year — a decision
@@ -44,5 +46,6 @@ public interface ReportService {
     ReviewEfficiencyReportDto reviewEfficiency(String academicYearId);
 
     /** Projects <em>scheduled</em> inside the selected year, with their hours from records dated inside it. */
-    TopProjectsReportDto topProjects(String academicYearId);
+    /** Carries grade-scoped copies of both figures for a teacher (issue 135); empty for a school-wide caller. */
+    TopProjectsReportDto topProjects(String academicYearId, Authentication auth);
 }

@@ -25,7 +25,8 @@ import java.util.List;
  * silently misstate the shape.</p>
  */
 public record ServiceHoursReportDto(Instant generatedAt, String academicYearId,
-                                     List<MonthFigure> byMonth, List<DayFigure> byDay) {
+                                     List<MonthFigure> byMonth, List<DayFigure> byDay,
+                                     List<DayFigure> byDayInScope) {
 
     public record MonthFigure(String month, int hours) {
     }
@@ -33,4 +34,9 @@ public record ServiceHoursReportDto(Instant generatedAt, String academicYearId,
     /** @param day ISO {@code yyyy-MM-dd}; @param minutes approved service minutes on that day, zero if none */
     public record DayFigure(String day, int minutes) {
     }
+
+    // `byDayInScope` is the same series narrowed to the caller's own grades
+    // (issue 135), so a teacher can read their cohort against the school rather
+    // than only the school. **Empty for anyone school-wide** — an administrator
+    // would otherwise get two identical lines, which says nothing twice.
 }

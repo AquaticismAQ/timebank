@@ -12,6 +12,27 @@ import { ListStateBanner } from '../ListStateBanner';
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
+/** Drawn once, used for both the school-wide and the grade-scoped pie (issue 135). */
+function CategoryPie({ data }: { data: { name: string; value: number }[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <PieChart>
+        <Pie key="pie" data={data} cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="value"
+          label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}>
+          {data.map((_, i) => (
+            <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
+          ))}
+        </Pie>
+        <Tooltip key="tooltip"
+          contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12 }}
+          labelStyle={{ color: 'var(--foreground)' }}
+          itemStyle={{ color: 'var(--foreground)' }}
+        />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
 export function ReportsPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'participation' | 'hours' | 'projects'>('participation');
@@ -23,6 +44,13 @@ export function ReportsPage() {
   // no argument. The options now come from `/academic-years` and the selection
   // is what the report endpoints are scoped by.
   const { academicYears, serviceCategories, loading: dictionariesLoading } = useDictionaries();
+  /**
+   * Which Top Projects list is showing (issue 135). Declared here with the
+   * other hooks, above the `if (!data || !stats) return` guard below — a hook
+   * after a conditional return runs on some renders and not others, which is
+   * what took this page down in issue 133.
+   */
+  const [projectScope, setProjectScope] = useState<'school' | 'mine'>('school');
   const [yearFilter, setYearFilter] = useState('');
 
   // Most recent year first — `/academic-years` returns them unordered.
@@ -86,8 +114,19 @@ export function ReportsPage() {
    * page down when this was first written that way). A 365-element map is not
    * worth a hook anyway.
    */
-  const dailyHours = data.serviceHoursByDay.map(
-    d => ({ day: d.day, hours: Math.round((d.minutes / 60) * 100) / 100 }));
+  /**
+   * Both series on one set of points (issue 135): a teacher reads their own
+   * grades against the school, which is the comparison a single line cannot
+   * make. `scopedHours` is empty for an administrator — they *are* the school,
+   * and a second identical line would say nothing twice.
+   */
+  const scopedByDay = new Map(data.serviceHoursByDayInScope.map(d => [d.day, d.minutes]));
+  const hasScopedSeries = scopedByDay.size > 0;
+  const dailyHours = data.serviceHoursByDay.map(d => ({
+    day: d.day,
+    hours: Math.round((d.minutes / 60) * 100) / 100,
+    scopedHours: hasScopedSeries ? Math.round(((scopedByDay.get(d.day) ?? 0) / 60) * 100) / 100 : undefined,
+  }));
   /** One tick per month: the first day of each, which is a value the axis actually holds. */
   const seenMonths = new Set<string>();
   const monthTicks = dailyHours
@@ -126,10 +165,15 @@ export function ReportsPage() {
    * server sends ids and counts. An unknown id falls back to the id rather than
    * vanishing from the chart.
    */
-  const pieData = data.participationByCategory.map(c => ({
+  const toPie = (rows: { categoryId: string; participants: number }[]) => rows.map(c => ({
     name: serviceCategories.find(sc => sc.id === c.categoryId)?.name ?? c.categoryId,
     value: c.participants,
   }));
+  const pieData = toPie(data.participationByCategory);
+  const scopedPieData = toPie(data.participationByCategoryInScope);
+  /** A teacher gets both pies; an administrator gets the one that is already everything. */
+  const hasScopedBreakdown = scopedPieData.length > 0 || data.topProjectsInScope.length > 0;
+  const shownProjects = projectScope === 'mine' ? data.topProjectsInScope : data.topProjects;
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
@@ -318,8 +362,12 @@ export function ReportsPage() {
                   labelStyle={{ color: 'var(--foreground)' }}
                   itemStyle={{ color: 'var(--foreground)' }}
                 />
+                {hasScopedSeries && <Legend key="legend" />}
                 {/* No per-point dot: 365 of them is a solid band, not a line. */}
-                <Line key="line" type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={2} dot={false} activeDot={{ r: 5 }} name={t('admin.reports.chartHours')} />
+                <Line key="line" type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={2} dot={false} activeDot={{ r: 5 }} name={t('admin.reports.seriesSchool')} />
+                {hasScopedSeries && (
+                  <Line key="scoped" type="monotone" dataKey="scopedHours" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 5 }} name={t('admin.reports.seriesMyGrades')} />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -349,30 +397,56 @@ export function ReportsPage() {
             </div>
           ) : (
             <>
-              <div className="bg-card border border-border rounded-2xl p-4">
-                <h3 className="text-foreground mb-4">{t('admin.reports.participationByCategory')}</h3>
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie key="pie" data={pieData} cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="value" label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}>
-                      {pieData.map((_, i) => (
-                        <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip key="tooltip"
-                      contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12 }}
-                      labelStyle={{ color: 'var(--foreground)' }}
-                      itemStyle={{ color: 'var(--foreground)' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+              {/* One pie for an administrator, two for a teacher (issue 135):
+                  the school's mix, and their own grades' beside it. Side by
+                  side rather than stacked, because the point is the comparison
+                  and a scroll between them defeats it. */}
+              <div className={`grid gap-3 ${hasScopedBreakdown ? 'lg:grid-cols-2' : 'grid-cols-1'}`}>
+                <div className="bg-card border border-border rounded-2xl p-4">
+                  <h3 className="text-foreground mb-4">
+                    {t('admin.reports.participationByCategory')}
+                    {hasScopedBreakdown && <span className="text-sm text-muted-foreground ml-2">· {t('admin.reports.wholeSchool')}</span>}
+                  </h3>
+                  <CategoryPie data={pieData} />
+                </div>
+                {hasScopedBreakdown && (
+                  <div className="bg-card border border-border rounded-2xl p-4">
+                    <h3 className="text-foreground mb-4">
+                      {t('admin.reports.participationByCategory')}
+                      <span className="text-sm text-muted-foreground ml-2">· {t('admin.reports.myGrades')}</span>
+                    </h3>
+                    {scopedPieData.length > 0
+                      ? <CategoryPie data={scopedPieData} />
+                      : <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">{t('admin.reports.noProjectData')}</div>}
+                  </div>
+                )}
               </div>
 
               <div className="bg-card border border-border rounded-2xl overflow-hidden">
-                <div className="px-4 py-3 border-b border-border">
+                <div className="px-4 py-3 border-b border-border flex items-center gap-3 flex-wrap">
                   <h3 className="text-foreground">{t('admin.reports.topProjects')}</h3>
+                  {/* Two tabs for a teacher, none for an administrator — a
+                      second tab holding the same rows is a control that does
+                      nothing (issue 135). */}
+                  {hasScopedBreakdown && (
+                    <div className="flex gap-1 ml-auto">
+                      {(['school', 'mine'] as const).map(scope => (
+                        <button key={scope} onClick={() => setProjectScope(scope)}
+                          className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                            projectScope === scope
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
+                              : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+                          {t(scope === 'school' ? 'admin.reports.wholeSchool' : 'admin.reports.myGrades')}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="divide-y divide-border">
-                  {data.topProjects.map((proj, i) => (
+                  {shownProjects.length === 0 && (
+                    <div className="px-4 py-6 text-sm text-muted-foreground">{t('admin.reports.noProjectData')}</div>
+                  )}
+                  {shownProjects.map((proj, i) => (
                     <div key={i} className="flex items-center gap-3 px-4 py-3">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
                         i === 0 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :

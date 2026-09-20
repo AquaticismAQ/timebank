@@ -1389,6 +1389,10 @@
       "credited": "增加"
     },
     "reports": {
+      "wholeSchool": "全校",
+      "myGrades": "我的年级",
+      "seriesSchool": "全校",
+      "seriesMyGrades": "我的年级",
       "title": "统计报表",
       "dataUpdate": "数据更新时间：2026-07-27 08:00",
       "export": "导出",

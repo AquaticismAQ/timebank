@@ -760,6 +760,8 @@ Effective rules cannot be modified in place; changes must create a new version.
 
 **`/reports/service-hours` resolution (issue 133).** The response carries the academic year at two resolutions: `byMonth` (`{month, hours}`, integer hours) for month-level summaries, and `byDay` (`{day, minutes}`, ISO `yyyy-MM-dd`) for the trend line. `byDay` includes **every day of the year, zero-minute days included** — a line chart spaces its points evenly whatever their dates, so a sparse series would draw a fortnight's gap the same width as a weekend. Minutes rather than hours because a day's service is often a fraction of one.
 
+**Scoped comparison series (issue 135).** `/reports/service-hours` also returns `byDayInScope`, and `/reports/top-projects` returns `topProjectsInScope` and `byCategoryInScope` — the same figures narrowed to the caller's own grades, so a teacher can read their cohort against the school. **All three are empty for a school-wide caller** (`admin`/`sysadmin`): an administrator already sees everything, and a second identical series or pie says nothing twice. The scoped figures count through the *enrolled student* (and, for hours, the record's student), not the project's eligible grades — a project open to four year groups is not four times any one teacher's.
+
 **`POST /exports` is authorised per report type.** The permission is
 `exports.` + the `reportType` in the body — `exports.studentList`,
 `exports.serviceRecords`, `exports.studentCompletion`, `exports.projects`,

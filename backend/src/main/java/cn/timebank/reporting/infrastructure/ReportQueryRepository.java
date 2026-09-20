@@ -103,23 +103,29 @@ public class ReportQueryRepository {
      * {@link #topProjects}, so the same project belongs to the same year in
      * both halves of this report.</p>
      */
-    public List<CategoryParticipationRow> participationByCategory(LocalDate start, LocalDate end) {
+    public List<CategoryParticipationRow> participationByCategory(LocalDate start, LocalDate end, ScopeDescriptor scope) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("start", start).addValue("end", end)
+                .addValue("startAt", start.atStartOfDay()).addValue("endAtExclusive", end.plusDays(1).atStartOfDay());
+        // Scoped through the *enrolled student*, not the project's eligible
+        // grades: "participation in my grades" is about who took part, and a
+        // project open to four year groups is not four times mine.
+        String enrolmentScope = scope instanceof ScopeDescriptor.All ? ""
+                : " and exists (select 1 from student st where st.id = e.student_id"
+                        + studentScopeClause(scope, "st", params) + ")";
         String sql = """
                 select p.category_id as category_id,
                        count(*) as participants,
                        (select coalesce(sum(sr.duration_minutes), 0) from service_record sr
                          join project p2 on p2.id = sr.project_id
                          where p2.category_id = p.category_id and sr.status = 'APPROVED'
-                           and sr.service_date between :start and :end) as total_minutes
+                           and sr.service_date between :start and :end%s) as total_minutes
                 from project p
-                join enrollment e on e.project_id = p.id and e.status in ('CONFIRMED', 'COMPLETED')
+                join enrollment e on e.project_id = p.id and e.status in ('CONFIRMED', 'COMPLETED')%s
                 where p.start_at >= :startAt and p.start_at < :endAtExclusive
                 group by p.category_id
                 order by participants desc
-                """;
-        MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("start", start).addValue("end", end)
-                .addValue("startAt", start.atStartOfDay()).addValue("endAtExclusive", end.plusDays(1).atStartOfDay());
+                """.formatted(recordScopeClause(scope, "sr", params), enrolmentScope);
         return jdbcTemplate.query(sql, params, (rs, rowNum) -> new CategoryParticipationRow(
                 rs.getString("category_id"), rs.getLong("participants"), rs.getLong("total_minutes")));
     }
@@ -128,15 +134,15 @@ public class ReportQueryRepository {
     }
 
     /** Approved service minutes per calendar day. Only days with service come back; the caller fills the rest (issue 133). */
-    public List<DayMinutesRow> serviceMinutesByDay(LocalDate start, LocalDate end) {
+    public List<DayMinutesRow> serviceMinutesByDay(LocalDate start, LocalDate end, ScopeDescriptor scope) {
+        MapSqlParameterSource params = new MapSqlParameterSource().addValue("start", start).addValue("end", end);
         String sql = """
-                select date_format(sr.service_date, '%Y-%m-%d') as ymd, sum(sr.duration_minutes) as minutes
+                select date_format(sr.service_date, '%%Y-%%m-%%d') as ymd, sum(sr.duration_minutes) as minutes
                 from service_record sr
-                where sr.status = 'APPROVED' and sr.service_date between :start and :end
+                where sr.status = 'APPROVED' and sr.service_date between :start and :end%s
                 group by ymd
                 order by ymd
-                """;
-        MapSqlParameterSource params = new MapSqlParameterSource().addValue("start", start).addValue("end", end);
+                """.formatted(recordScopeClause(scope, "sr", params));
         return jdbcTemplate.query(sql, params, (rs, rowNum) ->
                 new DayMinutesRow(rs.getString("ymd"), rs.getInt("minutes")));
     }
@@ -192,24 +198,30 @@ public class ReportQueryRepository {
      * so a project's hours never include service logged against it in a
      * different year from the one being asked about.</p>
      */
-    public List<TopProjectRow> topProjects(int limit, LocalDate start, LocalDate end) {
-        String sql = """
-                select p.id as project_id, p.title as title,
-                       (select count(distinct e.student_id) from enrollment e
-                         where e.project_id = p.id and e.status in ('CONFIRMED', 'COMPLETED')) as participants,
-                       (select coalesce(sum(sr.duration_minutes), 0) from service_record sr
-                         where sr.project_id = p.id and sr.status = 'APPROVED'
-                           and sr.service_date between :start and :end) as total_minutes
-                from project p
-                where exists (select 1 from enrollment e
-                               where e.project_id = p.id and e.status in ('CONFIRMED', 'COMPLETED'))
-                  and p.start_at >= :startAt and p.start_at < :endAtExclusive
-                order by participants desc, total_minutes desc
-                limit :limit
-                """;
+    public List<TopProjectRow> topProjects(int limit, LocalDate start, LocalDate end, ScopeDescriptor scope) {
         MapSqlParameterSource params = new MapSqlParameterSource().addValue("limit", limit)
                 .addValue("start", start).addValue("end", end)
                 .addValue("startAt", start.atStartOfDay()).addValue("endAtExclusive", end.plusDays(1).atStartOfDay());
+        // Scoped through the enrolled student, like the category figures: a
+        // project's rank "in my grades" is how many of my pupils joined it, not
+        // whether it happens to be open to them.
+        String enrolmentScope = scope instanceof ScopeDescriptor.All ? ""
+                : " and exists (select 1 from student st where st.id = e.student_id"
+                        + studentScopeClause(scope, "st", params) + ")";
+        String sql = """
+                select p.id as project_id, p.title as title,
+                       (select count(distinct e.student_id) from enrollment e
+                         where e.project_id = p.id and e.status in ('CONFIRMED', 'COMPLETED')%1$s) as participants,
+                       (select coalesce(sum(sr.duration_minutes), 0) from service_record sr
+                         where sr.project_id = p.id and sr.status = 'APPROVED'
+                           and sr.service_date between :start and :end%2$s) as total_minutes
+                from project p
+                where exists (select 1 from enrollment e
+                               where e.project_id = p.id and e.status in ('CONFIRMED', 'COMPLETED')%1$s)
+                  and p.start_at >= :startAt and p.start_at < :endAtExclusive
+                order by participants desc, total_minutes desc
+                limit :limit
+                """.formatted(enrolmentScope, recordScopeClause(scope, "sr", params));
         return jdbcTemplate.query(sql, params, (rs, rowNum) ->
                 new TopProjectRow(rs.getString("project_id"), rs.getString("title"), rs.getLong("participants"), rs.getLong("total_minutes")));
     }

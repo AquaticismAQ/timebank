@@ -1389,6 +1389,10 @@
       "credited": "credited"
     },
     "reports": {
+      "wholeSchool": "Whole school",
+      "myGrades": "My grades",
+      "seriesSchool": "Whole school",
+      "seriesMyGrades": "My grades",
       "title": "Reports",
       "dataUpdate": "Data updated: 2026-07-27 08:00",
       "export": "Export",

@@ -573,6 +573,10 @@ export interface ReportData {
   serviceHoursByDay: { day: string; minutes: number }[];
   /** Participation grouped by service category — the pie's source (issue 134). Enrolments, so the slices add up. */
   participationByCategory: { categoryId: string; participants: number; totalMinutes: number }[];
+  /** The same three figures narrowed to the caller's own grades (issue 135). All empty for a school-wide caller — showing an administrator two identical charts says nothing twice. */
+  serviceHoursByDayInScope: { day: string; minutes: number }[];
+  topProjectsInScope: { title: string; participants: number; totalMinutes: number }[];
+  participationByCategoryInScope: { categoryId: string; participants: number; totalMinutes: number }[];
   /** Minutes on the wire; render with `minutesToHours`. Issue 093 §9: this was
    *  `totalHours: Math.round(minutes / 60)`, which reported 150 minutes as 3h. */
   topProjects: { title: string; participants: number; totalMinutes: number }[];

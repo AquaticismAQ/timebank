@@ -265,8 +265,8 @@ class DashboardReportingIT extends AbstractIntegrationTest {
 
         // School-wide, so other fixtures in this class contribute months too —
         // asserted by which month appears in which year, not by exact totals.
-        ServiceHoursReportDto seededHours = reportService.serviceHours(SEEDED_YEAR_ID);
-        ServiceHoursReportDto laterHours = reportService.serviceHours(LATER_YEAR_ID);
+        ServiceHoursReportDto seededHours = reportService.serviceHours(SEEDED_YEAR_ID, adminAuthForReports());
+        ServiceHoursReportDto laterHours = reportService.serviceHours(LATER_YEAR_ID, adminAuthForReports());
         assertThat(months(seededHours)).contains("2025-10").doesNotContain("2026-09");
         assertThat(months(laterHours)).contains("2026-09").doesNotContain("2025-10");
     }
@@ -300,8 +300,8 @@ class DashboardReportingIT extends AbstractIntegrationTest {
                 registrationOpen.id(), new RegisterRequest(null), studentAuth(student.id()), "zh-CN");
         assertThat(enrollment.status()).isEqualTo("CONFIRMED");
 
-        TopProjectsReportDto aroundNow = reportService.topProjects(AROUND_NOW_YEAR_ID);
-        TopProjectsReportDto longPast = reportService.topProjects(LONG_PAST_YEAR_ID);
+        TopProjectsReportDto aroundNow = reportService.topProjects(AROUND_NOW_YEAR_ID, adminAuthForReports());
+        TopProjectsReportDto longPast = reportService.topProjects(LONG_PAST_YEAR_ID, adminAuthForReports());
 
         assertThat(aroundNow.topProjects()).extracting(TopProjectsReportDto.ProjectFigure::projectId)
                 .contains(published.id());
@@ -385,5 +385,10 @@ class DashboardReportingIT extends AbstractIntegrationTest {
                 userId, userId, "hash", "Test " + userId, true, false, "zh-CN", Set.of(roleCode), Set.of(), studentId, 480);
         CookieSessionUserDetails principal = new CookieSessionUserDetails(view);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+    }
+
+    /** School-wide, so these year-scope assertions see the unscoped figures. */
+    private org.springframework.security.core.Authentication adminAuthForReports() {
+        return authFor("usr_dash_admin", null, "admin");
     }
 }
