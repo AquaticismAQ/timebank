@@ -1,6 +1,7 @@
 # 111 — A user cannot change their own password, and the app tells them so
 
-**Status:** Open, not started. Filed 2026-09-20 on Aquaticism's report.
+**Status:** **Fixed** 2026-09-20, same day. Built on Docker and verified in a
+browser; **not yet deployed**.
 **Scope:** Frontend wiring plus two small backend loose ends. Every piece this
 needs already exists; nothing has to be designed from scratch (§4).
 
@@ -63,12 +64,18 @@ Both are small, and neither blocks §2.
   therefore stay flagged after doing exactly that.
 - **`mustChangePassword` never reaches the client.** It is a column and two audit
   summaries; it is absent from `AuthenticatedUserView`, so no screen can act on it
-  and nothing forces a change. The flag is currently inert. Either wire it (login
-  sees the flag → profile prompts → change clears it) or stop writing it; a flag
-  that is set and never read is a trap for whoever next assumes it works.
+  and nothing forces a change.
 
-Deciding between those two is worth a moment's thought rather than a default — if
-nothing is ever meant to force a password change, the column should go.
+**Decision (Aquaticism, 2026-09-20): keep the column, reserved.** It is held for a
+future forced-rotation policy — "a password older than N days must be changed" —
+rather than being dropped. Nothing sets it today and nothing reads it, and that is
+now a deliberate reservation rather than an oversight.
+
+The first half is therefore **fixed**: `changeOwnPassword` clears the flag. That is
+not tidiness but a precondition of the reserved feature — a forced-rotation prompt
+that survived the change answering it would trap the user in a loop they cannot
+exit. `SelfServicePasswordChangeIT` asserts it, and the assertion was confirmed by
+reverting the one line and watching it fail.
 
 ## 4. What already exists (do not rebuild)
 
@@ -84,7 +91,29 @@ nothing is ever meant to force a password change, the column should go.
 the backend rule, and that a rule relaxed in the browser buys a green tick
 followed by a server rejection. Reuse it; do not write a second strength check.
 
-## 5. What it must not do
+## 5. How it was built
+
+- `api.auth.changePassword(currentPassword, newPassword)` in the api client.
+- `components/shared/ChangePasswordDialog.tsx` — one component used by **both**
+  profile pages, so the student and staff experiences cannot drift apart. It
+  reuses `PasswordStrength` and `isAcceptable`; no second policy check was
+  written.
+- A **Change password** row on both profile pages, beside Account Security.
+- The four `accountSafety1` strings lost the sentence telling users to contact an
+  administrator. The rest of that advice — don't share your account, log out on
+  shared devices — is still true and stays.
+- `UserServiceImpl.changeOwnPassword` now clears `mustChangePassword` (§3).
+
+**Verified in a browser**, student portal, against the real backend: the entry
+opens the dialog; submit is disabled until the rules pass; **four weak variants
+were each refused** — too short, one character class only, long-but-guessable, and
+one containing the username — while an acceptable password enabled the button and
+a mismatched confirmation disabled it again. A wrong current password was refused
+with "Current password is incorrect." and the dialog stayed open. A correct change
+signed the user out to `/login`, after which the **old password returned 401 and
+the new one 200**.
+
+## 6. What it must not do
 
 - **Must not become password recovery.** No email, no reset link, no "forgot
   password". The endpoint requires the current password, and that requirement is

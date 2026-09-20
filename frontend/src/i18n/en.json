@@ -174,6 +174,15 @@
     }
   },
   "password": {
+    "change": {
+      "title": "Change password",
+      "currentLabel": "Current password",
+      "newLabel": "New password",
+      "confirmLabel": "Confirm new password",
+      "submit": "Change password",
+      "saving": "Changing...",
+      "signsYouOut": "Changing your password signs you out everywhere, including on this device. You will need to sign in again with the new password."
+    },
     "requirement": {
       "title": "Your password must:",
       "length": "Be at least {{min}} characters long (at most {{max}})",
@@ -572,7 +581,7 @@
       "email": "Email",
       "privacyTitle": "Account Security & Privacy",
       "accountSafety": "Account Security",
-      "accountSafety1": "Your account is managed by the school. Login credentials are your student ID and initial password. To change your password, please visit the Student Affairs Office or contact the system administrator.",
+      "accountSafety1": "Your account is managed by the school, and you sign in with your student number and your own password.",
       "accountSafety2": "Do not share your account and password with others. If you notice abnormal login activity, immediately inform your homeroom teacher or system administrator.",
       "accountSafety3": "After each use, we recommend manually logging out on public devices to protect your personal information.",
       "dataVisibility": "Data Visibility",
@@ -2034,7 +2043,7 @@
       "roles": "Roles",
       "privacyTitle": "Account Security & Privacy",
       "accountSafety": "Account Security",
-      "accountSafety1": "Your account is managed by the school. Login credentials are your username and password. To change your password, please contact the system administrator.",
+      "accountSafety1": "Your account is managed by the school, and you sign in with your username and your own password.",
       "accountSafety2": "Do not share your account and password with others. If you notice abnormal login activity, immediately inform the system administrator.",
       "accountSafety3": "After each use, we recommend manually logging out on public devices to protect your personal information.",
       "dataVisibility": "Data Visibility",

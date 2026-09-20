@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { LogOut, ChevronRight, Bell, Shield, HelpCircle, Moon, Sun, Monitor, Mail, Lock, Eye, Database, UserCheck, Globe, Pencil } from 'lucide-react';
+import { KeyRound, LogOut, ChevronRight, Bell, Shield, HelpCircle, Moon, Sun, Monitor, Mail, Lock, Eye, Database, UserCheck, Globe, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { ChangePasswordDialog } from '../shared/ChangePasswordDialog';
 import { useAuth, useTheme } from '../../App';
 import { type SchoolInfo } from '../../api/types';
 import { changeLanguage } from '../../lib/language';
@@ -15,6 +16,7 @@ export function AdminProfilePage() {
   const { user, logout, updateUser } = useAuth();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   const [schoolInfo, setSchoolInfo] = useState<SchoolInfo | null>(null);
 
@@ -190,6 +192,7 @@ export function AdminProfilePage() {
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         {[
           { icon: Shield, label: t('admin.profile.accountSecurity'), action: () => setShowPrivacyModal(true) },
+          { icon: KeyRound, label: t('password.change.title'), action: () => setShowChangePassword(true) },
           { icon: HelpCircle, label: t('admin.profile.helpRules'), action: () => {} },
         ].map((item, i) => (
           <button
@@ -375,6 +378,21 @@ export function AdminProfilePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showChangePassword && (
+        <ChangePasswordDialog
+          username={user?.username}
+          onClose={() => setShowChangePassword(false)}
+          onChanged={() => {
+            setShowChangePassword(false);
+            // The server has already revoked every session, this one included, so
+            // there is nothing left to render against — clear the local session and
+            // send them to log in with the password they just chose.
+            logout();
+            navigate('/login');
+          }}
+        />
       )}
     </div>
   );

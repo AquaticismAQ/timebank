@@ -243,6 +243,23 @@ export const api = {
     async logout(): Promise<void> {
       await http.post<void>('/auth/logout');
     },
+    /**
+     * Changes the signed-in user's own password (issue 111).
+     *
+     * <p>Not password *recovery* — that deliberately does not exist
+     * (`Design/*\/08-mlps-level1-security-design-guide.md` §8.1/§8.2, issue 089).
+     * `currentPassword` is what makes this safe to expose: the caller proves who
+     * they are by supplying the credential they already hold, which a forgotten
+     * password by definition cannot do.</p>
+     *
+     * <p><b>Every session is revoked server-side, including this one.</b> The
+     * caller is signed out by the time this resolves, so the only correct thing
+     * to do next is send the user to the login page — anything else renders
+     * against a session that no longer exists.</p>
+     */
+    async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+      await http.post<void>('/me/change-password', { currentPassword, newPassword });
+    },
     // I3.4: `PATCH /me/profile` — self-service fields only (displayName/
     // email/preferredLanguage). `localStorage['timebank-lang']` stays as a
     // cache for the pre-login paint only; once a real session exists this

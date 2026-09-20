@@ -174,6 +174,15 @@
     }
   },
   "password": {
+    "change": {
+      "title": "修改密码",
+      "currentLabel": "当前密码",
+      "newLabel": "新密码",
+      "confirmLabel": "确认新密码",
+      "submit": "修改密码",
+      "saving": "正在修改…",
+      "signsYouOut": "修改密码会让你在所有设备（包括当前设备）上退出登录，之后需要用新密码重新登录。"
+    },
     "requirement": {
       "title": "你的密码需要做到：",
       "length": "至少 {{min}} 个字符（最多 {{max}} 个）",
@@ -572,7 +581,7 @@
       "email": "邮箱",
       "privacyTitle": "账号安全与隐私",
       "accountSafety": "账号安全",
-      "accountSafety1": "您的账号由学校统一管理，登录凭证为学号与初始密码；如需修改密码，请前往学生事务处或联系系统管理员。",
+      "accountSafety1": "您的账号由学校统一管理，使用学号与您自己设置的密码登录。",
       "accountSafety2": "请勿将账号及密码分享给他人。若发现账号异常登录，请立即告知班主任或系统管理员。",
       "accountSafety3": "每次使用完毕后，建议在公共设备上手动退出登录，以保护个人信息安全。",
       "dataVisibility": "数据可见范围",
@@ -2034,7 +2043,7 @@
       "roles": "角色",
       "privacyTitle": "账号安全与隐私",
       "accountSafety": "账号安全",
-      "accountSafety1": "您的账号由学校统一管理，登录凭证为用户名与密码；如需修改密码，请联系系统管理员。",
+      "accountSafety1": "您的账号由学校统一管理，使用用户名与您自己设置的密码登录。",
       "accountSafety2": "请勿将账号及密码分享给他人。若发现账号异常登录，请立即告知系统管理员。",
       "accountSafety3": "每次使用完毕后，建议在公共设备上手动退出登录，以保护个人信息安全。",
       "dataVisibility": "数据可见范围",

@@ -334,6 +334,12 @@ class UserServiceImpl implements UserService {
         }
         PasswordPolicy.validate(newPassword, user.getUsername());
         user.setPasswordHash(passwordEncoder.encode(newPassword));
+        // Satisfied by doing the thing it asks for. The column is kept for a
+        // future forced-rotation policy (a password older than N days must be
+        // changed), and such a policy is only coherent if completing the change
+        // clears the flag — otherwise the prompt would survive the action that
+        // answers it and the user could never get past it.
+        user.setMustChangePassword(false);
         user.setUpdatedAt(Instant.now());
 
         auditService.record(new AuditEntry(userId, null, "user.changePassword", "user", user.getId(),
