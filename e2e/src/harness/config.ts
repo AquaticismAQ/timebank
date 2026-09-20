@@ -40,10 +40,18 @@ export function loadConfig(cli: {
     );
   }
 
-  const evidenceDir = resolve(cli.evidenceDir ?? process.env.EVIDENCE_DIR ?? join(repoRoot, '..', 'test-evidence'));
+  // `demo-evidence`, not `test-evidence`. The latter holds a genuine volunteer
+  // log sheet carrying a real school's name and crest — nothing committed, since
+  // both folders sit outside the repo, but a demonstration puts whatever it
+  // uploads on a projector, and that is the exposure this repo has twice had to
+  // rewrite its history to undo. The demo set is the same shape of document
+  // built from the placeholder names (`scripts/make-demo-evidence.ts`).
+  // `EVIDENCE_DIR` still points anywhere you like.
+  const evidenceDir = resolve(cli.evidenceDir ?? process.env.EVIDENCE_DIR ?? join(repoRoot, '..', 'demo-evidence'));
   if (!existsSync(evidenceDir)) {
     throw new Error(
-      `Evidence directory not found: ${evidenceDir}. Set EVIDENCE_DIR or pass --evidence-dir. `
+      `Evidence directory not found: ${evidenceDir}. Generate it with `
+      + '`pnpm tsx scripts/make-demo-evidence.ts`, or set EVIDENCE_DIR / --evidence-dir. '
       + 'Without it the upload step is skipped and submit fails later with a confusing EVIDENCE_REQUIRED.',
     );
   }
