@@ -2047,6 +2047,9 @@
       }
     },
     "profile": {
+      "assignedGrades": "负责年级：",
+      "assignedGradesAll": "全校",
+      "assignedGradesNone": "尚未分配年级",
       "title": "我的",
       "languageTitle": "语言",
       "langZh": "中文",

@@ -1428,3 +1428,13 @@ Issue 130, Aquaticism's answer to the follow-up 129 §4 left open, plus a second
 **Two existing fixtures broke, which is the right outcome.** Both published drafts with already-closed windows as a shortcut — one to reach auto-archive directly, one to seed a past year's project. Both now reach their state the way a real row does: published with a live window, then dated afterwards. Assertions unchanged; only the route, and the new route is production's.
 
 **Verified live with controls**: a Grade 6 draft is refused 403 while a draft including grade 10 publishes 200; the draft menu shows 发布 in scope and only 查看 out of it; and staling a real draft's window produces the dialog, whose Edit-dates button opens 编辑项目 on that project. The draft's original date was restored afterwards.
+
+### 41.26 A teacher can now see which grades they are assigned to (2026-09-20)
+
+Issue 131, reported by Aquaticism. Nothing in the app showed a teacher their own grade assignment — harmless until this week, and not any more: since issues 129 and 130 that assignment decides what they may edit and publish, so the first encounter with it would otherwise be a project whose menu says *View* where a colleague's says *Edit*, with nothing on screen explaining why.
+
+The data was already on the client (`/me`'s `scopeGradeIds`, used by `StudentList` since issue 004); it was simply never shown to the person it describes. The Admin Portal profile card now shows it in three states: the grade names for a teacher, **the whole school** for `admin`/`sysadmin` (who carry no grade bond because they are school-wide — saying so beats an empty row), and **no grades assigned** in warning colours for a teacher with none, who can edit only their own projects and would otherwise have no way to find that out.
+
+**Verified across four accounts and both languages** rather than one, since a card printing the same thing for everyone would pass a single-account check.
+
+**A false alarm worth recording**: an earlier run showed `Grade 10` on a Chinese page, and the obvious conclusion — a broken `Accept-Language` — was wrong. The app stores `zh` and maps exactly that to `zh-CN`; the English names came from the probe writing `timebank-lang=zh-CN` into `localStorage` directly, a value the app never writes. That also explains an earlier sighting of English category names on Chinese Project Management: same harness, not a defect.

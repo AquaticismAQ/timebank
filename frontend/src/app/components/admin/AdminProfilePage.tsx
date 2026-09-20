@@ -10,6 +10,7 @@ import { changeLanguage } from '../../lib/language';
 import { api } from '../../api/client';
 import { useFieldErrors, handleMutationError, FieldError } from '../../api/useFieldErrors';
 import { useEscapeToClose } from '../../lib/useEscapeToClose';
+import { useDictionaries } from '../../api/useDictionaries';
 
 export function AdminProfilePage() {
   const { t, i18n } = useTranslation();
@@ -40,6 +41,16 @@ export function AdminProfilePage() {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   const [editingBasicInfo, setEditingBasicInfo] = useState(false);
+  /**
+   * `scopeGradeIds` are ids; the card shows names, resolved through the same
+   * dictionary every other screen uses. admin/sysadmin carry no grade bond
+   * because they are school-wide — saying so is more useful than an empty row.
+   */
+  const { grades } = useDictionaries();
+  const schoolWide = (user?.roles ?? []).some(r => r === 'admin' || r === 'sysadmin');
+  const assignedGrades = (user?.scopeGradeIds ?? [])
+    .map(id => grades.find(g => g.id === id)?.name ?? id);
+
   const [basicForm, setBasicForm] = useState({ displayName: '', email: '' });
   const [savingBasicInfo, setSavingBasicInfo] = useState(false);
 
@@ -115,6 +126,30 @@ export function AdminProfilePage() {
             {user?.roles.map(r => roleLabels[r] ?? r).join(' · ')}
           </div>
           <div className="text-xs text-muted-foreground mt-0.5">{user?.email}</div>
+          {/* Which grades this account is responsible for (issue 131).
+              Nowhere in the app said, and since issues 129/130 it decides what
+              a teacher may edit and publish — so it is not trivia, it is the
+              answer to "why can I not change this project". */}
+          <div className="text-xs mt-1.5 flex items-center gap-1.5 flex-wrap">
+            <span className="text-muted-foreground">{t('admin.profile.assignedGrades')}</span>
+            {schoolWide ? (
+              <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                {t('admin.profile.assignedGradesAll')}
+              </span>
+            ) : assignedGrades.length > 0 ? (
+              assignedGrades.map(name => (
+                <span key={name} className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                  {name}
+                </span>
+              ))
+            ) : (
+              // Not cosmetic: an unassigned teacher can only edit their own
+              // projects, and would otherwise have no way to find that out.
+              <span className="px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">
+                {t('admin.profile.assignedGradesNone')}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

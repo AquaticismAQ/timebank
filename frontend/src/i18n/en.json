@@ -2047,6 +2047,9 @@
       }
     },
     "profile": {
+      "assignedGrades": "Responsible for:",
+      "assignedGradesAll": "The whole school",
+      "assignedGradesNone": "No grades assigned",
       "title": "Profile",
       "languageTitle": "Language",
       "langZh": "Chinese",
