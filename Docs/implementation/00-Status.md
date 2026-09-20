@@ -1330,3 +1330,13 @@ It did, and so did everything else. `handleMutationError` is the single funnel f
 **Verified on the deployed build in both languages**: the archive conflict still renders with its special case deleted (and with a localized Refresh action), a new code arrives in the envelope, and a validation failure produces a general toast plus four localized inline markers. The first attempt put a field-only message in the toast with no field named — found by reading the toast, and the reason `FIELD_ONLY_CODES` exists.
 
 **`mvn verify` fails 26 integration tests, identically before and after this change** (stash-and-rerun diff empty both ways). Pre-existing on `main`, listed in the issue doc, and worth their own investigation.
+
+### 41.18 Saving a project no longer 500s on its own partner organization (2026-09-20)
+
+Issue 122, found while verifying 121 rather than reported — the failure surfaced as a generic `INTERNAL_ERROR`, which is precisely the class of message that work made legible.
+
+`updateDraft` maintained the `project_organization` PARTNER row by deleting it and saving a fresh one. **Hibernate orders inserts before deletes at flush**, whatever order they were requested in, so when the organization was unchanged the insert went first and hit `uk_project_organization_role`. That is the ordinary edit — correct a location, leave the partner alone — while the unusual one (actually changing the partner) produced two different rows and passed. It also broke issue 119's Copy to draft, whose whole design is "create the draft, then open it for editing": a copy inherits the source's partner, so Save in that dialog failed every time.
+
+Fixed by flushing the delete before the insert. A guard that skipped the rewrite when the organization was unchanged was tried first and dropped: red-checking each half separately showed the flush alone is sufficient and the guard alone is not, so keeping both would have left a branch reading as load-bearing next to the real repair.
+
+**Verified** by a new IT that saves twice with the same partner id (what the edit dialog sends) and then changes it, red-checked both ways, plus the deployed server returning 200 and the success toast on the exact save that had returned 500 twenty minutes earlier.

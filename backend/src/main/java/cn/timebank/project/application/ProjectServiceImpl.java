@@ -211,6 +211,15 @@ class ProjectServiceImpl implements ProjectService {
             requirePartnerOrganization(request.organizationId(), schoolOrgId);
             project.setOrganizationId(request.organizationId());
             projectOrganizationRepository.deleteByProjectIdAndRole(project.getId(), ProjectOrganizationRole.PARTNER);
+            // The flush is the whole fix, not a precaution (issue 122).
+            //
+            // Hibernate orders inserts before deletes at flush regardless of the
+            // order they were requested in. So delete-then-save of the *same*
+            // (project, organization, PARTNER) triple sent the insert first and
+            // hit `uk_project_organization_role` — a 500 on every ordinary save
+            // of a project whose partner organization was left alone, which is
+            // the most common edit there is.
+            projectOrganizationRepository.flush();
             projectOrganizationRepository.save(new ProjectOrganization(OpaqueIds.generate("porg"), project.getId(),
                     request.organizationId(), ProjectOrganizationRole.PARTNER, 1));
         }

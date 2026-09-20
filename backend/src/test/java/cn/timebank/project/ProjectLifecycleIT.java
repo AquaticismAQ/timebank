@@ -6,6 +6,9 @@ import cn.timebank.enrollment.application.EnrollmentService;
 import cn.timebank.enrollment.application.dto.EnrollmentDto;
 import cn.timebank.enrollment.application.dto.EnrollmentRequests.RegisterRequest;
 import cn.timebank.iam.application.dto.AuthenticatedUserView;
+import cn.timebank.organization.application.OrganizationService;
+import cn.timebank.organization.application.dto.OrganizationDto;
+import cn.timebank.organization.application.dto.OrganizationRequests;
 import cn.timebank.project.application.ProjectService;
 import cn.timebank.project.application.dto.ProjectDto;
 import cn.timebank.project.application.dto.ProjectRequests.CancelProjectRequest;
@@ -53,6 +56,8 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
     private EnrollmentService enrollmentService;
     @Autowired
     private AuditLogQueryService auditLogQueryService;
+    @Autowired
+    private OrganizationService organizationService;
 
     @Test
     void registrationOpenArchivesAutomaticallyWithZeroRegistrantsInsteadOfClosing() {
@@ -237,6 +242,51 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
                 .hasMessageContaining("cannot be edited");
         assertThat(projectService.getDetail(archived.id(), adminAuth(), "zh-CN").title())
                 .isEqualTo("Archived Edit Test");
+    }
+
+    /**
+     * Issue 122. Saving a project without touching its partner organization used
+     * to 500: `updateDraft` deleted the `project_organization` row and saved an
+     * identical one, and Hibernate orders inserts before deletes at flush, so
+     * the insert hit `uk_project_organization_role`. That is the most ordinary
+     * edit there is — change a location, leave the partner alone.
+     */
+    @Test
+    void savingAProjectTwiceWithoutChangingItsPartnerOrganizationSucceeds() {
+        OrganizationDto partner = organizationService.create(
+                new OrganizationRequests.CreateOrganizationRequest(
+                        "Partner Flush Test Org", "COMMUNITY", "A partner", "Contact",
+                        "contact@example-township-school.edu", "13800000000", "Address"),
+                "usr_test_admin");
+
+        Instant start = Instant.now().plus(5, ChronoUnit.DAYS);
+        CreateProjectRequest request = new CreateProjectRequest(
+                "Partner Flush Test Project", "summary", "description", "cat_campus", partner.id(), null, "OFF_CAMPUS",
+                start, start.plusSeconds(7200), "Hall", 10, 100, null, null,
+                Instant.now().plusSeconds(1000), Instant.now().plusSeconds(2000));
+        ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
+
+        // The same partner id, resent — which is exactly what the edit dialog does.
+        UpdateProjectRequest moveIt = new UpdateProjectRequest(
+                null, null, null, null, partner.id(), null, null,
+                null, null, "Library, second floor", null, null, null, null, null, null, draft.version());
+        ProjectDto updated = projectService.updateDraft(draft.id(), moveIt, "usr_test_admin", true, "zh-CN");
+        assertThat(updated.location()).isEqualTo("Library, second floor");
+        assertThat(updated.organizationId()).isEqualTo(partner.id());
+
+        // And changing it really does still move the row, rather than the guard
+        // above quietly skipping the write.
+        OrganizationDto other = organizationService.create(
+                new OrganizationRequests.CreateOrganizationRequest(
+                        "Partner Flush Test Org Two", "COMMUNITY", "Another partner", "Contact",
+                        "contact2@example-township-school.edu", "13800000001", "Address"),
+                "usr_test_admin");
+        UpdateProjectRequest swapPartner = new UpdateProjectRequest(
+                null, null, null, null, other.id(), null, null,
+                null, null, null, null, null, null, null, null, null, updated.version());
+        ProjectDto swapped = projectService.updateDraft(draft.id(), swapPartner, "usr_test_admin", true, "zh-CN");
+        assertThat(swapped.organizationId()).isEqualTo(other.id());
+        assertThat(swapped.organizationName()).isEqualTo("Partner Flush Test Org Two");
     }
 
     /** The other half of issue 119's guard: a live project is still correctable. */
