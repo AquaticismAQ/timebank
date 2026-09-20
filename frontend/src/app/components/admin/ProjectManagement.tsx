@@ -18,6 +18,7 @@ import { GradePicker } from '../GradePicker';
 import { minutesToHours } from '../../lib/format';
 import { ListSearchInput } from '../ListSearchInput';
 import { useEscapeToClose } from '../../lib/useEscapeToClose';
+import { useBodyScrollLock } from '../../lib/useBodyScrollLock';
 
 const colorMap: Record<string, string> = {
   gray:   'bg-muted text-muted-foreground',
@@ -127,6 +128,9 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, re
   // role_teacher never holds, reused here rather than inventing a dedicated
   // "isAdmin" signal (02-PorjectOrganization.md §3).
   const canReassignOwner = hasPermission('projects.archive');
+  // Mounted only while open; unlike this file's other two shells it does not
+  // register with `useEscapeToClose`, so it asks for the lock (issue 126).
+  useBodyScrollLock();
   const set = (patch: Partial<EditForm>) => onChange(patch);
   const fe = (field: string, ...aliases: string[]) => getFieldError?.(field, ...aliases);
   const edit = (field: string, patch: Partial<EditForm>) => { onFieldEdit?.(field); set(patch); };
@@ -160,7 +164,7 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, re
             — the grade buttons and the owner picker included, and any field
             added here later, which is the useful half. A field that accepts
             typing it cannot save is worse than either state. */}
-        <div className="overflow-y-auto px-5 py-5 text-sm">
+        <div className="overflow-y-auto px-5 py-5 text-sm overscroll-contain">
         <fieldset disabled={readOnly} className="space-y-5 min-w-0 border-0 m-0 p-0 disabled:opacity-80">
 
           {/* Basic info */}
@@ -835,7 +839,7 @@ export function ProjectManagement() {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           {/* Decorative only — see issue 102. */}
           <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
-          <div className="relative bg-card border border-border rounded-2xl p-6 w-full sm:max-w-2xl max-w-[calc(100%-2rem)] mx-4 mb-4 sm:mb-0 z-50 max-h-[80vh] overflow-y-auto">
+          <div className="relative bg-card border border-border rounded-2xl p-6 w-full sm:max-w-2xl max-w-[calc(100%-2rem)] mx-4 mb-4 sm:mb-0 z-50 max-h-[80vh] overflow-y-auto overscroll-contain">
             <h3 className="text-foreground mb-4">{t('admin.projects.newProjectTitle')}</h3>
             <div className="space-y-3">
               <div>

@@ -69,7 +69,7 @@ export function DetailWorkbench({
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto px-5 py-5 space-y-5 text-sm flex-1">
+        <div className="overflow-y-auto px-5 py-5 space-y-5 text-sm flex-1 overscroll-contain">
           {active?.content}
         </div>
 

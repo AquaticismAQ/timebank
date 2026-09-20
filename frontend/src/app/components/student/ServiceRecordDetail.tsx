@@ -89,7 +89,7 @@ export function ServiceRecordDetail({ recordId, onClose }: { recordId: string; o
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5 overscroll-contain">
           {error && <p className="text-sm text-destructive">{error}</p>}
           {!record && !error && <p className="text-sm text-muted-foreground">{t('common.loading')}</p>}
 

@@ -384,7 +384,7 @@ export function ActivationSlips() {
               <h3 className="flex-1 text-foreground text-sm">{t('admin.system.slips.confirmTitle')}</h3>
             </div>
 
-            <div className="overflow-y-auto px-5 py-4 space-y-3 text-sm">
+            <div className="overflow-y-auto px-5 py-4 space-y-3 text-sm overscroll-contain">
               <p className="text-foreground">
                 {countIsKnown
                   ? t('admin.system.slips.confirmLead', { count: preview.issuable, className: selectedClassLabel })

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useBodyScrollLock } from '../../lib/useBodyScrollLock';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle, XCircle, RotateCcw, AlertTriangle, Clock, MoreHorizontal, Send } from 'lucide-react';
 import { toast } from 'sonner';
@@ -51,6 +52,10 @@ export function AuditCenter() {
   const [detailTimelineLoading, setDetailTimelineLoading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [decisionModal, setDecisionModal] = useState<{ id: string; action: 'approve' | 'return' | 'reject' } | null>(null);
+  // Inline JSX rather than a mounted component, and it does not register
+  // with `useEscapeToClose`, so the page lock is driven off its own flag
+  // (issue 126).
+  useBodyScrollLock(Boolean(decisionModal));
   const [decisionComment, setDecisionComment] = useState('');
   const [decisionReason, setDecisionReason] = useState('');
   const [bulkFailures, setBulkFailures] = useState<BulkFailure[]>([]);
@@ -529,7 +534,7 @@ export function AuditCenter() {
                 rows={10}
                 maxLength={1000}
                 placeholder={decisionModal.action === 'approve' ? t('admin.audit.placeholderApprove') : t('admin.audit.placeholderReject')}
-                className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono resize-none overflow-y-auto whitespace-pre-wrap"
+                className="w-full px-4 py-3 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono resize-none overflow-y-auto whitespace-pre-wrap overscroll-contain"
               />
             </div>
 

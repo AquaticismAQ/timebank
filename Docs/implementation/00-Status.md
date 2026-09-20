@@ -1372,3 +1372,15 @@ It also disagreed with its own neighbours: `student.proposals.estimatedHours`, `
 Now `Verified Duration (hours)` / `认定时长（小时）` — not `Verified Hours (hours)`, which is what "add the unit" literally asks for and reads as a stammer. The English said "Hours" where the Chinese said "时长", so the two were never translations of each other; naming it *duration* in both lets the unit sit where every neighbouring field already puts it. Both the New Project and Edit dialogs render the same key, so both changed — fixing only the reported one would have left the pair disagreeing about the same field.
 
 Verified on the deployed build in both dialogs and both languages; the stored value is untouched and durations stay integer minutes on the wire.
+
+### 41.22 Dialogs no longer scroll the page behind them (2026-09-20)
+
+Issue 126, reported by Aquaticism: a dialog with nothing to scroll passes the wheel through to the page, and one that does scroll passes it on once it reaches its end.
+
+Two symptoms, one cause. **The document is this app's scroller** — `AppShell` is `min-h-screen`, so it grows with its content and `<main>`'s `overflow-auto` never becomes a scroll container (measured: `scrollingElement HTML`, 2976 > 700, `mainScrollable: false`). Nothing held the page still while a dialog was open, so wheeling inside one moved the page 0 → 1500px.
+
+`overscroll-contain` is the usual advice and only covers the second symptom: it stops a scroll *container* handing on at its boundary, and the first case has no container and no boundary. So the page itself is now held still by a depth-counted body lock, with `overscroll-contain` added to 25 dialog scroll panels as well — useful for scrollers *inside* a dialog and for any shell outside the lock.
+
+The lock hangs off `useEscapeToClose`, which is already where every modal announces it is open (19 files, and it already reasons about nesting). Four shells don't register with it and ask directly: `ChangePasswordDialog`, `StudentRecords`, `AuditCenter`'s decision modal and `ProjectManagement`'s `EditModal`. Giving those four Escape as well was deliberately not done — one line each, but it changes keyboard behaviour that is issue 102's question, not this one.
+
+**Verified on the deployed build with the control first** — a page that never scrolls would pass every other check: no dialog → 0 → 2276; dialog open → 21 → 21; panel at its end → 21 → 21; after close → `overflow` restored and 21 → 2276. And the failure worse than the bug, a permanently frozen page, checked on the shell that can only be closed by its own button: locks on open, releases on Cancel, scrolls again. **Not exercised: two dialogs open at once**, so the depth counter is argued rather than demonstrated — recorded in the issue doc.

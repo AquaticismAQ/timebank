@@ -309,7 +309,7 @@ export function AdminProfilePage() {
             </div>
 
             {/* Scrollable body */}
-            <div className="overflow-y-auto px-5 py-4 space-y-5 text-sm">
+            <div className="overflow-y-auto px-5 py-4 space-y-5 text-sm overscroll-contain">
 
               {/* Sections */}
               {[

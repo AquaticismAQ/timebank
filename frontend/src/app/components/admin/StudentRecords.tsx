@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useBodyScrollLock } from '../../lib/useBodyScrollLock';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '../../api/client';
@@ -21,6 +22,10 @@ export function StudentRecords({ studentId, studentName, onClose }: { studentId:
   const { items, page, loading, error, setPage } =
     usePagedApi(api.serviceRecords.list, { filter: { studentId }, sort: '-serviceDate' });
 
+  // Mounted only while open, and it does not register with
+  // `useEscapeToClose`, so the page lock is asked for here (issue 126).
+  useBodyScrollLock();
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Backdrop is decorative only — no onClick, matching the other review modals (an accidental outside click must not dismiss this). */}
@@ -33,7 +38,7 @@ export function StudentRecords({ studentId, studentName, onClose }: { studentId:
           </div>
         </div>
 
-        <div className="overflow-y-auto px-5 py-4 space-y-2 flex-1">
+        <div className="overflow-y-auto px-5 py-4 space-y-2 flex-1 overscroll-contain">
           <ListStateBanner error={error} empty={!loading && items.length === 0} emptyLabel={t('admin.students.noRecords')} />
           {items.map(record => {
             const isExpanded = expandedId === record.id;

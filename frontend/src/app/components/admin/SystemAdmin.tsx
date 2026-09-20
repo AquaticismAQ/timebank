@@ -161,7 +161,7 @@ function RuleFormModal({ mode, initial, onClose, onSaved }: RuleFormModalProps) 
           <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">{t('admin.system.rules.draftWarning')}</p>
         </div>
 
-        <div className="overflow-y-auto px-5 py-4 space-y-5 text-sm">
+        <div className="overflow-y-auto px-5 py-4 space-y-5 text-sm overscroll-contain">
           {RULE_FIELD_GROUPS.map(group => (
             <div key={group.titleKey}>
               <h4 className="text-xs text-muted-foreground uppercase tracking-wide mb-2">{t(group.titleKey)}</h4>
@@ -248,7 +248,7 @@ function PublishRuleModal({ rule, onClose, onPublished }: PublishRuleModalProps)
           <h3 className="flex-1 text-foreground text-sm">{t('admin.system.rules.publishTitle')}</h3>
         </div>
 
-        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
+        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm overscroll-contain">
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 flex gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">{t('admin.system.rules.publishWarning')}</p>
@@ -332,7 +332,7 @@ function SchoolInfoEditModal({ initial, onClose, onSaved }: SchoolInfoEditModalP
           <h3 className="flex-1 text-foreground text-sm">{t('admin.system.editSchoolInfo')}</h3>
         </div>
 
-        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
+        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm overscroll-contain">
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.system.schoolName')}</label>
             <input type="text" value={form.name} maxLength={255} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -721,7 +721,7 @@ function ExportCard({ type, filters, onFilterChange, onExport, gradeOptions, cla
               <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
               <h3 className="flex-1 text-foreground text-sm">{t('admin.system.exportConfirmTitle')}</h3>
             </div>
-            <div className="overflow-y-auto px-5 py-4 space-y-3 text-sm">
+            <div className="overflow-y-auto px-5 py-4 space-y-3 text-sm overscroll-contain">
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 flex gap-2.5">
                 <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
@@ -998,7 +998,7 @@ function UserModal({ mode, initial, roles, onClose, onSave, onDelete, onUnlock }
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
+        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm overscroll-contain">
 
           {/* Username (create). Its own field since issue 096 §1: it was
               `email.split('@')[0]`, which is why an optional contact field was

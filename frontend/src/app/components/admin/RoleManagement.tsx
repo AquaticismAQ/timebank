@@ -267,7 +267,7 @@ function RoleFormModal({ mode, role, permissions, templates, onClose, onSave }: 
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 text-sm">
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 text-sm overscroll-contain">
           {mode === 'create' && (
             <div>
               <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.roles.codeLabel')} *</label>
@@ -397,7 +397,7 @@ function RoleTemplateFormModal({ mode, template, permissions, onClose, onSave }:
           <h3 className="flex-1 text-foreground">{mode === 'create' ? t('admin.roles.createTemplate') : t('admin.roles.editTemplate')}</h3>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 text-sm">
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 text-sm overscroll-contain">
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5">{t('admin.roles.nameLabel')} *</label>
             <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}

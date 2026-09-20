@@ -586,7 +586,7 @@ export function StudentList() {
             </div>
 
             {/* Form body */}
-            <div className="overflow-y-auto px-5 py-4 space-y-4">
+            <div className="overflow-y-auto px-5 py-4 space-y-4 overscroll-contain">
 
               {/* Identity fields */}
               <div className="grid grid-cols-2 gap-3">

@@ -212,7 +212,7 @@ export function OrganizationManagement() {
               <Building2 className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
               <h3 className="text-foreground leading-tight flex-1">{t('admin.organizations.newOrg')}</h3>
             </div>
-            <div className="overflow-y-auto px-5 py-5 space-y-3 text-sm">
+            <div className="overflow-y-auto px-5 py-5 space-y-3 text-sm overscroll-contain">
               <OrgFormFields form={createForm} onChange={patch => setCreateForm(f => ({ ...f, ...patch }))} getFieldError={fieldErrors.getError} onFieldEdit={fieldErrors.clearField} />
             </div>
             <div className="px-5 py-4 border-t border-border shrink-0 flex gap-3">
@@ -237,7 +237,7 @@ export function OrganizationManagement() {
                 <p className="text-xs text-muted-foreground truncate">{editOrg.name}</p>
               </div>
             </div>
-            <div className="overflow-y-auto px-5 py-5 space-y-3 text-sm">
+            <div className="overflow-y-auto px-5 py-5 space-y-3 text-sm overscroll-contain">
               <OrgFormFields form={editForm} onChange={patch => setEditForm(f => f && ({ ...f, ...patch }))} getFieldError={fieldErrors.getError} onFieldEdit={fieldErrors.clearField} />
             </div>
             <div className="px-5 py-4 border-t border-border shrink-0 flex gap-3">

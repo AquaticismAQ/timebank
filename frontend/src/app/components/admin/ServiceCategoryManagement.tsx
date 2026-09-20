@@ -245,7 +245,7 @@ export function ServiceCategoryManagement() {
               <Tags className="w-5 h-5 text-[oklch(0.488_0.243_264.376)] shrink-0" />
               <h3 className="text-foreground leading-tight flex-1">{t('admin.categories.newCategory')}</h3>
             </div>
-            <div className="overflow-y-auto px-5 py-5 space-y-3 text-sm">
+            <div className="overflow-y-auto px-5 py-5 space-y-3 text-sm overscroll-contain">
               <CategoryNameFields form={createForm} onChange={patch => setCreateForm(f => ({ ...f, ...patch }))}
                 getFieldError={fieldErrors.getError} onFieldEdit={fieldErrors.clearField} />
             </div>
@@ -271,7 +271,7 @@ export function ServiceCategoryManagement() {
                 <p className="text-xs text-muted-foreground truncate font-mono">{editCategory.code}</p>
               </div>
             </div>
-            <div className="overflow-y-auto px-5 py-5 space-y-3 text-sm">
+            <div className="overflow-y-auto px-5 py-5 space-y-3 text-sm overscroll-contain">
               <CategoryNameFields form={editForm} onChange={patch => setEditForm(f => f && ({ ...f, ...patch }))}
                 getFieldError={fieldErrors.getError} onFieldEdit={fieldErrors.clearField} />
               <label className="flex items-center gap-2 text-sm text-foreground">

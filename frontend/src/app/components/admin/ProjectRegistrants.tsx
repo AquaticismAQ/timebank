@@ -95,7 +95,7 @@ export function ProjectRegistrants({ projectId, projectTitle, onClose }: { proje
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
-      <div className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 mb-4 sm:mb-0 z-50 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 mb-4 sm:mb-0 z-50 max-h-[85vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-foreground">{t('admin.projects.registrants')}</h3>

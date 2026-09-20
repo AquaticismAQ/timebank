@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useBodyScrollLock } from '../../lib/useBodyScrollLock';
 import { useTranslation } from 'react-i18next';
 import { KeyRound, AlertTriangle } from 'lucide-react';
 import { api } from '../../api/client';
@@ -69,6 +70,10 @@ export function ChangePasswordDialog({ username, onClose, onChanged }: {
     }
   };
 
+  // This dialog does not use `useEscapeToClose`, so it asks for the page
+  // lock directly — it is mounted only while open (issue 126).
+  useBodyScrollLock();
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* No backdrop click-to-close: issue 102 — a half-typed password should not
@@ -81,7 +86,7 @@ export function ChangePasswordDialog({ username, onClose, onChanged }: {
           <h3 className="flex-1 text-foreground text-sm">{t('password.change.title')}</h3>
         </div>
 
-        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm">
+        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm overscroll-contain">
           <div className="flex gap-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
             <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">

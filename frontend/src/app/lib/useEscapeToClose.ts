@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useBodyScrollLock } from './useBodyScrollLock';
 
 /**
  * Closes the topmost open modal on `Escape` (issue 102 §5, reversed on the
@@ -49,6 +50,12 @@ function onKeyDown(event: KeyboardEvent) {
  *        several of these in one component.
  */
 export function useEscapeToClose(onClose: () => void, enabled = true) {
+  // Registering here is how a modal announces that it is open, so this is the
+  // one place that already knows about every dialog — and holding the page
+  // still is the other thing being open has to mean (issue 126). A modal that
+  // does not use this hook has to ask for the lock itself; three do.
+  useBodyScrollLock(enabled);
+
   useEffect(() => {
     if (!enabled) {
       return;
