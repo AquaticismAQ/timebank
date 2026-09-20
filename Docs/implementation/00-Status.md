@@ -1340,3 +1340,11 @@ Issue 122, found while verifying 121 rather than reported — the failure surfac
 Fixed by flushing the delete before the insert. A guard that skipped the rewrite when the organization was unchanged was tried first and dropped: red-checking each half separately showed the flush alone is sufficient and the guard alone is not, so keeping both would have left a branch reading as load-bearing next to the real repair.
 
 **Verified** by a new IT that saves twice with the same partner id (what the edit dialog sends) and then changes it, red-checked both ways, plus the deployed server returning 200 and the success toast on the exact save that had returned 500 twenty minutes earlier.
+
+### 41.19 Case Review can now actually show the evidence it lists (2026-09-20)
+
+Issue 124, reported by Aquaticism. The Related Materials tab listed a case's evidence as grey filename chips and opened each one with `window.open`, throwing the reviewer out of the workbench into a browser tab. The record-audit path has had a proper in-app viewer since I3 — `EvidencePreview` + `EvidenceViewerDialog`, with the processing/rejected tiles and the once-only URL re-mint argued out under issues 072/074. Case Review now calls the same component. Eight lines changed, no second viewer.
+
+**No backend change, and the reason is worth recording:** a case carries no files of its own — `CaseDto` has no attachment list and no `/cases` endpoint serves one. What the tab shows is the *linked subject record's* evidence, which `CaseReview` was already fetching via `api.serviceRecords.get(subjectId)`. The materials were always reaching the client; only the renderer was the lesser one. Giving cases their own attachments would be a contract change and was deliberately not attempted.
+
+**Verified on the deployed server, including the boundary that matters**: the workbench was held open for 315 seconds — past the 300s signed-URL lifetime — and only then used, in Chinese for the viewer and in English through to Download, which produced a real `evidence.pdf`. A file arriving after its link expired is what proves the re-mint; a viewer that looks fine proves nothing. Two gaps named in the issue doc rather than papered over: every seeded case cites a record carrying the same PDF, so the image-thumbnail path and the `noMaterials` empty-state control could not be exercised.

@@ -10,7 +10,7 @@ import { useAcademicYearFilter } from '../../api/useAcademicYearFilter';
 import { useDictionaries } from '../../api/useDictionaries';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
-import { EvidenceLink } from '../EvidenceLink';
+import { EvidencePreview } from '../shared/EvidencePreview';
 import { DetailWorkbench, type DetailWorkbenchTab } from '../shared/DetailWorkbench';
 import { type Case, type EvidenceFile, type TimelineEntry } from '../../api/types';
 import { CASE_STATUS_LABELS, STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
@@ -282,13 +282,13 @@ export function CaseReview() {
             ) : !detailEvidence || detailEvidence.length === 0 ? (
               <div className="text-sm text-muted-foreground">{t('admin.cases.noMaterials')}</div>
             ) : (
-              <div className="flex gap-2 flex-wrap">
-                {detailEvidence.map(f => (
-                  <span key={f.id} className="px-2 py-1 bg-muted rounded">
-                    <EvidenceLink fileId={f.id} name={f.name} />
-                  </span>
-                ))}
-              </div>
+              // Same viewer the record audit uses (issue 124): a case reviewer
+              // judges the same evidence an auditor does, so it must be as
+              // readable here — thumbnails in place, and a click opens the file
+              // in `EvidenceViewerDialog` rather than throwing the reviewer out
+              // to a browser tab. Deliberately `EvidencePreview`, not a second
+              // viewer of its own.
+              <EvidencePreview files={detailEvidence} />
             ),
           },
         ];
