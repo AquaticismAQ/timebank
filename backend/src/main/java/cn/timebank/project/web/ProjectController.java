@@ -79,7 +79,7 @@ public class ProjectController {
     public ApiResponse<ProjectDto> update(
             @PathVariable String id, @Valid @RequestBody UpdateProjectRequest request,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
-        return ApiResponse.of(projectService.updateDraft(id, request, principalId(auth), isAdmin(auth), resolveLanguage(acceptLanguage, auth)));
+        return ApiResponse.of(projectService.updateDraft(id, request, auth, resolveLanguage(acceptLanguage, auth)));
     }
 
     @PostMapping("/{id}/publish")

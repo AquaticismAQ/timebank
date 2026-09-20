@@ -37,4 +37,18 @@ public interface ProjectRepository extends JpaRepository<Project, String>, JpaSp
      */
     @Query(value = "select id from project where JSON_CONTAINS(eligible_grade_ids, JSON_QUOTE(:gradeId))", nativeQuery = true)
     List<String> findIdsByEligibleGrade(@Param("gradeId") String gradeId);
+
+    /**
+     * Projects that name no eligible grade at all.
+     *
+     * Such a project restricts nobody, so it is visible to every student
+     * (issue 129) — the alternative reading, "open to no one", would hide it
+     * from the whole school on a technicality. The admin form requires at least
+     * one grade, so these arrive only through the API and through proposal
+     * approval; they are real rows either way and a student must be able to see
+     * one.
+     */
+    @Query(value = "select id from project where eligible_grade_ids is null"
+            + " or JSON_LENGTH(eligible_grade_ids) = 0", nativeQuery = true)
+    List<String> findIdsWithNoEligibleGrades();
 }

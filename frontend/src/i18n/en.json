@@ -2176,6 +2176,7 @@
       "SERVICE_UNAVAILABLE": "The service is temporarily unavailable. Please try again shortly."
     },
     "field": {
+      "PROJECT_OUT_OF_YOUR_GRADES": "This project is not open to any of the grades you are responsible for, so it cannot be edited here. You can still view it, or copy it to a draft of your own.",
       "PROJECT_NOT_EDITABLE": "A finished or archived project cannot be edited.",
       "REGISTRATION_NOT_OPEN": "Registration for this project is not open.",
       "ALREADY_REGISTERED": "You have already signed up for this project.",

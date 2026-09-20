@@ -2,11 +2,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Search, MapPin, Clock, Users, MoreHorizontal, CheckCircle, X, Edit, Archive, Eye, Copy } from 'lucide-react';
 import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
-import { type Project, type ProjectStatus, type Organization, type Grade } from '../../api/types';
+import { type Project, type ProjectStatus, type Organization, type Grade, type Role } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { useFieldErrors, FieldError, handleMutationError } from '../../api/useFieldErrors';
-import { usePermissions } from '../../App';
+import { usePermissions, useAuth } from '../../App';
 import { useDictionaries } from '../../api/useDictionaries';
 import { localDatetimeLocalToISO, isoToLocalDatetimeLocal, isoToLocalDate } from '../../lib/datetime';
 import { usePagedApi } from '../../api/useApi';
@@ -105,6 +105,37 @@ function toForm(p: Project, grades: Grade[]): EditForm {
  */
 const READ_ONLY_STATUSES: ProjectStatus[] = ['completed', 'archived'];
 const isReadOnly = (status: ProjectStatus) => READ_ONLY_STATUSES.includes(status);
+
+/**
+ * Whether this operator may *change* this project (issue 129).
+ *
+ * Staff see the whole school and may copy anything; editing is limited to the
+ * grades they are responsible for, plus anything they own — `createDraft` puts
+ * no grade restriction on what a teacher may create, so a project they made for
+ * another year group has to stay theirs to fix.
+ *
+ * The API enforces this; the menu asks the same question so a teacher is not
+ * invited to fill in a form that will be refused on save. `eligibleGrades`
+ * reads back as localized grade *names*, so it is mapped through the dictionary
+ * — the same conversion `toForm` needs, for the same reason.
+ */
+function canEditProject(
+  project: Project,
+  user: { id?: string; roles?: Role[]; scopeGradeIds?: string[] } | null,
+  grades: Grade[],
+): boolean {
+  if (!user) return false;
+  // admin/sysadmin are the only structurally school-wide roles
+  // (07-RoleFinetune.md §2.10) — "any non-student" would exempt every teacher,
+  // which is the population this rule is about.
+  if ((user.roles ?? []).some(r => r === 'admin' || r === 'sysadmin')) return true;
+  if (user.id && user.id === project.ownerId) return true;
+  const mine = new Set(user.scopeGradeIds ?? []);
+  if (mine.size === 0) return false;
+  return project.eligibleGrades
+    .map(name => grades.find(g => g.name === name)?.id ?? name)
+    .some(id => mine.has(id));
+}
 
 interface EditModalProps {
   project: Project;
@@ -346,6 +377,7 @@ export function ProjectManagement() {
   const { t } = useTranslation();
   const { grades, serviceCategories, academicYears } = useDictionaries();
   const { hasPermission } = usePermissions();
+  const { user } = useAuth();
   // Backend gates create/update/publish/archive/cancel on five distinct
   // permissions (ProjectController's @PreAuthorize) — role_teacher's seed
   // grant has create/update/publish but not archive/cancel, so a single
@@ -762,7 +794,7 @@ export function ProjectManagement() {
                       {/* Read-only statuses offer View instead, and to everyone
                           who can see the page — reading a finished project's
                           details needs no update right (issue 119). */}
-                      {isReadOnly(proj.status) ? (
+                      {isReadOnly(proj.status) || !canEditProject(proj, user, grades) ? (
                         <button onClick={() => handleAction(proj, 'edit')}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-accent">
                           <Eye className="w-3.5 h-3.5" /> {t('admin.projects.view')}
@@ -828,7 +860,7 @@ export function ProjectManagement() {
           onClose={() => { setEditProject(null); setEditForm(null); }}
           onSave={saveEdit}
           organizations={organizations}
-          readOnly={isReadOnly(editProject.status)}
+          readOnly={isReadOnly(editProject.status) || !canEditProject(editProject, user, grades)}
           getFieldError={fieldErrors.getError}
           onFieldEdit={fieldErrors.clearField}
         />

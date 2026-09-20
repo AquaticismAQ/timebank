@@ -2176,6 +2176,7 @@
       "SERVICE_UNAVAILABLE": "服务暂时不可用，请稍后再试。"
     },
     "field": {
+      "PROJECT_OUT_OF_YOUR_GRADES": "该项目不属于你负责的年级，因此无法在此编辑。你仍然可以查看它，或复制一份属于自己的草稿。",
       "PROJECT_NOT_EDITABLE": "已结束或已归档的项目不能再编辑。",
       "REGISTRATION_NOT_OPEN": "该项目当前不在报名时间内。",
       "ALREADY_REGISTERED": "你已经报名过该项目了。",

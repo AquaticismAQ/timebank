@@ -72,4 +72,22 @@ public class EnrollmentReadRepository {
                 (rs, rowNum) -> Map.entry(rs.getString("project_id"), rs.getString("status")));
         return rows.stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
+
+    /**
+     * Every project this student has ever applied to.
+     *
+     * Needed so that narrowing the project list to a student's own grade
+     * (issue 129) cannot hide a project they are already enrolled in — a
+     * project's eligible grades can be edited after the fact, and a student who
+     * signed up under the old list still has a record pointing at it.
+     */
+    public java.util.Set<String> projectIdsAppliedToBy(String studentId) {
+        if (studentId == null || studentId.isBlank()) {
+            return java.util.Set.of();
+        }
+        return java.util.Set.copyOf(jdbcTemplate.queryForList(
+                "select distinct project_id from enrollment where student_id = :studentId",
+                new org.springframework.jdbc.core.namedparam.MapSqlParameterSource("studentId", studentId),
+                String.class));
+    }
 }

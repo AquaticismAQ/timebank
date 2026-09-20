@@ -104,7 +104,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
                 null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null,
                 null, now.minusSeconds(10), registrationOpen.version());
-        ProjectDto updated = projectService.updateDraft(registrationOpen.id(), closeItNow, "usr_test_admin", true, "zh-CN");
+        ProjectDto updated = projectService.updateDraft(registrationOpen.id(), closeItNow, adminAuth(), "zh-CN");
 
         ProjectDto reread = projectService.getDetail(updated.id(), adminAuth(), "zh-CN");
         assertThat(reread.status()).isEqualTo("CLOSED");
@@ -155,7 +155,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
                 null, null, null, null, null, null, null,
                 now.minusSeconds(40), now.minusSeconds(20), null, null, null, null, null,
                 null, now.minusSeconds(50), registrationOpen.version());
-        ProjectDto updated = projectService.updateDraft(registrationOpen.id(), pushToPast, "usr_test_admin", true, "zh-CN");
+        ProjectDto updated = projectService.updateDraft(registrationOpen.id(), pushToPast, adminAuth(), "zh-CN");
 
         // Issue 120: the count the client needs travels as a coded field error,
         // not buried in an English sentence it would have to parse.
@@ -211,14 +211,14 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
                 null, null, null, null, null, null, null,
                 now.minusSeconds(40), now.minusSeconds(20), null, null, null, null, null,
                 null, now.minusSeconds(50), registrationOpen.version());
-        ProjectDto updated = projectService.updateDraft(registrationOpen.id(), pushToPast, "usr_test_admin", true, "zh-CN");
+        ProjectDto updated = projectService.updateDraft(registrationOpen.id(), pushToPast, adminAuth(), "zh-CN");
         ProjectDto completed = projectService.getDetail(updated.id(), adminAuth(), "zh-CN");
         assertThat(completed.status()).isEqualTo("COMPLETED");
 
         UpdateProjectRequest renameIt = new UpdateProjectRequest(
                 "Renamed After Completion", null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, completed.version());
-        assertThatThrownBy(() -> projectService.updateDraft(completed.id(), renameIt, "usr_test_admin", true, "zh-CN"))
+        assertThatThrownBy(() -> projectService.updateDraft(completed.id(), renameIt, adminAuth(), "zh-CN"))
                 .isInstanceOf(cn.timebank.common.error.ApiException.class)
                 .hasMessageContaining("cannot be edited");
 
@@ -237,7 +237,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         UpdateProjectRequest renameIt = new UpdateProjectRequest(
                 "Renamed After Archiving", null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, archived.version());
-        assertThatThrownBy(() -> projectService.updateDraft(archived.id(), renameIt, "usr_test_admin", true, "zh-CN"))
+        assertThatThrownBy(() -> projectService.updateDraft(archived.id(), renameIt, adminAuth(), "zh-CN"))
                 .isInstanceOf(cn.timebank.common.error.ApiException.class)
                 .hasMessageContaining("cannot be edited");
         assertThat(projectService.getDetail(archived.id(), adminAuth(), "zh-CN").title())
@@ -270,7 +270,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         UpdateProjectRequest moveIt = new UpdateProjectRequest(
                 null, null, null, null, partner.id(), null, null,
                 null, null, "Library, second floor", null, null, null, null, null, null, draft.version());
-        ProjectDto updated = projectService.updateDraft(draft.id(), moveIt, "usr_test_admin", true, "zh-CN");
+        ProjectDto updated = projectService.updateDraft(draft.id(), moveIt, adminAuth(), "zh-CN");
         assertThat(updated.location()).isEqualTo("Library, second floor");
         assertThat(updated.organizationId()).isEqualTo(partner.id());
 
@@ -284,7 +284,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         UpdateProjectRequest swapPartner = new UpdateProjectRequest(
                 null, null, null, null, other.id(), null, null,
                 null, null, null, null, null, null, null, null, null, updated.version());
-        ProjectDto swapped = projectService.updateDraft(draft.id(), swapPartner, "usr_test_admin", true, "zh-CN");
+        ProjectDto swapped = projectService.updateDraft(draft.id(), swapPartner, adminAuth(), "zh-CN");
         assertThat(swapped.organizationId()).isEqualTo(other.id());
         assertThat(swapped.organizationName()).isEqualTo("Partner Flush Test Org Two");
     }
@@ -298,7 +298,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         UpdateProjectRequest moveIt = new UpdateProjectRequest(
                 null, null, null, null, null, null, null,
                 null, null, "Library, second floor", null, null, null, null, null, null, published.version());
-        ProjectDto updated = projectService.updateDraft(published.id(), moveIt, "usr_test_admin", true, "zh-CN");
+        ProjectDto updated = projectService.updateDraft(published.id(), moveIt, adminAuth(), "zh-CN");
         assertThat(updated.location()).isEqualTo("Library, second floor");
     }
 

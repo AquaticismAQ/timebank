@@ -46,7 +46,8 @@ public interface ProjectService {
     /** {@code actorIsAdmin}: gates whether {@code request.ownerId()} is honored — anyone else's is silently forced to {@code actorId} (02-PorjectOrganization.md §3). */
     ProjectDto createDraft(CreateProjectRequest request, String actorId, boolean actorIsAdmin, String resolvedLanguage);
 
-    ProjectDto updateDraft(String id, UpdateProjectRequest request, String actorId, boolean actorIsAdmin, String resolvedLanguage);
+    /** Takes the principal rather than a pre-derived actor id and admin flag: the grade rule (issue 129) needs the scope behind it, and every other module's `updateDraft` already has this shape. */
+    ProjectDto updateDraft(String id, UpdateProjectRequest request, Authentication auth, String resolvedLanguage);
 
     ProjectDto publish(String id, Long version, String actorId, String resolvedLanguage);
 

@@ -36,6 +36,11 @@ public class ApiException extends RuntimeException {
         return new ApiException(ApiErrorCode.FORBIDDEN, message, List.of());
     }
 
+    /** A refusal the user is meant to read and act on — see {@link #stateConflict(String, List)} for why it travels as a code. */
+    public static ApiException forbidden(String message, List<FieldErrorDetail> fieldErrors) {
+        return new ApiException(ApiErrorCode.FORBIDDEN, message, fieldErrors);
+    }
+
     public static ApiException stateConflict(String message) {
         return new ApiException(ApiErrorCode.STATE_CONFLICT, message, List.of());
     }

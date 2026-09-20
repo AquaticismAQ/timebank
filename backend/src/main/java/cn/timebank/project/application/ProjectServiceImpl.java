@@ -33,8 +33,11 @@ import cn.timebank.project.infrastructure.ProjectOrganizationRepository;
 import cn.timebank.project.infrastructure.ProjectRepository;
 import cn.timebank.project.infrastructure.ProjectRevisionRepository;
 import cn.timebank.security.application.CookieSessionUserDetails;
+import cn.timebank.security.application.DataScopeResolver;
+import cn.timebank.security.application.ScopeDescriptor;
 import cn.timebank.security.application.TimeBankPrincipal;
 import cn.timebank.student.application.AcademicStructureService;
+import cn.timebank.student.application.StudentService;
 import cn.timebank.student.application.AcademicYearWindowResolver;
 import cn.timebank.student.application.dto.AcademicYearDto;
 import cn.timebank.student.application.dto.GradeDto;
@@ -68,6 +71,8 @@ class ProjectServiceImpl implements ProjectService {
     private final OrganizationService organizationService;
     private final AcademicStructureService academicStructureService;
     private final AcademicYearWindowResolver academicYearWindows;
+    private final StudentService studentService;
+    private final DataScopeResolver dataScopeResolver;
     private final UserService userService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
@@ -78,6 +83,7 @@ class ProjectServiceImpl implements ProjectService {
                        ServiceCategoryService serviceCategoryService,
                        OrganizationService organizationService, AcademicStructureService academicStructureService,
                        AcademicYearWindowResolver academicYearWindows,
+                       StudentService studentService, DataScopeResolver dataScopeResolver,
                        UserService userService, AuditService auditService, ObjectMapper objectMapper) {
         this.repository = repository;
         this.revisionRepository = revisionRepository;
@@ -88,6 +94,8 @@ class ProjectServiceImpl implements ProjectService {
         this.organizationService = organizationService;
         this.academicStructureService = academicStructureService;
         this.academicYearWindows = academicYearWindows;
+        this.studentService = studentService;
+        this.dataScopeResolver = dataScopeResolver;
         this.userService = userService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
@@ -189,8 +197,14 @@ class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public ProjectDto updateDraft(String id, UpdateProjectRequest request, String actorId, boolean actorIsAdmin, String resolvedLanguage) {
+    public ProjectDto updateDraft(String id, UpdateProjectRequest request, Authentication auth, String resolvedLanguage) {
+        TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
+        String actorId = principal.id();
+        boolean actorIsAdmin = principal.hasFullDataScope();
         Project project = findOrThrow(id);
+        // Staff see every project and may copy any of them; changing one is
+        // restricted to the grades they are responsible for (issue 129).
+        requireWithinActorsGrades(project, principal);
         // Before the guard below, so it judges the status the project actually
         // has rather than the one last written: a project whose end date has
         // passed is COMPLETED whether or not anything has read it since.
@@ -563,14 +577,108 @@ class ProjectServiceImpl implements ProjectService {
         return principal.roleCodes().contains("student");
     }
 
+    /**
+     * Who may see which project.
+     *
+     * <p><b>Staff see the whole school</b> — that is the design, not an
+     * oversight: a teacher browses and copies any project, and is stopped at
+     * *editing* one outside their grades ({@link #requireWithinActorsGrades}).
+     * The two halves are deliberately different questions.</p>
+     *
+     * <p><b>A student sees their own grade's projects only</b> (issue 129).
+     * Before this they saw all 75 published projects in the school, across
+     * every grade — a Year 7 pupil browsing activities they cannot join.</p>
+     *
+     * <p>With one exception that has to be there: a project they have already
+     * applied to stays visible whatever its grades now say. Eligible grades are
+     * editable after the fact, and a student whose service record points at a
+     * project must be able to open it.</p>
+     */
     private Specification<Project> visibilitySpec(Authentication auth) {
         TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
         if (isManager(principal)) {
             return null;
         }
-        return (root, query, cb) -> cb.or(
+        Specification<Project> draftsAreOwnersOnly = (root, query, cb) -> cb.or(
                 cb.notEqual(root.get("status"), ProjectStatus.DRAFT),
                 cb.equal(root.get("ownerId"), principal.id()));
+
+        String studentId = principal.studentId();
+        if (studentId == null) {
+            return draftsAreOwnersOnly;
+        }
+        Set<String> visibleIds = new java.util.HashSet<>(
+                repository.findIdsByEligibleGrade(studentGradeIdOrNull(studentId)));
+        // A project that names no grade restricts nobody.
+        visibleIds.addAll(repository.findIdsWithNoEligibleGrades());
+        visibleIds.addAll(enrollmentReadRepository.projectIdsAppliedToBy(studentId));
+        Set<String> ids = visibleIds.isEmpty() ? Set.of("__none__") : Set.copyOf(visibleIds);
+        return FilterSpecifications.and(draftsAreOwnersOnly, (root, query, cb) -> root.get("id").in(ids));
+    }
+
+    /**
+     * The student's grade, or null.
+     *
+     * {@code placementsOf} rather than {@code getDetail}: the latter throws
+     * {@code notFound} for an unreadable row, and catching that inside the
+     * surrounding transaction does not un-mark it rollback-only — the read
+     * "succeeds" and the commit then fails with `UnexpectedRollback`, which is
+     * how ProjectAcademicYearScopeIT caught the first version of this. A batch
+     * lookup that simply omits missing rows has no such edge.
+     *
+     * Null narrows the list to nothing rather than widening it: not knowing a
+     * student's grade is not a reason to show them every grade's projects.
+     */
+    private String studentGradeIdOrNull(String studentId) {
+        StudentService.StudentPlacement placement = studentService.placementsOf(List.of(studentId)).get(studentId);
+        return placement == null ? null : placement.gradeId();
+    }
+
+    /**
+     * A teacher may edit a project that is open to one of their grades — and
+     * one they own, whatever its grades (issue 129).
+     *
+     * <p>The ownership clause is not in the sentence Aquaticism wrote, and it has to
+     * be: {@code createDraft} puts no grade restriction on what a teacher may
+     * create, so without it a teacher could make a project for another year
+     * group and then be unable to touch it again. "Not yours to change" is the
+     * rule; "not yours to have made" is not.</p>
+     *
+     * <p>The scope namespace is {@code serviceRecords}, which is where a
+     * teacher's grades are actually assigned — the same borrowing
+     * {@code FileServiceImpl} and the dashboard already make, and for the same
+     * reason: there is one set of grades a teacher is responsible for, not one
+     * per resource type.</p>
+     *
+     * <p>A teacher with no grade assignment at all resolves to {@code Self} and
+     * may therefore edit only their own projects. That is the safe reading of
+     * "no grades", but it is a real consequence worth knowing about.</p>
+     */
+    private void requireWithinActorsGrades(Project project, TimeBankPrincipal principal) {
+        // `hasSchoolWideVisibility`, not `hasFullDataScope`: the latter is
+        // "any non-student" and would exempt every teacher, which is the whole
+        // population this rule is about (07-RoleFinetune.md §2.10 — the same
+        // distinction the dashboard and every other grade-scoped read makes).
+        // The first version of this used the wrong one and the guard never
+        // fired; the test caught it.
+        if (principal.hasSchoolWideVisibility()) {
+            return;
+        }
+        if (principal.id().equals(project.getOwnerId())) {
+            return;
+        }
+        ScopeDescriptor scope = dataScopeResolver.resolve(principal, "serviceRecords", false);
+        if (scope instanceof ScopeDescriptor.All) {
+            return;
+        }
+        Set<String> mine = scope instanceof ScopeDescriptor.Grades grades ? grades.gradeIds() : Set.of();
+        List<String> projectGrades = project.getEligibleGradeIds() == null ? List.of() : project.getEligibleGradeIds();
+        if (projectGrades.stream().anyMatch(mine::contains)) {
+            return;
+        }
+        throw ApiException.forbidden(
+                "This project is not open to any of the grades you are responsible for.",
+                List.of(new FieldErrorDetail("eligibleGradeIds", "PROJECT_OUT_OF_YOUR_GRADES", "")));
     }
 
     private boolean isManager(TimeBankPrincipal principal) {

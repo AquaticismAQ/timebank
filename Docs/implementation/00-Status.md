@@ -1400,3 +1400,17 @@ After: teacher005 reads 24 / 12 / 4 / 39 / 90 / 37.13 against the administrator'
 **Verified against independently computed truth** (every page of `/accounts`, summed by the probe): both users' summaries match exactly. Integration tests take the `ScopeDescriptor` directly and require two grades to *partition* the whole rather than merely be smaller than it, plus an empty scope reporting zero; red-checked by disabling the student clause.
 
 **One bug the tests caught in passing**: `avg()` over no rows returns a row holding null, and `.stream().findFirst()` on it throws `Optional.of(null)`. Deployed briefly before `DashboardReportingIT` turned it up; fixed and redeployed. The 26 pre-existing IT failures are unchanged.
+
+### 41.24 Projects: staff see the school, students see their grade (2026-09-20)
+
+Issue 129, Aquaticism restating the original design. Visibility and mutability were being answered by the same code and both were wrong in opposite directions: a teacher could edit **any** project (`updateDraft` had no grade check at all), and a student saw **every** published project in the school — 75 of them, across six year groups.
+
+**Students** are now narrowed to projects whose `eligibleGradeIds` contain their grade, reusing the `JSON_CONTAINS` query the grade filter already uses rather than inventing a second definition of "open to a grade". Two clauses had to come with it: a project they have already applied to stays visible whatever its grades now say (grades are editable after the fact, and a service record points at it), and a project naming *no* grade is visible to everyone — it restricts nobody, and "open to no one" would hide it on a technicality. There are seven such rows on the test server.
+
+**Teachers** keep seeing the whole school and may copy anything; `updateDraft` refuses a project outside their grades with `403 PROJECT_OUT_OF_YOUR_GRADES`, and the menu offers View instead of Edit so nobody fills in a form that will be refused. Two judgements recorded in the issue doc: a teacher may always edit a project they **own** whatever its grades (creating has no grade restriction, so without this a teacher could make a cross-grade project and never touch it again), and a teacher with no grade assignment resolves to `Self` and can edit only their own.
+
+**Verified live with controls on both sides**: teacher005 (grades 10–12) gets 403 on a Grade 7/8/9 project and 200 on a Grade 10/11 one; the menu shows 编辑 on a non-terminal in-scope project and 查看 on a non-terminal out-of-scope one — terminal statuses were excluded deliberately, since issue 119 makes those View anyway. The student's 69 remaining projects break down as 60 in their own grade, 2 multi-grade lists including it, and 7 with no grades at all; nothing belonging exclusively to another grade survives.
+
+**Left alone and flagged:** `publish` is still unrestricted, so a teacher can publish an out-of-grade draft they cannot edit. Incoherent, but the report said *edit*; recommended as the next step and safe now the ownership clause exists.
+
+**One bug the tests caught:** the first version used `hasFullDataScope()`, which is `!roles.contains("student")` and would have exempted every teacher — the whole population the rule is about. `hasSchoolWideVisibility()` is the grade-scoped one; the guard silently never fired until a test asked it to.
