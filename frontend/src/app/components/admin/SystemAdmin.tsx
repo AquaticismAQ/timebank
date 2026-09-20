@@ -17,6 +17,7 @@ import { downloadBlob } from '../../lib/download';
 import { localDateTimeToISO, formatLocalInstant, isoToLocalDate } from '../../lib/datetime';
 import { DEFAULT_PAGE_SIZE } from '../../lib/pagination';
 import { STATUS_COLOR_CLASSES } from '../../lib/statusLabels';
+import { PROJECT_REPO_URL } from '../../lib/project';
 import type { RoleSummary, AuditLogEntry, AuditLogFacets, SchoolInfo, RuleVersion, RuleDraftFields, RuleValidationResult, Grade, SchoolClass, AcademicYear } from '../../api/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { usePagedApi } from '../../api/useApi';
@@ -2496,6 +2497,14 @@ export function SystemAdmin() {
       {/* ── Settings tab ──────────────────────────────────────────── */}
       {activeTab === 'settings' && (
         <div className="space-y-4">
+          {/* Sysadmin only. These switches decide whether whole phases of the
+              product exist, which is a system-operator concern rather than a
+              school-operations one — the same line School Info is drawn on
+              below, and drawn the same way, by role code rather than by a new
+              permission. Hidden rather than shown-disabled: a school admin
+              cannot act on them, and a dead switch invites the belief that
+              someone could. */}
+          {isSysadmin && (
           <div className="bg-card border border-border rounded-2xl overflow-hidden">
             <div className="px-4 py-3 border-b border-border">
               <h3 className="text-foreground">{t('admin.system.featureToggles')}</h3>
@@ -2519,6 +2528,7 @@ export function SystemAdmin() {
               </div>
             ))}
           </div>
+          )}
 
           <div className="bg-card border border-border rounded-2xl overflow-hidden">
             <div className="px-4 py-3 border-b border-border">
@@ -2534,6 +2544,17 @@ export function SystemAdmin() {
                 <span className="text-xs text-foreground">{item.value}</span>
               </div>
             ))}
+            {/* A property of the codebase, not of this deployment, so it is a
+                constant rather than another `school_info` field (lib/project.ts).
+                `rel="noreferrer"` because this is the only outbound link in the
+                admin portal. */}
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <span className="text-xs text-muted-foreground shrink-0">{t('admin.system.sourceCode')}</span>
+              <a href={PROJECT_REPO_URL} target="_blank" rel="noreferrer"
+                className="text-xs text-primary hover:underline truncate">
+                {PROJECT_REPO_URL}
+              </a>
+            </div>
           </div>
 
           <div className="bg-card border border-border rounded-2xl overflow-hidden">

@@ -1210,3 +1210,15 @@ Two deliberate asymmetries. **Absent means every year** for staff, not the curre
 ### 41.6 Logo mark given its own colour (2026-09-20)
 
 The clock badge on the login page and in the app shell is `rgb(200, 50, 25)` in both themes, at Aquaticism's request. It reads a new `--brand` token rather than `--primary`, and that token is deliberately absent from theme.css's `.dark` block: `--primary` is the UI's action colour and flips between themes, so a mark using it was not one mark. The glyph moved to `--brand-foreground` for the same reason — on `--primary-foreground` it would have been white on light and near-black on dark. `--primary` itself is untouched, so no other consumer changed. Confirmed by computed style at `rgb(200, 50, 25)` in both themes on the deployed server, on the login page and in the shell.
+
+### 41.7 Feature Toggles restricted, repository link added (2026-09-20)
+
+Issue 113. System Admin → System Settings showed the four Phase 3/4 feature switches to every account that could reach the tab, including a school admin. They are now sysadmin-only, by the same `isSysadmin` role-code check School Info already used one card below, and hidden rather than shown-disabled — a switch nobody present can move invites the belief that someone could.
+
+Not a privilege escalation, and the issue doc says so: `toggleFeature` has always answered with a "not yet available" toast rather than calling anything, and no write path for feature flags exists in any controller. There is consequently no backend half to this fix, which is worth stating explicitly so the card's visibility is not later mistaken for the control — when Phase 3/4 makes these switches real, the endpoint that does it carries its own `@PreAuthorize`.
+
+System Info gained a **Source Code** row linking the repository. `PROJECT_REPO_URL` moved from inside `LoginPage.tsx` to `lib/project.ts` so the login footer and this row cannot drift; it is a constant rather than a `school_info` field because it describes the codebase, not the school.
+
+**Verified live on both roles**, which is the only arrangement that distinguishes "hidden from the right people" from "hidden from everyone": `admin001` sees System Info and School Info and no Feature Toggles card, with the four feature labels absent from the page text, while `sysadmin001` still sees the card with all four switches. The Source Code row renders for both and in both language bundles.
+
+**Workflow change (Aquaticism, 2026-09-20):** simple changes are now deployed and verified on the shared test server rather than on the Docker stack, which is reserved for work needing a re-seed or a destructive experiment. Recorded in `CLAUDE.md`. This entry is the first worked that way.

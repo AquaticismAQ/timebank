@@ -7,8 +7,7 @@ import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { type SchoolInfo } from '../../api/types';
 import { LanguageSwitcher } from '../LanguageSwitcher';
-
-const PROJECT_REPO_URL = 'https://github.com/AquaticismAQ/timebank';
+import { PROJECT_REPO_URL } from '../../lib/project';
 
 export function LoginPage() {
   const navigate = useNavigate();
