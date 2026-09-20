@@ -1,0 +1,20 @@
+{
+  "name": "timebank-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Drives complete TimeBank workflows through a real browser: a live demonstration, and a regression check. See README.md.",
+  "type": "module",
+  "scripts": {
+    "e2e": "tsx run.ts",
+    "typecheck": "tsc --noEmit",
+    "selftest": "tsx selftest.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}

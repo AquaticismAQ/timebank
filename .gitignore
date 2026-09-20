@@ -62,3 +62,7 @@ drafts/
 Report/
 output/
 tmp/
+
+# e2e run output: screenshots and the per-run narration script
+e2e/artifacts/
+e2e/narration/

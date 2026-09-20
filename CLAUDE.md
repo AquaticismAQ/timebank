@@ -20,6 +20,7 @@ Docs/integration/APIContract.md   The REST API contract — authoritative for bo
 Docs/implementation/     Phase-by-phase backend + integration build plan and the living status tracker (00-Status.md)
 Docs/TestAccounts.md     Login credentials for the seeded test accounts on the shared test server
 integration-test/        Seeds a realistic dataset onto the shared test server; STATUS.md logs live-testing bugs/fixes
+e2e/                     Drives whole workflows through a real browser — a narrated live demo and a regression check, one flow, gated phases (see e2e/README.md)
 frontend/                React + Vite web app (Student Portal + Admin/Teacher Portal)
 backend/                 Spring Boot 3.4 / Java 21 backend, single Maven module, package root `cn.timebank` (see below)
 ```

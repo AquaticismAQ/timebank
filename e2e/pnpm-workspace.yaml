@@ -1,0 +1,7 @@
+# Self-contained, the same shape frontend/ uses. `allowBuilds` is what lets
+# `pnpm e2e` run at all: pnpm re-checks dependencies before every script and
+# treats tsx's bundled esbuild install script as an unapproved build otherwise.
+packages:
+  - '.'
+allowBuilds:
+  esbuild: true
