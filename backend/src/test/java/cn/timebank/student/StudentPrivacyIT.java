@@ -59,31 +59,54 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
 
     @Test
     void listResponsesNeverCarryGuardianOrEmailFields() {
-        createStudent("stu_privacy_1");
+        String number = createStudent("stu_privacy_1").studentNumber();
 
         // StudentListItemDto has no email/guardianName/guardianContact accessors
         // at all — this is a compile-time guarantee, not a runtime check. The
         // live assertion here is that the list actually returns the row.
         Page<StudentListItemDto> page = studentService.list(PageRequest.of(0, 20), adminAuth(), null, null, null, null, "zh-CN");
-        assertThat(page.getContent()).anyMatch(s -> s.studentNumber().equals("stu_privacy_1"));
+        assertThat(page.getContent()).anyMatch(s -> s.studentNumber().equals(number));
     }
 
     @Test
     void listFiltersByGradeAndSearchesByNameOrStudentNumber() {
-        createStudent("stu_privacy_4");
+        String number = createStudent("stu_privacy_4").studentNumber();
         Authentication auth = adminAuth();
 
         Page<StudentListItemDto> byGrade = studentService.list(PageRequest.of(0, 20), auth, "grade_6", null, null, null, "zh-CN");
-        assertThat(byGrade.getContent()).anyMatch(s -> s.studentNumber().equals("stu_privacy_4"));
+        assertThat(byGrade.getContent()).anyMatch(s -> s.studentNumber().equals(number));
 
         Page<StudentListItemDto> wrongGrade = studentService.list(PageRequest.of(0, 20), auth, "grade_9", null, null, null, "zh-CN");
-        assertThat(wrongGrade.getContent()).noneMatch(s -> s.studentNumber().equals("stu_privacy_4"));
+        assertThat(wrongGrade.getContent()).noneMatch(s -> s.studentNumber().equals(number));
 
+        // Searched in the case it was *typed*, not the case it is stored in —
+        // the column's collation is case-insensitive, and an operator typing a
+        // number off a printed slip should not have to match its casing.
         Page<StudentListItemDto> bySearch = studentService.list(PageRequest.of(0, 20), auth, null, null, null, "privacy_4", "zh-CN");
-        assertThat(bySearch.getContent()).anyMatch(s -> s.studentNumber().equals("stu_privacy_4"));
+        assertThat(bySearch.getContent()).anyMatch(s -> s.studentNumber().equals(number));
 
         Page<StudentListItemDto> noMatch = studentService.list(PageRequest.of(0, 20), auth, null, null, null, "no-such-student", "zh-CN");
         assertThat(noMatch.getContent()).isEmpty();
+    }
+
+    /**
+     * Why the two tests above compare against what {@code create} returned rather
+     * than against the string they passed in.
+     *
+     * <p>{@code StudentServiceImpl.canonicalStudentNumber} stores one case
+     * (`a0e9fa6`, 2026-09-16), so a number goes in as typed and comes back
+     * uppercased. Both tests asserted on their own literal and went red the day
+     * that landed. Asserting on the returned value fixes them without pinning the
+     * casing rule in a second place — and this test pins it in the one place it
+     * belongs, so the next person to meet a surprising uppercase student number
+     * finds the rule asserted rather than assuming the tests are wrong and
+     * reverting it.</p>
+     */
+    @Test
+    void creationStoresTheStudentNumberInOneCanonicalCase() {
+        StudentDetailDto created = createStudent("stu_privacy_5");
+
+        assertThat(created.studentNumber()).isEqualTo("STU_PRIVACY_5");
     }
 
     /**

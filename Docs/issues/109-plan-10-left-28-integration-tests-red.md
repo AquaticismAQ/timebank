@@ -1,6 +1,8 @@
 # 109 — Plan 10 left 28 integration tests red, and nothing noticed for two days
 
-**Status:** Diagnosed, not fixed. One root cause, eight test classes.
+**Status:** Diagnosed, mostly not fixed. **`StudentPrivacyIT` is fixed and green
+(2026-09-20) — and it was never this issue's root cause; see §3.1.** Seven classes
+remain, on the one cause below.
 **Found:** 2026-09-19, by two subagents independently reporting that `mvn verify`
 does not pass on `main` — and then confirmed here against a pre-session commit.
 **Broke:** 2026-09-17, plan 10 (`ddb309e`, `c16a2c3`, migrations `V27`/`V28`).
@@ -16,7 +18,8 @@ which is why it went unseen.
 | `ProposalApprovalTransactionIT` | 10 |
 | `AuthFlowIT` | 6 |
 | `ServiceRecordSourceOptimizationIT` | 2 |
-| `StudentPrivacyIT`, `UserDirectoryIT`, `DashboardReportingIT`, `NotificationReadPathIT`, `FileServiceIT` | the balance |
+| `StudentPrivacyIT` (2 failures — **a different cause, §3.1; fixed 2026-09-20**) | 0 |
+| `UserDirectoryIT`, `DashboardReportingIT`, `NotificationReadPathIT`, `FileServiceIT` | the balance |
 
 ## 2. It is not this session's work
 
@@ -36,6 +39,33 @@ this session's seed or rollover work) and at `main`:
 
 Identical. The annual-rollover and two-stage seed work neither caused nor
 worsened it.
+
+### 3.1 `StudentPrivacyIT` was misfiled here, and is now fixed
+
+**Corrected 2026-09-20.** This class was counted above on the strength of being
+red at the same time, and the "one root cause, eight classes" headline was wrong
+about it. Its two are **failures, not errors**, and they have nothing to do with
+plan 10 or the activation FK:
+
+`a0e9fa6` (2026-09-**16**, the day *before* plan 10) made
+`StudentServiceImpl.canonicalStudentNumber` store one case, so a number goes in
+as `stu_privacy_1` and comes back `STU_PRIVACY_1`. Two tests asserted on their
+own input literal and went red that day.
+
+Confirmed by bisecting rather than by reading: `StudentPrivacyIT` is **6/6 green
+at `a0e9fa6~1` and 2 failures at `a0e9fa6`**, in a clean worktree against real
+MySQL.
+
+Fixed by asserting on what `create` returned instead of on the literal passed
+in, which makes the two tests independent of the casing rule rather than
+encoding a second copy of it. A third test, `creationStoresTheStudentNumberInOneCanonicalCase`,
+now pins the rule in the one place it belongs — red-checked by removing the
+`toUpperCase`, which fails that test alone and leaves the other six passing. The
+class is **7/7 green**.
+
+The lesson for the seven that remain: *red at the same time* is not *red for the
+same reason*. Each should be run and read before being swept into the shared
+fixture helper §5 proposes.
 
 ## 3. Cause — one change, two consequences
 
@@ -79,9 +109,10 @@ the edges.
 
 ## 5. The fix, when it is picked up
 
-Not attempted here — it is a fixture change across eight classes, unrelated to
-the import/export work in flight, and merging it into that would make both
-harder to review.
+Not attempted here — it is a fixture change across the seven remaining classes,
+unrelated to the import/export work in flight, and merging it into that would
+make both harder to review. (`StudentPrivacyIT` was fixed separately because it
+turned out not to need any of this — §3.1.)
 
 The shape is a shared test helper rather than eight local patches:
 
