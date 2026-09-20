@@ -26,6 +26,18 @@ export interface RunOutcome {
  * phases are reported, not silently dropped — "it passed" and "it did not run"
  * must never look the same.
  */
+/** What the narration says the first time a role is used. */
+const FIRST_LOGIN_ZH: Record<'admin' | 'student', string> = {
+  admin: '以老师的身份登录管理后台',
+  student: '以学生的身份登录学生端',
+};
+
+/** And when the demonstration changes seats. */
+const SWITCH_ZH: Record<'admin' | 'student', string> = {
+  admin: '现在切换到老师的账号',
+  student: '现在切换到学生的账号',
+};
+
 export async function runFlow(
   flow: Flow,
   config: Config,
@@ -51,13 +63,24 @@ export async function runFlow(
   const adminApi = await Api.loginAs(config, config.admin.username, config.admin.password);
   const startedAt = new Date();
 
+  let currentRole: 'admin' | 'student' | null = null;
   const ctx: FlowContext = {
     config, api, adminApi, narrator, slots, runId,
     has: (gate: Gate) => gates.has(gate),
     as: async (role: 'admin' | 'student'): Promise<Page> => {
-      const page = await browser.open(role);
       const account = role === 'admin' ? config.admin : config.student;
       const prefix = role === 'admin' ? '/admin' : '/student';
+
+      // Said out loud, because a demonstration that changes seats without saying
+      // so looks like one person doing everything — which is the opposite of the
+      // point. The workflow's whole shape is that a student and a teacher each do
+      // their own part and neither can do the other's.
+      if (currentRole !== role) {
+        narrator.step(currentRole === null ? FIRST_LOGIN_ZH[role] : SWITCH_ZH[role]);
+        currentRole = role;
+      }
+
+      const page = await browser.open(role);
       // Once per role per run. The context persists, so a later switch back is a
       // tab change rather than another trip through the login form.
       if (!page.url().includes(prefix)) {
