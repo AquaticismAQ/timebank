@@ -1,7 +1,7 @@
 # 112 — Project lists are not scoped to an academic year
 
-**Status:** **Fixed** 2026-09-20, same day. Built and verified against the Docker
-stack; **not yet deployed**.
+**Status:** **Fixed and deployed** 2026-09-20, same day. Verified against the
+Docker stack, then re-verified on the deployed server.
 **Reported as:** Project Management (admin/teacher) should have an academic year
 filter defaulting to the current year; the student Project Center should show only
 the current year's projects.
@@ -105,6 +105,13 @@ In the browser: the dropdown loads on 2026-2027 showing 10, 2025-2026 shows the
 three pre-September projects, **All years** shows 13, and the label renders in both
 language bundles. The student Project Center shows 8, none of the three past-year
 titles, and its filter row contains no year control.
+
+**Re-verified on the deployed server** after the backend and frontend deploys,
+which matters because the live data is a different shape from Docker's: Project
+Management loaded on 2026-2027 with 10 projects and **All years** returned 13,
+the extra three starting 2026-06-21, 2026-07-06 and 2026-07-21. A real student
+account's Project Center returned 8, all starting on or after 2026-09-04, with no
+year control among its filters.
 
 ## 6. What it must not do
 
