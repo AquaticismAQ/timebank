@@ -1178,7 +1178,7 @@
       "sortEnrolled": "报名人数",
       "registrationProgress": "报名进度",
       "regCloses": "报名截止",
-      "verifiedHours": "认定时长",
+      "verifiedHours": "认定时长（小时）",
       "errorNameEmpty": "项目名称不能为空",
       "errorCapacityMin": "名额上限至少为 1",
       "errorNoGrade": "请至少选择一个适用年级",

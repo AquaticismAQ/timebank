@@ -1362,3 +1362,13 @@ And the PDF could not draw the name at all: Standard-14 Helvetica is WinAnsi-enc
 **Verified on the bytes the server actually returned** — an evidence PDF downloaded as staff over a fresh login, its content stream inflated and the `Tj` operand decoded — not on what the code composes. Red-checked both the identity change (9 of 17 tests fail on revert) and the PDF degradation (exactly 3 fail, while the ASCII-name test still passes). Two gaps named in the issue doc: no staff account on the test server has a CJK name, and all seeded evidence is PDF, so neither the live CJK path nor the image mark was exercised.
 
 Also recorded there: `FileServiceIT.staffDownloadsAreWatermarkedAndTheOwningStudentsAreNot` is red for a pre-existing reason — its fixture JPEG is 1×1 and the minimum watermark font is 12pt, so no glyph lands on the canvas and marked and clean bytes come out identical. The watermark works; the test cannot see it. Left alone, and it wants its own issue.
+
+### 41.21 The verified-hours field now states its unit (2026-09-20)
+
+Issue 125, reported by Aquaticism on the New Project dialog. The field was a bare number with a `0.5` step and nothing on screen saying what it counted — and the Chinese label, `认定时长` (*certified duration*), named the quantity without its unit, so `2` could as easily have been minutes.
+
+It also disagreed with its own neighbours: `student.proposals.estimatedHours`, `student.proposals.suggestedHours` and `admin.projects.recognizedHours` all carry `（小时）`, the last of which is the same concept in the same namespace.
+
+Now `Verified Duration (hours)` / `认定时长（小时）` — not `Verified Hours (hours)`, which is what "add the unit" literally asks for and reads as a stammer. The English said "Hours" where the Chinese said "时长", so the two were never translations of each other; naming it *duration* in both lets the unit sit where every neighbouring field already puts it. Both the New Project and Edit dialogs render the same key, so both changed — fixing only the reported one would have left the pair disagreeing about the same field.
+
+Verified on the deployed build in both dialogs and both languages; the stored value is untouched and durations stay integer minutes on the wire.

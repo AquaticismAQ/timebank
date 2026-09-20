@@ -1178,7 +1178,7 @@
       "sortEnrolled": "Enrolled",
       "registrationProgress": "Registration Progress",
       "regCloses": "Registration closes",
-      "verifiedHours": "Verified Hours",
+      "verifiedHours": "Verified Duration (hours)",
       "errorNameEmpty": "Project name cannot be empty",
       "errorCapacityMin": "Capacity must be at least 1",
       "errorNoGrade": "Please select at least one eligible grade",
