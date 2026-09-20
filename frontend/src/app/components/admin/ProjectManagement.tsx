@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Search, MapPin, Clock, Users, MoreHorizontal, CheckCircle, X, Edit, Archive, Eye, Copy } from 'lucide-react';
+import { Plus, Search, MapPin, Clock, Users, MoreHorizontal, CheckCircle, X, Edit, Archive, Eye, Copy, AlertTriangle } from 'lucide-react';
 import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
 import { type Project, type ProjectStatus, type Organization, type Grade, type Role } from '../../api/types';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
 import { useFieldErrors, FieldError, handleMutationError } from '../../api/useFieldErrors';
+import { ApiError } from '../../api/http';
 import { usePermissions, useAuth } from '../../App';
 import { useDictionaries } from '../../api/useDictionaries';
 import { localDatetimeLocalToISO, isoToLocalDatetimeLocal, isoToLocalDate } from '../../lib/datetime';
@@ -430,6 +431,8 @@ export function ProjectManagement() {
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [registrantsProject, setRegistrantsProject] = useState<Project | null>(null);
+  /** The refused publish above, held for the dialog that explains it. */
+  const [staleWindow, setStaleWindow] = useState<{ project: Project; closedAt: string } | null>(null);
   const [cancelProject, setCancelProject] = useState<Project | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelSaving, setCancelSaving] = useState(false);
@@ -437,6 +440,7 @@ export function ProjectManagement() {
   // Escape closes the topmost open dialog (issue 102 §5).
   useEscapeToClose(() => setShowForm(false), Boolean(showForm));
   useEscapeToClose(() => setCancelProject(null), Boolean(cancelProject));
+  useEscapeToClose(() => setStaleWindow(null), Boolean(staleWindow));
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -629,6 +633,17 @@ export function ProjectManagement() {
       toast.success(t('admin.projects.toastAction', { action: labels[action] || action, title: proj.title }));
       refetch();
     } catch (err) {
+      // A draft whose registration window has already closed cannot be
+      // published — it would be archived on the next read. This one gets a
+      // dialog rather than a toast (issue 130): the answer is "go and change
+      // the dates", which is an instruction, not a notification.
+      const stale = err instanceof ApiError
+        ? err.fieldErrors?.find(f => f.code === 'PROJECT_REGISTRATION_WINDOW_PASSED')
+        : undefined;
+      if (stale) {
+        setStaleWindow({ project: proj, closedAt: stale.message });
+        return;
+      }
       // `UNREVIEWED_RECORDS` used to be unwrapped by hand here. It no longer
       // needs to be: `handleMutationError` renders any coded field error from
       // `errors.field.*`, so this one is now just a row in that table (issue
@@ -811,7 +826,10 @@ export function ProjectManagement() {
                           <Copy className="w-3.5 h-3.5" /> {t('admin.projects.copyToDraft')}
                         </button>
                       )}
-                      {canPublish && proj.status === 'draft' && (
+                      {/* Publishing is a change like any other, so it follows the
+                          same grade rule as editing (issue 130) — a teacher
+                          could otherwise publish a draft they cannot open. */}
+                      {canPublish && proj.status === 'draft' && canEditProject(proj, user, grades) && (
                         <button onClick={() => handleAction(proj, 'publish')}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
                           <CheckCircle className="w-3.5 h-3.5" /> {t('admin.projects.publish')}
@@ -864,6 +882,36 @@ export function ProjectManagement() {
           getFieldError={fieldErrors.getError}
           onFieldEdit={fieldErrors.clearField}
         />
+      )}
+
+      {/* Why a publish was refused, and what to do about it (issue 130). */}
+      {staleWindow && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col">
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
+              <AlertTriangle className="w-5 h-5 text-orange-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-foreground leading-tight">{t('admin.projects.staleWindowTitle')}</h3>
+                <p className="text-xs text-muted-foreground truncate">{staleWindow.project.title}</p>
+              </div>
+            </div>
+            <div className="px-5 py-5 space-y-3 text-sm text-foreground">
+              <p>{t('admin.projects.staleWindowBody', { closedAt: isoToLocalDate(staleWindow.closedAt) })}</p>
+              <p className="text-muted-foreground">{t('admin.projects.staleWindowFix')}</p>
+            </div>
+            <div className="px-5 py-4 border-t border-border shrink-0 flex gap-3">
+              <button onClick={() => setStaleWindow(null)}
+                className="flex-1 py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-accent">
+                {t('common.close')}
+              </button>
+              <button onClick={() => { const p = staleWindow.project; setStaleWindow(null); openEdit(p); }}
+                className="flex-1 py-2.5 rounded-xl bg-[oklch(0.488_0.243_264.376)] text-white text-sm hover:opacity-90">
+                {t('admin.projects.staleWindowEdit')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* New project modal */}

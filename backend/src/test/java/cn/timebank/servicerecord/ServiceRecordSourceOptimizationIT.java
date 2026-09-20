@@ -217,7 +217,7 @@ class ServiceRecordSourceOptimizationIT extends AbstractIntegrationTest {
                 start, start.plusSeconds(7200), "Community Hall", 10, 100, null, null,
                 Instant.now().minusSeconds(60), start);
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", true, "zh-CN");
-        return projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        return projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
     }
 
     private EnrollmentDto confirmRegistration(ProjectDto project, StudentDetailDto student) {

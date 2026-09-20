@@ -264,9 +264,16 @@ class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public ProjectDto publish(String id, Long version, String actorId, String resolvedLanguage) {
+    public ProjectDto publish(String id, Long version, Authentication auth, String resolvedLanguage) {
+        TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
+        String actorId = principal.id();
         Project project = findOrThrow(id);
         syncTimeBasedStatus(project);
+        // Publishing is a change like any other, so the same grade rule applies
+        // (issue 130). Without it a teacher could publish an out-of-grade draft
+        // they are not allowed to edit, which is not a coherent pair of powers.
+        requireWithinActorsGrades(project, principal);
+        requirePublishableWindow(project);
         ConcurrencyControl.checkVersion(project.getVersion(), version);
         ProjectStateMachine.transition(project, ProjectStatus.PUBLISHED, ActorRole.MANAGER);
         project.setUpdatedAt(Instant.now());
@@ -454,6 +461,38 @@ class ProjectServiceImpl implements ProjectService {
     }
 
     /** Required for CLOSED (registration-elapsed) to ever actually reach IN_PROGRESS — a project whose registration window closes after its own start date would otherwise stall in REGISTRATION_OPEN forever, since IN_PROGRESS is now only reachable via CLOSED. */
+    /**
+     * A draft whose registration window has already closed cannot be published
+     * (issue 130).
+     *
+     * <p>Publishing it is not merely pointless — it is destructive.
+     * {@code syncTimeBasedStatus} runs on the very next read: PUBLISHED →
+     * REGISTRATION_OPEN → and, with nobody enrolled, straight to ARCHIVED. The
+     * draft someone had been preparing is gone, with a success toast and no
+     * error anywhere. Issue 119 documented this trap for copied projects; this
+     * closes it for every draft.</p>
+     *
+     * <p>Checking {@code registrationCloseAt} alone is enough because
+     * {@link #validateDateOrdering} already requires it to be on or before
+     * {@code startAt} — a future close date implies a future start.</p>
+     *
+     * <p>The auto-archive path itself is untouched and still reachable the way
+     * it actually happens: a project published with a live window whose window
+     * later elapses with nobody signed up.</p>
+     */
+    private void requirePublishableWindow(Project project) {
+        if (project.getStatus() != ProjectStatus.DRAFT) {
+            return;
+        }
+        if (!project.getRegistrationCloseAt().isAfter(Instant.now())) {
+            throw ApiException.stateConflict(
+                    "This project's registration window closed at " + project.getRegistrationCloseAt()
+                            + ", so publishing it would archive it immediately. Change its dates first.",
+                    List.of(new FieldErrorDetail("registrationCloseAt", "PROJECT_REGISTRATION_WINDOW_PASSED",
+                            project.getRegistrationCloseAt().toString())));
+        }
+    }
+
     private void validateDateOrdering(Project project) {
         if (project.getRegistrationCloseAt().isAfter(project.getStartAt())) {
             throw ApiException.invalidRequest("registrationCloseAt must not be after startAt.");

@@ -291,7 +291,7 @@ class DashboardReportingIT extends AbstractIntegrationTest {
                 now.plusSeconds(7200), now.plusSeconds(10800), "Hall", 5, 100, null, null,
                 now.minusSeconds(60), now.plusSeconds(3600));
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
-        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), authFor("usr_dash_admin", null, "admin"), "zh-CN");
         ProjectDto registrationOpen = projectService.getDetail(published.id(), authFor("usr_dash_admin", null, "admin"), "zh-CN");
         // grade_8, not grade_9: the year-scoping test above asserts an exact grade_9
         // head count, and test methods in a class share one schema.

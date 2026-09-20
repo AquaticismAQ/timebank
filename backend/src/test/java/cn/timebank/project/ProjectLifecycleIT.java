@@ -61,13 +61,21 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
 
     @Test
     void registrationOpenArchivesAutomaticallyWithZeroRegistrantsInsteadOfClosing() {
-        // registrationOpenAt already past; registrationCloseAt past too, but startAt
-        // (createDraft's default, 5 days out) is not — with nobody registered, the
-        // registration-close boundary should archive directly rather than land on
-        // CLOSED (which would otherwise just sit unused until startAt).
-        ProjectDto draft = createDraft(Instant.now().minusSeconds(60), Instant.now().minusSeconds(10));
-        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        // The window has to be live at publish time — issue 130 refuses a draft
+        // whose registration has already closed, because publishing one would
+        // archive it on the next read with no error anywhere. So this reaches
+        // the same state the way it actually happens: publish with a live
+        // window, then let the window elapse with nobody signed up.
+        Instant now = Instant.now();
+        ProjectDto draft = createDraft(now.minusSeconds(60), now.plusSeconds(3600));
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
         assertThat(published.status()).isEqualTo("PUBLISHED");
+
+        UpdateProjectRequest closeItNow = new UpdateProjectRequest(
+                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null,
+                null, now.minusSeconds(10), published.version());
+        projectService.updateDraft(published.id(), closeItNow, adminAuth(), "zh-CN");
 
         ProjectDto reread = projectService.getDetail(published.id(), adminAuth(), "zh-CN");
         assertThat(reread.status()).isEqualTo("ARCHIVED");
@@ -86,7 +94,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
                 now.plusSeconds(7200), now.plusSeconds(10800), "Hall", 5, 100, null, null,
                 now.minusSeconds(60), now.plusSeconds(3600));
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
-        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
         ProjectDto registrationOpen = projectService.getDetail(published.id(), adminAuth(), "zh-CN");
         assertThat(registrationOpen.status()).isEqualTo("REGISTRATION_OPEN");
 
@@ -135,7 +143,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
                 now.plusSeconds(7200), now.plusSeconds(10800), "Hall", 1, 100, null, null,
                 now.minusSeconds(60), now.plusSeconds(3600));
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
-        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
         ProjectDto registrationOpen = projectService.getDetail(published.id(), adminAuth(), "zh-CN");
         assertThat(registrationOpen.status()).isEqualTo("REGISTRATION_OPEN");
 
@@ -193,7 +201,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
                 now.plusSeconds(7200), now.plusSeconds(10800), "Hall", 1, 100, null, null,
                 now.minusSeconds(60), now.plusSeconds(3600));
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
-        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
         ProjectDto registrationOpen = projectService.getDetail(published.id(), adminAuth(), "zh-CN");
 
         // A confirmed registrant is what makes the cascade end at COMPLETED
@@ -293,7 +301,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
     @Test
     void updateIsStillAllowedOnAPublishedProject() {
         ProjectDto draft = createDraft("Editable While Live", Instant.now().plusSeconds(1000), Instant.now().plusSeconds(2000));
-        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
 
         UpdateProjectRequest moveIt = new UpdateProjectRequest(
                 null, null, null, null, null, null, null,
@@ -305,7 +313,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
     @Test
     void cancelArchivesALivePublishedProjectDirectlyWithoutPassingThroughClosed() {
         ProjectDto draft = createDraft(Instant.now().plusSeconds(1000), Instant.now().plusSeconds(2000));
-        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
 
         ProjectDto cancelled = projectService.cancel(published.id(),
                 new CancelProjectRequest("Partner organization withdrew.", published.version()),
@@ -319,7 +327,7 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
                 Instant.now().plusSeconds(1000), Instant.now().plusSeconds(2000));
         ProjectDto notDraft = createDraft("Filter Test Draft Beta",
                 Instant.now().plusSeconds(1000), Instant.now().plusSeconds(2000));
-        ProjectDto published = projectService.publish(notDraft.id(), notDraft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(notDraft.id(), notDraft.version(), adminAuth(), "zh-CN");
 
         // status filter narrows results: the still-draft project is included, the published one is not.
         Page<ProjectDto> draftOnly = projectService.list(PageRequest.of(0, 100), "DRAFT", null, null, null, null, adminAuth(), "zh-CN");

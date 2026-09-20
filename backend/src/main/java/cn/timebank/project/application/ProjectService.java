@@ -49,7 +49,8 @@ public interface ProjectService {
     /** Takes the principal rather than a pre-derived actor id and admin flag: the grade rule (issue 129) needs the scope behind it, and every other module's `updateDraft` already has this shape. */
     ProjectDto updateDraft(String id, UpdateProjectRequest request, Authentication auth, String resolvedLanguage);
 
-    ProjectDto publish(String id, Long version, String actorId, String resolvedLanguage);
+    /** Takes the principal for the same reason {@link #updateDraft} does — publishing is grade-restricted too (issue 130). */
+    ProjectDto publish(String id, Long version, Authentication auth, String resolvedLanguage);
 
     /** Rejects with a state-conflict if `status == COMPLETED` and any confirmed student's record isn't yet reviewed — {@link #cancel} is the override. */
     ProjectDto archive(String id, Long version, String actorId, String resolvedLanguage);

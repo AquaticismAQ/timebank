@@ -87,7 +87,7 @@ public class ProjectController {
     public ApiResponse<ProjectDto> publish(
             @PathVariable String id, @Valid @RequestBody ActionRequest request,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
-        return ApiResponse.of(projectService.publish(id, request.version(), principalId(auth), resolveLanguage(acceptLanguage, auth)));
+        return ApiResponse.of(projectService.publish(id, request.version(), auth, resolveLanguage(acceptLanguage, auth)));
     }
 
     @PostMapping("/{id}/archive")

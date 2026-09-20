@@ -5,6 +5,7 @@ import cn.timebank.iam.application.dto.AuthenticatedUserView;
 import cn.timebank.project.application.ProjectService;
 import cn.timebank.project.application.dto.ProjectDto;
 import cn.timebank.project.application.dto.ProjectRequests.CreateProjectRequest;
+import cn.timebank.project.application.dto.ProjectRequests.UpdateProjectRequest;
 import cn.timebank.security.application.CookieSessionUserDetails;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
@@ -133,13 +134,25 @@ class ProjectAcademicYearScopeIT extends AbstractIntegrationTest {
      */
     private String publishedProjectStarting(LocalDate startDay, String label) {
         Instant start = startDay.atTime(9, 0).atZone(ZoneId.systemDefault()).toInstant();
+        // Created with a live registration window and dated afterwards: issue
+        // 130 refuses to publish a draft whose registration has already closed,
+        // and a past year's project has by definition. Publishing first and
+        // then moving the dates is how such a row genuinely comes to exist —
+        // it was published when its window was open, and time passed.
+        Instant soon = Instant.now().plusSeconds(3600);
         CreateProjectRequest request = new CreateProjectRequest(
                 "Scope IT " + label + " " + System.nanoTime(), "summary", "description",
                 "cat_campus", null, null, "ON_CAMPUS",
-                start, start.plusSeconds(7200), "Hall", 5, 100, null, null,
-                start.minusSeconds(86400), start.minusSeconds(60));
+                soon.plusSeconds(7200), soon.plusSeconds(14400), "Hall", 5, 100, null, null,
+                Instant.now().minusSeconds(60), soon);
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
-        return projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN").id();
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
+
+        UpdateProjectRequest backdate = new UpdateProjectRequest(
+                null, null, null, null, null, null, null,
+                start, start.plusSeconds(7200), null, null, null, null, null,
+                start.minusSeconds(86400), start.minusSeconds(60), published.version());
+        return projectService.updateDraft(published.id(), backdate, adminAuth(), "zh-CN").id();
     }
 
     private Authentication adminAuth() {

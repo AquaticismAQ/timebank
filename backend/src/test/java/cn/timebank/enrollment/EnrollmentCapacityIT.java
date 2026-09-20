@@ -62,7 +62,7 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
                 start, start.plusSeconds(7200), "Hall", capacity, 100, null, null,
                 Instant.now().minusSeconds(60), start);
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
-        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
         assertThat(published.status()).isEqualTo("PUBLISHED");
         // Force the lazy time-sync to REGISTRATION_OPEN before firing concurrent registrations.
         projectService.getDetail(published.id(), adminAuth(), "zh-CN");
@@ -106,7 +106,7 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
                 start, start.plusSeconds(7200), "Hall", 5, 100, null, null,
                 Instant.now().minusSeconds(60), start);
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
-        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
         projectService.getDetail(published.id(), adminAuth(), "zh-CN");
 
         Authentication student = studentAuth(createStudent(300).id());
@@ -133,7 +133,7 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
                 start, start.plusSeconds(7200), "Hall", 1, 100, null, null,
                 Instant.now().minusSeconds(60), start);
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
-        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
         projectService.getDetail(published.id(), adminAuth(), "zh-CN");
 
         // `reject` only accepts PENDING/WAITLISTED, so the single seat is taken
@@ -160,7 +160,7 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
                 start, start.plusSeconds(7200), "Hall", capacity, 100, null, null,
                 Instant.now().minusSeconds(60), start);
         ProjectDto draft = projectService.createDraft(request, "usr_test_admin", false, "zh-CN");
-        ProjectDto published = projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN");
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
         // Force the lazy time-sync to REGISTRATION_OPEN before registering.
         projectService.getDetail(published.id(), adminAuth(), "zh-CN");
 
@@ -201,8 +201,8 @@ class EnrollmentCapacityIT extends AbstractIntegrationTest {
                 Instant.now().minusSeconds(60), start);
         ProjectDto draftA = projectService.createDraft(requestA, "usr_test_admin", false, "zh-CN");
         ProjectDto draftB = projectService.createDraft(requestB, "usr_test_admin", false, "zh-CN");
-        ProjectDto projectA = projectService.publish(draftA.id(), draftA.version(), "usr_test_admin", "zh-CN");
-        ProjectDto projectB = projectService.publish(draftB.id(), draftB.version(), "usr_test_admin", "zh-CN");
+        ProjectDto projectA = projectService.publish(draftA.id(), draftA.version(), adminAuth(), "zh-CN");
+        ProjectDto projectB = projectService.publish(draftB.id(), draftB.version(), adminAuth(), "zh-CN");
         projectService.getDetail(projectA.id(), adminAuth(), "zh-CN");
         projectService.getDetail(projectB.id(), adminAuth(), "zh-CN");
 

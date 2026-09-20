@@ -128,11 +128,65 @@ class ProjectGradeScopeIT extends AbstractIntegrationTest {
                 .isEqualTo("Moved by an admin");
     }
 
+    @Test
+    void aTeacherCannotPublishAProjectOutsideTheirGrades() {
+        ProjectDto draft = draftFor("grade_6", "Out of scope to publish");
+
+        assertThatThrownBy(() -> projectService.publish(draft.id(), draft.version(),
+                teacherAuth("usr_publishing_outsider"), "zh-CN"))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("not open to any of the grades");
+
+        assertThat(projectService.getDetail(draft.id(), adminAuth(), "zh-CN").status()).isEqualTo("DRAFT");
+    }
+
+    /** A draft whose registration has already closed would be archived the moment it was published. */
+    @Test
+    void aDraftWhoseRegistrationWindowHasClosedCannotBePublished() {
+        ProjectDto draft = draftFor("grade_6", "Stale window");
+        // Backdate it the way time would: published projects stay editable.
+        UpdateProjectRequest backdate = new UpdateProjectRequest(
+                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null,
+                null, Instant.now().minusSeconds(60), draft.version());
+        ProjectDto stale = projectService.updateDraft(draft.id(), backdate, adminAuth(), "zh-CN");
+
+        assertThatThrownBy(() -> projectService.publish(stale.id(), stale.version(), adminAuth(), "zh-CN"))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> {
+                    ApiException api = (ApiException) e;
+                    assertThat(api.fieldErrors()).extracting(cn.timebank.common.error.FieldErrorDetail::code)
+                            .containsExactly("PROJECT_REGISTRATION_WINDOW_PASSED");
+                    assertThat(api.getMessage()).contains("Change its dates first");
+                });
+
+        // Still a draft, not quietly archived — which is the whole point.
+        assertThat(projectService.getDetail(stale.id(), adminAuth(), "zh-CN").status()).isEqualTo("DRAFT");
+    }
+
+    /** The control: a live window still publishes, so the guard is not refusing everything. */
+    @Test
+    void aDraftWithALiveRegistrationWindowStillPublishes() {
+        ProjectDto draft = draftFor("grade_6", "Live window");
+
+        assertThat(projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN").status())
+                .isEqualTo("PUBLISHED");
+    }
+
     // ── fixture ──────────────────────────────────────────────────────────
 
     private List<String> idsFor(Authentication auth) {
         return projectService.list(PageRequest.of(0, 500), null, null, null, null, null, auth, "zh-CN")
                 .getContent().stream().map(ProjectDto::id).toList();
+    }
+
+    private ProjectDto draftFor(String gradeId, String label) {
+        Instant start = Instant.now().plus(5, ChronoUnit.DAYS);
+        return projectService.createDraft(new CreateProjectRequest(
+                        label + " " + System.nanoTime(), "summary", "description", "cat_campus", null, null,
+                        "ON_CAMPUS", start, start.plusSeconds(7200), "Hall", 5, 100,
+                        List.of(gradeId), null, Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600)),
+                "usr_test_admin", false, "zh-CN");
     }
 
     private String publishedFor(String gradeId, String label) {
@@ -142,7 +196,7 @@ class ProjectGradeScopeIT extends AbstractIntegrationTest {
                         "ON_CAMPUS", start, start.plusSeconds(7200), "Hall", 5, 100,
                         List.of(gradeId), null, Instant.now().plusSeconds(1000), Instant.now().plusSeconds(2000)),
                 "usr_test_admin", false, "zh-CN");
-        return projectService.publish(draft.id(), draft.version(), "usr_test_admin", "zh-CN").id();
+        return projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN").id();
     }
 
     private StudentDetailDto createStudent(String number, String name, String gradeId, String classId) {

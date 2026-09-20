@@ -1414,3 +1414,17 @@ Issue 129, Aquaticism restating the original design. Visibility and mutability w
 **Left alone and flagged:** `publish` is still unrestricted, so a teacher can publish an out-of-grade draft they cannot edit. Incoherent, but the report said *edit*; recommended as the next step and safe now the ownership clause exists.
 
 **One bug the tests caught:** the first version used `hasFullDataScope()`, which is `!roles.contains("student")` and would have exempted every teacher — the whole population the rule is about. `hasSchoolWideVisibility()` is the grade-scoped one; the guard silently never fired until a test asked it to.
+
+### 41.25 Publishing: grade-restricted, and no longer able to destroy a draft (2026-09-20)
+
+Issue 130, Aquaticism's answer to the follow-up 129 §4 left open, plus a second rule.
+
+**Out of grade.** Issue 129 restricted *editing* and deliberately left `publish` alone because the report said edit. That left an incoherent pair of powers — a teacher could not open a Grade 7 draft but could publish it to the school. `publish` now applies the same `requireWithinActorsGrades` check, ownership clause included, and the menu hides the action rather than failing on click.
+
+**Out of date.** A draft whose registration window had already closed could be published, and doing so is destructive rather than merely pointless: `syncTimeBasedStatus` runs on the next read and walks it `PUBLISHED → REGISTRATION_OPEN → ARCHIVED` with nobody enrolled. The draft is gone, with a success toast and no error. Issue 119 §3 documented this trap for copied projects and worked around it; this closes it for every draft, with `409 PROJECT_REGISTRATION_WINDOW_PASSED` carrying the date. Checking `registrationCloseAt` alone suffices because `validateDateOrdering` already ties it to `startAt`.
+
+**A dialog, not a toast** — Aquaticism's call, and the right distinction: the answer is "go and change the dates", which is an instruction, not a notification. It names the project and the date, says what publishing would do, and offers an Edit-dates button that opens the form on that project.
+
+**Two existing fixtures broke, which is the right outcome.** Both published drafts with already-closed windows as a shortcut — one to reach auto-archive directly, one to seed a past year's project. Both now reach their state the way a real row does: published with a live window, then dated afterwards. Assertions unchanged; only the route, and the new route is production's.
+
+**Verified live with controls**: a Grade 6 draft is refused 403 while a draft including grade 10 publishes 200; the draft menu shows 发布 in scope and only 查看 out of it; and staling a real draft's window produces the dialog, whose Edit-dates button opens 编辑项目 on that project. The draft's original date was restored afterwards.
