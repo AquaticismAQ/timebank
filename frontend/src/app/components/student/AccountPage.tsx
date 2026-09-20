@@ -88,7 +88,7 @@ export function AccountPage() {
     [accountId]
   );
 
-  const { items: transactions, page, loading, error, setPage, refetch } = usePagedApi(fetchTransactions, {});
+  const { items: transactions, page, params, loading, error, setPage, setPageSize, refetch } = usePagedApi(fetchTransactions, {});
 
   // The transactions fetch depends on `accountId`, which only becomes known
   // after api.accounts.get() resolves — re-trigger once it does (the hook's
@@ -286,7 +286,13 @@ export function AccountPage() {
             )}
 
             <div className="px-4 pb-4">
-              <PageControls page={page} onPageChange={setPage} />
+              {/* The page-size control every other paginated list carries
+                  (issue 141). A ledger is the list most likely to be long,
+                  and it was the one offering no way to see more of it at
+                  once. Options come from `lib/pagination.ts`, so this one
+                  cannot offer a different set from the rest. */}
+              <PageControls page={page} onPageChange={setPage}
+                pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
             </div>
           </div>
         </div>
