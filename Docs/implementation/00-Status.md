@@ -1647,3 +1647,17 @@ Auditing the upload as well as the commit is what gives a rejected import a trac
 **Verified through `GET /audit-logs`**, not through the call site: a rejected import shows `import.create` and no commit row; a committed one shows both, with the digest and `rowsCommitted`. The context bridge had a real before/after available, since `student.create` predates it — the same action written by an import earlier the same day carries `ip (null)`/`no-request`, and after the change carries the requester's address and a request id matching the `import.commit` row, tying the summary and every row it created to one person. Red-checked at unit and integration level.
 
 I-09 is ✅ in §12.4 and out of §12.8 in both language versions. §12.8 now holds only A-16 (a sentence to correct plus the proxy's stale rate-limit rule), the MFA trio, and central log retention — the last two being the school's decisions.
+
+### 41.44 A-16: the sentence, and the stale proxy rule (issue 150, 2026-09-21)
+
+Aquaticism: *"correct sentence of A-16, clean up the config."* The last §12.8 item that was ours.
+
+**The sentence.** §8.1 claimed "免认证接口全系统仅有两个——登录与激活". The second clause of that sentence — neither issues a credential because a caller named an account — is true and is what the design rests on. The count was not: there are seven, with logout, CSRF retrieval, two probes and the login page's school-name endpoint also `permitAll`. That is the worst kind of wrong sentence in a compliance document, because an assessor can count, and it counts wrong. Nothing was less safe than claimed; the claim was the wrong one to make.
+
+It now lists all seven and states the property that matters, including the stronger form for activation: it **takes no username at all** — the code is its own lookup key, so the endpoint never has to be told, and therefore never has to confirm, which student a code belongs to. `/actuator/**` is named too, with its loopback-only reachability, rather than omitted from a list claiming completeness.
+
+**The config.** The proxy's rate-limit location still named `forgot-password` and `reset-password`, removed with the self-service recovery feature; reduced to an exact match on login. `activate` was deliberately *not* added while the rule was open: the zone is 10r/m per source address and a class activating together sits behind one school NAT, so a proxy-side limit would refuse the thirtieth child. Activation's throttling stays in the application, which has both a per-IP limit and §8.3's global budget, tuned knowing that.
+
+**Measured**, because an exact-match location is exactly where a typo silently removes protection: a real login still succeeds, fourteen rapid logins against a nonexistent username give five through then 503s then one as the bucket refills, and fourteen hits on `/ping` are untouched — so it is the location doing it and not something global. A nonexistent username deliberately: lockout is real, and hammering a live account to test a proxy rule would lock it. The two removed paths return 404 (checked with a CSRF token — without one the CSRF filter answers 403 first, which would have looked like the endpoints still existing).
+
+A-16 is ✅ in §12.5 and out of §12.8 in both language versions. **§12.8 now contains only the school's decisions**: MFA (A-13/A-14/A-15) and central log retention (O-01).

@@ -129,6 +129,7 @@ T-03).
 | --- | --- | --- |
 | `ssl_protocols` | `TLSv1.2 TLSv1.3` — **in the global `http` block**, not only in the site's `server` block | The distribution default still names TLS 1.0 and 1.1. A site that does not include its own list inherits that, so setting it only on this vhost leaves the next one weak (issue 147) |
 | `Strict-Transport-Security` | `max-age=31536000` | A short max-age is a short window of protection. One year is the usual figure. `includeSubDomains`/`preload` deliberately unset — preload is slow to leave, and the production domain is not settled |
+| `limit_req` on `/api/v1/auth/login` | zone `timebank_auth_per_ip`, `10r/m`, `burst=5` | **Login only.** Activation is the other unauthenticated credential path and is deliberately *not* rate-limited here: a class activating together shares one school NAT address, so a per-source limit would refuse the thirtieth child in the room. Activation's throttling lives in the application, which has a per-IP limit and a global failure budget tuned knowing that (issue 150) |
 
 After changing either: `nginx -t`, then `systemctl reload nginx`. To check the
 TLS one you must force the client to offer the old versions, or the result is
