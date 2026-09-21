@@ -1607,3 +1607,15 @@ The deletion is checkpoint-resume. It existed to recover a half-applied file, an
 **Verified with a control** (see the issue doc): a two-row roster with one bad row was refused whole and *its good row did not land*, beside a clean file through the same endpoints that committed. The rollback half — an already-applied row coming back out — is proven by an integration test that asserts on the **first** row rather than the bad one, red-checked against the old skip-and-continue.
 
 §12's I-03 row and §12.8 updated in both language versions.
+
+### 41.41 The two transport settings from §12 (issue 147, 2026-09-21)
+
+Aquaticism, on the self-assessment's remaining ⚠️ rows: *"the fix the T-02 and T-03."*
+
+**T-02.** The proxy's global `ssl_protocols` still carried the distribution default, TLS 1.0 through 1.3. The site was never exposed by it — Certbot's include sets 1.2/1.3 and `ssl_protocols` resolves from the listening socket's default server, which is this site — so this was about what a *second* vhost would inherit. Converged globally.
+
+**T-03.** HSTS `max-age` 30 days → `31536000`. `includeSubDomains` and `preload` deliberately left off: preload is easy to join and slow to leave, and the school's production domain is not settled (P-06).
+
+**Measured, and the first reading was wrong.** A modern OpenSSL will not send a TLS 1.0 ClientHello of its own accord, and that refusal looks exactly like the server's. Forcing the offer with `-cipher 'ALL:@SECLEVEL=0'` gives the real answer: 1.0 and 1.1 fail with a protocol-version alert and `Cipher: 0000`, 1.2 and 1.3 complete with a verified chain. The summary line prints `Protocol: TLSv1` for a *refused* attempt, which is what made the first pass read as "still accepted".
+
+Both settings existed only on the server, so the design's §9 transport table now states checkable values (TLS 1.2/1.3 **including the global default**; HSTS ≥ 1 year) instead of "HTTPS enforced" and "HSTS enabled", and `Docs/operations/Configuration.md` §4.1 records them for whoever rebuilds the box. §7.1's third principle also now states the mechanism behind "whole file or nothing" — the validation gate and the single commit transaction from §41.40 — rather than asserting it. T-02/T-03 are ✅ in §12.6 and out of §12.8, in both language versions.

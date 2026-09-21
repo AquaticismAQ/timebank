@@ -117,6 +117,30 @@ properties is a small change if a deployment needs it.
 | `TIMEBANK_SITE_ROOT_URL` | *(required)* | Public root, used for activation deep links and printed credential slips |
 | `TIMEBANK_ENVIRONMENT` | `unspecified` | Label only; appears in logs and the version endpoint |
 
+### 4.1 Reverse proxy — two settings that live nowhere else
+
+TLS terminates at nginx, so these are not environment variables and not in this
+repository; they exist only in the proxy's own configuration, which is why they
+are written down here. Both are checked items in the security design's
+self-assessment (`Design/*/08-mlps-level1-security-design-guide.md` §9, T-02 and
+T-03).
+
+| Setting | Required value | Why here |
+| --- | --- | --- |
+| `ssl_protocols` | `TLSv1.2 TLSv1.3` — **in the global `http` block**, not only in the site's `server` block | The distribution default still names TLS 1.0 and 1.1. A site that does not include its own list inherits that, so setting it only on this vhost leaves the next one weak (issue 147) |
+| `Strict-Transport-Security` | `max-age=31536000` | A short max-age is a short window of protection. One year is the usual figure. `includeSubDomains`/`preload` deliberately unset — preload is slow to leave, and the production domain is not settled |
+
+After changing either: `nginx -t`, then `systemctl reload nginx`. To check the
+TLS one you must force the client to offer the old versions, or the result is
+meaningless — a modern OpenSSL will not send a TLS 1.0 ClientHello unprompted
+and the failure looks the same either way:
+
+```bash
+openssl s_client -connect <host>:443 -servername <host> -tls1 -cipher 'ALL:@SECLEVEL=0'
+# refused correctly => "alert protocol version" and `Cipher : 0000`
+# the summary line still prints `Protocol: TLSv1`; that is not success
+```
+
 ---
 
 ## 5. Database

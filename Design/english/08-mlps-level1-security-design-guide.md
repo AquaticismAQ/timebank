@@ -301,7 +301,12 @@ not a security boundary.
    does the commit phase run, and it **re-runs every check in full** rather than trusting the
    earlier result.
 3. **Commit only if the entire file is valid**, so a half-loaded dataset never creates an
-   intractable intermediate state.
+   intractable intermediate state. Two mechanisms hold this rather than a procedural
+   convention: a single invalid row ends validation in a *failed* state from which commit
+   cannot be started, and the commit itself is **one transaction**, so a row that is no
+   longer valid when re-checked rolls the whole file back along with the rows already
+   applied. There is therefore no "skip the bad rows and load the rest" outcome, and no need
+   for resumable checkpoints — there is no half-loaded file to resume.
 4. **Per-row error reports** give the row number, field, error type, and explanation so the
    school can locate and correct them.
 
@@ -537,8 +542,8 @@ be implemented to match.
 
 | Item | Measure |
 | :--- | :--- |
-| Transport encryption | Site-wide **HTTPS**, **TLS 1.2 / 1.3 only**, with known-weak protocol versions and cipher suites disabled |
-| Transport policy | HSTS enabled, so browsers always use HTTPS thereafter |
+| Transport encryption | Site-wide **HTTPS** (port 80 redirects wholesale to 443), **TLS 1.2 / 1.3 only**, with known-weak protocol versions and cipher suites disabled. The restriction belongs in the reverse proxy's **global default** as well as this site's own server block — otherwise a site added later inherits the distribution default, which still names TLS 1.0 and 1.1 |
+| Transport policy | HSTS enabled with `max-age` of **at least one year** (currently `31536000`), so browsers always use HTTPS thereafter. `includeSubDomains` and `preload` are deliberately not set: preload is a public list that is easy to join and slow to leave, and committing a domain to it before the school has settled its production domain is not ours to decide |
 | Content security policy | CSP configured to restrict script sources and limit the impact of cross-site scripting |
 | Session security | Cookies set `Secure`, `HttpOnly`, `SameSite`; no sensitive plaintext in client-side storage |
 | Cross-site request forgery | CSRF token validation enabled |
@@ -701,8 +706,8 @@ and showing it as passed or failed would be equally untrue.
 | ID | Check | Built | Notes | Accepted |
 | :--- | :--- | :--- | :--- | :--- |
 | T-01 | Site-wide HTTPS enforced | ✅ | Port 80 redirects wholesale (301) to 443 | [ ] |
-| T-02 | TLS 1.2/1.3 only; weak versions and cipher suites disabled | ⚠️ | The site serves TLS 1.2/1.3 with modern ciphers, but the reverse proxy's **global** configuration still lists TLSv1 and TLSv1.1. The site-level configuration overrides it; converge them anyway, so a future site does not inherit the default | [ ] |
-| T-03 | HSTS enabled | ⚠️ | Enabled, but `max-age` is 30 days — short of the usual six-month-to-one-year guidance. Raise before go-live | [ ] |
+| T-02 | TLS 1.2/1.3 only; weak versions and cipher suites disabled | ✅ | Converged 2026-09-21 (issue 147): the reverse proxy's global default is now `TLSv1.2 TLSv1.3` too, rather than relying on the site-level include to override it. Measured with a client forced to offer the old versions: TLS 1.0 and 1.1 are refused with a protocol-version alert, 1.2 and 1.3 complete | [ ] |
+| T-03 | HSTS enabled, `max-age` ≥ 1 year | ✅ | Raised from 30 days to `max-age=31536000` on 2026-09-21 (issue 147); confirmed in the served response header. `includeSubDomains`/`preload` deliberately not set — see §9 | [ ] |
 | T-04 | CSP configured | ✅ | `default-src 'self'`, framing refused (`frame-ancestors 'none'`) | [ ] |
 | T-05 | Cookies `Secure`/`HttpOnly`/`SameSite`; no sensitive plaintext in local storage | ✅ | All three attributes set on the session cookie. Local storage holds the current user's display information and language preference only — no password, session token, or evidence URL | [ ] |
 | T-06 | CSRF token validation enabled | ✅ | Double-submit cookie | [ ] |
@@ -729,8 +734,6 @@ implementer's current debt:
 | I-09 | No summary audit entry for an import | Implement |
 | A-16 | "Only two unauthenticated endpoints" does not match the code; the proxy still rate-limits removed paths | Restate the sentence; clean up the config |
 | D-08 | The production gate warns rather than refusing when the environment marker is missing | Known gap; tighten before go-live |
-| T-02 | The proxy's global configuration still lists TLSv1/1.1 | Converge the configuration |
-| T-03 | HSTS `max-age` is only 30 days | Adjust the configuration |
 | A-13/A-14/A-15 | MFA approach undecided, not enabled | Implement once the school decides (§8.4) |
 | O-01 | No central log-retention arrangement | Settle with the school alongside production operations |
 
