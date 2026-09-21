@@ -65,6 +65,17 @@ public interface ProjectService {
     /** B4.7: locks the project row for the duration of the caller's transaction (propagation REQUIRED joins it). */
     ProjectCapacitySnapshot lockForRegistration(String projectId);
 
+    /**
+     * Advances every project whose stored status has fallen behind the clock,
+     * and reports how many moved (issue 145).
+     *
+     * Exists for the scheduled sweep. The statuses were already correct
+     * everywhere a user could see them — every read syncs — but a project
+     * nobody opens keeps a stale row, and the report aggregates read the table
+     * directly.
+     */
+    int reconcileTimeBasedStatuses();
+
     /** B4.11: called only from `proposal`'s approval transaction. @return the new project's id. */
     String createFromProposal(ProjectGenerationRequest request);
 

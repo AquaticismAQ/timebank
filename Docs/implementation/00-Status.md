@@ -1571,4 +1571,25 @@ Aquaticism asked whether a published project really turns to `REGISTRATION_OPEN`
 
 And across the 97 real projects on the server, every stored status agreed with its own dates: `inconsistentCount: 0`, spanning DRAFT/PUBLISHED/REGISTRATION_OPEN/CLOSED/IN_PROGRESS/COMPLETED/ARCHIVED. Both close paths already have integration tests (`registrationOpenArchivesAutomaticallyWithZeroRegistrants…`, `registrationOpenClosesNormallyInsteadOfArchiving…`).
 
-**The one caveat worth knowing: the sync is lazy, not scheduled** — a deliberate B4.2 decision, since no cron/ShedLock infrastructure exists (§16). A project nobody opens keeps a stale row in the database until something reads it. That is invisible to users, because every read corrects it first, but it *is* visible to the raw-SQL report aggregates that bypass the service — the dashboard's "active projects" counts `status in ('PUBLISHED','REGISTRATION_OPEN','IN_PROGRESS')` straight from the table, so a project that should have archived itself at its registration close can be counted as active until someone looks at it. No change made: that is the known cost of the lazy design, and it is the kind of thing to fix by adding the scheduler, not by patching one query.
+**The one caveat worth knowing: the sync is lazy, not scheduled** — a deliberate B4.2 decision (§16). A project nobody opens keeps a stale row in the database until something reads it. That is invisible to users, because every read corrects it first, but it *is* visible to the raw-SQL report aggregates that bypass the service — the dashboard's "active projects" counts `status in ('PUBLISHED','REGISTRATION_OPEN','IN_PROGRESS')` straight from the table, so a project that should have archived itself at its registration close can be counted as active until someone looks at it. No change made here: that is the known cost of the lazy design, and it is the kind of thing to fix by adding the scheduler, not by patching one query.
+
+> **Correction, same day.** The sentence above originally gave the reason as "no cron/ShedLock infrastructure exists". **That was true when B4 decided it and has not been true since B5** (§18): ShedLock 6.3.0 is a dependency, `@EnableScheduling` is on `TimeBankApplication`, `SchedulingConfig` wires the JDBC lock provider, `V9` created the `shedlock` table, and ten `@Scheduled` jobs already run against it. The decision was still defensible on its own terms — one more job for a caveat nobody had complained about — but it was not blocked on anything. Scheduler added in §41.39.
+
+### 41.39 The project-status sweep (issue 145, 2026-09-21)
+
+Aquaticism, on the caveat §41.38 left open: *"yes, impl a scheduler in java, not crond."*
+
+`ProjectStatusSweepJob` — `@Scheduled(cron = "0 */5 * * * *")` plus `@SchedulerLock`, the same shape as the ten jobs already in `lifecycle/`. It calls one new service method, `reconcileTimeBasedStatuses()`, which calls the same private `syncTimeBasedStatus` every read calls; the job restates none of the transition rules. `ProjectRepository.findOvertakenByClock` selects only the four clock-driven edges rather than scanning the table — `DRAFT`, `COMPLETED` and `ARCHIVED` have no clock edge leaving them.
+
+Five minutes, not one, because nothing a person sees depends on it: the reads still correct themselves first, so the interval bounds only how stale a report aggregate can be.
+
+**Forced on the server, with a control.** Two projects published at 07:14, one with its registration close pushed 10 seconds into the past and one with everything an hour out, then *nothing read either* — the statuses below were read with SQL, which does not sync.
+
+| | before 07:15 tick | after |
+| :--- | :--- | :--- |
+| close already elapsed | `REGISTRATION_OPEN` | **`ARCHIVED`** |
+| control, all future | `PUBLISHED` | `PUBLISHED` |
+
+The job logged `advanced 1 project(s)`, the `shedlock` row for `projectStatusSweep` was taken and released, and the audit entry is the same `project.autoArchiveNoRegistrants` / `NO_REGISTRANTS_AT_REGISTRATION_CLOSE` the lazy path writes — with `actor_id` NULL, not attributed to the admin who last touched the project.
+
+`ProjectLifecycleIT.theSweepAdvancesAProjectNobodyHasReadAndLeavesAFutureOneAlone` covers it (12/12 in that class), reading through `ProjectRepository` for the same reason the live check used SQL. Red-checked: stub the sweep to find nothing and it fails alone.

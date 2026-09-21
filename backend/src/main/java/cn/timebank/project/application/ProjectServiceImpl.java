@@ -414,6 +414,25 @@ class ProjectServiceImpl implements ProjectService {
         }
     }
 
+    @Override
+    @Transactional
+    public int reconcileTimeBasedStatuses() {
+        List<Project> overtaken = repository.findOvertakenByClock(Instant.now());
+        int advanced = 0;
+        for (Project project : overtaken) {
+            ProjectStatus before = project.getStatus();
+            syncTimeBasedStatus(project);
+            if (project.getStatus() != before) {
+                advanced++;
+            }
+        }
+        // Saved even for the rows that did not move: `syncTimeBasedStatus` is
+        // the same call every read makes, and letting the transaction decide
+        // what is dirty is cheaper than reasoning about it here.
+        repository.saveAllAndFlush(overtaken);
+        return advanced;
+    }
+
     // --- time-based status sync (B4.2's scope decision — see plan/status doc) ---
 
     private void syncTimeBasedStatus(Project project) {

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -51,4 +52,27 @@ public interface ProjectRepository extends JpaRepository<Project, String>, JpaSp
     @Query(value = "select id from project where eligible_grade_ids is null"
             + " or JSON_LENGTH(eligible_grade_ids) = 0", nativeQuery = true)
     List<String> findIdsWithNoEligibleGrades();
+
+    /**
+     * Projects whose stored status the clock has overtaken (issue 145).
+     *
+     * <p>The four conditions are the four time-driven edges of
+     * {@code ProjectStateMachine}, and deliberately only those: `DRAFT`,
+     * `COMPLETED` and `ARCHIVED` have no clock edge leaving them, so a sweep
+     * that selected every project would load the whole table to do nothing to
+     * most of it.</p>
+     *
+     * <p>One pass is enough even for a project that has fallen several
+     * boundaries behind: {@code syncTimeBasedStatus} walks the chain with
+     * sequential `if`s, so `PUBLISHED` can reach `COMPLETED` in a single
+     * call.</p>
+     */
+    @Query("""
+            select p from Project p
+            where (p.status = cn.timebank.project.domain.ProjectStatus.PUBLISHED and p.registrationOpenAt <= :now)
+               or (p.status = cn.timebank.project.domain.ProjectStatus.REGISTRATION_OPEN and p.registrationCloseAt <= :now)
+               or (p.status = cn.timebank.project.domain.ProjectStatus.CLOSED and p.startAt <= :now)
+               or (p.status = cn.timebank.project.domain.ProjectStatus.IN_PROGRESS and p.endAt <= :now)
+            """)
+    List<Project> findOvertakenByClock(@Param("now") Instant now);
 }

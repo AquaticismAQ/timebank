@@ -20,6 +20,8 @@ import cn.timebank.student.application.dto.StudentDetailDto;
 import cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest;
 import cn.timebank.testsupport.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
+import cn.timebank.project.domain.ProjectStatus;
+import cn.timebank.project.infrastructure.ProjectRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -58,6 +60,8 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
     private AuditLogQueryService auditLogQueryService;
     @Autowired
     private OrganizationService organizationService;
+    @Autowired
+    private ProjectRepository projectRepository;
 
     @Test
     void registrationOpenArchivesAutomaticallyWithZeroRegistrantsInsteadOfClosing() {
@@ -343,6 +347,47 @@ class ProjectLifecycleIT extends AbstractIntegrationTest {
         Page<ProjectDto> searchNoMatch = projectService.list(PageRequest.of(0, 100), null, null, null, null,
                 "NoSuchProjectTitleXYZ", adminAuth(), "zh-CN");
         assertThat(searchNoMatch.getContent()).isEmpty();
+    }
+
+    @Test
+    void theSweepAdvancesAProjectNobodyHasReadAndLeavesAFutureOneAlone() {
+        Instant now = Instant.now();
+
+        // A project that has fallen behind the clock with nobody looking at it.
+        // Published with a live window (issue 130 refuses a dead one), then the
+        // close pushed into the past — which is the shape a real project reaches
+        // when its deadline passes overnight.
+        ProjectDto draft = createDraft("Sweep Stale Project", now.minusSeconds(60), now.plusSeconds(3600));
+        ProjectDto published = projectService.publish(draft.id(), draft.version(), adminAuth(), "zh-CN");
+        UpdateProjectRequest closeItNow = new UpdateProjectRequest(
+                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null,
+                null, now.minusSeconds(10), published.version());
+        projectService.updateDraft(published.id(), closeItNow, adminAuth(), "zh-CN");
+
+        // The control: everything still ahead of it, so the sweep must leave it
+        // exactly where it is. (It would survive an over-broad query too — the
+        // state machine is itself time-guarded — so what this actually pins is
+        // that the sweep never advances a project early.)
+        ProjectDto futureDraft = createDraft("Sweep Future Project", now.plusSeconds(3600), now.plusSeconds(7200));
+        ProjectDto future = projectService.publish(futureDraft.id(), futureDraft.version(), adminAuth(), "zh-CN");
+
+        // Read the rows, not the service: every service read syncs, so asking
+        // `getDetail` whether the row was stale would be what fixed it.
+        assertThat(storedStatus(published.id())).isNotEqualTo(ProjectStatus.ARCHIVED);
+        assertThat(storedStatus(future.id())).isEqualTo(ProjectStatus.PUBLISHED);
+
+        int advanced = projectService.reconcileTimeBasedStatuses();
+
+        assertThat(advanced).isGreaterThanOrEqualTo(1);
+        // Zero registrants at the close, so the same auto-archive the lazy sync
+        // performs — reached here without anyone opening the project.
+        assertThat(storedStatus(published.id())).isEqualTo(ProjectStatus.ARCHIVED);
+        assertThat(storedStatus(future.id())).isEqualTo(ProjectStatus.PUBLISHED);
+    }
+
+    private ProjectStatus storedStatus(String projectId) {
+        return projectRepository.findById(projectId).orElseThrow().getStatus();
     }
 
     private ProjectDto createDraft(Instant registrationOpenAt, Instant registrationCloseAt) {
