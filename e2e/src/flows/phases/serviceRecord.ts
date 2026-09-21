@@ -55,6 +55,9 @@ export const serviceRecord: Phase = {
     ctx.state.recordNumber = record.recordNumber;
     ctx.state.recordMinutes = record.durationMinutes;
     ctx.state.evidenceFileName = fileName;
+    // Handed to the approval phase so the teacher can be shown reading the
+    // student's own words before judging the photograph against them.
+    ctx.state.recordDescription = finalDescription;
     await assertRecordStatus(page, ctx.config.baseUrl, record.recordNumber, RECORD_STATUS.submitted);
     await assertRecordDetail(page, ctx.config.baseUrl, record.recordNumber,
       { description: finalDescription, fileName });

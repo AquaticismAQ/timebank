@@ -185,16 +185,26 @@ anywhere you like, including at the real files.
 A demonstration is not a passing test played slowly. `src/harness/stage.ts` wraps
 every interaction so it goes **say it → point at it → do it → pause**:
 
-A related rule the case flow had to be corrected on: **a reviewer reads before
-deciding.** Opening a row and clicking a decision in the same second is a rubber
-stamp on screen, which is the opposite of what a school is being shown — the
-reason a case or a record gets a human at all is that somebody weighs what the
-student wrote. So the record review opens the evidence before approving, and
-each case decision opens the tab the decision is actually about: 相关材料 before
-asking for more (finding it empty is *why* the question is asked), 处理历史
-before resolving (the answer sits next to the question it answers). What the
-reviewer must be able to see is asserted, so a workbench that opened on the
-wrong case fails rather than looking identical.
+**A reviewer reads before deciding — in every flow.** Opening a row and clicking
+a decision in the same second is a rubber stamp on screen, which is the opposite
+of what a school is being shown: the reason anything here gets a human is that
+somebody weighs what the student wrote.
+
+So each decision opens what it is actually deciding about, and asserts the
+reviewer can see it:
+
+| Decision | Reads | Because the comment says |
+| :--- | :--- | :--- |
+| Record — approve/return/reject | the student's account on 基本信息, then 证明材料 | "材料齐全，服务属实" — two claims, both have to be on screen |
+| Proposal — ask for changes | 组织与安全, where the risk field is | it quotes the student's own thin sentence back at them |
+| Proposal — approve | 组织与安全 again | "安全方案已经写清楚" is a judgement about that paragraph |
+| Case — ask for more | 相关材料, and finds it empty | finding it empty is *why* the question is asked |
+| Case — resolve | 处理历史 | the answer sits beside the question it answers |
+
+The assertion is the part that matters. A workbench that opened on the wrong
+item, or one where the student's text failed to load, looks exactly like a
+teacher reading carefully — so the fragment the comment depends on is required
+to be on screen, and the run fails if it is not.
 
 - **Said first.** `现在打开项目中心`, `现在点击立即报名`, `现在填写服务日期`. An
   audience cannot follow a click they were not told was coming, and account

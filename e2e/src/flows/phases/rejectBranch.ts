@@ -19,13 +19,15 @@ export const rejectBranch: Phase = {
     const title = ctx.state.projectTitle as string;
     const before = await readProgress(ctx.api, ctx.state.studentId as string);
 
+    const description = '这条记录用于演示驳回流程。';
     ctx.narrator.step('学生提交一条不符合要求的记录');
-    const { recordNumber } = await fileRecordForBranch(ctx, 2, '这条记录用于演示驳回流程。');
+    const { recordNumber } = await fileRecordForBranch(ctx, 2, description);
 
     const adminPage = await ctx.as('admin');
-    ctx.narrator.step('老师核实后驳回，并写明理由');
+    ctx.narrator.step('老师读过记录、看过材料并另行核实后驳回，并写明理由');
     await decideOnRecord(adminPage, ctx.config.baseUrl, title, recordNumber, 'reject',
-      '经与项目负责人核实，该时段学生未参与服务，予以驳回。');
+      '经与项目负责人核实，该时段学生未参与服务，予以驳回。',
+      { expectOnScreen: [description] });
 
     const studentPage = await ctx.as('student');
     await assertRecordStatus(studentPage, ctx.config.baseUrl, recordNumber, RECORD_STATUS.rejected);

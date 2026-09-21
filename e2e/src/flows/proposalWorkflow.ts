@@ -18,6 +18,14 @@ const PLANNED_DAYS_AHEAD = 21;
 /** Written once, checked again after the teacher sends the proposal back. */
 const RESOURCE_NEEDS = '手工材料一套（彩纸、剪刀、胶水），场地由敬老院活动室提供；预计费用约 200 元，申请学生会支持。';
 
+/** Deliberately thin. This is the sentence the teacher opens the tab to find. */
+const THIN_RISK = '注意安全。';
+
+/** What the student writes instead, and what the teacher has to see before approving. */
+const REVISED_RISK =
+  '往返由学校统一安排校车，全程由带队教师陪同；现场分三组，每组一名联络员；'
+  + '老人如出现不适，立即通知院方护理人员并停止活动，同时电话联系带队教师与家长。';
+
 function plannedDate(): string {
   const d = new Date();
   d.setDate(d.getDate() + PLANNED_DAYS_AHEAD);
@@ -49,7 +57,7 @@ const propose: Phase = {
       contact: 'alex.li@example-township-school.edu',
       proof: '签到表与带队教师确认函',
       // Left thin on purpose: this is the point the teacher asks about.
-      risk: '注意安全。',
+      risk: THIN_RISK,
       materials: RESOURCE_NEEDS,
       recruitment: '班级群公告与学生会渠道',
       eligibility: '全校学生均可，需提前参加一次简短培训。',
@@ -64,9 +72,17 @@ const requestChanges: Phase = {
   async run(ctx) {
     const title = ctx.state.proposalTitle as string;
     const page = await ctx.as('admin');
-    ctx.narrator.step('老师认为安全措施写得太简单，要求补充');
+    ctx.narrator.step('老师打开提案，翻到组织与安全这一部分，看学生的风险措施写了什么');
     await decideOnProposal(page, ctx.config.baseUrl, title, 'requestChanges',
-      '活动方向很好。但风险与应对措施只写了“注意安全”，请补充：往返交通如何安排、现场由谁带队、老人突发不适时的处理流程。');
+      '活动方向很好。但风险与应对措施只写了“注意安全”，请补充：往返交通如何安排、现场由谁带队、老人突发不适时的处理流程。',
+      {
+        // The comment below quotes the student's own words back at them, so
+        // those words have to be on screen first. Otherwise the demonstration
+        // is a teacher with an opinion about a field nobody was shown — and the
+        // audience has no way to tell whether the criticism is fair.
+        alsoRead: ['organization'],
+        expectOnScreen: [THIN_RISK],
+      });
 
     const studentPage = await ctx.as('student');
     await assertProposalStatus(studentPage, ctx.config.baseUrl, title, PROPOSAL_STATUS.changesRequested);
@@ -81,8 +97,7 @@ const revise: Phase = {
     const page = await ctx.as('student');
     ctx.narrator.step('学生按照老师的意见补充安全方案');
     await reviseAndResubmit(page, ctx.config.baseUrl, title,
-      '往返由学校统一安排校车，全程由带队教师陪同；现场分三组，每组一名联络员；'
-      + '老人如出现不适，立即通知院方护理人员并停止活动，同时电话联系带队教师与家长。',
+      REVISED_RISK,
       // Checked on the way past: a returned proposal must still hold everything
       // the student wrote before it was sent back (issue 116).
       RESOURCE_NEEDS);
@@ -96,9 +111,13 @@ const approve: Phase = {
   async run(ctx) {
     const title = ctx.state.proposalTitle as string;
     const page = await ctx.as('admin');
-    ctx.narrator.step('老师确认修改到位，通过这份提案');
+    ctx.narrator.step('老师回到组织与安全这一部分，对照自己提的三点读学生补充后的方案');
     await decideOnProposal(page, ctx.config.baseUrl, title, 'approve',
-      '安全方案已经写清楚，同意立项。');
+      '安全方案已经写清楚，同意立项。',
+      // 写清楚了 is a judgement about a specific paragraph, and this is the one.
+      // Reading it also proves the revision reached the reviewer at all — an
+      // approval granted over the old thin sentence would look identical.
+      { alsoRead: ['organization'], expectOnScreen: [REVISED_RISK] });
 
     const studentPage = await ctx.as('student');
     await assertProposalStatus(studentPage, ctx.config.baseUrl, title, PROPOSAL_STATUS.approved);

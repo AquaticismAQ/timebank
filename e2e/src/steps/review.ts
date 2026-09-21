@@ -1,6 +1,6 @@
 import type { Page } from 'playwright';
-import { assertThat } from '../harness/assert.js';
-import { choose, tap, type, visit } from '../harness/stage.js';
+import { assertContains, assertThat } from '../harness/assert.js';
+import { choose, narrate, tap, type, visit } from '../harness/stage.js';
 
 export type Decision = 'approve' | 'return' | 'reject';
 
@@ -9,6 +9,18 @@ const BUTTON: Record<Decision, string> = { approve: '通过', return: '退回', 
 const REASON_VALUE: Record<'return' | 'reject', string> = {
   return: 'MISSING_EVIDENCE', reject: 'FAKE_SERVICE',
 };
+
+export interface ReviewReadOptions {
+  /**
+   * What the reviewer must be able to see before deciding.
+   *
+   * Asserted rather than assumed. A demonstration that says the teacher read
+   * the claim should fail if the claim is not on screen, and this also catches
+   * the workbench having opened on the wrong item — which looks identical to
+   * reading carefully.
+   */
+  expectOnScreen?: string[];
+}
 
 /**
  * A teacher works one record in the review queue and decides on it.
@@ -21,6 +33,7 @@ const REASON_VALUE: Record<'return' | 'reject', string> = {
  */
 export async function decideOnRecord(
   page: Page, baseUrl: string, projectTitle: string, recordNumber: string, decision: Decision, comment: string,
+  review: ReviewReadOptions = {},
 ): Promise<void> {
   await visit(page, `${baseUrl}/admin/audit`, '审核中心');
 
@@ -36,6 +49,19 @@ export async function decideOnRecord(
   // `.first()`: the number appears twice in the workbench — as the subtitle
   // and again in the detail fields.
   await page.getByText(recordNumber, { exact: false }).first().waitFor({ state: 'visible', timeout: 15_000 });
+
+  // The workbench lands on 基本信息, and that is what is being approved: a
+  // date, a duration, and the student's account of what they did. Read before
+  // the evidence, in that order, because the evidence is judged *against* the
+  // claim — looking at a photograph without having read what it is supposed to
+  // show is not a check.
+  narrate(page, '先读这条记录：服务日期、时长，以及学生写的服务内容');
+  for (const fragment of review.expectOnScreen ?? []) {
+    await page.getByText(fragment, { exact: false }).first()
+      .waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+    assertContains(await page.locator('body').innerText(), fragment,
+      '审核之前，老师应当能够看到学生填写的服务内容');
+  }
 
   await inspectEvidence(page);
 
@@ -111,6 +137,17 @@ const PROPOSAL_BUTTON: Record<ProposalDecision, string> = {
   approve: '通过', requestChanges: '要求修改',
 };
 
+/** The workbench lands on 活动内容; the other two are opened deliberately. */
+export type ProposalTab = 'content' | 'organization' | 'history';
+
+const PROPOSAL_TAB: Record<ProposalTab, string> = {
+  content: '活动内容', organization: '组织与安全', history: '审核历史',
+};
+
+export interface ProposalReadOptions extends ReviewReadOptions {
+  alsoRead?: ProposalTab[];
+}
+
 /**
  * A teacher reads a student's proposal and decides on it.
  *
@@ -121,9 +158,28 @@ const PROPOSAL_BUTTON: Record<ProposalDecision, string> = {
  */
 export async function decideOnProposal(
   page: Page, baseUrl: string, title: string, decision: ProposalDecision, comment: string,
+  review: ProposalReadOptions = {},
 ): Promise<void> {
   await visit(page, `${baseUrl}/admin/proposals`, '活动审核页面');
   await tap(page.getByText(title, { exact: false }).first(), '这份待审核的提案');
+
+  // A proposal is six sections of a student's writing, and the decision below
+  // says something specific about one of them. Opening the row and clicking
+  // 要求修改 in the same second demonstrates a teacher who has an opinion about
+  // a field nobody was shown — worse than a rubber stamp, because the comment
+  // then asserts something the audience has no way to check.
+  for (const tab of review.alsoRead ?? []) {
+    const label = PROPOSAL_TAB[tab];
+    const button = page.getByRole('button', { name: label, exact: true }).first();
+    if (!(await button.isVisible().catch(() => false))) continue;
+    await tap(button, label);
+  }
+  for (const fragment of review.expectOnScreen ?? []) {
+    await page.getByText(fragment, { exact: false }).first()
+      .waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+    assertContains(await page.locator('body').innerText(), fragment,
+      '审核之前，老师应当能够看到学生写的这一部分');
+  }
 
   const action = page.getByRole('button', { name: PROPOSAL_BUTTON[decision], exact: true }).last();
   await action.waitFor({ state: 'visible', timeout: 15_000 });
