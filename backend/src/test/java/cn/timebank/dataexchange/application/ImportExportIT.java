@@ -6,6 +6,10 @@ import cn.timebank.dataexchange.application.dto.DataExchangeRequests.CreateExpor
 import cn.timebank.dataexchange.application.dto.ImportErrorReportDto;
 import cn.timebank.dataexchange.application.dto.JobDto;
 import cn.timebank.dataexchange.domain.Job;
+import cn.timebank.audit.application.AuditLogQueryService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import cn.timebank.audit.application.dto.AuditLogDto;
 import cn.timebank.dataexchange.infrastructure.JobRepository;
 import cn.timebank.file.application.dto.DownloadResult;
 import cn.timebank.iam.application.dto.AuthenticatedUserView;
@@ -55,6 +59,8 @@ class ImportExportIT extends AbstractIntegrationTest {
     private AccountService accountService;
     @Autowired
     private JobRepository jobRepository;
+    @Autowired
+    private AuditLogQueryService auditLogQueryService;
     @Autowired
     private cn.timebank.servicerecord.application.ServiceRecordService serviceRecordService;
     @Autowired
@@ -112,6 +118,24 @@ class ImportExportIT extends AbstractIntegrationTest {
         // "2 already committed") even though the actual credits were correct.
         JobDto committedJob = jobRepository.findById(validated.id()).map(this::toDto).orElseThrow();
         assertThat(committedJob.validRows()).isEqualTo(2);
+
+        // Issue 149: the import records itself, and through the query a person
+        // would actually run — a call to AuditService that lands nowhere
+        // retrievable is not an audit trail.
+        Page<AuditLogDto> logs = auditLogQueryService.search(null, null, "import", validated.id(),
+                null, null, null, PageRequest.of(0, 10));
+        assertThat(logs.getContent()).extracting(AuditLogDto::action)
+                .containsExactlyInAnyOrder("import.create", "import.commit");
+        AuditLogDto commit = logs.getContent().stream()
+                .filter(l -> "import.commit".equals(l.action())).findFirst().orElseThrow();
+        assertThat(commit.actorId()).isEqualTo("usr_test_admin");
+        // The digest is the file's identity; the row count is what it did.
+        // Matched loosely on purpose: this asserts the facts are in the row, not
+        // how Jackson spaced them.
+        assertThat(commit.afterSummary())
+                .contains("serviceRecordsHistorical")
+                .contains(jobRepository.findById(validated.id()).orElseThrow().getSourceFileHash())
+                .containsPattern("\"rowsCommitted\"\\s*:\\s*2");
     }
 
     @Test

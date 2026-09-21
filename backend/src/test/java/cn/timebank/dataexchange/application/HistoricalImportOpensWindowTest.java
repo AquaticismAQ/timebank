@@ -45,7 +45,8 @@ class HistoricalImportOpensWindowTest {
         when(jobRepository.finishCommitIfStillCommitting(anyString(), org.mockito.ArgumentMatchers.anyInt(), any()))
                 .thenReturn(1);
         return new ImportCommitTransaction(jobRepository, historicalRowValidator, studentRowValidator,
-                accountService, studentService, userService, fileStorage, ruleEngine, windowService);
+                accountService, studentService, userService, fileStorage, ruleEngine, windowService,
+                mock(cn.timebank.audit.application.AuditService.class));
     }
 
     @Test
@@ -55,7 +56,7 @@ class HistoricalImportOpensWindowTest {
                         .getBytes(StandardCharsets.UTF_8)));
         when(historicalRowValidator.validate(anyString(), any(), anyString())).thenReturn(validRow());
 
-        commitTransaction().commit("job_1", "serviceRecordsHistorical", "import_job_1.csv", "usr_admin");
+        commitTransaction().commit("job_1", "serviceRecordsHistorical", "import_job_1.csv", "sha-1", "usr_admin");
 
         // Both happen inside the one transaction now (issue 146), so ordering
         // between them no longer carries the guarantee — atomicity does. What
@@ -75,7 +76,7 @@ class HistoricalImportOpensWindowTest {
         when(studentService.create(any(), anyString(), anyString()))
                 .thenReturn(mock(cn.timebank.student.application.dto.StudentDetailDto.class));
 
-        commitTransaction().commit("job_1", "students", "import_job_1.csv", "usr_admin");
+        commitTransaction().commit("job_1", "students", "import_job_1.csv", "sha-1", "usr_admin");
 
         verify(windowService, never()).openOnFirstCommit(anyString(), anyString());
     }

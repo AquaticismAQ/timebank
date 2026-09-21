@@ -2,6 +2,8 @@ package cn.timebank.dataexchange.application;
 
 import cn.timebank.account.application.AccountService;
 import cn.timebank.account.application.dto.AccountRequests.AdjustmentRequest;
+import cn.timebank.audit.application.AuditEntry;
+import cn.timebank.audit.application.AuditService;
 import cn.timebank.dataexchange.domain.Job;
 import cn.timebank.dataexchange.infrastructure.JobRepository;
 import cn.timebank.file.application.FileStorage;
@@ -54,11 +56,13 @@ class ImportCommitTransaction {
     private final FileStorage fileStorage;
     private final RuleEngine ruleEngine;
     private final HistoricalImportWindowService windowService;
+    private final AuditService auditService;
 
     ImportCommitTransaction(JobRepository jobRepository, HistoricalImportRowValidator historicalRowValidator,
                              StudentImportRowValidator studentRowValidator, AccountService accountService,
                              StudentService studentService, UserService userService, FileStorage fileStorage,
-                             RuleEngine ruleEngine, HistoricalImportWindowService windowService) {
+                             RuleEngine ruleEngine, HistoricalImportWindowService windowService,
+                             AuditService auditService) {
         this.jobRepository = jobRepository;
         this.historicalRowValidator = historicalRowValidator;
         this.studentRowValidator = studentRowValidator;
@@ -68,6 +72,7 @@ class ImportCommitTransaction {
         this.fileStorage = fileStorage;
         this.ruleEngine = ruleEngine;
         this.windowService = windowService;
+        this.auditService = auditService;
     }
 
     /**
@@ -91,7 +96,8 @@ class ImportCommitTransaction {
     }
 
     @Transactional
-    public int commit(String jobId, String resourceType, String sourceFileKey, String actorId) {
+    public int commit(String jobId, String resourceType, String sourceFileKey, String sourceFileHash,
+                       String actorId) {
         int committed = switch (resourceType) {
             case HistoricalImportRowValidator.TYPE -> commitHistorical(sourceFileKey, actorId);
             case StudentImportRowValidator.TYPE -> commitStudents(sourceFileKey, actorId);
@@ -106,7 +112,19 @@ class ImportCommitTransaction {
             windowService.openOnFirstCommit(jobId, actorId);
         }
         finish(jobId, committed);
+        // Issue 149. Inside the transaction, for the same reason the terminal
+        // status is (issue 146): a row saying a file was imported must not
+        // outlive a commit that rolled back, and one written afterwards in its
+        // own transaction would. The digest identifies the file by content —
+        // a name is whatever the uploader's spreadsheet was called.
+        auditService.record(new AuditEntry(actorId, "imports.commit",
+                "import.commit", "import", jobId, null,
+                new ImportCommitted(resourceType, sourceFileHash, committed), null));
         return committed;
+    }
+
+    /** The audit row's `after` summary — §7.4's "file digest, affected rows". */
+    private record ImportCommitted(String type, String sha256, int rowsCommitted) {
     }
 
     private int commitHistorical(String sourceFileKey, String actorId) {

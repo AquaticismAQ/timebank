@@ -57,6 +57,44 @@ public final class RequestContext {
         return principalId;
     }
 
+    /**
+     * The three values an audit row needs, copied out so they can cross a
+     * thread boundary (issue 149).
+     *
+     * <p>Deliberately not the {@code RequestContext} itself: that object is
+     * mutable ({@link #setPrincipalId}) and belongs to the request's own
+     * thread. A record of three strings cannot be written back into by the
+     * worker that borrows it.</p>
+     */
+    public record Snapshot(String requestId, String ipAddress, String userAgent) {
+    }
+
+    /** Taken on the request thread, while there still is one. */
+    public static Snapshot snapshot() {
+        RequestContext ctx = current();
+        return new Snapshot(ctx.requestId, ctx.ipAddress, ctx.userAgent);
+    }
+
+    /**
+     * Runs {@code body} on this thread with {@code snapshot}'s identity in
+     * place, so audit rows written from a background job name the person who
+     * asked for it rather than {@code no-request} and a null IP.
+     *
+     * <p>The {@code finally} is the load-bearing part. Unlike a request's own
+     * virtual thread, a job executor's threads are pooled and reused, so a
+     * context left behind here would be inherited by whatever ran next — the
+     * precise failure this class's javadoc says a ThreadLocal is safe from
+     * <em>because</em> requests do not share threads.</p>
+     */
+    public static void runWithin(Snapshot snapshot, Runnable body) {
+        set(snapshot.requestId(), snapshot.ipAddress(), snapshot.userAgent());
+        try {
+            body.run();
+        } finally {
+            clear();
+        }
+    }
+
     /** Set once security (B1) resolves the authenticated principal for this request. */
     public void setPrincipalId(String principalId) {
         this.principalId = principalId;

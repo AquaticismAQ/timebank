@@ -1,8 +1,11 @@
 package cn.timebank.dataexchange.application;
 
+import cn.timebank.audit.application.AuditEntry;
+import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.error.ApiException;
 import cn.timebank.common.idempotency.IdempotencyService;
+import cn.timebank.common.web.RequestContext;
 import cn.timebank.dataexchange.application.dto.ImportErrorReportDto;
 import cn.timebank.dataexchange.application.dto.JobDto;
 import cn.timebank.dataexchange.domain.Job;
@@ -45,16 +48,18 @@ class ImportServiceImpl implements ImportService {
     private final IdempotencyService idempotencyService;
     private final RuleSetSource ruleSetSource;
     private final HistoricalImportWindowService windowService;
+    private final AuditService auditService;
 
     ImportServiceImpl(JobRepository jobRepository, ImportJobRunner importJobRunner, FileStorage fileStorage,
                        IdempotencyService idempotencyService, RuleSetSource ruleSetSource,
-                       HistoricalImportWindowService windowService) {
+                       HistoricalImportWindowService windowService, AuditService auditService) {
         this.jobRepository = jobRepository;
         this.importJobRunner = importJobRunner;
         this.fileStorage = fileStorage;
         this.idempotencyService = idempotencyService;
         this.ruleSetSource = ruleSetSource;
         this.windowService = windowService;
+        this.auditService = auditService;
     }
 
     /**
@@ -147,7 +152,19 @@ class ImportServiceImpl implements ImportService {
         job.setSourceFileKey(storageKey);
         job.setSourceFileHash(hash);
         jobRepository.saveAndFlush(job);
+        // Issue 149. The upload, not only the commit: since issue 146 a file
+        // with one bad row is a complete no-op, so "somebody uploaded a roster
+        // of two hundred real children and it bounced" would otherwise leave
+        // nothing at all behind. Same split as export.create — the request is
+        // the decision a person made, whatever became of it.
+        auditService.record(new AuditEntry(actorId, "imports.create",
+                "import.create", "import", jobId, null,
+                new ImportUploaded(type, hash, file.getSize()), null));
         return toDto(job);
+    }
+
+    /** The audit row's `after` summary: which file, identified by content rather than by name. */
+    private record ImportUploaded(String type, String sha256, long bytes) {
     }
 
     @Override
@@ -208,7 +225,10 @@ class ImportServiceImpl implements ImportService {
         // would make the expiry advisory, and "validate now, commit whenever"
         // is precisely the indefinite door §6 closes.
         windowService.requireCommittable(job.getResourceType());
-        importJobRunner.commitAsync(jobId, actorId);
+        // Snapshotted here, on the request thread, because the commit runs on a
+        // job-executor thread where RequestContext is empty and every audit row
+        // it writes would otherwise say `no-request` with no IP (issue 149).
+        importJobRunner.commitAsync(jobId, actorId, RequestContext.snapshot());
         return toDto(job);
     }
 

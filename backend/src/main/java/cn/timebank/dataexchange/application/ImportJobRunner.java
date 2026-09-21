@@ -1,5 +1,6 @@
 package cn.timebank.dataexchange.application;
 
+import cn.timebank.common.web.RequestContext;
 import cn.timebank.dataexchange.application.validation.ImportRuleSet;
 import cn.timebank.dataexchange.application.validation.Rfc4180Reader;
 import cn.timebank.dataexchange.application.validation.RuleEngine;
@@ -260,20 +261,26 @@ class ImportJobRunner {
      * such a thing.</p>
      */
     @Async(JOB_EXECUTOR)
-    void commitAsync(String jobId, String actorId) {
-        Job claimed = progressWriter.claim(jobId, "COMMITTING", COMMIT_LEASE_SECONDS);
-        try {
-            int committed = commitTransaction.commit(jobId, claimed.getResourceType(),
-                    claimed.getSourceFileKey(), actorId);
-            log.info("Import job {} committed: {} rows applied", jobId, committed);
-        } catch (ImportCommitTransaction.ClaimLost e) {
-            // Someone else owns the job now and this run rolled back. Saying so
-            // would overwrite their status with a stale one; the log is enough.
-            log.warn("Import job {} commit abandoned: {}", jobId, e.getMessage());
-        } catch (Exception e) {
-            log.error("Import job {} commit failed — nothing was applied", jobId, e);
-            progressWriter.fail(jobId, "COMMIT_FAILED", String.valueOf(e.getMessage()));
-        }
+    void commitAsync(String jobId, String actorId, RequestContext.Snapshot requester) {
+        // The requester's identity travels with the work (issue 149). Without
+        // it every audit row this commit writes — the import's own, and one
+        // `student.create` per row — records `no-request` and no IP, because
+        // RequestContext is a ThreadLocal belonging to the servlet thread.
+        RequestContext.runWithin(requester, () -> {
+            Job claimed = progressWriter.claim(jobId, "COMMITTING", COMMIT_LEASE_SECONDS);
+            try {
+                int committed = commitTransaction.commit(jobId, claimed.getResourceType(),
+                        claimed.getSourceFileKey(), claimed.getSourceFileHash(), actorId);
+                log.info("Import job {} committed: {} rows applied", jobId, committed);
+            } catch (ImportCommitTransaction.ClaimLost e) {
+                // Someone else owns the job now and this run rolled back. Saying so
+                // would overwrite their status with a stale one; the log is enough.
+                log.warn("Import job {} commit abandoned: {}", jobId, e.getMessage());
+            } catch (Exception e) {
+                log.error("Import job {} commit failed — nothing was applied", jobId, e);
+                progressWriter.fail(jobId, "COMMIT_FAILED", String.valueOf(e.getMessage()));
+            }
+        });
     }
 
     private String escapeCsv(String value) {

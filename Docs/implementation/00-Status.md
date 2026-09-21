@@ -1633,3 +1633,17 @@ The case this closes is a production deployment that simply forgets the variable
 `FileServiceIT`'s watermark failure is pre-existing — verified by stashing the change and re-running, not assumed.
 
 D-08 is ✅ in §12.2 and out of §12.8 in both language versions. What remains there: I-09, A-16's wording plus the proxy's stale rate-limit rule, MFA (A-13/14/15) and central log retention.
+
+### 41.43 An import now records itself (issue 149, 2026-09-21)
+
+§12's I-09, and the last item on §12.8 that was ours rather than the school's. The rule in §7.4 is that every import and export writes an audit row with operator, time, IP, file digest and affected rows. Export did. Import did not — the digest and counts existed only on the `job` row, which is an operational record of a background task, mutated in place and carrying no IP.
+
+**It was not simply a missing call.** The commit runs on the job executor, and `RequestContext` — where `AuditService` gets the request id, IP and user agent — is a `ThreadLocal` populated by the servlet filter. So every audit row an import already wrote, one `student.create` per row, came out with a null IP and `no-request`. Adding a summary row there would only have joined them.
+
+Two halves, then. `RequestContext.snapshot()` on the request thread and `runWithin(...)` around the whole commit on the worker, clearing in a `finally` — a pooled thread holding a stale context is exactly the hazard that class's javadoc says a ThreadLocal avoids *because* requests do not share threads. And the two entries: `import.create` on upload, `import.commit` **inside the commit transaction**, for the same reason the terminal status moved there in §41.40 — a row saying a file was imported must not outlive a commit that rolled back.
+
+Auditing the upload as well as the commit is what gives a rejected import a trace at all: since §41.40, a file with one bad row is a complete no-op, so "somebody uploaded a roster of two hundred real children and it bounced" would otherwise leave nothing behind.
+
+**Verified through `GET /audit-logs`**, not through the call site: a rejected import shows `import.create` and no commit row; a committed one shows both, with the digest and `rowsCommitted`. The context bridge had a real before/after available, since `student.create` predates it — the same action written by an import earlier the same day carries `ip (null)`/`no-request`, and after the change carries the requester's address and a request id matching the `import.commit` row, tying the summary and every row it created to one person. Red-checked at unit and integration level.
+
+I-09 is ✅ in §12.4 and out of §12.8 in both language versions. §12.8 now holds only A-16 (a sentence to correct plus the proxy's stale rate-limit rule), the MFA trio, and central log retention — the last two being the school's decisions.

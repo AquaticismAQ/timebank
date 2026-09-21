@@ -675,7 +675,7 @@ and showing it as passed or failed would be equally untrue.
 | I-06 | RFC 4180 parsing of quotes and commas; names with commas do not misalign | ✅ | `Rfc4180Reader` | [ ] |
 | I-07 | Row-count and file-size caps per file | ✅ | 10,000 rows / 10 MiB by default, configurable per import type | [ ] |
 | I-08 | Import/export constrained by permissions and data scope | ✅ | Export permissions are split per export type; the system administrator holds no import or export permission at all | [ ] |
-| I-09 | Import/export audited (operator, time, IP, file digest, affected rows) | ⚠️ | **Export** is audited (`exports.<type>`). **Import writes no audit entry for the import itself**: the file's SHA-256 and the affected row count live only in the `job` table. The row-level changes are still audited (one entry per student created), so traceability is not lost — what is missing is the single "who imported which file, when" record | [ ] |
+| I-09 | Import/export audited (operator, time, IP, file digest, affected rows) | ✅ | Closed 2026-09-21 (issue 149): import now writes `import.create` on upload (type, SHA-256, byte size) and `import.commit` **inside the commit transaction** (type, SHA-256, rows committed), so an import that rolled back leaves no row claiming it happened. The upload is recorded separately because since issue 146 a file with any bad row is a complete no-op, and auditing only the commit would leave a rejected import with no trace at all. This also fixed a related defect: the commit runs on a background thread, where every audit row it wrote — including the per-row `student.create` entries — previously carried no IP and a `no-request` id. The requester's identity now travels with the job (`RequestContext.runWithin`, cleared in a `finally`) | [ ] |
 | I-10 | Temporary files deleted deterministically | ✅ | | [ ] |
 
 ### 12.5 Authentication, account creation, and MFA
@@ -731,7 +731,6 @@ implementer's current debt:
 
 | ID | Item | Nature |
 | :--- | :--- | :--- |
-| I-09 | No summary audit entry for an import | Implement |
 | A-16 | "Only two unauthenticated endpoints" does not match the code; the proxy still rate-limits removed paths | Restate the sentence; clean up the config |
 | A-13/A-14/A-15 | MFA approach undecided, not enabled | Implement once the school decides (§8.4) |
 | O-01 | No central log-retention arrangement | Settle with the school alongside production operations |
