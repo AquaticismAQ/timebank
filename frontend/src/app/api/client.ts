@@ -930,6 +930,15 @@ export const api = {
       const results = await http.get<StudentDirectoryEntry[]>('/students/directory', { search });
       return results.filter(s => s.id !== excludeId);
     },
+    /**
+     * Sends the student a real notification about their service progress
+     * (issue 155). Rejects with `NO_LOGIN_ACCOUNT` / `ACCOUNT_NOT_ACTIVE` when
+     * the message would reach nobody — those are the cases the old toast-only
+     * button used to report as success.
+     */
+    async remind(id: string): Promise<void> {
+      await http.post<void>(`/students/${id}/reminders`);
+    },
   },
 
   organizations: {

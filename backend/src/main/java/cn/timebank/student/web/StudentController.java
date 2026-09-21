@@ -6,6 +6,7 @@ import cn.timebank.common.web.ApiResponse;
 import cn.timebank.common.web.PageMeta;
 import cn.timebank.organization.application.RequestLanguageService;
 import cn.timebank.security.application.CookieSessionUserDetails;
+import cn.timebank.student.application.StudentReminderService;
 import cn.timebank.student.application.StudentService;
 import cn.timebank.student.application.dto.StudentDetailDto;
 import cn.timebank.student.application.dto.StudentDirectoryEntryDto;
@@ -38,10 +39,13 @@ public class StudentController {
     private static final Set<String> SORTABLE = Set.of("id", "studentNumber", "displayName", "createdAt");
 
     private final StudentService studentService;
+    private final StudentReminderService studentReminderService;
     private final RequestLanguageService requestLanguageService;
 
-    public StudentController(StudentService studentService, RequestLanguageService requestLanguageService) {
+    public StudentController(StudentService studentService, StudentReminderService studentReminderService,
+                             RequestLanguageService requestLanguageService) {
         this.studentService = studentService;
+        this.studentReminderService = studentReminderService;
         this.requestLanguageService = requestLanguageService;
     }
 
@@ -111,6 +115,24 @@ public class StudentController {
     @PreAuthorize("hasAuthority('students.manage')")
     public ApiResponse<Void> deactivate(@PathVariable String id, Authentication auth) {
         studentService.deactivate(id, auth, principalId(auth));
+        return ApiResponse.of(null);
+    }
+
+    /**
+     * Issue 155: Student Management's <i>Remind</i> action, which until now
+     * showed a toast and sent nothing.
+     *
+     * <p>Gated on {@code students.read}, not {@code students.manage}: a teacher
+     * who can see a student's progress is exactly the person who should be able
+     * to nudge them about it, and the data scope inside decides which students
+     * that is. Sending a message is not editing a record.</p>
+     */
+    @PostMapping("/{id}/reminders")
+    @PreAuthorize("hasAuthority('students.read')")
+    public ApiResponse<Void> remind(
+            @PathVariable String id, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            Authentication auth) {
+        studentReminderService.remind(id, auth, principalId(auth), resolveLanguage(acceptLanguage, auth));
         return ApiResponse.of(null);
     }
 

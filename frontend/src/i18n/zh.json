@@ -2236,7 +2236,9 @@
       "NOT_CONFIRMED": "你在该项目的报名尚未被确认。",
       "OVERLAPPING_RECORD": "该时间段与你的另一条服务记录重叠。",
       "RESERVED_FOR_STUDENT": "该权限仅限学生账号使用。",
-      "UNREVIEWED_RECORDS": "暂时无法归档：还有 {{count}} 名已确认的同学的服务记录尚未审核，请先在报名名单中完成审核。"
+      "UNREVIEWED_RECORDS": "暂时无法归档：还有 {{count}} 名已确认的同学的服务记录尚未审核，请先在报名名单中完成审核。",
+      "NO_LOGIN_ACCOUNT": "该学生还没有登录账号，提醒无法送达，请先发放账号凭条。",
+      "ACCOUNT_NOT_ACTIVE": "该学生的账号未处于正常状态，提醒无法送达，请先确认账号激活情况。"
     }
   }
 }

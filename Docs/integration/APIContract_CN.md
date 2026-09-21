@@ -664,12 +664,22 @@ queued → running → succeeded
 | `PATCH` | `/students/{id}` | `students.manage` | 更新权威资料 |
 | `POST` | `/students/{id}/activate` | `students.manage` | 启用 |
 | `POST` | `/students/{id}/deactivate` | `students.manage` | 停用 |
+| `POST` | `/students/{id}/reminders` | `students.read` | 向该学生发送服务时长提醒（issue 155） |
 | `GET` | `/students/{id}/progress` | 本人/`progress.read` | 达标进度 |
 | ~~`GET` `/students/{id}/service-records`~~ | — | 从未实现——这一行原本描述了预期形态，但服务端实际没有这个路由。解决方式与 `api.accounts.get(studentId)`（§13.1 后的说明）相同：前端改为调用 `GET /service-records?filter[studentId]=`，复用其它管理端服务记录页面已经在用的列表接口，而不是再维护一个带自己一套筛选/排序/分页逻辑的子资源接口。 |
 | `GET` | `/students/directory` | `students.read`/`directory.read` | 按姓名搜索，返回精简的 `{id, displayName, gradeLevel, className}`，用于挑选共同组织者（2026-08-06 新增，见 `Docs/optimization/01-i3-partner-school-terminology.md`；`gradeName` 已在 issue 010 中改为原始的 `gradeLevel`） |
 | `GET` | `/academic-years` | 已登录 | 学年 |
 | `GET` | `/grades` | 已登录 | 年级 |
 | `GET` | `/classes` | 已登录 | 班级 |
+
+**`POST /students/{id}/reminders`（2026-09-22 新增，issue 155）。** 向该学生本人的登录账号写入一条通知，模板为
+`student.serviceProgressReminder`——因此与其它通知一样，展示时按**阅读者**当时的语言渲染，而不是发送者发送时的语言。没有请求体：
+一条提醒真正承载的只有"谁发的"和"什么时候发的"，这两项都已知。权限取 `students.read` 而非 `students.manage`，因为能看到学生进度的人
+正是应当能提醒他的人，具体能提醒哪些学生由学生数据范围决定——发一条消息不等于修改一条记录。
+
+当这条提醒送不到任何人手上时，它**宁可报错也不假装成功**：返回 `409 STATE_CONFLICT`，`fieldErrors[0].code` 为
+`NO_LOGIN_ACCOUNT`（学生根本没有账号——`POST /students` 不创建账号，只有花名册导入会创建）或 `ACCOUNT_NOT_ACTIVE`
+（待激活、激活过期、锁定或已停用）。对送不出去的提醒报成功，正是 issue 155 要修的那个 bug。点两次就发两条，没有去重窗口。
 
 **学生记录不再包含监护人与学籍邮箱字段。** `guardianName`、`guardianContact` 与学生自身的 `email` 已在 `V26` 中按数据最小化原则删除（`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1）：没有任何界面展示它们，因此只是徒增泄露面而无功能收益。它们不再出现在 `POST`/`PATCH /students` 请求、`GET /students/{id}` 响应，以及 `students` 导入模板中——模板现为七列（`studentNumber,displayName,gradeId,classId,enrollmentAcademicYearId,graduationYear,joinedAt`）。`user.email` 不受影响：那是登录账号上的另一个字段，也是登录页接受的标识符。
 

@@ -227,7 +227,11 @@ INSERT IGNORE INTO notification_template (id, code, title_zh, title_en, body_zh,
     -- Issue 137: publishing a project is the fourth real writer of a notification
     -- row, and the first that fans out — it goes to every active student in the
     -- project's eligible grades and every staff account assigned to one of them.
-    ('tmpl_project_published', 'project.published', '有新项目可以报名', 'A New Project Is Open', '本年级有新的志愿服务项目开放报名，去项目中心看看吧。', 'A new volunteer project is open to your grade - take a look in the Project Center.', NOW(3), NOW(3));
+    ('tmpl_project_published', 'project.published', '有新项目可以报名', 'A New Project Is Open', '本年级有新的志愿服务项目开放报名，去项目中心看看吧。', 'A new volunteer project is open to your grade - take a look in the Project Center.', NOW(3), NOW(3)),
+    -- Issue 155: the first notification a person sends on purpose rather than
+    -- one a state change fans out. Student Management's Remind button, which
+    -- until now showed the teacher a toast and sent the student nothing.
+    ('tmpl_student_progress_reminder', 'student.serviceProgressReminder', '志愿服务时长提醒', 'A Reminder About Your Service Hours', '老师提醒你关注本学年的志愿服务时长进度，记得参加项目并及时提交服务记录。', 'A teacher has reminded you to check your volunteer service progress this school year - take part in a project and submit your service records.', NOW(3), NOW(3));
 
 -- System settings: a single fixed row (B5.5/B5.12).
 INSERT IGNORE INTO system_settings (id, notification_poll_interval_seconds, version, updated_at, updated_by) VALUES

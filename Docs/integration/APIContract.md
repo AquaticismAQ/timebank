@@ -672,12 +672,31 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 | `PATCH` | `/students/{id}` | `students.manage` | Update authoritative profile |
 | `POST` | `/students/{id}/activate` | `students.manage` | Activate |
 | `POST` | `/students/{id}/deactivate` | `students.manage` | Deactivate |
+| `POST` | `/students/{id}/reminders` | `students.read` | Send this student a service-progress reminder (issue 155) |
 | `GET` | `/students/{id}/progress` | Owner/`progress.read` | Progress tracking |
 | ~~`GET` `/students/{id}/service-records`~~ | — | Never implemented — this row described the intended shape but no such route exists server-side. Resolved the same way `api.accounts.get(studentId)` was (§13.1's note below): the frontend calls `GET /service-records?filter[studentId]=` instead of a dedicated sub-resource, reusing the list endpoint every other admin service-record screen already calls rather than adding a second route with its own filter/sort/pagination to maintain. |
 | `GET` | `/students/directory` | `students.read`/`directory.read` | Minimal `{id, displayName, gradeLevel, className}` search by name, for picking a co-organizer (added 2026-08-06, `Docs/optimization/01-i3-partner-school-terminology.md`; `gradeName` became raw `gradeLevel` in issue 010) |
 | `GET` | `/academic-years` | Authenticated | Academic years |
 | `GET` | `/grades` | Authenticated | Grades |
 | `GET` | `/classes` | Authenticated | Classes |
+
+**`POST /students/{id}/reminders` (added 2026-09-22, issue 155).** Writes one
+notification to the student's own login account, from the `student.serviceProgressReminder`
+template — so, like every other notification, it is rendered in the *reader's*
+language when they open it, not the sender's when it was sent. No request body:
+the only thing a reminder carries is who sent it and when, and both are already
+known. `students.read` rather than `students.manage`, because the person who can
+see a student's progress is the person who should be able to nudge them about it,
+and the student data scope decides which students that is — sending a message is
+not editing a record.
+
+It **refuses rather than pretending** when the message would reach nobody:
+`409 STATE_CONFLICT` with `fieldErrors[0].code = NO_LOGIN_ACCOUNT` (the student
+has no account at all — `POST /students` provisions none, only the roster import
+does) or `ACCOUNT_NOT_ACTIVE` (pending activation, expired, locked or
+deactivated). Reporting success for an undeliverable reminder is the exact bug
+issue 155 was filed about. Clicking twice sends twice; there is no de-duplication
+window.
 
 **Student records carry no guardian or roster-email fields.** `guardianName`, `guardianContact` and the student's own `email` were dropped in `V26` under data minimization (`Docs/optimization/08-SecurityPrivacyHardening.md` §3.1): no screen displayed them, so they were breach surface with no functional return. They are absent from `POST`/`PATCH /students` requests, from `GET /students/{id}`, and from the `students` import template, which is now seven columns (`studentNumber,displayName,gradeId,classId,enrollmentAcademicYearId,graduationYear,joinedAt`). `user.email` is unaffected — a different field on the login account, and the identifier the sign-in page accepts.
 

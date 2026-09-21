@@ -2236,7 +2236,9 @@
       "NOT_CONFIRMED": "Your registration for that project has not been confirmed yet.",
       "OVERLAPPING_RECORD": "This time window overlaps another of your service records.",
       "RESERVED_FOR_STUDENT": "That permission is reserved for student accounts.",
-      "UNREVIEWED_RECORDS": "Cannot archive yet — {{count}} confirmed student(s) still need their service record reviewed. Review them from the registrant list first."
+      "UNREVIEWED_RECORDS": "Cannot archive yet — {{count}} confirmed student(s) still need their service record reviewed. Review them from the registrant list first.",
+      "NO_LOGIN_ACCOUNT": "This student has no login account yet, so a reminder would reach nobody. Issue them a credential slip first.",
+      "ACCOUNT_NOT_ACTIVE": "This student's account is not active, so a reminder would reach nobody. Check their activation status first."
     }
   }
 }

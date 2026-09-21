@@ -88,6 +88,7 @@ export function StudentList() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editStudent, setEditStudent] = useState<Student | null>(null);
   const [recordsStudent, setRecordsStudent] = useState<Student | null>(null);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
 
   const { items, page, loading, error, params, setPage, setPageSize, setSearch: setApiSearch, setFilter, setSort, refetch } =
@@ -232,6 +233,26 @@ export function StudentList() {
       setSort(nextDesc ? `-${wireKey}` : wireKey);
     } else {
       setSort(undefined);
+    }
+  };
+
+  /**
+   * Issue 155: this used to be `toast.success(...)` and nothing else — the
+   * button told the teacher a message had been sent and sent none. It now posts
+   * a real notification, and the success toast waits for the server to say so.
+   *
+   * Disabled while in flight, because the one thing worse than a reminder that
+   * never arrives is three of them.
+   */
+  const sendReminder = async (student: Student) => {
+    setRemindingId(student.id);
+    try {
+      await api.students.remind(student.id);
+      toast.success(t('admin.students.toastRemindSent', { name: student.name }));
+    } catch (err) {
+      handleMutationError(err, { fallbackMessage: String(err) });
+    } finally {
+      setRemindingId(null);
     }
   };
 
@@ -553,8 +574,8 @@ export function StudentList() {
                             className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.blue}`}>
                             <Pencil className="w-3 h-3" /> {t('admin.students.edit')}
                           </button>
-                          <button onClick={() => toast.success(t('admin.students.toastRemindSent', { name: student.name }))}
-                            className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.amber}`}>
+                          <button onClick={() => sendReminder(student)} disabled={remindingId === student.id}
+                            className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 disabled:opacity-50 ${ACTION_COLORS.amber}`}>
                             <Bell className="w-3 h-3" /> {t('admin.students.remind')}
                           </button>
                         </>
@@ -776,8 +797,8 @@ export function StudentList() {
                           className={`flex-1 py-2 rounded-lg border text-xs transition-colors flex items-center justify-center gap-1 ${ACTION_COLORS.blue}`}>
                           <Pencil className="w-3 h-3" /> {t('admin.students.edit')}
                         </button>
-                        <button onClick={() => toast.success(t('admin.students.toastRemindSent', { name: student.name }))}
-                          className={`flex-1 py-2 rounded-lg border text-xs transition-colors flex items-center justify-center gap-1 ${ACTION_COLORS.amber}`}>
+                        <button onClick={() => sendReminder(student)} disabled={remindingId === student.id}
+                          className={`flex-1 py-2 rounded-lg border text-xs transition-colors flex items-center justify-center gap-1 disabled:opacity-50 ${ACTION_COLORS.amber}`}>
                           <Bell className="w-3 h-3" /> {t('admin.students.remind')}
                         </button>
                       </>

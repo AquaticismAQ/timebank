@@ -1719,3 +1719,18 @@ Two halves, answering different questions. A small `BadgeCounts` context exposes
 The Student Portal's header hours and coins ride the same signal. Not badges and not in the report, but the same staleness an inch away.
 
 **Verified in the browser with a control both times**: 22 → 21 on reading one notification, and Case Review 7 → 6 on resolving a case *while Audit Center held at 10*. The control is the part that matters — a refresh that redrew everything would look identical on the badge under test. Two wrong turns on the way, both instructive: the first notification clicked was already read, so nothing changed and the fix looked broken until the network panel showed all four re-reads firing correctly; and the first attempt to decide a case found no buttons, because that session was a teacher, who holds `cases.read` but not `cases.decide`.
+
+### 41.49 The Remind button now sends something (issue 155, 2026-09-22)
+
+Aquaticism: Student Management's *Remind* action toasts "reminder sent to …" and nothing reaches the student.
+
+The whole handler was `toast.success(...)`. No request, no endpoint, no notification — a mock-era leftover that survived the 2026-08-07 mock purge precisely because it never called `api.*`, so nothing broke when the mocks went. That is worse than a missing button: a teacher who clicks it believes they have nudged a student who is behind, and stops worrying about them.
+
+`POST /students/{id}/reminders` writes a real notification from a new seeded bilingual template, rendered in the **reader's** language when they open it. Gated on `students.read` rather than `students.manage` — the person who can see a student's progress is the person who should be able to nudge them about it, and the student data scope decides which students that is; sending a message is not editing a record. Audit-logged, like every other mutation.
+
+It **refuses rather than pretending** when the message would reach nobody: `NO_LOGIN_ACCOUNT` (only the roster import provisions accounts — `POST /students` does not) or `ACCOUNT_NOT_ACTIVE`. Reporting success for an undeliverable reminder would reproduce the original bug in a new place.
+
+`StudentReminderService` sits beside `StudentService` rather than inside it, called straight from the controller. Looking up the account needs `UserService`, and `UserServiceImpl` already injects `StudentService`; a method on `StudentServiceImpl` would close a bean cycle and the application would not start. Same shape as `ProjectPublishNotifier`.
+
+**Verified live, with the failure paths forced rather than reasoned about.** Two students already on the roster had the two undeliverable shapes — one with no account, one `PENDING_ACTIVATION` — and both produced the refusal and wrote nothing; the second is the sharper test, since that account exists and only its status makes it unreachable. Reader-language rendering was proven by sending from an **English** admin session and reading 志愿服务时长提醒 in the student's Chinese portal, the same row coming back in English when fetched with `Accept-Language: en`. Scope was checked as `teacher001` against two out-of-scope students **with active accounts** (404 both) *and* one in-scope student sent successfully — without that third line, two 404s prove only that something is broken. A second student, never clicked, held its count throughout.
+
