@@ -262,4 +262,31 @@ class AccountLedgerIT extends AbstractIntegrationTest {
                 new cn.timebank.security.application.CookieSessionUserDetails(view);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
+    /**
+     * Issue 152. `totalEarned` is what the ledger says came in, which is not
+     * the balance and not hours-times-a-rate: a correction that takes coins
+     * back out lowers the balance and leaves what was earned alone.
+     *
+     * <p>The reversal is the point. Without it the two numbers agree and the
+     * test would pass against a `totalEarned` that simply echoed the
+     * balance — which is exactly what the frontend used to do.</p>
+     */
+    @Test
+    void totalEarnedCountsCreditsOnlyAndDivergesFromTheBalanceAfterACorrection() {
+        String studentId = createStudent();
+        accountService.credit(studentId, "grade_6", "class_6A", 500, "test", "src_e1", "SERVICE_APPROVED", "usr_test_admin");
+        accountService.credit(studentId, "grade_6", "class_6A", 300, "test", "src_e2", "SERVICE_APPROVED", "usr_test_admin");
+
+        AccountDto afterCredits = accountService.getByStudentId(studentId, adminAuth());
+        assertThat(afterCredits.balance()).isEqualTo(800);
+        assertThat(afterCredits.totalEarned()).isEqualTo(800);
+
+        accountService.adjustForStudent(studentId, "grade_6", "class_6A",
+                new AdjustmentRequest(-200, "MANUAL_ADJUSTMENT", "Taking some back"), "usr_test_admin");
+
+        AccountDto afterCorrection = accountService.getByStudentId(studentId, adminAuth());
+        assertThat(afterCorrection.balance()).isEqualTo(600);
+        assertThat(afterCorrection.totalEarned()).isEqualTo(800);
+    }
+
 }

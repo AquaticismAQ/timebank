@@ -64,15 +64,19 @@ export function AccountManagement() {
     [classes, filterGrade],
   );
 
-  const [balanceMap, setBalanceMap] = useState<Record<string, number>>({});
+  // Balance *and* total earned, from the one call this page already made.
+  // Earned used to be computed here from `student.completedMinutes` at a
+  // hardcoded two coins an hour — a field the students endpoint does not send
+  // (so it was always 0) and a conversion rate the server owns (issue 152).
+  const [accountMap, setAccountMap] = useState<Record<string, { balance: number; earned: number }>>({});
   const enrichWithBalances = useCallback(async (students: Student[]) => {
     try {
       const accountPage = await api.accounts.list({ pageSize: 200 });
-      const map: Record<string, number> = {};
+      const map: Record<string, { balance: number; earned: number }> = {};
       for (const acct of accountPage.data) {
-        map[acct.studentId] = acct.balance;
+        map[acct.studentId] = { balance: acct.balance, earned: acct.totalEarned };
       }
-      setBalanceMap(map);
+      setAccountMap(map);
     } catch { /* accounts may not be accessible, fallback to 0 */ }
   }, []);
 
@@ -122,7 +126,8 @@ export function AccountManagement() {
     setApiSearch(value);
   };
 
-  const getBalance = useCallback((s: Student) => balanceMap[s.id] ?? s.timeCoinBalance ?? 0, [balanceMap]);
+  const getBalance = useCallback((s: Student) => accountMap[s.id]?.balance ?? s.timeCoinBalance ?? 0, [accountMap]);
+  const getEarned = useCallback((s: Student) => accountMap[s.id]?.earned ?? 0, [accountMap]);
 
   const filtered = useMemo(() => {
     return [...items].sort((a, b) => getBalance(b) - getBalance(a));
@@ -221,22 +226,25 @@ export function AccountManagement() {
                   <span className="text-foreground text-sm font-medium">{student.name[0]}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-foreground font-medium truncate">{student.name}</div>
-                  {/* The student number, because the search box above accepts it
-                      (issue 151). Searching by a value the results never show
-                      leaves the operator no way to confirm they found the right
-                      person — and the number is what a teacher actually holds:
-                      display names are masked and repeat across a school.
+                  {/* The student number is here because the search box above
+                      accepts it (issue 151): searching by a value the results
+                      never show leaves the operator no way to confirm they
+                      found the right person, and the number is what a teacher
+                      actually holds — display names are masked and repeat
+                      across a school.
 
-                      On its own line rather than beside the name: sharing one
-                      line cost the name instead, which at 390px truncated a
-                      masked name to "Taylor …" and made the card worse than it
-                      started. This is the same name-over-number stack the
-                      Student Management list already uses. */}
-                  <div className="text-xs text-muted-foreground truncate">
-                    {student.studentNumber} · {formatGradeClass(student.gradeLevel, student.className)}
+                      Stacked on a phone, inline from `md` up (issue 152). One
+                      line is the better reading when there is room for it; at
+                      390px there is not, and sharing the line truncated the
+                      *name* instead — a masked name became "Taylor …", which
+                      is a worse card than the one we started with. */}
+                  <div className="flex flex-col md:flex-row md:items-baseline md:gap-2 min-w-0">
+                    <span className="text-sm text-foreground font-medium truncate">{student.name}</span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {student.studentNumber} · {formatGradeClass(student.gradeLevel, student.className)}
+                    </span>
                   </div>
-                  <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: formatCoins(Math.round((student.completedMinutes ?? 0) / 60 * 2 * 100)), redeemed: 0 })}</div>
+                  <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: formatCoins(getEarned(student)), redeemed: 0 })}</div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-lg font-semibold text-foreground">{formatCoins(getBalance(student))}</div>

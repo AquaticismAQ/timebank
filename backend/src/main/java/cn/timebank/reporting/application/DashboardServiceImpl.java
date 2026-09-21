@@ -83,7 +83,7 @@ class DashboardServiceImpl implements DashboardService {
         try {
             account = accountService.getByStudentId(studentId, auth);
         } catch (ApiException e) {
-            account = new AccountDto(null, studentId, 0, false, null, null, null, null);
+            account = new AccountDto(null, studentId, 0, 0, false, null, null, null, null);
         }
 
         List<ServiceRecordDto> recentRecords = serviceRecordService

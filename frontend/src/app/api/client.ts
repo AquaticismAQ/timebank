@@ -83,12 +83,15 @@ function fromRuleVersionDto(dto: RuleVersionDtoWire): RuleVersion {
   return { ...dto, status: fromBackendEnum(dto.status) as RuleVersion['status'] };
 }
 
-type AccountDtoWire = { id: string; studentId: string; balance: number; frozen: boolean; updatedAt: string };
-/** `/accounts` and `/dashboards/student`'s embedded `account` both return the same real `AccountDto` — see the totalEarned/frozen approximation note at the `accounts.get` call site. */
+type AccountDtoWire = { id: string; studentId: string; balance: number; totalEarned: number; frozen: boolean; updatedAt: string };
+/** `/accounts` and `/dashboards/student`'s embedded `account` both return the same real `AccountDto` — see the frozen approximation note at the `accounts.get` call site. */
 function fromAccountDto(dto: AccountDtoWire): Account {
   return {
     id: dto.id, studentId: dto.studentId, balance: dto.balance,
-    totalEarned: dto.balance, totalRedeemed: 0, borrowed: 0,
+    // Real, from the ledger, since issue 152 — it used to be approximated as
+    // the balance, which is the same number only until the first correction.
+    totalEarned: dto.totalEarned ?? dto.balance,
+    totalRedeemed: 0, borrowed: 0,
     frozen: dto.frozen ? dto.balance : 0, updatedAt: dto.updatedAt,
   };
 }
@@ -798,8 +801,9 @@ export const api = {
     // filter[studentId] then the returned accountId — not a student-scoped
     // account endpoint.
     async get(studentId: string): Promise<Account> {
-      // Real AccountDto has no totalEarned/totalRedeemed/borrowed at all
-      // (Phase 4 concepts, unimplemented — always 0, not a mock gap), and
+      // `totalRedeemed`/`borrowed` are Phase 4 concepts the backend has no
+      // field for — always 0, not a mock gap. (`totalEarned` is real as of
+      // issue 152.) And
       // `frozen` is a boolean flag (is this account frozen?), not a
       // frozen-amount like the frontend's `frozen: number` — approximated
       // as "whole balance" when frozen, since freezing blocks all new

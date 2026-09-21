@@ -1661,3 +1661,17 @@ It now lists all seven and states the property that matters, including the stron
 **Measured**, because an exact-match location is exactly where a typo silently removes protection: a real login still succeeds, fourteen rapid logins against a nonexistent username give five through then 503s then one as the bucket refills, and fourteen hits on `/ping` are untouched — so it is the location doing it and not something global. A nonexistent username deliberately: lockout is real, and hammering a live account to test a proxy rule would lock it. The two removed paths return 404 (checked with a CSRF token — without one the CSRF filter answers 403 first, which would have looked like the endpoints still existing).
 
 A-16 is ✅ in §12.5 and out of §12.8 in both language versions. **§12.8 now contains only the school's decisions**: MFA (A-13/A-14/A-15) and central log retention (O-01).
+
+### 41.45 "Earned coins" was computed in the browser (issue 152, 2026-09-21)
+
+Aquaticism, on the accounts card from §41.44's sibling issue: put the number beside the name on a laptop, and *"why is the earned all 0 even [when] the student ha[s] approved records?"*
+
+**The layout.** Stacked below `md`, inline from `md` up. Issue 151 stacked it because at 390px sharing a line truncated the *name*; on a laptop there is room for both.
+
+**The zero.** The card computed `(student.completedMinutes ?? 0) / 60 * 2 * 100`. Three things wrong, of which the zero is only the visible one: `completedMinutes` is not a field the students list endpoint returns, so it was `undefined` on every card and could never have shown anything else; the expression converts minutes to coins in the browser at a hardcoded two-an-hour, which is a second silent copy of a versioned server-side rule; and earned is not derivable from service time at all, because corrections, reversals and adjustments are transactions and the ledger is what counts.
+
+`AccountDto` now carries a real `totalEarned` — the sum of the account's positive transactions — from one grouped query per page rather than an aggregate per row. `Redeemed` is left at zero deliberately: the question was about earned, redemption is knowingly unbuilt, and the same hardcoded zero appears on two Student Portal screens as well, so removing it is one decision about three screens rather than a tidy-up of this card.
+
+The fix reaches those screens for free and fixes a quieter bug there: `StudentHome` derives a student's recognition level from `account.totalEarned`, which the client had been approximating as the balance — so a correction could have moved a student down a level.
+
+**Verified** at both widths on the deployed site, with the honest caveat that every earned figure there equals its balance (nobody live has had a correction), which is exactly why the divergence is proven in `AccountLedgerIT` instead: credits of 500 and 300 then an adjustment of −200, asserting balance 600 and earned 800. Red-checked against the `earned = balance` approximation, which fails it alone.

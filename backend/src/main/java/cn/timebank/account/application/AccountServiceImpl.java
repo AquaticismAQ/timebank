@@ -37,6 +37,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import java.time.Instant;
 
 @Service
@@ -70,7 +75,11 @@ class AccountServiceImpl implements AccountService {
         Specification<Account> scopeSpec = scopeSpecification(auth);
         Specification<Account> filterSpec = FilterSpecifications.equalTo("studentId", studentId);
         Specification<Account> combined = FilterSpecifications.and(scopeSpec, filterSpec);
-        return accountRepository.findAll(combined, pageable).map(this::toDto);
+        Page<Account> page = accountRepository.findAll(combined, pageable);
+        // The page's totals in one query, before mapping — going through the
+        // single-account overload here would be an aggregate per row.
+        Map<String, Integer> credited = creditedFor(page.getContent().stream().map(Account::getId).toList());
+        return page.map(a -> toDto(a, credited.getOrDefault(a.getId(), 0)));
     }
 
     /**
@@ -293,8 +302,30 @@ class AccountServiceImpl implements AccountService {
     }
 
     private AccountDto toDto(Account a) {
-        return new AccountDto(a.getId(), a.getStudentId(), a.getBalance(), a.isFrozen(), a.getFrozenReason(),
+        return toDto(a, creditedFor(List.of(a.getId())).getOrDefault(a.getId(), 0));
+    }
+
+    private AccountDto toDto(Account a, int totalEarned) {
+        return new AccountDto(a.getId(), a.getStudentId(), a.getBalance(), totalEarned,
+                a.isFrozen(), a.getFrozenReason(),
                 a.getVersion(), a.getCreatedAt(), a.getUpdatedAt());
+    }
+
+    /**
+     * Total credited per account, for however many accounts the caller is
+     * about to render (issue 152). One query for the whole set: the single-row
+     * overload above goes through the same method rather than having a second
+     * one to keep in step.
+     */
+    private Map<String, Integer> creditedFor(Collection<String> accountIds) {
+        if (accountIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Integer> totals = new HashMap<>();
+        for (Object[] row : transactionRepository.sumCreditedByAccountIds(accountIds)) {
+            totals.put((String) row[0], ((Number) row[1]).intValue());
+        }
+        return totals;
     }
 
     private AccountTransactionDto toDto(AccountTransaction t) {
