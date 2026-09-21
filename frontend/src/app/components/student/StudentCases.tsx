@@ -282,12 +282,16 @@ export function StudentCases() {
       </div>
       <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
 
+      {/* `allowDraft`: this page lists cases and refetches below, so a saved
+          draft shows up immediately — the one place the Save Draft button earns
+          its keep (issue 143). */}
       {(filing || editing) && (
         <CaseFilingModal
           type={editing?.type === 'appeal' ? 'appeal' : 'supplement'}
           record={null}
           draft={editing}
           onClose={() => { setFiling(false); setEditing(null); }}
+          allowDraft
           onFiled={() => { setFiling(false); setEditing(null); refetch(); }}
         />
       )}

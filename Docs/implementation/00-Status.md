@@ -1542,3 +1542,15 @@ Measured before changing anything: a returned record's row offered `["查看", "
 The word already existed elsewhere: the proposal flow calls the same situation `Revise & Resubmit` / 按意见修改并重提, and cases use 补充并重新提交. Service records were the odd one out, so they now read **Revise & Resubmit / 修改并重提** — the family phrase, minus 按意见, because the row already shows the reviewer's reason directly above the button. `修改` rather than `编辑` on purpose: 编辑 belongs to your own draft, and the draft row two lines up already uses it. Key renamed with the value so the bundle stops calling it the confusing thing.
 
 Verified in both languages with the row height measured, since the label grew and these buttons sit in a table cell: unchanged at 79px, nothing wrapped.
+
+### 41.37 Three controls renamed to match what they do (2026-09-21)
+
+Issue 143, three of Aquaticism's observations with one shape: a control named for an outcome it does not produce.
+
+**"Revise & Resubmit" shortened to Revise / 修改** — issue 142's wording was accurate and too wide for a table cell that already carries View. *Revise* says the part that was missing; the resubmit is what the form you land in is for.
+
+**Revising a returned record does not make a draft.** The wizard's second button said Save Draft and toasted "Draft saved", but `saveRecord()` PATCHes the existing record, which stays `RETURNED` — no draft is created, and a student who went looking for one found nothing. Label and toast now switch on `editing?.status === 'returned'`, the same condition the code already used to choose PATCH over POST: **Save / 保存** and **Record saved / 记录已保存**.
+
+**The appeal dialog's Save Draft was not broken — it was invisible.** `api.cases.create` ran and the draft is real, but opened from a service record the dialog closes back onto a list of *records*, so the case draft appears nowhere the student is looking. It is now gated on `allowDraft`, off by default, and the question is about the caller: *will what you just saved be visible when this closes?* My Cases passes it and keeps the button; Service Records does not. Removing it everywhere was the other reading and would have deleted a working feature from the one screen where it works.
+
+**Verified on the deployed page**, with the two lines that matter being the absence rather than the presence: after saving a revised record the record is still `RETURNED` and the draft count is **0** — the thing the old copy claimed had happened.

@@ -445,12 +445,22 @@ export function ServiceRecords() {
     closeAfterOverlapChoice();
   };
 
+  /**
+   * Save without submitting.
+   *
+   * What that *means* depends on what is open (issue 143). A new record becomes
+   * a draft. **A returned record does not** — it is PATCHed in place and stays
+   * RETURNED, so calling it "Save Draft" and toasting "Draft saved" described
+   * something that had not happened, and left students looking for a draft that
+   * was never created.
+   */
+  const revising = editing?.status === 'returned';
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
       await saveRecord();
       fieldErrors.clearAll();
-      toast.success(t('student.records.draftSaved'));
+      toast.success(t(revising ? 'student.records.recordSaved' : 'student.records.draftSaved'));
       // Close the wizard, not just reset it. The two lines below tear down the
       // state the form needs (uploaded evidence, and the `editing` link that
       // makes a later submit a PATCH rather than a POST), so leaving the form on
@@ -904,7 +914,7 @@ export function ServiceRecords() {
               <button type="button" onClick={handleSaveDraft} disabled={saving || !canSaveDraft}
                 title={canSaveDraft ? undefined : t('student.records.saveDraftNeedsWindow')}
                 className="flex-1 py-3 rounded-xl border border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-colors text-sm disabled:opacity-50 disabled:hover:bg-transparent">
-                {t('student.records.saveDraft')}
+                {t(revising ? 'student.records.saveRecord' : 'student.records.saveDraft')}
               </button>
             )}
             {step < STEP_KEYS.length - 1 ? (
@@ -1234,6 +1244,9 @@ export function ServiceRecords() {
       )}
       <PageControls page={page} onPageChange={setPage} pageSize={params.pageSize ?? 20} onPageSizeChange={setPageSize} />
 
+      {/* No `allowDraft`: this page lists records, not cases, so a saved case
+          draft would vanish from view the moment the dialog closed (issue 143).
+          My Cases, which does list them, keeps the button. */}
       {caseFiling && (
         <CaseFilingModal
           type={caseFiling.type}

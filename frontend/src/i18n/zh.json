@@ -308,6 +308,8 @@
       "waitlistedSuccess": "你已进入“{{title}}”的候补名单，仅在有人取消报名时才会空出名额。"
     },
     "records": {
+      "saveRecord": "保存",
+      "recordSaved": "记录已保存",
       "submitRecord": "提交服务记录",
       "source": "来源",
       "serviceInfo": "服务信息",
@@ -364,7 +366,7 @@
       "status": "状态",
       "timeCoins": "时间币",
       "actions": "操作",
-      "reviseResubmit": "修改并重提",
+      "reviseResubmit": "修改",
       "loadedReturned": "已载入退回记录，请补充材料",
       "delete": "删除",
       "deleteRecord": "删除草稿记录",

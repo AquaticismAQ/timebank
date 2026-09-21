@@ -308,6 +308,8 @@
       "waitlistedSuccess": "You are on the waitlist for \"{{title}}\" — a place will open up only if someone cancels."
     },
     "records": {
+      "saveRecord": "Save",
+      "recordSaved": "Record saved",
       "submitRecord": "Submit Service Record",
       "source": "Source",
       "serviceInfo": "Service Information",
@@ -364,7 +366,7 @@
       "status": "Status",
       "timeCoins": "Time Coins",
       "actions": "Actions",
-      "reviseResubmit": "Revise & Resubmit",
+      "reviseResubmit": "Revise",
       "loadedReturned": "Returned record loaded, please supplement materials",
       "delete": "Delete",
       "deleteRecord": "Delete Draft Record",

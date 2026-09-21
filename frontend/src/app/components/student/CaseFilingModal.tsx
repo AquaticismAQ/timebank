@@ -39,12 +39,22 @@ function caseTitle(subject: ServiceRecord | null, reason: string): string {
 }
 
 export function CaseFilingModal({
-  type, record, draft, onClose, onFiled,
+  type, record, draft, allowDraft = false, onClose, onFiled,
 }: {
   type: 'appeal' | 'supplement';
   record: ServiceRecord | null;
   /** An existing DRAFT/NEEDS_INFORMATION case being edited instead of a new filing (issue 081). */
   draft?: Case | null;
+  /**
+   * Whether "Save Draft" is offered (issue 143).
+   *
+   * Off by default, because the answer is about the *caller*: a saved draft has
+   * to be visible somewhere the student lands afterwards. My Cases lists cases
+   * and refetches, so it passes true. The records page does not, so a draft
+   * saved from there was real, correct, and invisible — a button that reported
+   * success and appeared to do nothing.
+   */
+  allowDraft?: boolean;
   onClose: () => void;
   onFiled: () => void;
 }) {
@@ -144,10 +154,17 @@ export function CaseFilingModal({
         <div className="flex gap-2 mt-4">
           <button onClick={onClose} disabled={saving}
             className="flex-1 py-2.5 rounded-xl border border-border text-foreground hover:bg-accent text-sm">{t('common.cancel')}</button>
-          <button onClick={() => save(false)} disabled={saving}
-            className="flex-1 py-2.5 rounded-xl border border-border text-foreground hover:bg-accent text-sm disabled:opacity-50">
-            {t('student.cases.saveDraft')}
-          </button>
+          {/* Only where the draft will be visible afterwards (issue 143).
+              Opened from a service record, this dialog closes back onto a list
+              of *records*; the case draft it just created is real but appears
+              nowhere the student is looking, so the button reported success and
+              seemed to do nothing. My Cases refetches and shows it. */}
+          {allowDraft && (
+            <button onClick={() => save(false)} disabled={saving}
+              className="flex-1 py-2.5 rounded-xl border border-border text-foreground hover:bg-accent text-sm disabled:opacity-50">
+              {t('student.cases.saveDraft')}
+            </button>
+          )}
           <button onClick={() => save(true)} disabled={saving}
             className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 text-sm disabled:opacity-50">
             {saving ? t('common.saving', { defaultValue: 'Saving...' }) : t('common.submit')}
