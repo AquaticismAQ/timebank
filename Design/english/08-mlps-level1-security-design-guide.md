@@ -646,7 +646,7 @@ and showing it as passed or failed would be equally untrue.
 | D-05 | Guardian name, guardian contact, and roster email are not collected | ✅ | The `Student` entity carries no such field; the legacy `guardian_name`/`guardian_contact` columns were dropped by migration `V26` | [ ] |
 | D-06 | **[School]** Name masking follows the §4.1 convention (consistent across Chinese and English) | — | Performed by the school before import. The system does not check masking strength, and could not — what reaches it is a string | [ ] |
 | D-07 | **[School]** Student-number hash stability confirmed: unchanged across years and batches | — | The uniqueness constraint and format check are in force system-side (see I-01); "unchanged across years" can only be guaranteed where the value is generated | [ ] |
-| D-08 | Application fails at startup if local disk storage is used in production | ⚠️ | `LocalStorageProductionGate` is implemented and unit-tested. **Known gap, noted in the code**: when the environment marker is missing or unrecognised it warns rather than refusing to start. The current deployment is marked `test-server` | [ ] |
+| D-08 | Application fails at startup if local disk storage is used in production | ✅ | Tightened 2026-09-21 (issue 148) into the allow-list it always claimed to be: on local disk, **any** environment not on the known non-production list — including missing and unset — refuses to start, and the message names the accepted values. The old gap (an unset marker only warned) is closed because the integration suite and the Docker stack now declare their environment, which is what let the default become fatal. Measured: `uat` exits with code 1; `local` and `test-server` start normally | [ ] |
 
 ### 12.3 Evidence files
 
@@ -733,7 +733,6 @@ implementer's current debt:
 | :--- | :--- | :--- |
 | I-09 | No summary audit entry for an import | Implement |
 | A-16 | "Only two unauthenticated endpoints" does not match the code; the proxy still rate-limits removed paths | Restate the sentence; clean up the config |
-| D-08 | The production gate warns rather than refusing when the environment marker is missing | Known gap; tighten before go-live |
 | A-13/A-14/A-15 | MFA approach undecided, not enabled | Implement once the school decides (§8.4) |
 | O-01 | No central log-retention arrangement | Settle with the school alongside production operations |
 

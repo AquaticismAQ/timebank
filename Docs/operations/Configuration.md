@@ -115,7 +115,7 @@ properties is a small change if a deployment needs it.
 | `TIMEBANK_SERVER_ADDRESS` | `127.0.0.1` | Loopback on purpose — the app is reached through nginx, never directly |
 | `TIMEBANK_ALLOWED_ORIGINS` | *(required)* | Comma-separated. Must be the browser-visible origin, scheme included |
 | `TIMEBANK_SITE_ROOT_URL` | *(required)* | Public root, used for activation deep links and printed credential slips |
-| `TIMEBANK_ENVIRONMENT` | `unspecified` | Label only; appears in logs and the version endpoint |
+| `TIMEBANK_ENVIRONMENT` | `unspecified` | **Effectively required while evidence is on local disk.** Otherwise a label, appearing in logs and the version endpoint — but `LocalStorageProductionGate` refuses to start on the local-disk adapter under any value outside `local`, `dev`, `development`, `test`, `test-server`, `ci`, `it`, the default `unspecified` included (issue 148). An unset variable is how a production deployment ends up on a test-stage adapter, so it is a refusal rather than a warning |
 
 ### 4.1 Reverse proxy — two settings that live nowhere else
 

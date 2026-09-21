@@ -1619,3 +1619,17 @@ Aquaticism, on the self-assessment's remaining ⚠️ rows: *"the fix the T-02 a
 **Measured, and the first reading was wrong.** A modern OpenSSL will not send a TLS 1.0 ClientHello of its own accord, and that refusal looks exactly like the server's. Forcing the offer with `-cipher 'ALL:@SECLEVEL=0'` gives the real answer: 1.0 and 1.1 fail with a protocol-version alert and `Cipher: 0000`, 1.2 and 1.3 complete with a verified chain. The summary line prints `Protocol: TLSv1` for a *refused* attempt, which is what made the first pass read as "still accepted".
 
 Both settings existed only on the server, so the design's §9 transport table now states checkable values (TLS 1.2/1.3 **including the global default**; HSTS ≥ 1 year) instead of "HTTPS enforced" and "HSTS enabled", and `Docs/operations/Configuration.md` §4.1 records them for whoever rebuilds the box. §7.1's third principle also now states the mechanism behind "whole file or nothing" — the validation gate and the single commit transaction from §41.40 — rather than asserting it. T-02/T-03 are ✅ in §12.6 and out of §12.8, in both language versions.
+
+### 41.42 The storage gate now refuses instead of warning (issue 148, 2026-09-21)
+
+The last code item §12 left open. `LocalStorageProductionGate`'s javadoc described "an allow-list of environments known to be safe for local disk, not a deny-list, so a new environment name cannot accidentally inherit permission"; the code was a deny-list of three names with everything else permitted, including the unset default. The gap was named rather than hidden, along with the reason (failing on `unspecified` would have broken local dev and the test suite) and the fix (make those set it, then let the default be fatal).
+
+Done in that order. `application-it.yml` gives the integration profile `environment: it`; the compose file and the server already declared theirs. The gate then became what it claimed: on local disk, anything outside the non-production list refuses to start, with two messages — "you said production" and "you said nothing" need different instructions — but one outcome.
+
+The case this closes is a production deployment that simply forgets the variable. Not exotic: it is the likeliest route to production on a test-stage adapter, and it was the one case that used to start. A line in a startup log is not a control.
+
+**Forced on Docker, controlled on the server.** `TIMEBANK_ENVIRONMENT=uat` crash-loops and a one-shot run exits 1 — checked separately from the crash loop, because under `restart: unless-stopped` a container that dies looks the same whatever it exited with, and "aborts with a non-zero exit code" is a claim the class makes. `local` on the same image starts clean, and the deployed server (`test-server`) is active with no complaint. 23 unit tests, red-checked; `prod-eu` is in there as the name that reads as production, belongs to neither list, and used to start.
+
+`FileServiceIT`'s watermark failure is pre-existing — verified by stashing the change and re-running, not assumed.
+
+D-08 is ✅ in §12.2 and out of §12.8 in both language versions. What remains there: I-09, A-16's wording plus the proxy's stale rate-limit rule, MFA (A-13/14/15) and central log retention.

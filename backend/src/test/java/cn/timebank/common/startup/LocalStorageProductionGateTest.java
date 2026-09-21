@@ -48,7 +48,7 @@ class LocalStorageProductionGateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"local", "dev", "development", "test", "test-server", "ci"})
+    @ValueSource(strings = {"local", "dev", "development", "test", "test-server", "ci", "it"})
     void startsNormallyOnLocalDiskOutsideProduction(String environment) {
         LocalStorageProductionGate gate = new LocalStorageProductionGate(new LocalFileStorage(), environment);
 
@@ -56,16 +56,37 @@ class LocalStorageProductionGateTest {
     }
 
     /**
-     * The documented gap: an unset variable warns but does not stop startup,
-     * because failing would break local development and the test suite. Asserted
-     * so that a later change making it fatal is a deliberate decision rather than
-     * an accidental break.
+     * Issue 148, and the case the gate exists for. A deployment that forgets
+     * TIMEBANK_ENVIRONMENT is the likeliest way to reach production on the
+     * test-stage adapter, and it used to be the one case that started anyway.
+     *
+     * <p>The message has to carry the accepted values: an operator told only
+     * that theirs is wrong has to go and read the source to find out what is
+     * right.</p>
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"unspecified", "uat", "qa", "prod-eu", ""})
+    void refusesToStartWhenTheEnvironmentIsNotRecognised(String environment) {
+        LocalStorageProductionGate gate = new LocalStorageProductionGate(new LocalFileStorage(), environment);
+
+        assertThatThrownBy(() -> gate.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("local disk")
+                .hasMessageContaining("TIMEBANK_ENVIRONMENT")
+                .hasMessageContaining("test-server");
+    }
+
+    /**
+     * `prod-eu` above is the reason this is an allow-list rather than a longer
+     * deny-list: it is neither in the production set nor the non-production one,
+     * and under the old check it would have started — a name that reads as
+     * production to any human passing straight through the gate.
      */
     @Test
-    void doesNotBlockStartupWhenTheEnvironmentIsUnspecified() {
-        LocalStorageProductionGate gate = new LocalStorageProductionGate(new LocalFileStorage(), "unspecified");
+    void aProductionLookingNameOutsideBothListsIsStillRefused() {
+        LocalStorageProductionGate gate = new LocalStorageProductionGate(new LocalFileStorage(), "prod-eu");
 
-        assertThatCode(() -> gate.run(null)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> gate.run(null)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -75,9 +96,22 @@ class LocalStorageProductionGateTest {
         assertThatCode(() -> gate.run(null)).doesNotThrowAnyException();
     }
 
+    /** A null property must reach the same refusal as an unset one, not a NullPointerException. */
     @Test
-    void treatsANullEnvironmentAsUnspecifiedRatherThanFailing() {
-        assertThatCode(() -> new LocalStorageProductionGate(new LocalFileStorage(), null).run(null))
+    void treatsANullEnvironmentAsUnrecognisedRatherThanThrowingSomethingElse() {
+        assertThatThrownBy(() -> new LocalStorageProductionGate(new LocalFileStorage(), null).run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("unspecified");
+    }
+
+    /**
+     * The scope limit. Once evidence is on real object storage the gate has no
+     * opinion about the environment at all — including an unset one, which is
+     * why this asserts on that case specifically rather than on "production".
+     */
+    @Test
+    void saysNothingAboutAnUnsetEnvironmentWhenStorageIsNotLocalDisk() {
+        assertThatCode(() -> new LocalStorageProductionGate(new S3FileStorage(), "unspecified").run(null))
                 .doesNotThrowAnyException();
     }
 

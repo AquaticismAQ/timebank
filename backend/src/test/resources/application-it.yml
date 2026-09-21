@@ -1,0 +1,10 @@
+# The `it` profile (AbstractIntegrationTest). Only what the integration suite
+# needs to differ on — everything else comes from the main application.yml.
+
+timebank:
+  # Issue 148: LocalStorageProductionGate now refuses to start on the local-disk
+  # adapter under an environment it does not recognise, and the integration
+  # suite runs on exactly that adapter. Naming the environment here is what let
+  # the unset default become fatal — without it, "we cannot fail on unspecified
+  # because the tests would break" stays true forever.
+  environment: it
