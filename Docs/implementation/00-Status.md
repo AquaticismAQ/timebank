@@ -1554,3 +1554,21 @@ Issue 143, three of Aquaticism's observations with one shape: a control named fo
 **The appeal dialog's Save Draft was not broken — it was invisible.** `api.cases.create` ran and the draft is real, but opened from a service record the dialog closes back onto a list of *records*, so the case draft appears nowhere the student is looking. It is now gated on `allowDraft`, off by default, and the question is about the caller: *will what you just saved be visible when this closes?* My Cases passes it and keeps the button; Service Records does not. Removing it everywhere was the other reading and would have deleted a working feature from the one screen where it works.
 
 **Verified on the deployed page**, with the two lines that matter being the absence rather than the presence: after saving a revised record the record is still `RETURNED` and the draft count is **0** — the thing the old copy claimed had happened.
+
+### 41.38 Audit: the time-based project statuses do advance (2026-09-21)
+
+Aquaticism asked whether a published project really turns to `REGISTRATION_OPEN` when its registration time arrives, and whether the close is handled correctly. Read the code and then forced each boundary on the deployed server rather than waiting to find one.
+
+**How it works.** `ProjectServiceImpl.syncTimeBasedStatus` walks the whole chain in one pass — `PUBLISHED → REGISTRATION_OPEN → (CLOSED | ARCHIVED) → IN_PROGRESS → COMPLETED` — with sequential `if`s, so a project that has been ignored across several boundaries catches up in a single call. It runs on every user-facing path: `list`, both `getDetail`s, `updateDraft`, `publish`, `archive`, `cancel`, and `lockForRegistration`, which is the locking read registration itself goes through. **A stale status is therefore never displayed and never gates a registration.**
+
+**Forced, not found:**
+
+| Boundary | Result |
+| :--- | :--- |
+| published 25s before registration opens | `PUBLISHED`, then `REGISTRATION_OPEN` once the moment passed |
+| registration closes, **zero** confirmed | `ARCHIVED` — the no-registrants auto-archive |
+| registration closes, **one** confirmed | `CLOSED` |
+
+And across the 97 real projects on the server, every stored status agreed with its own dates: `inconsistentCount: 0`, spanning DRAFT/PUBLISHED/REGISTRATION_OPEN/CLOSED/IN_PROGRESS/COMPLETED/ARCHIVED. Both close paths already have integration tests (`registrationOpenArchivesAutomaticallyWithZeroRegistrants…`, `registrationOpenClosesNormallyInsteadOfArchiving…`).
+
+**The one caveat worth knowing: the sync is lazy, not scheduled** — a deliberate B4.2 decision, since no cron/ShedLock infrastructure exists (§16). A project nobody opens keeps a stale row in the database until something reads it. That is invisible to users, because every read corrects it first, but it *is* visible to the raw-SQL report aggregates that bypass the service — the dashboard's "active projects" counts `status in ('PUBLISHED','REGISTRATION_OPEN','IN_PROGRESS')` straight from the table, so a project that should have archived itself at its registration close can be counted as active until someone looks at it. No change made: that is the known cost of the lazy design, and it is the kind of thing to fix by adding the scheduler, not by patching one query.
