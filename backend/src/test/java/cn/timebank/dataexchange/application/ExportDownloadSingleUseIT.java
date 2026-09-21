@@ -161,7 +161,7 @@ class ExportDownloadSingleUseIT extends AbstractIntegrationTest {
      * meaningfully spent against a file that exists.
      *
      * <p>`serviceRecords` rather than the `participation` this used to use: V31
-     * retired that key with the other re-cut reports (12-DataExport.md §9.4),
+     * retired that key with the other re-cut reports (13-DataExport.md §9.4),
      * and a retired key is refused at create — so the token under test would
      * never have been issued.</p>
      */

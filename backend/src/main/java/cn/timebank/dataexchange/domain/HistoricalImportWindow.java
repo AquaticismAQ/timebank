@@ -12,7 +12,7 @@ import java.time.Instant;
 
 /**
  * The window opened by the first committed historical import
- * (Design/*&#47;11-DataImport.md §6). Exactly one row exists or none does:
+ * (Design/*&#47;12-DataImport.md §6). Exactly one row exists or none does:
  * "no row" means no historical import has ever committed, so the feature is
  * still available and the interface owes the operator §6.2's warning.
  *

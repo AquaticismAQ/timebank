@@ -46,7 +46,7 @@ arrives in seconds rather than after a restart.
 ### `TIMEBANK_ACADEMIC_YEAR_START`
 
 **Default `09-01`. Format `MM-DD`.** The day a school year turns over — and so
-**the day promotion and graduation run** (`Design/*/13-AnnualRollover.md` §2).
+**the day promotion and graduation run** (`Design/*/14-AnnualRollover.md` §2).
 
 It decides exactly two things:
 
@@ -84,7 +84,7 @@ Two consequences worth knowing before you change it:
 ### `TIMEBANK_HISTORICAL_IMPORT_WINDOW_DAYS`
 
 **Default `15`, clamped to `1`–`60`.** How long historical service-record import
-stays open after the first successful import (`Design/*/11-DataImport.md` §6).
+stays open after the first successful import (`Design/*/12-DataImport.md` §6).
 
 Configurable because a migration that genuinely runs long should not need a code
 change and a deploy at the worst possible moment. Clamped because an unbounded

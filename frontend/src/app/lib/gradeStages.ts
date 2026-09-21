@@ -6,7 +6,7 @@ import type { Grade } from '../api/types';
  *
  * A stage is "everything up to and including its exit level", because that is
  * exactly what an exit level means: finishing it graduates the student rather
- * than promoting them (`Design/&#42;/13-AnnualRollover.md` §2.1). With
+ * than promoting them (`Design/&#42;/14-AnnualRollover.md` §2.1). With
  * `[8, 12]` and grades 6…12 that gives `[[6,7,8], [9,10,11,12]]`.
  *
  * Derived rather than written down. A literal "6-8 / 9-12" in a component would

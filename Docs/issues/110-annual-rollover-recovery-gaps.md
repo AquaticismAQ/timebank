@@ -66,7 +66,7 @@ a transaction, it converts silent loss of the record into a loud timeout.
 
 ### 4.1 A successful but *wrong* run cannot be undone
 
-**The design specifies the fix** (`Design/*/13-AnnualRollover.md` §3.3.1) and
+**The design specifies the fix** (`Design/*/14-AnnualRollover.md` §3.3.1) and
 **the build is specified** in `Docs/backlog/02-RecoverableAnnualRollover.md` —
 journal shape, reversal semantics, the refusal condition, and the five open
 questions whoever builds it will hit. The code does not do this yet, which is what

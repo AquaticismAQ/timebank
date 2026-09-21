@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The seven export types of `Design/*&#47;12-DataExport.md` §6, and — the reason
+ * The seven export types of `Design/*&#47;13-DataExport.md` §6, and — the reason
  * this class exists — <b>which filters each one accepts</b>
  * (`11-DataImportExportOptimization.md` §2.6.1).
  *

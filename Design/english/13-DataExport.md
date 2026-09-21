@@ -2,10 +2,10 @@
 
 > This document describes the export type catalogue, the filter and scope model,
 > the column conventions and the permission constraints.
-> Keep `Design/chinese/12-DataExport.md` in sync when editing this file — the
+> Keep `Design/chinese/13-DataExport.md` in sync when editing this file — the
 > Chinese version is the source of truth.
-> Related: the permission and scope model in `10-RolesAndPermissions.md`;
-> imports in `11-DataImport.md`.
+> Related: the permission and scope model in `11-RolesAndPermissions.md`;
+> imports in `12-DataImport.md`.
 
 ---
 
@@ -173,7 +173,7 @@ broken system.
 
 Grade is denormalised onto service records, cases and proposals, and on those
 screens the system's scope filter reads **the row's own grade snapshot** rather
-than the student's live grade (`10-RolesAndPermissions.md` §7.2.1).
+than the student's live grade (`11-RolesAndPermissions.md` §7.2.1).
 
 **Exports do not inherit that filtering.** An export is a report *about
 students*:
@@ -202,7 +202,7 @@ correct reading.
 is in today, and the database keeps no historical roster. So "which grade was
 this student in during 2023-2024" cannot be queried directly.
 
-The derivation rests on the stage model (`13-AnnualRollover.md` §2): the school
+The derivation rests on the stage model (`14-AnnualRollover.md` §2): the school
 runs **two stages — grades 6-7-8 (three years) and grades 9-10-11-12 (four
 years)** — and students enter at grade 6 or at grade 9.
 
@@ -234,7 +234,7 @@ export**.
 ### 5.2 One person may be two student records
 
 Grade 8 to grade 9 is **graduation plus fresh intake**, not promotion
-(`13-AnnualRollover.md` §2.1): the student number is reassigned, and time coins
+(`14-AnnualRollover.md` §2.1): the student number is reassigned, and time coins
 and service hours start from zero.
 
 So **no export will ever show one person's continuous history from grade 6 to
@@ -251,7 +251,7 @@ records by name and year; the system does not link them.
 
 The derivation assumes **no repeated or skipped years**, because the system
 models neither. Where a student does repeat, their historical grades shift by
-one. `13-AnnualRollover.md` §5's consistency check reports such students as
+one. `14-AnnualRollover.md` §5's consistency check reports such students as
 inconsistent, and is the only signal that will surface them.
 
 ### 5.3 When Academic Year is "All years"
@@ -262,7 +262,7 @@ present grade**, and graduated students show `Graduated (YYYY)`.
 ### 5.4 The `GRADUATED` status is written by the annual process
 
 `StudentStatus` contains `GRADUATED`, and the annual process defined in
-`13-AnnualRollover.md` is the only thing that writes it: on the day a school year
+`14-AnnualRollover.md` is the only thing that writes it: on the day a school year
 turns over, grade 8 and grade 12 students are set to `GRADUATED` and their login
 accounts are deactivated at the same time.
 
@@ -302,7 +302,7 @@ prose for a reader, not as field labels.
 > (monthly hours trend) exports are **retired**: the first is covered, in more
 > detail, by Student Completion, and the second is a twelve-point trend line that
 > reads better on screen than in a CSV. Their permission rows are kept and marked
-> retired per `10-RolesAndPermissions.md` §5.2.
+> retired per `11-RolesAndPermissions.md` §5.2.
 
 ---
 
@@ -530,7 +530,7 @@ school, so it belongs in no export.
 > A reader must be able to see the denominator.
 >
 > This is peer performance material, and teachers do not hold the permission
-> (`10-RolesAndPermissions.md` §5.3).
+> (`11-RolesAndPermissions.md` §5.3).
 
 ---
 
@@ -576,7 +576,7 @@ school, so it belongs in no export.
 ## 7. Checklist for adding an export type
 
 - [ ] The type key is stable, lowerCamelCase, and **not** a translation of the UI title
-- [ ] A permission row is added to `10-RolesAndPermissions.md` §5.3 with its role assignment
+- [ ] A permission row is added to `11-RolesAndPermissions.md` §5.3 with its role assignment
 - [ ] Title and description exist in Chinese and English; column names are fixed English
 - [ ] First column is `No.`; every student name is paired with a student number
 - [ ] No database identifiers anywhere

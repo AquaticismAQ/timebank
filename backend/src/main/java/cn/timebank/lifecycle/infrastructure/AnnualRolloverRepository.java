@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * The annual rollover's writes (Design/*&#47;13-AnnualRollover.md), as raw SQL in
+ * The annual rollover's writes (Design/*&#47;14-AnnualRollover.md), as raw SQL in
  * the same cross-module read-model style {@link PurgeQueryRepository}
  * established: this process necessarily spans `student`, `class`, `account`,
  * `user` and `academic_year`, and expressing it as five modules' services

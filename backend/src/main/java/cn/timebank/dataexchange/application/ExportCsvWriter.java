@@ -14,7 +14,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * Every column convention in `Design/*&#47;12-DataExport.md` §2, in one place
+ * Every column convention in `Design/*&#47;13-DataExport.md` §2, in one place
  * (`11-DataImportExportOptimization.md` §2.8).
  *
  * <p>These conventions are cross-cutting and there are seven export types. Left

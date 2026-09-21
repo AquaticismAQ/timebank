@@ -675,7 +675,7 @@ queued → running → succeeded
 
 一个需要知晓的连带影响：`supervisorKind: "student"` 的同伴主管，其联系方式现在通过该学生**关联的登录账号**解析，而非学籍邮箱；因此没有账号的纯名册学生仍会以 `CONTACT_MISSING` 失败，与此前行为一致。
 
-**`GET /students` 默认只返回在校学生（2026-09-20 变更，见问题 114）。** `filter[status]` 取 `StudentStatus` 名称（`ACTIVE`、`INACTIVE`、`GRADUATED`）；**不传该参数表示"除 `GRADUATED` 之外的全部"**。这与 `GET /projects`（见 §4.2）刻意相反——缺省参数在那里不收窄结果，在这里收窄，而两者并不矛盾：毕业会把 `gradeId` 保留在学生读完的那个年级上（见 `13-AnnualRollover.md` §3.1），因此自第一次学年轮转起，未过滤的列表会把两届学生同时放进"八年级"，任何清点八年级人数的人都会得到接近两倍的数字，而页面上没有任何说明。在 `/projects` 中多出来的行只是无害的历史；在这里它们混进了同一个数字。显式指定状态仍可取到任意取值，`GRADUATED` 也不例外——这一届是默认隐藏，绝非不可达。
+**`GET /students` 默认只返回在校学生（2026-09-20 变更，见问题 114）。** `filter[status]` 取 `StudentStatus` 名称（`ACTIVE`、`INACTIVE`、`GRADUATED`）；**不传该参数表示"除 `GRADUATED` 之外的全部"**。这与 `GET /projects`（见 §4.2）刻意相反——缺省参数在那里不收窄结果，在这里收窄，而两者并不矛盾：毕业会把 `gradeId` 保留在学生读完的那个年级上（见 `14-AnnualRollover.md` §3.1），因此自第一次学年轮转起，未过滤的列表会把两届学生同时放进"八年级"，任何清点八年级人数的人都会得到接近两倍的数字，而页面上没有任何说明。在 `/projects` 中多出来的行只是无害的历史；在这里它们混进了同一个数字。显式指定状态仍可取到任意取值，`GRADUATED` 也不例外——这一届是默认隐藏，绝非不可达。
 
 `directory.read` 刻意比 `students.read` 更窄：这是 `role_student` 持有的权限（学生原本没有任何方式查到其他学生或教师的 id），其响应从不携带 `/students` 列表响应中的 `studentNumber`/`status`/`graduationYear` 或联系方式字段。`search` 为必填参数，结果数量有上限（20 条）——这是一个联想搜索，不是目录浏览。
 
@@ -760,7 +760,7 @@ queued → running → succeeded
 `reportType`——即 `exports.studentList`、`exports.serviceRecords`、
 `exports.studentCompletion`、`exports.projects`、`exports.studentParticipation`、
 `exports.reviewEfficiency`、`exports.reviewHistory`。原先笼统的 `exports.create`
-已停用（`Design/*/12-DataExport.md` §9.4）：「可以导出」实际等于「什么都可以导出」，
+已停用（`Design/*/13-DataExport.md` §9.4）：「可以导出」实际等于「什么都可以导出」，
 而审核效率属于同侪绩效材料，归学生发展中心，教师不应拥有。停用的权限行保留在库中，
 以便审计记录中「谁曾持有它」仍能解析，但它不再授予任何能力，也不可再被分配。
 
@@ -817,7 +817,7 @@ queued → running → succeeded
 导入必须先校验后确认。重复导入通过来源文件 Hash、业务唯一键和幂等键共同防护。
 
 **导入属于 SDC 管理员，不属于系统管理员。** `imports.create`、`imports.read`、
-`imports.commit` 不再授予 `sysadmin`（`Design/*/10-RolesAndPermissions.md` §6.1）：
+`imports.commit` 不再授予 `sysadmin`（`Design/*/11-RolesAndPermissions.md` §6.1）：
 系统管理员负责维护系统，不负责录入学生数据，而导入服务历史就是录入学生数据。
 
 #### 历史记录导入会永久关闭
@@ -1118,7 +1118,7 @@ id（对应 `teacher_scope_assignment` 记录，覆盖 §11 验收场景 8 已�
 }
 ```
 
-`exitGradeLevels` 是**结束某一学段**的年级——读完它意味着毕业而不是升级（见 `13-AnnualRollover.md` §2.1），升序排列。`academicYearStart` 为 `MM-DD`：学年换届的日期，也就是升级与毕业执行的日期。
+`exitGradeLevels` 是**结束某一学段**的年级——读完它意味着毕业而不是升级（见 `14-AnnualRollover.md` §2.1），升序排列。`academicYearStart` 为 `MM-DD`：学年换届的日期，也就是升级与毕业执行的日期。
 
 这个接口存在的意义是让任何客户端都不必重述这两个值。否则，提供"八年级毕业生／十二年级毕业生"选项的页面就会自带一份字面量，而没有任何机制让它与真正执行毕业的流程保持一致；学校信息卡片上写死的"9 月 1 日"，也会在某个部署改了配置的那一刻变成假话。
 

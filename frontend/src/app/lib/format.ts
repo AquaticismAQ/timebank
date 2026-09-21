@@ -10,7 +10,7 @@ import i18n from '../../i18n';
  * converter, since Chinese numeral construction isn't a formula for two-
  * digit numbers (十 for 10, not a concatenation of 1 and 0's characters).
  *
- * 12 was added with the senior stage (`Design/*\u002f13-AnnualRollover.md` §2).
+ * 12 was added with the senior stage (`Design/*\u002f14-AnnualRollover.md` §2).
  * The fallback below is why this needed finding by looking: an unmapped grade
  * renders as "12年级" rather than failing, which sits next to "十一年级" and
  * reads as a formatting slip rather than a missing entry.

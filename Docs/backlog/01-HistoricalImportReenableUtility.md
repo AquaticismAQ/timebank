@@ -1,7 +1,7 @@
 # 01 — Historical import re-enable utility (console)
 
 **Status:** Specified, not built. No target release.
-**Depends on:** `Design/*/11-DataImport.md` §6, which defines the window this
+**Depends on:** `Design/*/12-DataImport.md` §6, which defines the window this
 utility reopens.
 **The window itself now exists** (2026-09-19, `V32__historical_import_window.sql`).
 That settles the one thing this spec could not assume: §3's requirement that a
@@ -15,14 +15,14 @@ pressure by whoever needs the door opened.
 ## 1. What this is
 
 The historical service-record import closes permanently 15 days after its first
-successful run (`11-DataImport.md` §6). Once closed, the card disappears from the
+successful run (`12-DataImport.md` §6). Once closed, the card disappears from the
 export/import screen and no HTTP route can reopen it.
 
 This document specifies the **only** way back: a maintenance utility run on the
 server console by a system administrator.
 
 It does not exist yet. This file exists so that the design in
-`11-DataImport.md` §6 does not promise a door that nobody has written down.
+`12-DataImport.md` §6 does not promise a door that nobody has written down.
 
 ## 2. Why it is console-only
 
@@ -36,7 +36,7 @@ under deadline pressure. Requiring shell access on the server makes reopening a
 deliberate, logged, two-person-visible act rather than a UI affordance.
 
 **This is the one place a system administrator touches the import feature**, and
-it is not a contradiction of `10-RolesAndPermissions.md` §6.1: that rule says
+it is not a contradiction of `11-RolesAndPermissions.md` §6.1: that rule says
 System Admin may not import or export data. Operating the switch is not the same
 act as walking through the door — the utility reopens the window and grants
 nothing to the operator, who still holds no `imports.*` permission and still

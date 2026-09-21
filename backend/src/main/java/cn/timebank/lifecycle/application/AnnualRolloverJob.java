@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Design/*&#47;13-AnnualRollover.md §3 — the rollover runs itself when the new
+ * Design/*&#47;14-AnnualRollover.md §3 — the rollover runs itself when the new
  * academic year begins.
  *
  * <p><b>Why daily rather than a cron pinned to 1 September.</b> A once-a-year

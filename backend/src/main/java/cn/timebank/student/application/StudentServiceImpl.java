@@ -85,7 +85,7 @@ class StudentServiceImpl implements StudentService {
      * not everyone (issue 114).
      *
      * <p>Graduation leaves {@code gradeId} on the grade the student finished
-     * (`13-AnnualRollover.md` §3.1), so from the first rollover onward a list that
+     * (`14-AnnualRollover.md` §3.1), so from the first rollover onward a list that
      * includes graduates puts two cohorts in "grade 8" at once, and anyone
      * counting their grade 8 gets roughly double with nothing on screen saying
      * why. That is a wrong answer rather than extra context, which is why this

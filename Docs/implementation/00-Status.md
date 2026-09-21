@@ -1098,7 +1098,7 @@ A teacher with no grade assignment is refused rather than handed an empty file (
 
 Filters travel with the job in `params_json`, and **which filters an export accepts is declared server-side** (`ExportTypeCatalog`, `GET /exports/types`). Passing one an export does not declare is a field error, because accepted-and-ignored is indistinguishable from working — the failure issue 093 was filed about. The stored payload is the scope's *criteria*, not a materialised id list: an earlier version dropped the list above a size limit and fell back to "all students", which is a scope **widening** on overflow and the wrong direction to fail in.
 
-Grade for a selected year is derived, never read — `student.grade_id` is present-tense and no historical roster exists. The arithmetic is a pure class asserted against `12-DataExport.md` §5.1's own table, including the student who repeated a year, whose entry grade lands on neither 6 nor 9 and who therefore gets an empty cell rather than a confidently wrong grade.
+Grade for a selected year is derived, never read — `student.grade_id` is present-tense and no historical roster exists. The arithmetic is a pure class asserted against `13-DataExport.md` §5.1's own table, including the student who repeated a year, whose entry grade lands on neither 6 nor 9 and who therefore gets an empty cell rather than a confidently wrong grade.
 
 One writer owns every column convention (`ExportCsvWriter`). Issue 107's three complaints were all drift between per-type writers. The CSV-injection guard moved across **unchanged**, character set and apostrophe prefix both — the first rewrite of it silently dropped the tab and carriage-return triggers and used a tab as the prefix, which is itself a trigger.
 
@@ -1156,7 +1156,7 @@ Follow-up deploy of `TIMEBANK_ACADEMIC_YEAR_START` and the export change that ha
 
 ### 41.2 Known gap moved out of the design docs: import commit is not audited (2026-09-20)
 
-`Design/*/11-DataImport.md` §8 used to carry "not yet implemented" beside its
+`Design/*/12-DataImport.md` §8 used to carry "not yet implemented" beside its
 audit requirement. That marker has been removed as part of making the design docs
 read as design rather than as a status report — the requirement stays stated
 there, and the gap is recorded here, where gaps belong.
@@ -1166,7 +1166,7 @@ there, and the gap is recorded here, where gaps belong.
 writes none of its own. It should record actor, import type, row count and job id.
 Import is the one remaining path that changes student data in bulk without
 leaving an entry, which makes it the more important of the two halves that
-`11-DataImport.md` §8 asks for.
+`12-DataImport.md` §8 asks for.
 
 Not fixed here because it is unrelated to the doc pass that surfaced it, and
 bundling it in would make both harder to review.
@@ -1181,7 +1181,7 @@ Worth recording for the next person: reverting the annotation left the test **pa
 
 One thing this pass got wrong first. The initial test built the service with `new`, which bypasses Spring's transactional proxy — every repository call auto-committed, graduated students stayed graduated, and it looked like proof that the rollover was not atomic. It was proof that a hand-built object has no transaction. Failure behaviour has to be driven through the container-managed bean. (The restructure incidentally removes that trap: the transaction is now explicit, so a hand-built instance gets one too.)
 
-**Open, and the reason the issue stays open:** a run that *succeeds against wrong inputs* still cannot be undone. `13-AnnualRollover.md` §3.3.1 now specifies the before-state journal that would fix it, so this is a gap against a written design rather than an unrecorded idea. There is no recorded before-state, and the idempotency guard blocks a corrective re-run, so recovery is a full database restore — which on a shared RDS instance means discarding everything else that happened since. Recording one before-row per student changed would turn that into a bounded reversal. Also open: no dry run, and a ShedLock window of 30 minutes that nobody has measured against a real roster.
+**Open, and the reason the issue stays open:** a run that *succeeds against wrong inputs* still cannot be undone. `14-AnnualRollover.md` §3.3.1 now specifies the before-state journal that would fix it, so this is a gap against a written design rather than an unrecorded idea. There is no recorded before-state, and the idempotency guard blocks a corrective re-run, so recovery is a full database restore — which on a shared RDS instance means discarding everything else that happened since. Recording one before-row per student changed would turn that into a bounded reversal. Also open: no dry run, and a ShedLock window of 30 minutes that nobody has measured against a real roster.
 
 ### 41.4 Self-service password change deployed (2026-09-20)
 
@@ -1675,3 +1675,19 @@ Aquaticism, on the accounts card from §41.44's sibling issue: put the number be
 The fix reaches those screens for free and fixes a quieter bug there: `StudentHome` derives a student's recognition level from `account.totalEarned`, which the client had been approximating as the balance — so a correction could have moved a student down a level.
 
 **Verified** at both widths on the deployed site, with the honest caveat that every earned figure there equals its balance (nobody live has had a correction), which is exactly why the divergence is proven in `AccountLedgerIT` instead: credits of 500 and 300 then an adjustment of −200, asserting balance 600 and earned 800. Red-checked against the `earned = balance` approximation, which fails it alone.
+
+### 41.46 Design docs renumbered; a student-identity design added (2026-09-21)
+
+Aquaticism asked for `09-StudentActivationFlow.md` to become `10-`, the rest to shift up, and a new `09` to hold the **identity** design — observing that onboarding was already covered by the activation doc, so the new one should not repeat it.
+
+**Renumbering.** `09-StudentActivationFlow` → `10-`, `10-RolesAndPermissions` → `11-`, `11-DataImport` → `12-`, `12-DataExport` → `13-`, `13-AnnualRollover` → `14-`, in both languages. 250 references across 88 files, including Java and TypeScript comments that cite these documents by path.
+
+One trap worth recording: `Docs/optimization/11-DataImportExportOptimization.md` **starts with** `11-DataImport`, so a naive substitution renamed it too, in 20 files, to a document that does not exist. Caught by grepping for the corrupted name rather than by reading the diff. Every `NN-Name.md` reference in `Design/` and every `Design/*/NN-*.md` cited from code now resolves to a real file (checked programmatically, not by eye).
+
+**New: `09-StudentIdentity.md`** (both languages). It covers the two identifiers and why they are deliberately not one — the 8-digit random username with the three constraints that get optimised away, the three rejected alternatives including the name-derived scheme and why every fix for it was worse than the problem, and the Crockford student number as a roster key that is explicitly *not* a credential. Onboarding is not repeated; the header points at `10-StudentActivationFlow.md` for it.
+
+**§5 is new material, not a restatement**: how a school prepares the roster CSV. Every column with what it accepts, the three things that go wrong most (header order, internal identifiers rather than "Grade 6", class-belongs-to-grade), the file's own constraints, and the consequence of §41.40 — one invalid row and nothing imports, so preparation aims at zero errors rather than "a few bad rows are fine".
+
+**§5.6 specifies the offline conversion tool**, not yet built. The school holds real names and real student numbers; the system wants masked names and Crockford numbers, and that conversion stays outside the system deliberately — the moment it happens inside, "the system never holds directly identifying information" stops being true. Three requirements it must meet, of which the load-bearing one is that student-number generation be **stable and re-runnable**: numbers generated randomly and discarded would break §3.1 the second time it runs.
+
+**`12-DataImport.md` updated** in both languages for what changed in §41.40 and §41.43: validation fails on *any* invalid row, the commit is one transaction that rolls back a file whose row goes bad mid-commit (and therefore needs no resumable checkpoint), and upload and commit each write an audit entry — the upload separately, because a rejected import now imports nothing and would otherwise leave no trace at all. It also now points at `09-StudentIdentity.md` §5 rather than listing columns twice.

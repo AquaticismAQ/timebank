@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>The fixture puts a graduated student and a current student <b>in the same
  * grade</b>, because that is the collision the change exists for: graduation
- * leaves {@code gradeId} alone (`13-AnnualRollover.md` §3.1), so from the first
+ * leaves {@code gradeId} alone (`14-AnnualRollover.md` §3.1), so from the first
  * rollover onward "grade 8" names two cohorts at once. A test with the graduate
  * in a grade of its own would pass whether or not the default filter does
  * anything.</p>

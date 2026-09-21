@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * `Design/english/10-RolesAndPermissions.md` §5 and §6, proven rather than
+ * `Design/english/11-RolesAndPermissions.md` §5 and §6, proven rather than
  * read: seven export permissions replacing the blanket `exports.create`,
  * teacher holding six of them, System Admin holding neither export nor
  * import, and `exports.create` surviving as a retired row that grants

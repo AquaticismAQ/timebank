@@ -25,7 +25,7 @@ const ACTION_BTN_RED_DISABLED = 'inline-flex items-center gap-1 text-xs px-2 py-
 // 02-PorjectOrganization.md §2), kept as an unused DB row, also hidden here.
 const NEVER_ASSIGNABLE = new Set([
   'eventProposals.create', 'applications.create', 'serviceRecords.create', 'projects.close',
-  // Retired by 12-DataExport.md §9.4 in favour of one permission per export
+  // Retired by 13-DataExport.md §9.4 in favour of one permission per export
   // type, so that granting "may export" stops meaning "may export everything".
   // Same treatment as `projects.close`: the row stays for the audit trail of
   // who once held it, and granting it now would confer nothing.
@@ -38,7 +38,7 @@ const RISK_FLAGGED = new Set([
   'accounts.adjust', 'accounts.reverse', 'accounts.freeze', 'rules.publish',
   // Of the seven export permissions this is the one worth a second look:
   // every other export describes students, which is the job, while this one
-  // describes colleagues. 12-DataExport.md §6.6 confines it to the SDC, and
+  // describes colleagues. 13-DataExport.md §6.6 confines it to the SDC, and
   // the flag is here so granting it to a custom role is a deliberate act.
   'exports.reviewEfficiency',
   'imports.commit', 'users.manage', 'roles.manage', 'settings.manage', 'lifecycle.purge',

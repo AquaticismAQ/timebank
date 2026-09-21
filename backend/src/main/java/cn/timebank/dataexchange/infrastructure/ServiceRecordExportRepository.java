@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The Service Records export (`Design/*&#47;12-DataExport.md` §6.2) — one row per
+ * The Service Records export (`Design/*&#47;13-DataExport.md` §6.2) — one row per
  * <b>submitted</b> record, in every review state.
  *
  * <p>Keyset (seek) pagination on {@code id}, not {@code OFFSET}, per Design.md

@@ -58,7 +58,7 @@ correction already applied to the exports.
   pass. Aquaticism's requirement is that the Project Center shows only the current year;
   enforcing that in the query rather than the component means it cannot be
   sidestepped by editing a request, the same reasoning that pins a teacher's
-  Review History to their own decisions (`12-DataExport.md` §6.7).
+  Review History to their own decisions (`13-DataExport.md` §6.7).
 
 ### 3.2 Frontend
 

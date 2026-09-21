@@ -84,7 +84,7 @@ const orgNames = new Set([...organizations.map(o => o.name), 'Example City HD'])
 
 const CATEGORY_IDS = new Set(['cat_campus', 'cat_community', 'cat_welfare', 'cat_education', 'cat_environment', 'cat_other']);
 const GRADE_IDS = ['grade_6', 'grade_7', 'grade_8', 'grade_9', 'grade_10', 'grade_11', 'grade_12'];
-/** The two stage entry grades: both are fresh intakes with no prior-year history (13-AnnualRollover.md §2). */
+/** The two stage entry grades: both are fresh intakes with no prior-year history (14-AnnualRollover.md §2). */
 const INTAKE_GRADE_IDS = ['grade_6', 'grade_9'];
 const CLASS_IDS = new Set([
   ...GRADE_IDS.flatMap(g => { const l = g.replace('grade_', ''); return [`class_${l}A`, `class_${l}B`]; }),
@@ -275,7 +275,7 @@ for (const p of eventProposals) {
   }
 }
 
-// A student's login is 8 random digits — `09-StudentActivationFlow.md` §3, and
+// A student's login is 8 random digits — `10-StudentActivationFlow.md` §3, and
 // `StudentUsernameGenerator` in the backend. The fixture used `student001`…
 // `student030`, which breaks both halves of the rule at once: wrong format, and
 // sequential, which is what §2.1 rejected because it leaks enrolment order and
@@ -310,7 +310,7 @@ for (const u of users) {
   }
 }
 
-// `13-AnnualRollover.md` §5: a student is always exactly 6 + n or 9 + n years
+// `14-AnnualRollover.md` §5: a student is always exactly 6 + n or 9 + n years
 // past their entry year, and the rollover's own consistency check counts the
 // rows where that fails. Asserting it on the fixture means the seeded roster
 // cannot be the thing that makes that check fire.

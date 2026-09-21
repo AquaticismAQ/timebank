@@ -31,7 +31,7 @@ import java.util.HexFormat;
  * are checked as before, and then the token is spent, so the second
  * presentation of the same link is refused
  * (`Docs/optimization/11-DataImportExportOptimization.md` §2.11, F-10 —
- * `12-DataExport.md` §3 and §8 both claimed this property before anything
+ * `13-DataExport.md` §3 and §8 both claimed this property before anything
  * implemented it). Single-use cannot be expressed by a signature alone: a
  * replay is byte-identical to the first use, so only state written by the
  * first use can tell them apart. That state is `export_download_redemption`

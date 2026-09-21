@@ -12,7 +12,7 @@ import java.time.format.DateTimeParseException;
 /**
  * When a school year turns over — the one date that decides which academic year
  * "today" belongs to, and therefore the day promotion and graduation run
- * (`Design/*&#47;13-AnnualRollover.md` §2).
+ * (`Design/*&#47;14-AnnualRollover.md` §2).
  *
  * <p>Configurable because 1 September is a convention, not a law: a school may
  * start a week earlier or later, and the date was previously hardcoded in three

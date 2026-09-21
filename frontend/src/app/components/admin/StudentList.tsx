@@ -325,7 +325,7 @@ export function StudentList() {
 
   /**
    * The purge dates for the cohorts actually on screen — 31 August of the year
-   * after each `graduationYear` (`13-AnnualRollover.md` §6). Derived from the rows
+   * after each `graduationYear` (`14-AnnualRollover.md` §6). Derived from the rows
    * rather than from today, so it names the deadline for what is being looked at;
    * usually one date, two while both cohorts are still retained.
    */
@@ -458,7 +458,7 @@ export function StudentList() {
 
       {/* The retention deadline, stated where the graduates are read rather than
           left in a design doc. A cohort's records are purged on 31 August of the
-          year after `graduationYear` (13-AnnualRollover.md §6) — roughly a year.
+          year after `graduationYear` (14-AnnualRollover.md §6) — roughly a year.
           Without this, the first time anyone learns there was a deadline is when
           a transcript request comes back empty. */}
       {viewingGraduates && filtered.length > 0 && (

@@ -35,7 +35,7 @@ public class ExportController {
 
     /**
      * One permission per export type, not a blanket {@code exports.create}
-     * (`Design/english/10-RolesAndPermissions.md` §5.1: a teacher who needs
+     * (`Design/english/11-RolesAndPermissions.md` §5.1: a teacher who needs
      * the student list must not thereby gain Review Efficiency, whose every
      * row is a colleague's approval rate). The authority name is the export
      * type's stable key, so the check is {@code exports.} + the requested

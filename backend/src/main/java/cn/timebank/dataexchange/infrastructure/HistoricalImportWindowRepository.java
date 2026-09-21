@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 
 /**
- * The window's single row (Design/*&#47;11-DataImport.md §6).
+ * The window's single row (Design/*&#47;12-DataImport.md §6).
  *
  * <p>Opening it is a native insert rather than {@code save()} on purpose.
  * §6.1's "later imports do not extend the window" must hold whatever the

@@ -2,8 +2,8 @@
 
 > This document describes the system's role templates, permission catalogue and
 > data-scope model. It is the shared foundation for the data import
-> (`11-DataImport.md`) and data export (`12-DataExport.md`) designs.
-> Keep `Design/chinese/10-RolesAndPermissions.md` in sync when editing this file
+> (`12-DataImport.md`) and data export (`13-DataExport.md`) designs.
+> Keep `Design/chinese/11-RolesAndPermissions.md` in sync when editing this file
 > — the Chinese version is the source of truth.
 > Related: compliance basis in `08-mlps-level1-security-design-guide.md`;
 > the earlier role adjustment record in `Docs/optimization/07-RoleFinetune.md`.
@@ -54,7 +54,7 @@ deriving.
 ### 3.1 Student (`student`)
 
 **Who**: an enrolled student. The account is created by the roster import and
-first entered with an activation slip (`09-StudentActivationFlow.md`).
+first entered with an activation slip (`10-StudentActivationFlow.md`).
 
 **Can**: submit service records and event proposals, register for projects,
 appeal a review outcome, view their own time-coin account and progress, browse
@@ -200,7 +200,7 @@ Imports stay divided by **workflow stage** rather than by data type:
 | `imports.commit` | Confirm and write the rows |
 
 Stage rather than type, because what is being gated is the "upload → validate →
-commit" pipeline itself (`11-DataImport.md` §3), and with only one role holding
+commit" pipeline itself (`12-DataImport.md` §3), and with only one role holding
 imports at all, a per-type split would draw a distinction nobody can currently
 stand on either side of. If a second importing role ever appears, split then.
 
@@ -227,7 +227,7 @@ the more valuable property to keep.
 
 **The one apparent exception is not one.** After the historical-import window
 expires, only a system administrator can reopen it, from the server console
-(`11-DataImport.md` §6.3). That does not weaken this rule: the utility reopens
+(`12-DataImport.md` §6.3). That does not weaken this rule: the utility reopens
 the *window* and grants the operator no `imports.*` — **the switch is not the
 door**, and after reopening, only an SDC Admin can still perform an import.
 
@@ -277,7 +277,7 @@ The sentence above — "the students who are in Grade 9 today" — holds only fo
 resources whose **subject is the student**.
 
 Grade is denormalised onto six tables, and scope filtering reads **each table's
-own column** (`13-AnnualRollover.md` §3.4). So the same teacher sees different
+own column** (`14-AnnualRollover.md` §3.4). So the same teacher sees different
 populations on different screens:
 
 | Subject | Filtered on | What the teacher sees |
@@ -295,20 +295,20 @@ Both behaviours are defensible: filtering the review queue by snapshot is right 
 you review what happened in your grade — while "how are my current students
 doing" obviously wants filtering by student.
 
-**Exports therefore scope by the student** (`12-DataExport.md` §4.4): an export
+**Exports therefore scope by the student** (`13-DataExport.md` §4.4): an export
 is a report *about students*, the rows are decided by the student, and that
 student's data is not trimmed because a given year's records hang off a different
 grade. Record-subject operational screens such as the review queue keep snapshot
 filtering and are unaffected.
 
 **The stage boundary also bounds how far back anyone can look.** Grade 8 to
-grade 9 is graduation plus fresh intake (`13-AnnualRollover.md` §2.1), so a
+grade 9 is graduation plus fresh intake (`14-AnnualRollover.md` §2.1), so a
 grade 9 student is an entirely new student record. A Grade 9 teacher selecting a
 year before that intake therefore gets **zero rows** — in that year the person
 existed as a different record, outside this teacher's scope. That is the correct
 answer, not missing data.
 
-The derivation rule for the Grade column is in `12-DataExport.md` §5.
+The derivation rule for the Grade column is in `13-DataExport.md` §5.
 
 ### 7.3 A `Self`-scoped teacher exports nothing
 

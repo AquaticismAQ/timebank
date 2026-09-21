@@ -269,7 +269,7 @@ For work that has been **designed in enough detail to be relied on by another
 document**, but that nobody has built and nothing has scheduled.
 
 It exists because a design doc will sometimes promise a mechanism that has no
-implementation — `Design/*/11-DataImport.md` §6 closes the historical-import
+implementation — `Design/*/12-DataImport.md` §6 closes the historical-import
 window and says the only way to reopen it is a console utility. That utility has
 to be written down somewhere, or the design has promised a door nobody specified.
 

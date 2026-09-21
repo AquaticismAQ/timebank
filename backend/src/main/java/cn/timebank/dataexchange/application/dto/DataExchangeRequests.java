@@ -7,7 +7,7 @@ public final class DataExchangeRequests {
     private DataExchangeRequests() {
     }
 
-    /** `POST /exports` (contract §4.13). {@code reportType} is an export type's stable key, and also names the permission required to ask for it — {@code exports.<reportType>} (10-RolesAndPermissions.md §5.2). {@code ExportServiceImpl.SUPPORTED_REPORT_TYPES} is the set a query exists for today. */
+    /** `POST /exports` (contract §4.13). {@code reportType} is an export type's stable key, and also names the permission required to ask for it — {@code exports.<reportType>} (11-RolesAndPermissions.md §5.2). {@code ExportServiceImpl.SUPPORTED_REPORT_TYPES} is the set a query exists for today. */
     public record CreateExportRequest(@NotBlank String reportType, ExportFilters filters) {
 
         /** Filters are optional in the body; absent and all-null mean the same thing — every dimension unrestricted. */

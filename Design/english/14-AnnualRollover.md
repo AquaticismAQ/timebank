@@ -2,11 +2,11 @@
 
 > This document describes the once-a-year promotion and graduation process, and
 > how the two school stages join.
-> Keep `Design/chinese/13-AnnualRollover.md` in sync when editing this file —
+> Keep `Design/chinese/14-AnnualRollover.md` in sync when editing this file —
 > the Chinese version is the source of truth.
-> Related: roles and permissions in `10-RolesAndPermissions.md`; imports in
-> `11-DataImport.md`; the export grade derivation depends on the stage model
-> defined here, `12-DataExport.md` §5.
+> Related: roles and permissions in `11-RolesAndPermissions.md`; imports in
+> `12-DataImport.md`; the export grade derivation depends on the stage model
+> defined here, `13-DataExport.md` §5.
 
 ---
 
@@ -19,7 +19,7 @@ never rewritten after the roster import, and the `GRADUATED` value in
 This is not a gap that can keep being deferred, because other designs already
 depend on it being filled:
 
-- `12-DataExport.md` §5 derives a student's grade in a given year from their
+- `13-DataExport.md` §5 derives a student's grade in a given year from their
   enrolment year. That derivation **only matches reality if something actually
   advances `grade_id` each year** — otherwise the derived grade and the stored
   grade diverge a little more annually, and both appear in the same export.
@@ -140,7 +140,7 @@ left unpromoted with nothing saying so.
 - `student.grade_id` is **left unchanged**, still the grade they finished in. It
   records how far the student got, not a grade 13 that does not exist.
 - The student's **login account is deactivated**. One person should hold one
-  usable identity at a time (the same position `12-DataExport.md` takes on
+  usable identity at a time (the same position `13-DataExport.md` takes on
   graduates).
 - Service records, the time-coin account and review history are **all retained**
   and stay queryable by staff.
@@ -149,7 +149,7 @@ left unpromoted with nothing saying so.
 
 Neither is produced by this process. They are the two stage entry points and are
 established by the Student Development Centre through a **roster import**
-(`11-DataImport.md` §2.1).
+(`12-DataImport.md` §2.1).
 
 So after the turnover run, grades 6 and 9 are empty until the import lands.
 That is correct, not a fault — and the report must say "grade 6: 0 students,
@@ -281,7 +281,7 @@ guess.
 
 ## 5. Relationship to the grade derivation
 
-`12-DataExport.md` §5 derives a student's grade in a given year from their
+`13-DataExport.md` §5 derives a student's grade in a given year from their
 enrolment year. This process is the precondition for that derivation holding:
 **the stored `grade_id` only matches the derived grade if something advances it
 once a year.**

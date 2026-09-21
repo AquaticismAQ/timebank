@@ -145,7 +145,7 @@ class ExportServiceImpl implements ExportService {
 
     /**
      * Only the types the caller holds a permission for
-     * (`12-DataExport.md` §3: a type the user lacks renders nothing, not a
+     * (`13-DataExport.md` §3: a type the user lacks renders nothing, not a
      * disabled card). Filtering here rather than in the client means the list is
      * also the authorisation answer, so the two cannot disagree.
      */

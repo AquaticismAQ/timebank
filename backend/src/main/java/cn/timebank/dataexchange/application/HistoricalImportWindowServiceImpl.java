@@ -23,7 +23,7 @@ class HistoricalImportWindowServiceImpl implements HistoricalImportWindowService
 
     private static final Logger log = LoggerFactory.getLogger(HistoricalImportWindowServiceImpl.class);
 
-    /** Design/*&#47;11-DataImport.md §6.1. Configuration may shorten or lengthen it; it may not remove it. */
+    /** Design/*&#47;12-DataImport.md §6.1. Configuration may shorten or lengthen it; it may not remove it. */
     static final int DEFAULT_WINDOW_DAYS = 15;
 
     /**
@@ -60,7 +60,7 @@ class HistoricalImportWindowServiceImpl implements HistoricalImportWindowService
         }
         int clamped = configured < 1 ? 1 : MAX_WINDOW_DAYS;
         log.warn("timebank.import.historical-window-days={} is outside 1..{} — using {} days instead"
-                + " (the design's length is {}; see 11-DataImport.md §6.1)",
+                + " (the design's length is {}; see 12-DataImport.md §6.1)",
                 configured, MAX_WINDOW_DAYS, clamped, DEFAULT_WINDOW_DAYS);
         return clamped;
     }

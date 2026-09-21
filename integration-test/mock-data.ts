@@ -93,7 +93,7 @@ function isWeekend(offsetDays: number): boolean {
 
 /**
  * The school runs two stages, not one continuous six-year line
- * (`Design/*\u002f13-AnnualRollover.md` §2): grades 6-7-8, then grades
+ * (`Design/*\u002f14-AnnualRollover.md` §2): grades 6-7-8, then grades
  * 9-10-11-12. A student enters at grade 6 **or** at grade 9, and finishing
  * grade 8 is a graduation followed by a fresh intake with a new student number
  * — not a promotion.
@@ -783,7 +783,7 @@ export interface GeneratedStudent extends SeedStudent {
   /**
    * The login the student actually types — 8 random digits.
    *
-   * `Design/chinese/09-StudentActivationFlow.md` §3 (and its English twin): an imported student's account is
+   * `Design/chinese/10-StudentActivationFlow.md` §3 (and its English twin): an imported student's account is
    * created with an "8 位随机数字用户名", and §4.1's slip shows `48215577`.
    * `StudentUsernameGenerator` is the real implementation and pins two
    * properties this has to match — **8 digits with no leading zero** (drawn

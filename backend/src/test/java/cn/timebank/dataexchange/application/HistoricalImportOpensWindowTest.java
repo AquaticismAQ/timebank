@@ -22,7 +22,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 11-DataImport.md §6.1: the clock is started by the first historical import
+ * 12-DataImport.md §6.1: the clock is started by the first historical import
  * that actually commits. Asserted at the commit run itself, for the same reason
  * {@code StudentImportProvisionsAccountsTest} does — the failure this guards
  * against is the call being absent, and an import that credits the ledger while

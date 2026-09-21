@@ -2,11 +2,14 @@
 
 > This document describes the complete path a student takes from roster import to
 > first login, and the **credential slip** that carries their first credential.
-> `Design/chinese/09-StudentActivationFlow.md` is the authoritative source;
+> **The two identifiers a student has — username and student number — are not
+> here**; see `09-StudentIdentity.md`, which also covers how a school prepares
+> the roster CSV.
+> `Design/chinese/10-StudentActivationFlow.md` is the authoritative source;
 > update both in the same change.
 > Related: the security and compliance basis is in
 > `08-mlps-level1-security-design-guide.md` §8.3 (and the password rule in
-> §8.2); the decisions and the
+> §8.2); the import flow in `12-DataImport.md`; the decisions and the
 > alternatives that were rejected are in
 > `Docs/optimization/10-StudentIdentityAndOnboarding.md`.
 

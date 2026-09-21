@@ -5,7 +5,7 @@ import java.time.Instant;
 /**
  * What the import screen needs to choose between §6.2's three states:
  * warn before the first import, count down during the window, and show
- * nothing at all once it has closed (Design/*&#47;11-DataImport.md §6.1 —
+ * nothing at all once it has closed (Design/*&#47;12-DataImport.md §6.1 —
  * "a control you cannot use should not be visible").
  *
  * <p>{@code secondsRemaining} travels alongside {@code expiresAt} rather than

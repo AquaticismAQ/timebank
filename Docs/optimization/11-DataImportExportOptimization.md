@@ -2,7 +2,7 @@
 
 ## 0. Scope and how to read this
 
-`Design/*/10-RolesAndPermissions.md`, `11-DataImport.md` and `12-DataExport.md` were
+`Design/*/11-RolesAndPermissions.md`, `12-DataImport.md` and `13-DataExport.md` were
 written after import and export had already shipped. They describe a different system
 from the one running: a seven-type export catalogue with per-type permissions, filters,
 student-scoped rows and readable columns, against a built system with one blanket
@@ -18,15 +18,15 @@ plan is wrong.
   `Docs/backlog/01-HistoricalImportReenableUtility.md`, not built, not scheduled.
   §3.6 below builds the window that utility reopens; it does not build the utility,
   and §5's R-6 says what that asymmetry costs.
-- **The annual rollover itself** (`Design/*/13-AnnualRollover.md`). Its
+- **The annual rollover itself** (`Design/*/14-AnnualRollover.md`). Its
   `AnnualRolloverService` work is in flight separately. This plan *depends* on its
   stage model for the grade derivation (§2.7) and on grade 12 existing, but builds
   none of it.
-- **Any further `admin`/`sysadmin` separation.** `10-RolesAndPermissions.md` §6's
+- **Any further `admin`/`sysadmin` separation.** `11-RolesAndPermissions.md` §6's
   closing note puts that out of scope; this plan reverses the V21 merge for
   `imports.*` and `exports.*` only.
 - **The five `/reports/*` screen endpoints.** Two *export types* retire (§2.4); the
-  on-screen reports they were built from stay, because `12-DataExport.md` §6's own
+  on-screen reports they were built from stay, because `13-DataExport.md` §6's own
   reasoning for retiring the hours trend is that it "reads better on screen than in
   a CSV" — which presumes the screen keeps it.
 
@@ -42,19 +42,19 @@ tree on 2026-09-19.
 | F-1 | **`exports.create` is held by `admin` and `sysadmin` only — never by `teacher`.** `R__seed_permissions_and_roles.sql` grants `perm_exports_create` at lines 152 and 199; no `role_teacher` or `role_template_teacher` grant exists | Retiring it strands **two role rows, not a population of teachers**. It also means teacher export is an entirely *new* capability, not a narrowing of an existing one — which reshapes the risk (R-2) |
 | F-2 | **The built catalogue is seven keys that mostly are not the design's seven.** `ExportServiceImpl.SUPPORTED_REPORT_TYPES` = `participation`, `completion`, `serviceHours`, `reviewEfficiency`, `topProjects`, `serviceRecords`, `students` | Only `serviceRecords` survives by key. `students` → `studentList` is a rename. `completion`/`topProjects` are *near-misses*: right subject, wrong shape (F-7). `participation`/`serviceHours` retire. `studentParticipation` and `reviewHistory` do not exist at all |
 | F-3 | **No export applies any data scope whatsoever.** `StudentExportRepository.page` and `ServiceRecordExportRepository.page` are `select … from student` / `from service_record where id > :afterId` with no predicate beyond the keyset cursor; the five aggregate exports call `ReportService`, which is school-wide by design (`reports.read`-gated dashboards) | There is no scope code to *change* — there is scope code to **write**. §2.5 is new behaviour, not modified behaviour |
-| F-4 | **`DataScopeSpecifications` cannot be reused here.** It returns a JPA `Specification<T>` built from Criteria `Path`s via `ScopeFields`; both export repositories are raw `NamedParameterJdbcTemplate` SQL | `12-DataExport.md` §7's checklist item "scope is resolved through `ScopeDescriptor`" is satisfiable, but only by resolving the *descriptor* and translating it to SQL parameters by hand. `DataScopeSpecifications.apply` itself is unusable on this path |
+| F-4 | **`DataScopeSpecifications` cannot be reused here.** It returns a JPA `Specification<T>` built from Criteria `Path`s via `ScopeFields`; both export repositories are raw `NamedParameterJdbcTemplate` SQL | `13-DataExport.md` §7's checklist item "scope is resolved through `ScopeDescriptor`" is satisfiable, but only by resolving the *descriptor* and translating it to SQL parameters by hand. `DataScopeSpecifications.apply` itself is unusable on this path |
 | F-5 | **The export request carries one field.** `CreateExportRequest(String reportType)`. `job.params_json VARCHAR(2000)` exists in `V10__dataexchange.sql` and is mapped on `Job`, and **nothing ever writes or reads it** | The filter model is a contract change on `POST /exports`, and it has a storage slot waiting for it |
 | F-6 | **`ReportService` already takes an `academicYearId`; the export runner passes `null` to all five.** `ExportJobRunner.writeReportCsv`'s Javadoc says so explicitly, citing issue 093, and `APIContract.md` §4.13 states the limitation in prose: *"the export jobs in `POST /exports` carry no period of their own"* | The year filter is half-built already. The missing half is the request field and the plumbing, not the query support |
 | F-7 | **No existing query produces a per-student or per-project row.** `completion`/`participation` are one row per grade; `serviceHours` one row per month; `reviewEfficiency` four columns per reviewer; `topProjects` a bounded top-N | Four of the design's seven types need genuinely new queries: Student Completion, Student Participation, Projects Report, Review History. Review Efficiency needs its query widened from 4 columns to 12 |
 | F-8 | **Exports write database ids, centi-coins, and the literal string `null`.** `ExportJobRunner` header lines are `id,studentId,studentName,…` and `id,studentNumber,displayName,gradeId,classId,…`; `csvLine(…, String.valueOf(row.creditedUnits()), …)` renders a null `Integer` as `"null"` | This is `Docs/issues/107`, whose fix **was reverted and is not in the tree** (`git log` on `ExportJobRunner.java` ends at `c252325`, and the working tree is clean). Issue 107 is open and §3.2 closes it |
-| F-9 | **Nothing in `cn.timebank.dataexchange` writes an audit entry.** `AuditService` is not imported anywhere in the module | Export — the single most concentrated data-egress action in the system — leaves no audit trail. `11-DataImport.md` §8's *"Every commit writes an audit entry"* holds only indirectly, via the per-row `AccountServiceImpl`/`StudentServiceImpl` entries; there is no job-level row naming actor, type and row count |
-| F-10 | **The download token is time-boxed but not single-use.** `ExportDownloadTokenService` is a stateless HMAC over `jobId:expiry` with `TTL_SECONDS = 300`; `validate` checks the signature and the clock and nothing else | `12-DataExport.md` §3 and §8 both say "single-use". Replay inside the 300 s window is currently free |
-| F-11 | **Export output files are never deleted.** `ExportJobRunner` stores `export_<jobId>.csv` through `FileStorage` and no code path removes it; nothing in `lifecycle` references `result_ref` | `12-DataExport.md` §8's *"No long-lived server-side copies"* is not true today |
-| F-12 | **The 15-day historical-import window does not exist in any form** — no schema, no code, no copy. `grep` for the window finds nothing in `backend/src` or `frontend/src` | The first historical import is currently unbounded and unannounced, which is exactly the situation `11-DataImport.md` §6.2 says must not be reached |
-| F-13 | **The historical commit is not one transaction.** `ImportJobRunner.commitHistorical` loops rows, calls `accountService.adjustForStudent` per row, and checkpoints every 1,000 rows so a crashed job resumes from `checkpointOffset` | `11-DataImport.md` §8's *"A commit either fully succeeds or fully rolls back … 'half imported' does not exist"* describes something else. Flagged in §7; **not** fixed by this plan |
-| F-14 | **Import and Export are one tab.** `SystemAdmin.tsx` has `activeTab === 'import'` rendering two import cards, `ActivationSlips`, and one export card holding a 7-button grid. No filters anywhere | `12-DataExport.md` §3 and `11-DataImport.md` §5.2 both require two tabs and expandable per-type cards |
+| F-9 | **Nothing in `cn.timebank.dataexchange` writes an audit entry.** `AuditService` is not imported anywhere in the module | Export — the single most concentrated data-egress action in the system — leaves no audit trail. `12-DataImport.md` §8's *"Every commit writes an audit entry"* holds only indirectly, via the per-row `AccountServiceImpl`/`StudentServiceImpl` entries; there is no job-level row naming actor, type and row count |
+| F-10 | **The download token is time-boxed but not single-use.** `ExportDownloadTokenService` is a stateless HMAC over `jobId:expiry` with `TTL_SECONDS = 300`; `validate` checks the signature and the clock and nothing else | `13-DataExport.md` §3 and §8 both say "single-use". Replay inside the 300 s window is currently free |
+| F-11 | **Export output files are never deleted.** `ExportJobRunner` stores `export_<jobId>.csv` through `FileStorage` and no code path removes it; nothing in `lifecycle` references `result_ref` | `13-DataExport.md` §8's *"No long-lived server-side copies"* is not true today |
+| F-12 | **The 15-day historical-import window does not exist in any form** — no schema, no code, no copy. `grep` for the window finds nothing in `backend/src` or `frontend/src` | The first historical import is currently unbounded and unannounced, which is exactly the situation `12-DataImport.md` §6.2 says must not be reached |
+| F-13 | **The historical commit is not one transaction.** `ImportJobRunner.commitHistorical` loops rows, calls `accountService.adjustForStudent` per row, and checkpoints every 1,000 rows so a crashed job resumes from `checkpointOffset` | `12-DataImport.md` §8's *"A commit either fully succeeds or fully rolls back … 'half imported' does not exist"* describes something else. Flagged in §7; **not** fixed by this plan |
+| F-14 | **Import and Export are one tab.** `SystemAdmin.tsx` has `activeTab === 'import'` rendering two import cards, `ActivationSlips`, and one export card holding a 7-button grid. No filters anywhere | `13-DataExport.md` §3 and `12-DataImport.md` §5.2 both require two tabs and expandable per-type cards |
 | F-15 | **`/admin/system` is in the admin nav unconditionally, and its default tab needs `users.read`.** `AdminLayout.tsx` line 32 adds it for every admin-portal user; `SystemAdmin.tsx`'s own comment at line 981 says the tab "is otherwise visible to them [teachers]" | A teacher opening System Admin today lands on a Users tab that 403s. Granting teachers export gives them a *reason* to open that page, which turns a latent wart into a routine one |
-| F-16 | **`/grades`, `/classes` and `/academic-years` are `isAuthenticated()` and unscoped** (`AcademicStructureController`), but **`/me` already returns `scopeGradeIds`** (`MeResponse`, `AuthController.withScopeGradeIds`) | `12-DataExport.md` §4.3's "a teacher's Grade filter lists only their bound grades" needs no new endpoint — the client can intersect the dictionary with `scopeGradeIds`. The server must still enforce it (F-17) |
+| F-16 | **`/grades`, `/classes` and `/academic-years` are `isAuthenticated()` and unscoped** (`AcademicStructureController`), but **`/me` already returns `scopeGradeIds`** (`MeResponse`, `AuthController.withScopeGradeIds`) | `13-DataExport.md` §4.3's "a teacher's Grade filter lists only their bound grades" needs no new endpoint — the client can intersect the dictionary with `scopeGradeIds`. The server must still enforce it (F-17) |
 | F-17 | **`usePermissions().hasPermission` fails *open*.** `App.tsx` line 71: `if (!user?.permissions) return true` | Card hiding is a courtesy, never a control. Every hidden card needs a server-side refusal behind it |
 | F-18 | **`exports.create` is hardcoded in the frontend and in a prior optimization doc.** `RoleManagement.tsx` line 33 lists it among the ⚠️ sensitive permissions; `07-RoleFinetune.md` §6 and its §365 catalogue row name it | Three non-obvious edit sites beyond the migration |
 | F-19 | **`service_record` has no academic-year column**, and `student` has `enrollment_academic_year_id` + `graduation_year INT` | A year filter must be a `service_date BETWEEN academic_year.start_date AND end_date` test, matching how `ReportService` already scopes. The two columns §5's derivation needs are both present |
@@ -74,7 +74,7 @@ answer, because it will be proposed again otherwise.
 
 ### 2.1 `exports.create` is retired by **revoking its grants**, never by deleting its row
 
-`10-RolesAndPermissions.md` §5.2 already requires the row to survive, marked retired,
+`11-RolesAndPermissions.md` §5.2 already requires the row to survive, marked retired,
 "never deleted, never reused" — the same treatment `projects.close` got. The migration
 therefore does two different things to one permission: `DELETE` from `role_permission`,
 `UPDATE` the `permission.description` to say retired and why.
@@ -93,7 +93,7 @@ documents from the other direction.
 
 ### 2.2 The seven new permissions are inserted granted to nobody, then granted in a second statement
 
-`10-RolesAndPermissions.md` §9.4: *"A new permission is granted to no role by default,
+`11-RolesAndPermissions.md` §9.4: *"A new permission is granted to no role by default,
 then assigned deliberately."* So the migration is `INSERT` the seven rows, then a
 separate `INSERT … VALUES` per (role, permission) pair from §5.3's table — 7 for
 `admin`, 6 for `teacher`, 0 for `sysadmin`.
@@ -111,7 +111,7 @@ next person who creates a teacher from it.
 
 `DELETE` `perm_exports_create` and all three `perm_imports_*` from `role_sysadmin`, and
 drop those four lines from the repeatable seed's `role_sysadmin` block.
-`10-RolesAndPermissions.md` §6.1 is explicit that this reverses `V21`'s merge for these
+`11-RolesAndPermissions.md` §6.1 is explicit that this reverses `V21`'s merge for these
 two groups only.
 
 **This is a live-behaviour removal, unlike §2.1.** `sysadmin` accounts can import and
@@ -120,7 +120,7 @@ export today and will stop being able to. R-7.
 ### 2.4 The two retiring export types are removed from the accepted set; their permission rows do not exist to retire
 
 `participation` and `serviceHours` retire as *export types*. They never had per-type
-permissions — there was only `exports.create` — so `12-DataExport.md` §6's "their
+permissions — there was only `exports.create` — so `13-DataExport.md` §6's "their
 permission rows are kept and marked retired" has nothing to act on beyond §2.1's single
 row. Note that in the migration comment so the next reader does not go looking.
 
@@ -130,7 +130,7 @@ the same phase, so nothing user-reachable breaks.
 
 ### 2.5 Export scope resolves to a **student-id set**, computed once per job, before any data query
 
-This is the concrete form of `12-DataExport.md` §4.4 and `10-RolesAndPermissions.md`
+This is the concrete form of `13-DataExport.md` §4.4 and `11-RolesAndPermissions.md`
 §7.2.1. One new component — call it `ExportScopeResolver` in
 `cn.timebank.dataexchange.application` — does:
 
@@ -155,7 +155,7 @@ it is why the resolution happens once, in one place, instead of each query reach
 **Rejected — reusing `DataScopeSpecifications` with a `ScopeFields` that points at the
 student join.** It only produces JPA `Specification`s and the export path is raw JDBC
 (F-4). Converting the export repositories to JPA to reuse it would give up the keyset
-pagination that `12-DataExport.md` §2.1 explicitly keeps.
+pagination that `13-DataExport.md` §2.1 explicitly keeps.
 
 **A `Self`-scoped teacher is refused, not given an empty file.** §7.3 requires the
 message "you have not been assigned any grade" rather than an empty export. So this is
@@ -219,7 +219,7 @@ reconstructable from the audit log alone.
 
 ### 2.7 Grade is **derived in Java** from the enrolment year, and never read from `student.status`
 
-Per `12-DataExport.md` §5.1, in one place — `ExportGradeDerivation`, a small pure class
+Per `13-DataExport.md` §5.1, in one place — `ExportGradeDerivation`, a small pure class
 with no repository dependency:
 
 ```
@@ -245,7 +245,7 @@ in a given year reading Grade 6/7/8 then `Graduated`) without a database.
 ### 2.8 One shared CSV writer owns every column convention
 
 `ExportJobRunner` today concatenates headers as string literals per type. The
-conventions in `12-DataExport.md` §2 are cross-cutting and will drift if each of seven
+conventions in `13-DataExport.md` §2 are cross-cutting and will drift if each of seven
 writers re-implements them. So: one `ExportCsvWriter` that owns
 
 - the `No.` counter (§2.3), emitted by the writer so no query can forget it;
@@ -299,14 +299,14 @@ act is *asking for the data*, and a job that fails still tells you someone tried
 A second entry on successful download, naming the job and the row count. The file is
 the egress; the job is only the intent.
 
-This is `11-DataImport.md` §8's guarantee finally made true for the export half, and it
+This is `12-DataImport.md` §8's guarantee finally made true for the export half, and it
 closes F-9. Per the repo's standing rule, "audited" is not established by reading the
 code — it is established by querying `GET /audit-logs` after a real export on the test
 server (§3.5's exit criteria).
 
 ### 2.11 Export files expire; the download token becomes single-use
 
-Two small changes that make `12-DataExport.md` §8 true rather than aspirational:
+Two small changes that make `13-DataExport.md` §8 true rather than aspirational:
 
 - **Single-use token** (F-10): the issued token's id is recorded and marked consumed on
   first successful `content` fetch. Stateless HMAC alone cannot express single-use — a
@@ -323,7 +323,7 @@ time-bounded *file* gets the property §8 wants without that.
 
 ### 2.12 Import and Export become two tabs, on a page a teacher can actually hold
 
-`11-DataImport.md` §5.2 and `12-DataExport.md` §3 both require two independent tabs,
+`12-DataImport.md` §5.2 and `13-DataExport.md` §3 both require two independent tabs,
 each hidden without its permission. In `SystemAdmin.tsx`'s `Tab` union, `'import'`
 splits into `'import'` and `'export'`, each conditionally present:
 
@@ -443,7 +443,7 @@ landed, so the filter existed server-side and offered nothing in the UI.
 | `INSERT` 6 grants | `role_template_teacher`, the same six |
 | `DELETE` | `perm_exports_create` from `role_admin`, `role_sysadmin` |
 | `DELETE` | `perm_imports_create/read/commit` from `role_sysadmin` |
-| `UPDATE` | `permission.description` for `exports.create` → retired, citing `10-RolesAndPermissions.md` §5.1 |
+| `UPDATE` | `permission.description` for `exports.create` → retired, citing `11-RolesAndPermissions.md` §5.1 |
 
 `R__seed_permissions_and_roles.sql` mirrors all of it for a from-scratch schema:
 add the seven rows and their grants, remove the four `role_sysadmin` lines and the
@@ -578,7 +578,7 @@ The three whose rows are not students.
 **Exit criteria.** All seven types live. A teacher cannot obtain another reviewer's
 history by passing a `reviewerId` in the request body — verified by sending one, not by
 reading the controller. A reviewer with one approval shows `1` in `Total Reviews` beside
-`100.00%`, so the reader can see the denominator. `12-DataExport.md` §7's checklist runs
+`100.00%`, so the reader can see the denominator. `13-DataExport.md` §7's checklist runs
 clean against each of the seven.
 
 ### 3.5 Phase 5 — Egress hygiene
@@ -598,7 +598,7 @@ sweep. Independent of phases 2–4.
 ### 3.6 Phase 6 — The 15-day historical-import window
 
 §2.9's table, its two enforcement points, its read endpoint, and the three UI states
-(`11-DataImport.md` §6.2): pre-first-import warning, post-import countdown **with the expiry date** — the
+(`12-DataImport.md` §6.2): pre-first-import warning, post-import countdown **with the expiry date** — the
 date, because only a date goes into a migration plan — and, after expiry, **no card**.
 
 **Exit criteria.**
@@ -646,7 +646,7 @@ date, because only a date goes into a migration plan — and, after expiry, **no
 | `frontend/src/app/components/admin/ExportCenter.tsx` | New. The card list + filter panels, extracted rather than grown inside a 2,100-line file |
 | `frontend/src/app/components/admin/RoleManagement.tsx` | Sensitive-permission list (F-18) |
 | `frontend/src/app/api/client.ts` | `api.exports.create` takes filters; `api.imports.window()` |
-| `frontend/src/i18n/en.json`, `zh.json` | Seven card titles + seven multi-sentence **card texts** (`12-DataExport.md` §6: what one row is, the question it answers, and the caveat — Q-3's non-summing rates and Q-11's mixed tenses both land here); the window's warning, countdown and expiry copy; the §7.3 no-grade message |
+| `frontend/src/i18n/en.json`, `zh.json` | Seven card titles + seven multi-sentence **card texts** (`13-DataExport.md` §6: what one row is, the question it answers, and the caveat — Q-3's non-summing rates and Q-11's mixed tenses both land here); the window's warning, countdown and expiry copy; the §7.3 no-grade message |
 | `Docs/integration/APIContract.md` + `_CN.md` | §4.13's permission cell and the "carry no period of their own" paragraph, which stops being true in phase 2; §4.14's window states |
 | `Docs/implementation/00-Status.md` | Phase entry/exit as each lands |
 | `Docs/issues/107-*.md` | Closed by §3.2, with its `integration-test/STATUS.md` rows |
@@ -655,7 +655,7 @@ date, because only a date goes into a migration plan — and, after expiry, **no
 `DataScopeResolver` and the five `ScopeFields` implementations stay exactly as they are
 — the export path consumes the descriptor and does its own translation (§2.5), and the
 review queue's snapshot filtering must keep working precisely as it does
-(`10-RolesAndPermissions.md` §7.2.1's last paragraph).
+(`11-RolesAndPermissions.md` §7.2.1's last paragraph).
 
 ---
 
@@ -706,9 +706,9 @@ Silently doing neither is what produces a bug report.
 **R-5 — The grade derivation is only as good as its inputs, and one input is known
 inconsistent.** §2.7 derives the entry grade from the *live* `grade_id`, so a missed
 rollover run makes both the derived grade **and** the enrolment window wrong at once,
-in the same file, with no indication. `13-AnnualRollover.md` §5's consistency check is
+in the same file, with no indication. `14-AnnualRollover.md` §5's consistency check is
 the only signal, and it lives in a process not yet shipped. Worse for the near term:
-`13-AnnualRollover.md` §2's implementation note records that `integration-test`'s
+`14-AnnualRollover.md` §2's implementation note records that `integration-test`'s
 `graduationYearFor` "still assumes a six-year run ending at grade 11", so the seeded
 fixture may well produce derived grades past 12 or enrolment windows that exclude
 students who are plainly present. Any export verification that runs against the seeded
@@ -765,7 +765,7 @@ are places the three design docs genuinely do not say.
 
 | # | Question | Recommendation | Trade-off |
 | :--- | :--- | :--- | :--- |
-| Q-1 | Which `resource_type` does an export resolve its scope against? `teacher_scope_assignment` is keyed per resource type, and `12-DataExport.md` §4.4 says only "the data scope" | **`"students"`** — the export's subject is the student, so the student resource's binding is the honest one | Today all five managed types get identical grade sets (F-22), so the choice is unobservable. It becomes observable if per-resource bindings ever diverge, and then this decision is load-bearing and undocumented unless recorded now |
+| Q-1 | Which `resource_type` does an export resolve its scope against? `teacher_scope_assignment` is keyed per resource type, and `13-DataExport.md` §4.4 says only "the data scope" | **`"students"`** — the export's subject is the student, so the student resource's binding is the honest one | Today all five managed types get identical grade sets (F-22), so the choice is unobservable. It becomes observable if per-resource bindings ever diverge, and then this decision is load-bearing and undocumented unless recorded now |
 | Q-2 | For a teacher, does `exports.reviewHistory` scope by *reviewer = self* only, or **also** by their student scope? §6.7 pins the Reviewer filter and says nothing about the students in those rows | **Reviewer-pinned only** — *decided*, and note this is a scope predicate on the rows, not a filter control anyone sees. Adding the student scope on top would hide a teacher's *own* past decisions from them | The original reasoning here was that the extra predicate is "nearly always a no-op", which this column already disproved: a teacher who moves grades has decisions on students now outside their scope, so it is a no-op only until someone changes year group. The conclusion survives; the reason for it does not, and is corrected above |
 | Q-3 | How is `ESCALATE` exported? §6.7's `Decision` maps three values; the column has four (F-20) | Add **`Escalated`** as a fourth label, count it in §6.6's `Total Reviews`, and exclude it from all three rates | The three rates then do not sum to 100%, which invites "the numbers don't add up". The alternative — omitting escalations — hides real decisions from a file called Review History, which is worse. Document the non-summing explicitly in the card description |
 | Q-4 | May Student Completion's Academic Year be set to "All years"? §4.2 says it *defaults* to the current year and explains why an all-years rate is meaningless, but does not say the option is absent | **Remove the option for that one export.** §4.2's reasoning — "the denominator does not exist" — is an argument against the option existing, not just against it being the default | It makes one card's filter behave differently from the other six, which is a small inconsistency a user may read as a bug. Cheaper than producing a completion rate that means nothing |
@@ -773,7 +773,7 @@ are places the three design docs genuinely do not say.
 | Q-6 | Which rule version supplies `Annual Required Hours` for a **past** year? §6.3 states junior 25h / senior 75h as constants, while its own note says the conversion rate belongs to the rule version, and V25 makes the requirement per-version too (F-21) | **The version in effect during the selected year**, matching how each record converts on its own service date and how `/reports/completion` already scopes ("the annual required minutes that were in effect **during** that year") | "In effect during a year" is ambiguous if a version was published mid-year. Recommend the version in effect on the year's **end date**, since the requirement is judged at year end — but say so, because the alternative (start date) is equally defensible and produces different files |
 | Q-7 | Projects Report's Grade filter, for a project whose `eligible_grade_ids` is null or empty | **Treat null/empty as "open to all grades"** — the project is included for any user's grade filter | If null actually means "not yet configured" rather than "open to all", this over-includes draft projects. Worth confirming against how the Project Center renders an empty eligible-grades list before committing to it |
 | Q-8 | A `serviceRecordsHistorical` job already `VALIDATED` when the window expires | **Refuse the commit**, with an error naming the window and the expiry date | A validated job becomes permanently uncommittable, which will look like a bug to whoever validated it 20 minutes earlier. The alternative — honouring in-flight jobs — makes the expiry advisory, and "validate a job now, commit it whenever" is exactly the indefinite door §6 closes |
-| Q-9 | Is the window length fixed at 15 days or configurable? `11-DataImport.md` §6.1 states 15; `Docs/backlog/01` §4 lists this as open for the utility too | **Configurable, defaulting to 15**, with the applied length stored on the window row (§2.9) | A configurable window can be set to 3650 days and the mechanism is gone. Mitigate with a ceiling rather than by hardcoding: a hardcoded 15 forces a code change and a deploy for a migration that legitimately runs long, which is pressure applied at the worst possible moment |
+| Q-9 | Is the window length fixed at 15 days or configurable? `12-DataImport.md` §6.1 states 15; `Docs/backlog/01` §4 lists this as open for the utility too | **Configurable, defaulting to 15**, with the applied length stored on the window row (§2.9) | A configurable window can be set to 3650 days and the mechanism is gone. Mitigate with a ceiling rather than by hardcoding: a hardcoded 15 forces a code change and a deploy for a migration that legitimately runs long, which is pressure applied at the worst possible moment |
 | Q-10 | When Academic Year is "All years", which year's classes does the Class filter list? `class` rows are per academic year (F-19) | **The current year's**, matching §5.3's choice to show the present grade for "All years" | A class that existed only in a past year is then unselectable, so a user cannot export "everyone who was ever in 9-Mars". Acceptable: that question is answered by picking the year |
 | Q-11 | Does `studentList`'s `Class` column show the class **as of the selected year**? §6.1 marks only `Grade` as derived | **Present class**, since no historical roster exists (§5.1's own premise) | The row then mixes tenses — a historical `Grade` beside a present-tense `Class` — which is genuinely confusing on a past-year export. Recommend naming this in the card description rather than pretending the columns agree |
 | Q-12 | §6.6's `Bound Grades` for a reviewer who is an SDC Admin and has no bindings | **Empty cell**, per §2.4 | `All` is more informative and arguably more truthful (their scope *is* everything), but §2.4 admits no exceptions and an invented literal in a column of comma-separated ids is its own inconsistency. If `All` is preferred, §2.4 needs the carve-out written down |
@@ -787,7 +787,7 @@ do, or states two things that cannot both hold. Each needs a decision *in the de
 not in this plan.
 
 1. **"Single-use download token" is not implemented and cannot be, as built.**
-   `12-DataExport.md` §3 and §8 both assert it; the token is a stateless HMAC replayable
+   `13-DataExport.md` §3 and §8 both assert it; the token is a stateless HMAC replayable
    for 300 s (F-10). §2.11 proposes making the design true. Until it lands, §8's claim
    should not be read as a property the system has.
 
@@ -796,7 +796,7 @@ not in this plan.
    §6.1's reasoning for removing sysadmin's export permission: the permission is not the
    only path to the files.
 
-3. **`11-DataImport.md` §8's "commit runs in a single transaction; 'half imported' does
+3. **`12-DataImport.md` §8's "commit runs in a single transaction; 'half imported' does
    not exist" describes a different implementation.** The historical commit is
    row-by-row with a 1,000-row checkpoint specifically so a crashed job **resumes**
    (F-13), and `ImportJobRunner`'s own comments describe live bugs caused by that
@@ -805,7 +805,7 @@ not in this plan.
    Out of scope here; it needs its own decision, and until then §8's table is wrong
    rather than merely optimistic.
 
-4. **`11-DataImport.md` §8's "Every commit writes an audit entry: actor, type, row count
+4. **`12-DataImport.md` §8's "Every commit writes an audit entry: actor, type, row count
    and job id" has no implementation.** Per-row entries exist via the underlying account
    and student services; the job-level entry naming type, row count and job id does not
    (F-9).
@@ -813,7 +813,7 @@ not in this plan.
 5. **The grade derivation's two halves trust different fields.** §5.1 derives the entry
    grade from the *live* `grade_id` but bounds enrolment with the *stored*
    `graduation_year`. §5.2.1 acknowledges repeated years as a cause of divergence;
-   `13-AnnualRollover.md` §5 names a **missed run** as the other cause, and §5.2.1 does
+   `14-AnnualRollover.md` §5 names a **missed run** as the other cause, and §5.2.1 does
    not mention it. A missed run corrupts both halves at once and the export gives no
    signal. Worth adding to §5.2.1, since the whole point of §5.4's "always derive, never
    read the status column" is robustness against a missed run.

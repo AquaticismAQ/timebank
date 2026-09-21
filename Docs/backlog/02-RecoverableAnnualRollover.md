@@ -1,7 +1,7 @@
 # 02 — Recoverable annual rollover (before-state journal and reversal)
 
 **Status:** Specified, not built. No target release.
-**Depends on:** `Design/*/13-AnnualRollover.md` §3.3.1, which states that a
+**Depends on:** `Design/*/14-AnnualRollover.md` §3.3.1, which states that a
 rollover records each changed student's previous grade, class and status so a
 completed run can be reversed. Nothing writes that journal today, so the design
 currently promises a mechanism that does not exist — which is what this directory
@@ -88,7 +88,7 @@ previous status per user, not assume it.
 - **Is itself one transaction**, for the same reason the rollover is.
 - **Console-only, by a system administrator** — the same reasoning as
   `01-HistoricalImportReenableUtility.md` §2. The rollover is deliberately not a
-  button (`13-AnnualRollover.md` §8); an undo button beside it would be worse.
+  button (`14-AnnualRollover.md` §8); an undo button beside it would be worse.
 
 ### 3.3 Dry run (companion, lower priority)
 

@@ -683,7 +683,7 @@ The frontend does not sequentially call multiple endpoints to simulate this tran
 
 A consequence worth knowing: a `supervisorKind: "student"` peer supervisor's contact now resolves through that student's **linked login account** rather than a roster email, so a roster-only student with no account fails `CONTACT_MISSING` as before.
 
-**`GET /students` returns current students unless asked otherwise (changed 2026-09-20, issue 114).** `filter[status]` takes a `StudentStatus` name (`ACTIVE`, `INACTIVE`, `GRADUATED`); **an absent filter means everything except `GRADUATED`**. This narrows on a missing parameter where `GET /projects` deliberately does not (§4.2), and the difference is not an inconsistency: graduation leaves `gradeId` on the grade the student finished (`13-AnnualRollover.md` §3.1), so from the first rollover onward an unfiltered list puts two cohorts in "grade 8" at once and anyone counting their grade 8 gets roughly double with nothing saying why. On `/projects` the extra rows were harmless history; here they collide inside a single number. Naming the status explicitly still reaches every value, `GRADUATED` included — the cohort is hidden by default, never unreachable.
+**`GET /students` returns current students unless asked otherwise (changed 2026-09-20, issue 114).** `filter[status]` takes a `StudentStatus` name (`ACTIVE`, `INACTIVE`, `GRADUATED`); **an absent filter means everything except `GRADUATED`**. This narrows on a missing parameter where `GET /projects` deliberately does not (§4.2), and the difference is not an inconsistency: graduation leaves `gradeId` on the grade the student finished (`14-AnnualRollover.md` §3.1), so from the first rollover onward an unfiltered list puts two cohorts in "grade 8" at once and anyone counting their grade 8 gets roughly double with nothing saying why. On `/projects` the extra rows were harmless history; here they collide inside a single number. Naming the status explicitly still reaches every value, `GRADUATED` included — the cohort is hidden by default, never unreachable.
 
 `directory.read` is deliberately narrower than `students.read`: it's the permission `role_student` holds (students otherwise have no way to look up another student's or teacher's id), and its response never carries `studentNumber`/`status`/`graduationYear`/contact fields the way `/students`'s own list response does. `search` is required and results are capped at a small page size (20) — this is a typeahead, not a directory browse.
 
@@ -769,7 +769,7 @@ Effective rules cannot be modified in place; changes must create a new version.
 `exports.serviceRecords`, `exports.studentCompletion`, `exports.projects`,
 `exports.studentParticipation`, `exports.reviewEfficiency`,
 `exports.reviewHistory`. The former blanket `exports.create` is retired
-(`Design/*/12-DataExport.md` §9.4): "may export" meant "may export
+(`Design/*/13-DataExport.md` §9.4): "may export" meant "may export
 everything", and Review Efficiency is peer performance data that the Student
 Development Centre holds and teachers do not. The retired permission row is
 kept so the audit trail of who once held it still resolves, but it grants
@@ -836,7 +836,7 @@ Imports must validate before commit. Duplicate imports are prevented by source f
 
 **Import is the SDC Admin's, not the System Administrator's.** `imports.create`,
 `imports.read` and `imports.commit` are no longer granted to `sysadmin`
-(`Design/*/10-RolesAndPermissions.md` §6.1): the System Administrator
+(`Design/*/11-RolesAndPermissions.md` §6.1): the System Administrator
 maintains the system and does not author student data, and importing service
 history is authoring student data.
 
@@ -1193,7 +1193,7 @@ Example response:
 }
 ```
 
-`exitGradeLevels` are the grade levels that **end a stage** — finishing one graduates the student rather than promoting them (`13-AnnualRollover.md` §2.1), ascending. `academicYearStart` is `MM-DD`: the day the year turns over, and therefore the day promotion and graduation run.
+`exitGradeLevels` are the grade levels that **end a stage** — finishing one graduates the student rather than promoting them (`14-AnnualRollover.md` §2.1), ascending. `academicYearStart` is `MM-DD`: the day the year turns over, and therefore the day promotion and graduation run.
 
 This exists so no client restates either value. A screen offering "grade 8 graduates / grade 12 graduates" would otherwise carry a second literal pair that nothing keeps in step with the process that actually graduates people, and a School Info card printing "September 1" becomes a lie the moment a deployment configures something else.
 

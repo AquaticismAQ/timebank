@@ -2,7 +2,7 @@ package cn.timebank.lifecycle.application;
 
 import cn.timebank.lifecycle.application.dto.AnnualRolloverReportDto;
 
-/** Design/*&#47;13-AnnualRollover.md — promotion and graduation, once per academic year. */
+/** Design/*&#47;14-AnnualRollover.md — promotion and graduation, once per academic year. */
 public interface AnnualRolloverService {
 
     /**

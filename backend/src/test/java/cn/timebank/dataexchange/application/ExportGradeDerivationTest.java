@@ -8,7 +8,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * `Design/*&#47;12-DataExport.md` §5.1's table, asserted directly. No database:
+ * `Design/*&#47;13-DataExport.md` §5.1's table, asserted directly. No database:
  * the derivation is arithmetic, and the point of keeping it dependency-free is
  * that this table can be checked without standing a schema up.
  */

@@ -132,7 +132,7 @@ Deliberately **not** the fix:
 
 ## 6. Related
 
-- Plan 10: `Design/chinese/09-StudentActivationFlow.md`, memory
+- Plan 10: `Design/chinese/10-StudentActivationFlow.md`, memory
   `plan-10-identity-onboarding-status`.
 - `108` is the same species of miss from the other direction: a screen that
   renders without error while displaying a figure a third of the truth.

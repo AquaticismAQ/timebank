@@ -104,7 +104,7 @@ class ImportCommitTransaction {
             default -> throw new IllegalStateException("Unknown import type: " + resourceType);
         };
         if (HistoricalImportRowValidator.TYPE.equals(resourceType)) {
-            // 11-DataImport.md §6.1: the first successful historical import starts
+            // 12-DataImport.md §6.1: the first successful historical import starts
             // the 15-day clock, and nothing can restart it. Inside this transaction
             // deliberately (issue 146) — as a REQUIRES_NEW call it would commit even
             // when the import rolled back, burning a window on an import that never

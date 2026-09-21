@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Design/*&#47;11-DataImport.md §6 against real MySQL.
+ * Design/*&#47;12-DataImport.md §6 against real MySQL.
  *
  * <p>The load-bearing part of this class is that it <b>crosses the expiry for
  * real</b>. A test that only ever runs inside a fresh 15-day window cannot

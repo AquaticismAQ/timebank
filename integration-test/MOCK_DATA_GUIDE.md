@@ -51,7 +51,7 @@ Two different values, and mixing them up is issue 105:
 | `ref` | `student001` — the **fixture handle**. Every `studentUsername`, `filedByUsername` and `reviewerUsername` field in this file holds one of these |
 | `username` | `28339473` — the **real login**, 8 random digits |
 
-`Design/chinese/09-StudentActivationFlow.md` §3 requires an imported student's
+`Design/chinese/10-StudentActivationFlow.md` §3 requires an imported student's
 account to carry an "8 位随机数字用户名", and `StudentUsernameGenerator` pins two
 properties: 8 digits with no leading zero (so a spreadsheet cannot eat it), and
 **random rather than sequential** — a sequential login leaks enrolment order and

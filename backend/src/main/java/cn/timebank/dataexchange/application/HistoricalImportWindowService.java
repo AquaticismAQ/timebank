@@ -4,7 +4,7 @@ import cn.timebank.dataexchange.application.dto.HistoricalImportWindowDto;
 
 /**
  * The 15-day window on historical service-record import
- * (Design/*&#47;11-DataImport.md §6).
+ * (Design/*&#47;12-DataImport.md §6).
  *
  * <p>Historical import is a migration-era capability and the only bulk write
  * that credits the time-coin ledger directly, so it is not left one click away

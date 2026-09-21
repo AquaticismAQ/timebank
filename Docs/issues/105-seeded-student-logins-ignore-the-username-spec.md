@@ -3,7 +3,7 @@
 **Status:** Fixed, verified on the local Docker stack and re-seeded to the
 shared test server (§4).
 **Raised:** 2026-09-19 by the user, pointing at
-`Design/chinese/09-StudentActivationFlow.md`:
+`Design/chinese/10-StudentActivationFlow.md`:
 
 > student username should follow the spec, not 'studentNNN', why you forget this
 

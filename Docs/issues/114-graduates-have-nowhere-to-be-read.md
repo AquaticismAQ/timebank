@@ -9,7 +9,7 @@ options on Student Management's grade filter.
 
 ### 1.1 Graduates are unreachable
 
-`13-AnnualRollover.md` §3.1: graduation sets `student.status = GRADUATED`,
+`14-AnnualRollover.md` §3.1: graduation sets `student.status = GRADUATED`,
 deactivates the login, and **retains** service records, the time-coin account and
 review history, "queryable by staff". Nothing in the UI queries them. Student
 Management offers grade, class and a progress bucket; none of them is status, and

@@ -364,7 +364,7 @@ export interface Student {
    * The year the student leaves their stage — finishing grade 8 for a stage-1
    * student, grade 12 for a stage-2 one. Also the retention key: a cohort's data
    * is purged on 31 August of the following year
-   * (`Design/&#42;/13-AnnualRollover.md` §6), which is why the graduate view shows it.
+   * (`Design/&#42;/14-AnnualRollover.md` §6), which is why the graduate view shows it.
    */
   graduationYear?: number;
   completedMinutes?: number;

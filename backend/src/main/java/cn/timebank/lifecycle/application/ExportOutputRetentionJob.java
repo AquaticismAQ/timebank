@@ -22,7 +22,7 @@ import java.util.Map;
  *
  * <p>F-11 (`Docs/optimization/11-DataImportExportOptimization.md` §2.11): until
  * this existed, every export ever run was still on disk, which made
- * `12-DataExport.md` §8's "no long-lived server-side copies" the one line in
+ * `13-DataExport.md` §8's "no long-lived server-side copies" the one line in
  * that section describing an intention rather than the system. It matters more
  * than a housekeeping job usually would, because §6.1 removes System Admin's
  * export permission specifically to close a student-data exit — and a

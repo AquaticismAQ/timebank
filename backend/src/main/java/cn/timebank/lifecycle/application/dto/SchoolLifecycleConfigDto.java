@@ -8,7 +8,7 @@ import java.util.List;
  *
  * @param exitGradeLevels   the grade levels that end a stage — finishing one
  *                          graduates the student rather than promoting them
- *                          (`Design/&#42;/13-AnnualRollover.md` §2.1). Ascending.
+ *                          (`Design/&#42;/14-AnnualRollover.md` §2.1). Ascending.
  * @param academicYearStart the day the school year turns over, and therefore the
  *                          day promotion and graduation run, as {@code MM-DD}.
  *                          Read-only here: it comes from the deployment's

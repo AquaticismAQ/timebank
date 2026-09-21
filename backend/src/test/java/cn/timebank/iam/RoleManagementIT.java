@@ -45,7 +45,7 @@ class RoleManagementIT extends AbstractIntegrationTest {
     /**
      * V21 merged the two roles into one permission set
      * (`07-RoleFinetune.md` §2.3). V31 reverses that merge for import and
-     * export only (`Design/english/10-RolesAndPermissions.md` §6.1): bulk
+     * export only (`Design/english/11-RolesAndPermissions.md` §6.1): bulk
      * student-data movement is a Student Development Centre judgement, not
      * an operations task. Everything else stays identical, and that "one
      * named exception, not a general drift apart" is what this asserts —

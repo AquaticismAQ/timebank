@@ -45,7 +45,7 @@ export function loadAccounts(testAccountsPath: string): { admin: Account; studen
 
   const admin = envAdmin ?? rows.find(r => r.username === (process.env.E2E_ADMIN_USERNAME ?? 'admin001'));
   // Staff keep readable names; a student login is 8 digits, which is what a real
-  // roster import produces (`Design/*/09-StudentActivationFlow.md` §3). Picking by
+  // roster import produces (`Design/*/10-StudentActivationFlow.md` §3). Picking by
   // shape rather than by position means the file can be reordered freely.
   const student = envStudent
     ?? rows.find(r => r.username === process.env.E2E_STUDENT_USERNAME)

@@ -444,7 +444,7 @@ const NO_GRADE_SCOPE_ROLES = new Set(['admin', 'student', 'sysadmin']);
 const STUDENT_ROLE_CODE = 'student';
 
 /**
- * The seven exports of `12-DataExport.md` §6, in the design's own order.
+ * The seven exports of `13-DataExport.md` §6, in the design's own order.
  *
  * <p>`type` is the request key, and it is also the permission suffix — each
  * export is now its own permission (`exports.studentList`, …) rather than one
@@ -494,7 +494,7 @@ const KNOWN_ROLE_LABEL_KEYS: Record<string, string> = {
 
 /**
  * One export, with its explanation and — collapsed until asked for — the filters
- * its type declares (`12-DataExport.md` §6, plan §2.6.1).
+ * its type declares (`13-DataExport.md` §6, plan §2.6.1).
  *
  * Collapsed by default because the common case is "export everything I can see":
  * every filter defaults to All (§4.1), so an unopened panel is already the right
@@ -1258,7 +1258,7 @@ export function SystemAdmin() {
   const canManageRoles = hasPermission('roles.manage');
   const canReadUsers = hasPermission('users.read');
   /**
-   * Import is now the SDC admin's alone (`10-RolesAndPermissions.md` §6.1 —
+   * Import is now the SDC admin's alone (`11-RolesAndPermissions.md` §6.1 —
    * `imports.*` was revoked from sysadmin, and teachers never held it), so the
    * whole tab is gated rather than each button inside it. A teacher who cannot
    * import should not be shown the concept.
@@ -1372,7 +1372,7 @@ export function SystemAdmin() {
   const studentImportFileRef = useRef<HTMLInputElement>(null);
   const [importType, setImportType] = useState<string>('');
   /**
-   * The 15-day historical-import window (11-DataImport.md §6). `undefined`
+   * The 15-day historical-import window (12-DataImport.md §6). `undefined`
    * means "not known yet" — either still loading or the read failed — and the
    * historical card stays hidden until the server has actually said the feature
    * is open. Hiding on an unknown answer is the safe direction: showing the
@@ -1937,7 +1937,7 @@ export function SystemAdmin() {
 
   /**
    * Import and Export are two independent tabs, each present only with its own
-   * permission (`11-DataImport.md` §5.2, `12-DataExport.md` §3, plan §2.12).
+   * permission (`12-DataImport.md` §5.2, `13-DataExport.md` §3, plan §2.12).
    *
    * They were one tab while one permission covered both. Since import became the
    * Student Development Centre's alone and export was split per type, a teacher
@@ -2264,7 +2264,7 @@ export function SystemAdmin() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Historical import is a migration-era capability, not a permanent
-                one (11-DataImport.md §6): the first successful import opens a
+                one (12-DataImport.md §6): the first successful import opens a
                 15-day window, and once it has run out this card is not rendered
                 at all — §6.1 asks for absent, not disabled, because a control
                 that cannot be used should not be on screen. `undefined` (the
@@ -2359,7 +2359,7 @@ export function SystemAdmin() {
       {/* ── Export tab ────────────────────────────────────────────
           Its own tab, not a panel inside Import: the two have different
           permissions now, and a teacher holds export without import
-          (12-DataExport.md §3, plan §2.12). Single column, because each card
+          (13-DataExport.md §3, plan §2.12). Single column, because each card
           carries an explanatory paragraph and an expandable filter panel —
           two columns would either truncate the text or make the filters
           cramped, and §2.8 is explicit that the card text must not be cut to

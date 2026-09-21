@@ -165,7 +165,7 @@ timebank:
         # the case this exists for.
         batch-limit: ${TIMEBANK_ACTIVATION_EXPIRY_SWEEP_BATCH_LIMIT:500}
   lifecycle:
-    # Design/*/13-AnnualRollover.md §2 — the day a school year turns over, and so
+    # Design/*/14-AnnualRollover.md §2 — the day a school year turns over, and so
     # the day promotion and graduation run. `MM-DD`, default 1 September.
     #
     # 1 September is a convention rather than a law, and this was hardcoded in
@@ -183,7 +183,7 @@ timebank:
     # see AcademicYearCalendar for why that is stricter than the window below.
     academic-year-start: ${TIMEBANK_ACADEMIC_YEAR_START:09-01}
   import:
-    # 11-DataImport.md §6.1 — the window the first successful historical import
+    # 12-DataImport.md §6.1 — the window the first successful historical import
     # opens, after which historical import is closed permanently. 15 is the
     # design's figure and the default; the property exists because a migration
     # that genuinely runs long should not need a code change and a deploy at the

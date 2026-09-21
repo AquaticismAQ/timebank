@@ -170,7 +170,7 @@ export interface ImportJob {
 }
 
 /**
- * The 15-day historical-import window (`Design/*&#47;11-DataImport.md` §6).
+ * The 15-day historical-import window (`Design/*&#47;12-DataImport.md` §6).
  * `NOT_OPENED` means no historical import has ever committed, so the feature is
  * still available and the screen owes the operator §6.2's warning; `OPEN` is
  * the countdown state; `EXPIRED` means the card is not drawn at all, since a
@@ -189,7 +189,7 @@ export interface HistoricalImportWindow {
   secondsRemaining?: number;
 }
 
-/** The filter fields an export can declare (`12-DataExport.md` §4). */
+/** The filter fields an export can declare (`13-DataExport.md` §4). */
 export type ExportFilterField = 'academicYearId' | 'gradeId' | 'classId' | 'reviewerId';
 
 /** Values chosen for those fields. Absent or empty means "All" (§4.1). */

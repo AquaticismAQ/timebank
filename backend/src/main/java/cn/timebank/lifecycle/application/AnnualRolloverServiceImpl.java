@@ -24,7 +24,7 @@ import static cn.timebank.lifecycle.infrastructure.AnnualRolloverRepository.EXIT
 import static cn.timebank.lifecycle.infrastructure.AnnualRolloverRepository.PROMOTION_LEVELS_DESC;
 
 /**
- * Design/*&#47;13-AnnualRollover.md §3.
+ * Design/*&#47;14-AnnualRollover.md §3.
  *
  * <p>Three properties the implementation exists to hold, all of them consequences
  * of running with nobody watching:</p>

@@ -2,12 +2,12 @@ package cn.timebank.dataexchange.application;
 
 /**
  * Which grade a student was in during a given academic year
- * (`Design/*&#47;12-DataExport.md` §5.1).
+ * (`Design/*&#47;13-DataExport.md` §5.1).
  *
  * <p>{@code student.grade_id} is present-tense — it says where a student is
  * today — and the database keeps no historical roster, so a past year's grade
  * cannot be looked up. It can be derived, because the school's stage model
- * (`13-AnnualRollover.md` §2) fixes entry at grade 6 or grade 9 and advances one
+ * (`14-AnnualRollover.md` §2) fixes entry at grade 6 or grade 9 and advances one
  * grade per year:</p>
  *
  * <pre>
@@ -73,7 +73,7 @@ final class ExportGradeDerivation {
      *
      * <p>Exposed because a value that is neither is the signal that this
      * student repeated or skipped a year, which §5.2.1 says the system does not
-     * model and `13-AnnualRollover.md` §5's check is the only thing that
+     * model and `14-AnnualRollover.md` §5's check is the only thing that
      * surfaces. Callers use it to avoid printing a confidently wrong grade.</p>
      */
     static int entryGrade(Cohort cohort, int currentYearIndex) {

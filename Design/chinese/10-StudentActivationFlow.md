@@ -1,9 +1,12 @@
 # 学生账号激活流程设计
 
 > 本文描述学生从名册导入到首次登录的完整流程，以及承载首次凭证的**激活凭证单**。
-> 改动本文时请同步更新 `Design/english/09-StudentActivationFlow.md`。
+> **学生的两个标识（登录名与学号）本身不在本文**，见 `09-StudentIdentity.md`——
+> 那里也写了学校如何准备名册 CSV。
+> 改动本文时请同步更新 `Design/english/10-StudentActivationFlow.md`。
 > 相关文档：安全与合规依据见 `08-mlps-level1-security-design-guide.md` §8.3（密码规则见 §8.2）；
-> 决策记录与被否决的替代方案见 `Docs/optimization/10-StudentIdentityAndOnboarding.md`。
+> 导入流程见 `12-DataImport.md`；决策记录与被否决的替代方案见
+> `Docs/optimization/10-StudentIdentityAndOnboarding.md`。
 
 ---
 

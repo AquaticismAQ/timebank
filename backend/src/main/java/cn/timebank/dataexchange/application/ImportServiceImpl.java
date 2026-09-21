@@ -108,7 +108,7 @@ class ImportServiceImpl implements ImportService {
         // First of §2.9's two enforcement points, and before the file is read:
         // once the 15-day window has closed there is no reason to spend a disk
         // write and a SHA-256 pass on a file that can never be committed
-        // (11-DataImport.md §6.1). Roster import never reaches this check.
+        // (12-DataImport.md §6.1). Roster import never reaches this check.
         windowService.requireImportable(type);
         if (file == null || file.isEmpty()) {
             throw ApiException.invalidRequest("An import file is required.");

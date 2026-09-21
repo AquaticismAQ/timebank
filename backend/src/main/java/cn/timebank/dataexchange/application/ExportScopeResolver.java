@@ -15,7 +15,7 @@ import java.util.Set;
 /**
  * Turns "who is asking" plus "what they filtered by" into a concrete set of
  * students, once per job (`11-DataImportExportOptimization.md` §2.5, the
- * concrete form of `12-DataExport.md` §4.4).
+ * concrete form of `13-DataExport.md` §4.4).
  *
  * <p><b>Why a student set and not a grade predicate.</b> Records carry a grade
  * <em>snapshot</em> — the grade the student was in when the record was filed —
@@ -28,7 +28,7 @@ import java.util.Set;
  *
  * <p>Deliberately not reusing {@code DataScopeSpecifications}: it produces JPA
  * {@code Specification}s and the export path is raw JDBC with keyset pagination
- * that `12-DataExport.md` §2.1 keeps on purpose.</p>
+ * that `13-DataExport.md` §2.1 keeps on purpose.</p>
  */
 @Component
 class ExportScopeResolver {

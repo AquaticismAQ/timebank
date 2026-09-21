@@ -105,7 +105,7 @@ What is actually true:
 
 ## 6. Superseded by the export design
 
-`Design/*/12-DataExport.md` now specifies this export, and **one decision in it
+`Design/*/13-DataExport.md` now specifies this export, and **one decision in it
 reverses part of §4 of this issue**: Service Records exports **every submitted
 status with a `Status` column**, not approved rows only.
 

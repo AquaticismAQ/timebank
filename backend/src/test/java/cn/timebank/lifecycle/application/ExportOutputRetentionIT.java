@@ -167,7 +167,7 @@ class ExportOutputRetentionIT extends AbstractIntegrationTest {
         // `serviceRecords` because this fixture needs a type that really runs
         // and really writes a file — the sweep has nothing to delete otherwise.
         // It used to be `participation`, which V31 retired along with the other
-        // re-cut reports (12-DataExport.md §9.4); a retired key is refused at
+        // re-cut reports (13-DataExport.md §9.4); a retired key is refused at
         // create, so the sweep would have been proved against no file at all.
         JobDto job = exportService.create(new CreateExportRequest("serviceRecords", null), adminAuth());
         Instant deadline = Instant.now().plus(Duration.ofSeconds(25));

@@ -51,8 +51,8 @@ INSERT IGNORE INTO permission (id, code, description) VALUES
     ('perm_rules_manage', 'rules.manage', 'Create or edit rule drafts and service categories'),
     ('perm_rules_publish', 'rules.publish', 'Publish a rule version'),
     ('perm_reports_read', 'reports.read', 'View dashboards and reports'),
-    ('perm_exports_create', 'exports.create', 'Retired (10-RolesAndPermissions.md §5.1): superseded by one exports.* permission per export type, grants revoked in V31. Row kept, never deleted and never reused — the code is a string in historical audit entries.'),
-    -- 10-RolesAndPermissions.md §5.3: one permission per export type. The
+    ('perm_exports_create', 'exports.create', 'Retired (11-RolesAndPermissions.md §5.1): superseded by one exports.* permission per export type, grants revoked in V31. Row kept, never deleted and never reused — the code is a string in historical audit entries.'),
+    -- 11-RolesAndPermissions.md §5.3: one permission per export type. The
     -- id is 'perm_' + the code with dots as underscores, as everywhere else
     -- here, which needed V31 to widen permission.id — exports.studentParticipation
     -- makes a 33-character id and the column was VARCHAR(32).
@@ -129,7 +129,7 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_teacher', 'perm_accounts_read'),
     ('role_teacher', 'perm_rules_read'),
     ('role_teacher', 'perm_reports_read'),
-    -- 10-RolesAndPermissions.md §5.3: six of the seven export types. The
+    -- 11-RolesAndPermissions.md §5.3: six of the seven export types. The
     -- teacher grant is a new capability, not a narrowing of an old one —
     -- `exports.create` was never granted to a teacher. exports.reviewEfficiency
     -- is withheld: every row of it is a colleague's review volume and
@@ -179,7 +179,7 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_admin', 'perm_rules_manage'),
     ('role_admin', 'perm_rules_publish'),
     ('role_admin', 'perm_reports_read'),
-    -- 10-RolesAndPermissions.md §5.3: all seven export types. Deliberately
+    -- 11-RolesAndPermissions.md §5.3: all seven export types. Deliberately
     -- *not* 'perm_exports_create' — that permission is retired (§5.1) and
     -- re-seeding its grant here would put it straight back on a fresh
     -- schema, which is the half of the change V31 cannot do on its own.
@@ -236,7 +236,7 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_sysadmin', 'perm_rules_manage'),
     ('role_sysadmin', 'perm_rules_publish'),
     ('role_sysadmin', 'perm_reports_read'),
-    -- 10-RolesAndPermissions.md §6.1 reverses V21's admin/sysadmin merge for
+    -- 11-RolesAndPermissions.md §6.1 reverses V21's admin/sysadmin merge for
     -- import and export only: no exports.* and no imports.* line here on
     -- purpose. Export takes student data out in bulk and import writes it in
     -- bulk; a system administrator needs the system to run, not the roster

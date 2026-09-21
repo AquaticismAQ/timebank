@@ -2,10 +2,11 @@
 
 > This document describes the bulk data import types, workflow, validation and
 > permission constraints.
-> Keep `Design/chinese/11-DataImport.md` in sync when editing this file — the
+> Keep `Design/chinese/12-DataImport.md` in sync when editing this file — the
 > Chinese version is the source of truth.
-> Related: the permission and scope model in `10-RolesAndPermissions.md`;
-> exports in `12-DataExport.md`; the validation implementation record in
+> Related: **how to prepare the roster CSV is in `09-StudentIdentity.md` §5**;
+> the permission and scope model in `11-RolesAndPermissions.md`; exports in
+> `13-DataExport.md`; the validation implementation record in
 > `Docs/optimization/09-RuleBasedImportValidation.md`.
 
 ---
@@ -38,14 +39,18 @@ with a human decision in between.**
 
 Used to establish the roster in bulk at the start of a school year. Each row
 produces two things: a roster record, and a **password-less, pending-activation**
-login account (`09-StudentActivationFlow.md` §3).
+login account (`10-StudentActivationFlow.md` §3).
 
 Columns: `studentNumber`, `displayName`, `gradeId`, `classId`,
-`enrollmentAcademicYearId`, `graduationYear`, `joinedAt`.
+`enrollmentAcademicYearId`, `graduationYear`, `joinedAt`. **What each column
+accepts, the file's encoding and size limits, and how a school turns its
+existing roster into this file are in `09-StudentIdentity.md` §5** — this
+document is about how the import runs; that section is about where the file
+comes from.
 
 **The username is not a column and cannot be supplied.** It is generated as 8
-random digits — a sequential username leaks enrolment order and cohort size,
-which the identity design rejected explicitly.
+random digits — a sequential username leaks enrolment order and cohort size
+(`09-StudentIdentity.md` §2.2).
 
 ### 2.2 Historical service records (`serviceRecordsHistorical`)
 
@@ -77,7 +82,7 @@ directly. Two constraints:
         ▼
 ② Validate (automatic)
         │  Rules run row by row, producing an error report
-        │  status = VALIDATED or VALIDATION_FAILED
+        │  **any invalid row means VALIDATION_FAILED**; VALIDATED needs all of them
         ▼
 ③ Human confirmation and commit (imports.commit)
         │  The administrator reads the error report, then confirms explicitly
@@ -104,6 +109,18 @@ confirmation" is a real resting state and has to be expressible.
 A `VALIDATION_FAILED` job has no commit path. There is no "ignore errors and
 import anyway" — once that button exists, it gets pressed on the day everyone is
 in a hurry. The correct route is to fix the file and upload again.
+
+**"Failed" means: any row is invalid.** Three bad rows in a roster of two hundred
+is not "import 197 and attach an error list"; it is import nothing. This and §8's
+"a commit either fully succeeds or fully rolls back" are the same principle stated
+at two stages — one stops a file before commit, the other catches what goes wrong
+during it.
+
+Both together are what let the system say something complete to an administrator:
+**the file in your hand and the data in the system either correspond exactly, or
+not at all.** Without either half you get two hundred people in the file, a
+hundred and ninety-seven in the system, and a success message on screen — with
+nothing anywhere telling them those two numbers differ.
 
 ---
 
@@ -133,12 +150,12 @@ contract and does not change when the wording does.
 ### 5.1 One role holds import
 
 `imports.create` / `imports.read` / `imports.commit` are held **by SDC Admin
-only** (`10-RolesAndPermissions.md` §6).
+only** (`11-RolesAndPermissions.md` §6).
 
 - **Teachers have no import permission.** Bulk roster writes are a Student
   Development Centre responsibility, not a year-group one.
 - **System Admin has no import permission.** Reasoning in
-  `10-RolesAndPermissions.md` §6.1.
+  `11-RolesAndPermissions.md` §6.1.
 
 ### 5.2 Import and export are two separate tabs
 
@@ -198,7 +215,7 @@ date can be written into a migration plan.
 
 ### 6.3 Why a system administrator reopens something they cannot use
 
-This reads as a contradiction: `10-RolesAndPermissions.md` §6.1 says a system
+This reads as a contradiction: `11-RolesAndPermissions.md` §6.1 says a system
 administrator may not import any data, and here they are the one who reopens
 import.
 
@@ -232,10 +249,10 @@ mistake.
 | Property | How it holds |
 | :--- | :--- |
 | **Validation never writes business data** | Validation only reads and produces a report; every business write happens at commit |
-| **A commit either fully succeeds or fully rolls back** | Commit runs in a single transaction; "half imported" does not exist |
+| **A commit either fully succeeds or fully rolls back** | Commit runs in a single transaction. Every row is re-validated as it commits, and a row that is no longer valid — a student number taken elsewhere since validation, say — rolls the whole file back along with the rows already written. "Half imported" does not exist, which is also why there is no resumable checkpoint: an interrupted commit left nothing to resume from |
 | **Import produces no password plaintext** | Roster-imported accounts have no password hash and are first entered with an activation code |
 | **Conversion always uses the rule in effect on the service date** | The historical import resolves the rule version per row; no rule means the row fails |
-| **Every commit writes an audit entry** | Recording actor, import type, row count and job id. Export creation and the opening of the historical-import window are audited on the same principle: taking data in or out is an act someone is answerable for |
+| **The upload and the commit each write an audit entry** | `import.create` records the upload (actor, time, source IP, import type, the file's SHA-256, its size); `import.commit` records the commit (the same, plus rows actually committed) and is written **inside** the commit transaction, so an import that rolled back leaves no entry claiming it happened. The upload is recorded separately because, per §3.2, a file with errors imports nothing at all — auditing only commits would leave a rejected import with no trace, and "who uploaded a roster of two hundred real children and had it refused" is exactly the sort of thing a record is for. Export creation and the opening of the historical-import window are audited on the same principle: taking data in or out is an act someone is answerable for |
 
 ---
 
