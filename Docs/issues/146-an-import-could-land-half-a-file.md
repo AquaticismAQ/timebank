@@ -130,6 +130,94 @@ the control had to actually commit for the comparison to mean anything and there
 is no delete for a student. Deactivated afterwards; the rejected import's job row
 is cancelled.
 
+### 4.1 Full roster-import pass on the Docker stack
+
+The live check above proved the refusal with a one-row control. Aquaticism asked for
+the whole thing exercised properly, against a correct roster and one with real
+errors in it, which means the disposable stack: the failure cases create and
+destroy students, and the interesting one has to be able to roll a created
+student back out.
+
+Rebuilt the image from this branch (`docker compose up -d --build backend`)
+against the seeded dev database — 56 students, 42 users to start.
+
+**A. A file with errors in it.** Thirteen rows, ten of them bad, one failure per
+documented rule. Every one fired on the row it was aimed at:
+
+| row | field | code |
+| :--- | :--- | :--- |
+| 3 | studentNumber | `INVALID_FORMAT` (contains I, L, U) |
+| 4 | displayName | `REQUIRED` |
+| 5 | studentNumber | `DUPLICATE_IN_FILE` |
+| 6 | studentNumber | `STUDENT_NUMBER_TAKEN` |
+| 7 | gradeId | `UNKNOWN_GRADE` |
+| 8 | classId | `CLASS_GRADE_MISMATCH` |
+| 9 | enrollmentAcademicYearId | `UNKNOWN_ACADEMIC_YEAR` |
+| 10 | graduationYear | `INVALID_YEAR` |
+| 11 | joinedAt | `INVALID_DATE` |
+| 12 | displayName | `UNSAFE_CONTENT` (`=cmd\|' /C calc'!A0`) |
+
+```
+status VALIDATION_FAILED   13 rows, 3 valid
+commit -> 409 STATE_CONFLICT
+students 56 -> 56     users 42 -> 42
+rows 1, 2 and 13 (the valid ones)  absent
+```
+
+**B. A correct file.** Six rows across four grades, including two masked CJK
+names and one name containing a comma:
+
+```
+status VALIDATED 6/6, 0 errors  ->  COMMITTED, 6
+students 56 -> 62    users 42 -> 48, every one PENDING_ACTIVATION with no password hash
+"Wang, Casey Z."  kept its comma, and landed in grade_7/class_7B — no column shift
+李*红             stored as E69D8E 2A E7BAA2, and returned by the API as 李*红
+```
+
+(The `mysql` client prints those names as `?*?` unless told
+`--default-character-set=utf8mb4`. That is the terminal, not the data — the hex
+and the API response are the evidence.)
+
+**C. A file that goes bad between validate and commit.** Three good rows;
+another administrator takes row 2's student number through `POST /students`
+after validation and before commit:
+
+```
+after validate   VALIDATED 3/3
+commit           COMMIT_FAILED
+                 "Row 2 is no longer valid (STUDENT_NUMBER_TAKEN) … Nothing was
+                  imported — correct the file and import it again."
+VG146R01 (row 1, applied before row 2 was reached)   absent
+VG146R03                                             absent
+VG146R02                                             present — the manual one only
+```
+
+Row 1 is the assertion. It was created, and the rollback took it back out,
+along with its pending account (`user` rows for it: 0) and its audit entry —
+`student.create` in the window totals 7, which is the six committed rows plus
+the one manual creation, not eight.
+
+**D. Through the actual screen**, since the "report the errors, then import the
+rest" behaviour lived in the UI too. Admin Portal → System Admin → Data Import →
+Upload Student File with file A:
+
+> 10 invalid rows — nothing was imported. Fix the file and upload it again.
+> Row 3: "studentNumber must be Crockford base32 …"; Row 4: displayName is
+> required; Row 5: studentNumber VG146M01 appears more than once in this file
+
+and no commit followed — the job went to `CANCELLED`, counts unmoved. A
+two-row correct file uploaded through the same control immediately afterwards
+committed (`COMMITTED 2/2`, two more students and two more pending accounts),
+so the screen is refusing bad files rather than refusing everything.
+
+**One thing worth knowing, not a regression.** A row reports only its *first*
+failing rule: a single row with six independent problems produced exactly one
+error (`studentNumber INVALID_FORMAT`). That was always true, but it costs more
+now — before, a bad row was skipped and the rest of the file went in; now it
+stops the file, so an operator fixing a badly-formed row may go around several
+times to discover all of its problems. Logged as an observation rather than
+fixed here.
+
 ## 5. What it must not do
 
 - **Must not commit a file with a known-invalid row.** §2.
