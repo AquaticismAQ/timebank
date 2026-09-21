@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useBadgeCounts } from '../layout/BadgeCounts';
 import { CheckCircle, XCircle, RotateCcw, Search, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
@@ -42,6 +43,7 @@ function Field({ label, value }: { label: string; value?: string | number | null
  */
 export function ProposalReview() {
   const { t } = useTranslation();
+  const badges = useBadgeCounts();
   const { hasPermission } = usePermissions();
   const canReview = hasPermission('eventProposals.review');
   const [decisionModal, setDecisionModal] = useState<{ item: EventProposal; decision: Decision } | null>(null);
@@ -106,6 +108,7 @@ export function ProposalReview() {
       await api.eventProposals.review(item.id, decision, comment || undefined, reasonCode, item.version, decisionKeyRef.current);
       decisionKeyRef.current = newIdempotencyKey();
       if (decision !== 'approve') toast.success(t('admin.proposals.decisionRecorded'));
+      badges.refresh(); // a decided proposal leaves the queue the badge counts (issue 154)
       setDecisionModal(null);
       setDetailId(null);
       refetch();

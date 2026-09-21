@@ -1,11 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Home, FolderOpen, FileText, Wallet, User, Bell, TrendingUp, Lightbulb, MessageSquareWarning } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../App';
 import { api } from '../../api/client';
 import { type StudentProgress, type Account } from '../../api/types';
 import { formatCoins, minutesToHours } from '../../lib/format';
+import { useLocation } from 'react-router';
 import { AppShell, type ShellNavItem } from './AppShell';
+import { BadgeCountsProvider } from './BadgeCounts';
 
 export function StudentLayout() {
   const { t } = useTranslation();
@@ -15,13 +17,20 @@ export function StudentLayout() {
   const [accountLoaded, setAccountLoaded] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     api.students.progress(user?.studentId || 'std_001').then(setProgress).catch(() => {});
     // `getOrNull`: no account row is a zero balance, not an error (issue 099).
     api.accounts.getOrNull(user?.studentId || 'std_001')
       .then(setAccount).catch(() => setAccount(null)).finally(() => setAccountLoaded(true));
     api.notifications.unreadCount().then(setUnreadCount).catch(() => {});
   }, [user?.studentId]);
+
+  // The hours and coins in the header get refreshed alongside the badge, not
+  // because the report was about them, but because they are the same staleness
+  // sitting next to it: a student whose record was just approved should not see
+  // yesterday's total beside a corrected badge (issue 154).
+  const { pathname } = useLocation();
+  useEffect(refresh, [refresh, pathname]);
 
   const bottomNavItems = useMemo((): ShellNavItem[] => [
     { to: '/student/home', icon: Home, label: t('layout.student.home') },
@@ -59,15 +68,19 @@ export function StudentLayout() {
     </div>
   );
 
+  const badgeCounts = useMemo(() => ({ refresh }), [refresh]);
+
   return (
-    <AppShell
-      navItems={navItems}
-      bottomNavItems={bottomNavItems}
-      brandSubtitle={t('layout.student.studentPortal')}
-      headerInfo={progress ? `${progress.grade} · ${progress.academicYear} ${t('common.academicYear')}` : ''}
-      statsStrip={statsStrip}
-      notificationsPath="/student/notifications"
-      unreadCount={unreadCount}
-    />
+    <BadgeCountsProvider value={badgeCounts}>
+      <AppShell
+        navItems={navItems}
+        bottomNavItems={bottomNavItems}
+        brandSubtitle={t('layout.student.studentPortal')}
+        headerInfo={progress ? `${progress.grade} · ${progress.academicYear} ${t('common.academicYear')}` : ''}
+        statsStrip={statsStrip}
+        notificationsPath="/student/notifications"
+        unreadCount={unreadCount}
+      />
+    </BadgeCountsProvider>
   );
 }

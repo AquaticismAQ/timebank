@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useBodyScrollLock } from '../../lib/useBodyScrollLock';
 import { useTranslation } from 'react-i18next';
+import { useBadgeCounts } from '../layout/BadgeCounts';
 import { CheckCircle, XCircle, RotateCcw, AlertTriangle, Clock, MoreHorizontal, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
@@ -39,6 +40,7 @@ function Field({ label, value }: { label: string; value?: string | number | null
 
 export function AuditCenter() {
   const { t } = useTranslation();
+  const badges = useBadgeCounts();
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
   const canDecide = hasPermission('reviews.decide');
@@ -136,9 +138,11 @@ export function AuditCenter() {
       decisionKeyRef.current = newIdempotencyKey();
       if (action === 'approve' && record.creditedUnits != null) {
         toast.success(t('admin.audit.approvedWithCredit', { units: record.creditedUnits }));
+        badges.refresh(); // the queue this badge counts just got shorter (issue 154)
       } else {
         const actionLabels: Record<string, string> = { approve: t('admin.audit.approved'), return: t('admin.audit.returned'), reject: t('admin.audit.rejected') };
         toast.success(t('admin.audit.recordDecision', { action: actionLabels[action] }));
+        badges.refresh(); // the queue this badge counts just got shorter (issue 154)
       }
       setDecisionModal(null);
       setDetailId(null);
@@ -165,6 +169,7 @@ export function AuditCenter() {
     setBulkFailures(failures);
     if (failures.length === 0) {
       toast.success(t('admin.audit.batchApproved', { count: succeeded }));
+      badges.refresh(); // the queue this badge counts just got shorter (issue 154)
     } else {
       toast.warning(t('admin.audit.batchApprovedWithFailures', { succeeded, failed: failures.length }));
     }

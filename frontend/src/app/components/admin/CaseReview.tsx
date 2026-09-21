@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useBadgeCounts } from '../layout/BadgeCounts';
 import { CheckCircle, XCircle, HelpCircle, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../api/client';
@@ -42,6 +43,7 @@ function Field({ label, value }: { label: string; value?: string | number | null
 
 export function CaseReview() {
   const { t } = useTranslation();
+  const badges = useBadgeCounts();
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
   const { grades } = useDictionaries();
@@ -124,6 +126,7 @@ export function CaseReview() {
       await api.cases.decide(item.id, decision, reasonCode, comment || undefined, item.version, decisionKeyRef.current);
       decisionKeyRef.current = newIdempotencyKey();
       toast.success(t('admin.cases.decisionRecorded'));
+      badges.refresh(); // a decided case leaves the queue the badge counts (issue 154)
       setDecisionModal(null);
       setDetailId(null);
       refetch();

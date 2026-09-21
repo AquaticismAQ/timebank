@@ -7,6 +7,7 @@ import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { formatLocalInstant } from '../../lib/datetime';
+import { useBadgeCounts } from '../layout/BadgeCounts';
 
 // list-conventions: no-search — `/notifications` takes no search parameter.
 
@@ -30,6 +31,9 @@ export function NotificationsPage() {
   const { t } = useTranslation();
   const [filterTab, setFilterTab] = useState<'all' | 'unread'>('all');
   const { items, page, loading, error, setPage, setFilter, refetch } = usePagedApi(api.notifications.list, {});
+  // The sidebar badge and the bell both count unread notifications, and this is
+  // the page that makes them read (issue 154).
+  const badges = useBadgeCounts();
 
   const unreadCount = items.filter(n => !n.isRead).length;
 
@@ -39,14 +43,14 @@ export function NotificationsPage() {
   };
 
   const markRead = (id: string) => {
-    api.notifications.markRead(id).then(refetch).catch((err) => {
+    api.notifications.markRead(id).then(() => { refetch(); badges.refresh(); }).catch((err) => {
       if (err?.message) toast.error(err.message);
     });
   };
 
   const markAllRead = () => {
     api.notifications.markAllRead()
-      .then(() => { toast.success(t('student.notifications.allMarkedRead')); refetch(); })
+      .then(() => { toast.success(t('student.notifications.allMarkedRead')); refetch(); badges.refresh(); })
       .catch((err) => { if (err?.message) toast.error(err.message); });
   };
 

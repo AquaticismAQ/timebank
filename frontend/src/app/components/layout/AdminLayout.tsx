@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { LayoutDashboard, ClipboardCheck, FolderOpen, Users, Wallet, BarChart2, Settings, User, FileQuestion, Lightbulb, Bell } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../App';
 import { api } from '../../api/client';
+import { useLocation } from 'react-router';
 import { AppShell, type ShellNavItem } from './AppShell';
+import { BadgeCountsProvider } from './BadgeCounts';
 
 export function AdminLayout() {
   const { t } = useTranslation();
@@ -13,12 +15,24 @@ export function AdminLayout() {
   const [pendingCases, setPendingCases] = useState(0);
   const [pendingProposals, setPendingProposals] = useState(0);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
+    // Each is caught on its own: a portal where one queue is forbidden to this
+    // user must still show the others, which is why these were never a single
+    // combined request.
     api.notifications.unreadCount().then(setUnreadCount).catch(() => {});
     api.reviewQueue.summary().then(s => setPendingReviews(s.pending)).catch(() => {});
     api.cases.pendingCount().then(setPendingCases).catch(() => {});
     api.eventProposals.pendingCount().then(setPendingProposals).catch(() => {});
   }, []);
+
+  // On arrival, and again whenever the user moves. The layout is the route
+  // parent and does not remount between its children, so without the pathname
+  // here this runs once per sign-in (issue 154). Navigation is the cheap half
+  // of the answer: it catches anything decided on another screen, in another
+  // tab, or by someone else. The precise half is `refresh` in the context
+  // below, which the page that changed something calls immediately.
+  const { pathname } = useLocation();
+  useEffect(refresh, [refresh, pathname]);
 
   const navItems = useMemo((): ShellNavItem[] => [
     { to: '/admin/dashboard', icon: LayoutDashboard, label: t('layout.admin.dashboard') },
@@ -34,12 +48,16 @@ export function AdminLayout() {
     { to: '/admin/profile', icon: User, label: t('layout.admin.profile') },
   ], [t, pendingReviews, pendingCases, pendingProposals, unreadCount]);
 
+  const badgeCounts = useMemo(() => ({ refresh }), [refresh]);
+
   return (
-    <AppShell
-      navItems={navItems}
-      brandSubtitle={t('layout.admin.brandSubtitle')}
-      unreadCount={unreadCount}
-      notificationsPath="/admin/notifications"
-    />
+    <BadgeCountsProvider value={badgeCounts}>
+      <AppShell
+        navItems={navItems}
+        brandSubtitle={t('layout.admin.brandSubtitle')}
+        unreadCount={unreadCount}
+        notificationsPath="/admin/notifications"
+      />
+    </BadgeCountsProvider>
   );
 }

@@ -1705,3 +1705,17 @@ Grade ordering is by `grade.sequence`, never by id or label: `grade_10` sorts be
 One thing that looked like a problem and is not: Student List prints the grade a student held *in the selected year*, not their stored grade, so sorting by the stored one looks wrong. It is identical — the derived level is `liveGradeLevel + (selectedYear − currentYear)`, a constant offset within any one file, and a constant offset cannot reorder anything.
 
 **An outage on the way, and it was mine.** The first deploy would not start: Flyway checksum mismatch on V30, V31 and V32. §41.46's renumbering had rewritten doc references *inside already-applied migrations*, and Flyway checksums the whole file including comments. Restored the three files byte-for-byte rather than repairing checksums in the database — an applied migration is immutable, and the price is one stale document name in a comment. The repeatable `R__` seeds are the opposite case and kept their updated references. Neither compiling nor reviewing could have caught it, because those files are read only when the application starts against a database that already has them; the rule now lives in `Docs/README.md` §2.10.
+
+### 41.48 Sidebar badges refresh when something changes (issue 154, 2026-09-22)
+
+Aquaticism: a sidebar badge should update after the user acts — reading a notification left the count unchanged until the browser was reloaded.
+
+The layouts fetched their counts in a `useEffect` with an empty dependency array. The layout is the route *parent* and does not remount when you move between the pages inside it, so that is once per sign-in: the number was not stale for a moment, it was stale for the session. Four badges had it, not just notifications — Audit Center, Case Review and Proposal Review count queues the same session empties.
+
+Two halves, answering different questions. A small `BadgeCounts` context exposes `refresh()`, which the page that just changed something calls — marking a notification read, deciding a case, a proposal, or a record singly or in a batch. And the layout re-reads on every navigation, which covers what no call site can: a decision made on another screen, in another tab, or by a colleague.
+
+**A refresh signal rather than a shared number**, deliberately: the page does not know the new count. Marking one notification read is not "minus one" if another arrived; approving a record can clear two queue entries. Only the server knows, and a local decrement drifts — invisibly, until somebody counts.
+
+The Student Portal's header hours and coins ride the same signal. Not badges and not in the report, but the same staleness an inch away.
+
+**Verified in the browser with a control both times**: 22 → 21 on reading one notification, and Case Review 7 → 6 on resolving a case *while Audit Center held at 10*. The control is the part that matters — a refresh that redrew everything would look identical on the badge under test. Two wrong turns on the way, both instructive: the first notification clicked was already read, so nothing changed and the fix looked broken until the network panel showed all four re-reads firing correctly; and the first attempt to decide a case found no buttons, because that session was a teacher, who holds `cases.read` but not `cases.decide`.
