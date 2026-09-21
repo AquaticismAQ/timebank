@@ -1,4 +1,4 @@
--- Annual rollover (Design/*/14-AnnualRollover.md).
+-- Annual rollover (Design/*/13-AnnualRollover.md).
 --
 -- One row per attempt, not per academic year: a failed run must be
 -- retryable, and keeping the failure visible is the point of having the

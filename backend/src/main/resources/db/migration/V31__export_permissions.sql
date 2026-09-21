@@ -1,4 +1,4 @@
--- Design/english/11-RolesAndPermissions.md §5 and §6: one permission per
+-- Design/english/10-RolesAndPermissions.md §5 and §6: one permission per
 -- export type instead of a single blanket `exports.create`, and all three
 -- `imports.*` back to SDC Admin alone. Build plan:
 -- Docs/optimization/11-DataImportExportOptimization.md §3.1.
@@ -109,11 +109,11 @@ WHERE rp.permission_id = 'perm_exports_create';
 
 -- Note for the next reader, so nothing is gone looking for: the two export
 -- *types* that also retire in this pass, `participation` and `serviceHours`
--- (13-DataExport.md §6), have no permission rows to retire. There was only
+-- (12-DataExport.md §6), have no permission rows to retire. There was only
 -- ever `exports.create` for all seven built types, so the row below is the
 -- whole of "their permission rows are kept and marked retired" (§2.4).
 UPDATE permission
-SET description = 'Retired (11-RolesAndPermissions.md §5.1): superseded by one exports.* permission per export type, grants revoked in V31. Row kept, never deleted and never reused — the code is a string in historical audit entries.'
+SET description = 'Retired (10-RolesAndPermissions.md §5.1): superseded by one exports.* permission per export type, grants revoked in V31. Row kept, never deleted and never reused — the code is a string in historical audit entries.'
 WHERE id = 'perm_exports_create';
 
 -- §6: all three `imports.*` return to SDC Admin alone, reversing V21's

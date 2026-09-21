@@ -47,7 +47,8 @@ public class StudentReportExportRepository {
     public record CompletionRow(String studentId, String studentNumber, String studentName,
                                  String gradeId, String classId, String enrollmentAcademicYearId,
                                  Integer graduationYear,
-                                 int projectsParticipated, long approvedMinutes, long creditedUnits) {
+                                 int projectsParticipated, long approvedMinutes, long creditedUnits,
+                                 int gradeSequence, String className) {
     }
 
     public record ParticipationRow(String studentId, String studentNumber, String studentName,
@@ -55,37 +56,48 @@ public class StudentReportExportRepository {
                                     Integer graduationYear,
                                     int registeredProjects, String registeredProjectNames,
                                     int participatedProjects, String participatedProjectNames,
-                                    long approvedMinutes, long creditedUnits) {
+                                    long approvedMinutes, long creditedUnits,
+                                    int gradeSequence, String className) {
     }
 
-    public List<CompletionRow> completionPage(String afterId, int limit, Set<String> studentIds,
+    public List<CompletionRow> completionPage(ExportCursor.Roster after, int limit, Set<String> studentIds,
                                               LocalDate yearFrom, LocalDate yearTo) {
         StringBuilder sql = new StringBuilder("""
                 select s.id, s.student_number, s.display_name, s.grade_id, s.class_id,
                        s.enrollment_academic_year_id, s.graduation_year,
+                       g.sequence as grade_sequence, coalesce(c.name, '') as class_name,
                        count(distinct case when sr.status = 'APPROVED' and sr.project_id is not null
                                            then sr.project_id end) as projects_participated,
                        coalesce(sum(case when sr.status = 'APPROVED' then sr.duration_minutes else 0 end), 0) as approved_minutes,
                        coalesce(sum(case when sr.status = 'APPROVED' then sr.credited_units else 0 end), 0) as credited_units
                 from student s
+                  join grade g on g.id = s.grade_id
+                  left join class c on c.id = s.class_id
                   left join service_record sr
                          on sr.student_id = s.id
                         and sr.status = 'APPROVED'
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("afterId", afterId == null ? "" : afterId)
+                .addValue("afterId", after == null ? null : after.id())
+                .addValue("afterGradeSequence", after == null ? null : after.gradeSequence())
+                .addValue("afterClassName", after == null ? null : after.className())
                 .addValue("limit", limit);
         appendYearPredicate(sql, params, yearFrom, yearTo, "sr");
-        sql.append(" where s.id > :afterId");
+        sql.append(" where (:afterId is null"
+                + " or (g.sequence, coalesce(c.name, ''), s.id) > (:afterGradeSequence, :afterClassName, :afterId))");
         appendStudentPredicate(sql, params, studentIds, "s");
-        sql.append(" group by s.id order by s.id asc limit :limit");
+        // Grade then class (issue 153); see ExportCursor for why the keyset has
+        // to move with it.
+        sql.append(" group by s.id"
+                + " order by g.sequence asc, coalesce(c.name, '') asc, s.id asc limit :limit");
 
         return jdbcTemplate.query(sql.toString(), params, (rs, i) -> new CompletionRow(
                 rs.getString("id"), rs.getString("student_number"), rs.getString("display_name"),
                 rs.getString("grade_id"), rs.getString("class_id"),
                 rs.getString("enrollment_academic_year_id"), (Integer) rs.getObject("graduation_year"),
                 rs.getInt("projects_participated"), rs.getLong("approved_minutes"),
-                rs.getLong("credited_units")));
+                rs.getLong("credited_units"),
+                rs.getInt("grade_sequence"), rs.getString("class_name")));
     }
 
     /**
@@ -99,11 +111,12 @@ public class StudentReportExportRepository {
      * not a commitment the student made and the school accepted, so counting it
      * would inflate the very gap this report exists to show.</p>
      */
-    public List<ParticipationRow> participationPage(String afterId, int limit, Set<String> studentIds,
+    public List<ParticipationRow> participationPage(ExportCursor.Roster after, int limit, Set<String> studentIds,
                                                      LocalDate yearFrom, LocalDate yearTo) {
         StringBuilder sql = new StringBuilder("""
                 select s.id, s.student_number, s.display_name, s.grade_id, s.class_id,
                        s.enrollment_academic_year_id, s.graduation_year,
+                       g.sequence as grade_sequence, coalesce(c.name, '') as class_name,
                        (select count(distinct e.project_id) from enrollment e
                          where e.student_id = s.id and e.status = 'CONFIRMED') as registered_count,
                        (select group_concat(distinct p.title order by p.title separator ', ')
@@ -113,7 +126,9 @@ public class StudentReportExportRepository {
                          where sr.student_id = s.id and sr.status = 'APPROVED' and sr.project_id is not null
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("afterId", afterId == null ? "" : afterId)
+                .addValue("afterId", after == null ? null : after.id())
+                .addValue("afterGradeSequence", after == null ? null : after.gradeSequence())
+                .addValue("afterClassName", after == null ? null : after.className())
                 .addValue("limit", limit);
         appendYearPredicate(sql, params, yearFrom, yearTo, "sr");
         sql.append(") as participated_count,\n"
@@ -131,9 +146,12 @@ public class StudentReportExportRepository {
         appendYearPredicate(sql, params, yearFrom, yearTo, "sr");
         sql.append(") as credited_units\n"
                 + "                from student s\n"
-                + "                where s.id > :afterId\n");
+                + "                  join grade g on g.id = s.grade_id\n"
+                + "                  left join class c on c.id = s.class_id\n"
+                + "                where (:afterId is null"
+                + " or (g.sequence, coalesce(c.name, ''), s.id) > (:afterGradeSequence, :afterClassName, :afterId))\n");
         appendStudentPredicate(sql, params, studentIds, "s");
-        sql.append(" order by s.id asc limit :limit");
+        sql.append(" order by g.sequence asc, coalesce(c.name, '') asc, s.id asc limit :limit");
 
         return jdbcTemplate.query(sql.toString(), params, (rs, i) -> new ParticipationRow(
                 rs.getString("id"), rs.getString("student_number"), rs.getString("display_name"),
@@ -141,7 +159,8 @@ public class StudentReportExportRepository {
                 rs.getString("enrollment_academic_year_id"), (Integer) rs.getObject("graduation_year"),
                 rs.getInt("registered_count"), rs.getString("registered_names"),
                 rs.getInt("participated_count"), rs.getString("participated_names"),
-                rs.getLong("approved_minutes"), rs.getLong("credited_units")));
+                rs.getLong("approved_minutes"), rs.getLong("credited_units"),
+                rs.getInt("grade_sequence"), rs.getString("class_name")));
     }
 
     /**

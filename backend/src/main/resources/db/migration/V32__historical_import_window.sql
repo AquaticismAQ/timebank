@@ -1,5 +1,5 @@
 -- The 15-day window on historical service-record import
--- (Design/*/12-DataImport.md §6, plan 11-DataImportExportOptimization.md §2.9).
+-- (Design/*/11-DataImport.md §6, plan 11-DataImportExportOptimization.md §2.9).
 --
 -- One row, never more: the window is state on the *import feature*, not on a
 -- job, so the primary key is a fixed literal id and "is the window open" is a

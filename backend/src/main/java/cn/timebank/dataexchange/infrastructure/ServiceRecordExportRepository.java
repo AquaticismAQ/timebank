@@ -62,7 +62,7 @@ public class ServiceRecordExportRepository {
      * §6.2 wants a row a reader can match against the roster, and the roster is
      * present-tense.</p>
      */
-    public List<ExportRow> page(String afterId, int limit, Set<String> studentIds,
+    public List<ExportRow> page(ExportCursor.ByDate after, int limit, Set<String> studentIds,
                                  LocalDate yearFrom, LocalDate yearTo) {
         StringBuilder sql = new StringBuilder("""
                 select sr.id, sr.student_id, s.student_number, s.display_name,
@@ -74,11 +74,12 @@ public class ServiceRecordExportRepository {
                   join student s on s.id = sr.student_id
                   left join service_category sc on sc.id = sr.service_category_id
                   left join project p on p.id = sr.project_id
-                where sr.id > :afterId
+                where (:afterId is null or (sr.service_date, sr.id) > (:afterDate, :afterId))
                   and sr.status <> 'DRAFT'
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("afterId", afterId == null ? "" : afterId)
+                .addValue("afterId", after == null ? null : after.id())
+                .addValue("afterDate", after == null ? null : after.date())
                 .addValue("limit", limit);
         if (studentIds != null) {
             sql.append(" and sr.student_id in (:studentIds)");
@@ -93,7 +94,10 @@ public class ServiceRecordExportRepository {
             params.addValue("yearFrom", yearFrom);
             params.addValue("yearTo", yearTo);
         }
-        sql.append(" order by sr.id asc limit :limit");
+        // Each row is something that happened, so it reads in the order it
+        // happened (issue 153). The id breaks ties within a day, which is
+        // also what keeps the keyset walk from dropping a row on a boundary.
+        sql.append(" order by sr.service_date asc, sr.id asc limit :limit");
 
         return jdbcTemplate.query(sql.toString(), params, (rs, rowNum) -> new ExportRow(
                 rs.getString("id"), rs.getString("student_id"),

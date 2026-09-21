@@ -39,9 +39,16 @@ public class StudentExportRepository {
      * @param enrollmentAcademicYearId resolved to a start year by the caller, so a
      *                  student's cohort can be derived without a second query
      */
+    /**
+     * @param gradeSequence and {@code className} are the sort key, carried out
+     *        so the caller can build the next page's cursor without a second
+     *        lookup (issue 153). They are not written to the file — the Grade
+     *        and Class columns are rendered from the ids above
+     */
     public record ExportRow(String id, String studentNumber, String displayName,
                              String gradeId, String classId, String status,
-                             String enrollmentAcademicYearId, Integer graduationYear, LocalDate joinedAt) {
+                             String enrollmentAcademicYearId, Integer graduationYear, LocalDate joinedAt,
+                             int gradeSequence, String className) {
     }
 
     /**
@@ -54,27 +61,41 @@ public class StudentExportRepository {
      * {@code ExportScope.matchesNobody()} exists so the call site handles it
      * before getting here.</p>
      */
-    public List<ExportRow> page(String afterId, int limit, Set<String> studentIds) {
+    public List<ExportRow> page(ExportCursor.Roster after, int limit, Set<String> studentIds) {
+        // Ordered by grade then class, which is how a school reads a roster
+        // (issue 153). `grade.sequence`, never the id or the label: `grade_10`
+        // sorts before `grade_6` as a string, and so does "Grade 10".
+        //
+        // The keyset moves with the order — see ExportCursor. A null cursor is
+        // the first page; the row-value comparison is one predicate MySQL can
+        // still resolve with an index.
         StringBuilder sql = new StringBuilder("""
-                select id, student_number, display_name, grade_id, class_id, status,
-                       enrollment_academic_year_id, graduation_year, joined_at
-                from student
-                where id > :afterId
+                select s.id, s.student_number, s.display_name, s.grade_id, s.class_id, s.status,
+                       s.enrollment_academic_year_id, s.graduation_year, s.joined_at,
+                       g.sequence as grade_sequence, coalesce(c.name, '') as class_name
+                from student s
+                  join grade g on g.id = s.grade_id
+                  left join class c on c.id = s.class_id
+                where (:afterId is null
+                       or (g.sequence, coalesce(c.name, ''), s.id) > (:afterGradeSequence, :afterClassName, :afterId))
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("afterId", afterId == null ? "" : afterId)
+                .addValue("afterId", after == null ? null : after.id())
+                .addValue("afterGradeSequence", after == null ? null : after.gradeSequence())
+                .addValue("afterClassName", after == null ? null : after.className())
                 .addValue("limit", limit);
         if (studentIds != null) {
-            sql.append(" and id in (:studentIds)");
+            sql.append(" and s.id in (:studentIds)");
             params.addValue("studentIds", studentIds);
         }
-        sql.append(" order by id asc limit :limit");
+        sql.append(" order by g.sequence asc, coalesce(c.name, '') asc, s.id asc limit :limit");
 
         return jdbcTemplate.query(sql.toString(), params, (rs, rowNum) -> new ExportRow(
                 rs.getString("id"), rs.getString("student_number"), rs.getString("display_name"),
                 rs.getString("grade_id"), rs.getString("class_id"), rs.getString("status"),
                 rs.getString("enrollment_academic_year_id"),
                 (Integer) rs.getObject("graduation_year"),
-                rs.getObject("joined_at", LocalDate.class)));
+                rs.getObject("joined_at", LocalDate.class),
+                rs.getInt("grade_sequence"), rs.getString("class_name")));
     }
 }

@@ -1,6 +1,7 @@
 package cn.timebank.dataexchange.application;
 
 import cn.timebank.dataexchange.application.ExportGradeDerivation.Cohort;
+import cn.timebank.dataexchange.infrastructure.ExportCursor;
 import cn.timebank.dataexchange.infrastructure.ExportScopeRepository;
 import cn.timebank.dataexchange.infrastructure.ServiceRecordExportRepository;
 import cn.timebank.dataexchange.infrastructure.StudentExportRepository;
@@ -153,12 +154,12 @@ class ExportJobRunner {
         if (studentIds != null && studentIds.isEmpty()) {
             return 0;
         }
-        String afterId = null;
+        ExportCursor.Roster afterId = null;
         List<StudentExportRepository.ExportRow> chunk;
         do {
             chunk = studentExportRepository.page(afterId, CHUNK_SIZE, studentIds);
             for (StudentExportRepository.ExportRow row : chunk) {
-                afterId = row.id();
+                afterId = new ExportCursor.Roster(row.gradeSequence(), row.className(), row.id());
                 GradeCell grade = gradeCell(row.gradeId(), row.enrollmentAcademicYearId(),
                         row.graduationYear(), scope, labels);
                 if (grade.excluded()) {
@@ -183,13 +184,13 @@ class ExportJobRunner {
         if (studentIds != null && studentIds.isEmpty()) {
             return 0;
         }
-        String afterId = null;
+        ExportCursor.ByDate afterId = null;
         List<ServiceRecordExportRepository.ExportRow> chunk;
         do {
             chunk = serviceRecordExportRepository.page(afterId, CHUNK_SIZE, studentIds,
                     scope.yearFrom(), scope.yearTo());
             for (ServiceRecordExportRepository.ExportRow row : chunk) {
-                afterId = row.id();
+                afterId = new ExportCursor.ByDate(row.serviceDate(), row.id());
                 writer.row(row.studentNumber(), row.studentName(),
                         // The record's own grade snapshot is the truthful answer
                         // for a record: it is the grade the student was in when
@@ -238,13 +239,13 @@ class ExportJobRunner {
         java.time.LocalDate completionTo = window[1];
         var required = studentReportRepository.requiredMinutesFor(completionTo).orElse(null);
 
-        String afterId = null;
+        ExportCursor.Roster afterId = null;
         List<StudentReportExportRepository.CompletionRow> chunk;
         do {
             chunk = studentReportRepository.completionPage(afterId, CHUNK_SIZE, studentIds,
                     completionFrom, completionTo);
             for (var row : chunk) {
-                afterId = row.studentId();
+                afterId = new ExportCursor.Roster(row.gradeSequence(), row.className(), row.studentId());
                 ExportScope yearScope = new ExportScope(scope.restriction(), yearStart,
                         scope.currentYearIndex(), scope.reviewerId(), scope.yearFrom(), scope.yearTo());
                 GradeCell grade = gradeCell(row.gradeId(), row.enrollmentAcademicYearId(),
@@ -289,13 +290,13 @@ class ExportJobRunner {
         if (studentIds != null && studentIds.isEmpty()) {
             return 0;
         }
-        String afterId = null;
+        ExportCursor.Roster afterId = null;
         List<StudentReportExportRepository.ParticipationRow> chunk;
         do {
             chunk = studentReportRepository.participationPage(afterId, CHUNK_SIZE, studentIds,
                     scope.yearFrom(), scope.yearTo());
             for (var row : chunk) {
-                afterId = row.studentId();
+                afterId = new ExportCursor.Roster(row.gradeSequence(), row.className(), row.studentId());
                 GradeCell grade = gradeCell(row.gradeId(), row.enrollmentAcademicYearId(),
                         row.graduationYear(), scope, labels);
                 if (grade.excluded()) {
@@ -321,13 +322,13 @@ class ExportJobRunner {
                 "Recognized Minutes", "Capacity", "Registrations", "Participants",
                 "Participation Rate", "Approved Service Hours", "Approval Rate");
         String gradeFilter = scope.restriction() == null ? null : scope.restriction().gradeFilter();
-        String afterId = null;
+        ExportCursor.ByInstant afterId = null;
         List<ProjectReviewExportRepository.ProjectRow> chunk;
         do {
             chunk = projectReviewRepository.projectsPage(afterId, CHUNK_SIZE, studentIds,
                     scope.yearFrom(), scope.yearTo(), gradeFilter);
             for (var row : chunk) {
-                afterId = row.id();
+                afterId = new ExportCursor.ByInstant(row.startAt(), row.id());
                 writer.row(row.title(), row.summary(), row.category(), row.organization(),
                         row.location(), row.owner(), eligibleGradeLabels(row.eligibleGradeIds(), labels),
                         projectStatusLabel(row.status()), row.startAt(), row.endAt(),
@@ -385,13 +386,13 @@ class ExportJobRunner {
         if (studentIds != null && studentIds.isEmpty()) {
             return 0;
         }
-        String afterId = null;
+        ExportCursor.ByInstant afterId = null;
         List<ProjectReviewExportRepository.ReviewHistoryRow> chunk;
         do {
             chunk = projectReviewRepository.reviewHistoryPage(afterId, CHUNK_SIZE,
                     scope.yearFrom(), scope.yearTo(), scope.reviewerId(), studentIds);
             for (var row : chunk) {
-                afterId = row.id();
+                afterId = new ExportCursor.ByInstant(row.decidedAt(), row.id());
                 writer.row(row.reviewerName(), roleLabel(row.reviewerRole()), row.boundGrades(),
                         row.studentNumber(), row.studentName(), row.serviceDate(), row.subject(),
                         decisionLabel(row.decision()), row.decidedAt(),

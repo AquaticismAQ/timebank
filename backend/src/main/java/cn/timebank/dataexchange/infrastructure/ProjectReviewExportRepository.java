@@ -68,7 +68,7 @@ public class ProjectReviewExportRepository {
      * reading that makes the file useful to them without disclosing who else
      * took part.</p>
      */
-    public List<ProjectRow> projectsPage(String afterId, int limit, Set<String> studentIds,
+    public List<ProjectRow> projectsPage(ExportCursor.ByInstant after, int limit, Set<String> studentIds,
                                           LocalDate yearFrom, LocalDate yearTo, String gradeFilter) {
         StringBuilder sql = new StringBuilder("""
                 select p.id, p.title, p.summary, p.location, p.status, p.start_at, p.end_at,
@@ -79,7 +79,8 @@ public class ProjectReviewExportRepository {
                          where e.project_id = p.id and e.status = 'CONFIRMED'
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("afterId", afterId == null ? "" : afterId)
+                .addValue("afterId", after == null ? null : after.id())
+                .addValue("afterAt", after == null ? null : after.at())
                 .addValue("limit", limit);
         appendStudentFilter(sql, params, studentIds, "e.student_id");
         sql.append(") as registrations,\n");
@@ -111,7 +112,7 @@ public class ProjectReviewExportRepository {
                 + "                  left join service_category sc on sc.id = p.category_id\n"
                 + "                  left join organization o on o.id = p.organization_id\n"
                 + "                  left join user u on u.id = p.owner_id\n"
-                + "                where p.id > :afterId\n");
+                + "                where (:afterId is null or (p.start_at, p.id) > (:afterAt, :afterId))\n");
         if (yearFrom != null && yearTo != null) {
             // Scheduled inside the year, matching /reports/top-projects' own rule.
             // The window is the stored one; `yearTo` is the year's last day, so the
@@ -129,7 +130,9 @@ public class ProjectReviewExportRepository {
                     + " or json_contains(p.eligible_grade_ids, json_quote(:gradeFilter)))");
             params.addValue("gradeFilter", gradeFilter);
         }
-        sql.append(" order by p.id asc limit :limit");
+        // A project is an activity that ran, so the file reads in the order
+        // they ran (issue 153).
+        sql.append(" order by p.start_at asc, p.id asc limit :limit");
 
         return jdbcTemplate.query(sql.toString(), params, (rs, i) -> new ProjectRow(
                 rs.getString("id"), rs.getString("title"), rs.getString("summary"),
@@ -201,7 +204,7 @@ public class ProjectReviewExportRepository {
      * lived only in a dropdown would be bypassed by anyone willing to edit a
      * request body.</p>
      */
-    public List<ReviewHistoryRow> reviewHistoryPage(String afterId, int limit,
+    public List<ReviewHistoryRow> reviewHistoryPage(ExportCursor.ByInstant after, int limit,
                                                      LocalDate yearFrom, LocalDate yearTo,
                                                      String reviewerId, Set<String> studentIds) {
         StringBuilder sql = new StringBuilder("""
@@ -221,10 +224,11 @@ public class ProjectReviewExportRepository {
                   left join user_role ur on ur.user_id = rd.reviewer_id
                   left join role r on r.id = ur.role_id
                   left join project p on p.id = sr.project_id
-                where rd.id > :afterId
+                where (:afterId is null or (rd.created_at, rd.id) > (:afterAt, :afterId))
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("afterId", afterId == null ? "" : afterId)
+                .addValue("afterId", after == null ? null : after.id())
+                .addValue("afterAt", after == null ? null : after.at())
                 .addValue("limit", limit);
         if (reviewerId != null) {
             sql.append(" and rd.reviewer_id = :reviewerId");
@@ -232,7 +236,9 @@ public class ProjectReviewExportRepository {
         }
         appendDecisionYear(sql, params, yearFrom, yearTo);
         appendStudentFilter(sql, params, studentIds, "sr.student_id");
-        sql.append(" order by rd.id asc limit :limit");
+        // Each row is a decision made at a moment, so they read in the order
+        // the decisions were made (issue 153).
+        sql.append(" order by rd.created_at asc, rd.id asc limit :limit");
 
         return jdbcTemplate.query(sql.toString(), params, (rs, i) -> new ReviewHistoryRow(
                 rs.getString("id"), rs.getString("reviewer_name"), rs.getString("reviewer_role"),

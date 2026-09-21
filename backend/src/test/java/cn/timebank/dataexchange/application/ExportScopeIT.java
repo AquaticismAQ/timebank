@@ -219,6 +219,104 @@ class ExportScopeIT extends AbstractIntegrationTest {
 
     // ── fixture ──────────────────────────────────────────────────────────
 
+    /**
+     * Issue 153: a roster export reads grade by grade, class by class.
+     *
+     * <p>The fixture straddles what a wrong implementation would get right by
+     * luck. It spans `grade_7` and `grade_10`, whose <em>ids</em> and labels sort
+     * in the opposite order to their sequences — "10" before "7" as a string.
+     * Ordering by id, by code or by label all put grade 10 first; only
+     * `grade.sequence` puts it last, which is where a school puts it.</p>
+     *
+     * <p>Class names are given as `A-…`/`B-…` so the within-grade order is a
+     * fact about the name rather than about insertion order, and the students
+     * are inserted in neither the right order nor its reverse.</p>
+     */
+    @Test
+    void aRosterExportIsOrderedByGradeThenClass() throws Exception {
+        insertClass("cls_scope_it_10b", "10B-ScopeIT", "grade_10");
+        insertClass("cls_scope_it_10a", "10A-ScopeIT", "grade_10");
+        insertClass("cls_scope_it_7b", "7B-ScopeIT", GRADE_A);
+        insertStudent("stu_scope_it_ord4", "S-ORD-4", "Ten B", "grade_10", "cls_scope_it_10b", YEAR_CURRENT, 2026);
+        insertStudent("stu_scope_it_ord2", "S-ORD-2", "Seven B", GRADE_A, "cls_scope_it_7b", YEAR_CURRENT, 2029);
+        insertStudent("stu_scope_it_ord3", "S-ORD-3", "Ten A", "grade_10", "cls_scope_it_10a", YEAR_CURRENT, 2026);
+        insertStudent("stu_scope_it_ord1", "S-ORD-1", "Seven A", GRADE_A, "cls_scope_it_7a", YEAR_CURRENT, 2029);
+
+        String csv = exportCsv(adminAuth(), "studentList", ExportFilters.none());
+
+        assertThat(positionsOf(csv, "S-ORD-1", "S-ORD-2", "S-ORD-3", "S-ORD-4"))
+                .as("grade 7 before grade 10, and class A before class B inside each")
+                .isSorted();
+    }
+
+    /**
+     * Issue 153: an export whose rows are events reads in the order they
+     * happened.
+     *
+     * <p>The service dates run opposite to the ids — id `a` is the latest date —
+     * so the previous `order by id` produced exactly the reverse of the right
+     * answer rather than something that might have passed by luck.</p>
+     */
+    @Test
+    void aServiceRecordExportIsOrderedByServiceDateAscending() throws Exception {
+        insertStudent("stu_scope_it_dates", "S-ORD-DATE", "Date Student", GRADE_A, "cls_scope_it_7a", YEAR_CURRENT, 2029);
+        insertServiceRecord("sr_scope_it_orda", "stu_scope_it_dates", GRADE_A, "cls_scope_it_7a",
+                LocalDate.of(2016, 11, 20), 60, 100, "APPROVED");
+        insertServiceRecord("sr_scope_it_ordb", "stu_scope_it_dates", GRADE_A, "cls_scope_it_7a",
+                LocalDate.of(2016, 10, 15), 60, 100, "APPROVED");
+        insertServiceRecord("sr_scope_it_ordc", "stu_scope_it_dates", GRADE_A, "cls_scope_it_7a",
+                LocalDate.of(2016, 9, 5), 60, 100, "APPROVED");
+
+        String csv = exportCsv(adminAuth(), "serviceRecords", ExportFilters.none());
+
+        assertThat(positionsOf(csv, "2016-09-05", "2016-10-15", "2016-11-20"))
+                .as("earliest service first")
+                .isSorted();
+    }
+
+    /**
+     * The property that matters more than the order: <b>the walk must not lose a
+     * row</b>.
+     *
+     * <p>Sorting a keyset-paginated export means moving the cursor to the new
+     * sort key, and getting that subtly wrong skips rows at a page boundary —
+     * which no ordering assertion would catch, because what survives is still in
+     * order.</p>
+     *
+     * <p>This cannot force a boundary (the chunk is 1000 rows, and a fixture that
+     * large would make the suite slow for one assertion), so it asserts the
+     * weaker but still load-bearing thing: every student comes back exactly once.
+     * A cursor that compares only part of the key repeats rows here, which is the
+     * same defect seen from the other side.</p>
+     */
+    @Test
+    void everyRowAppearsExactlyOnce() throws Exception {
+        for (int i = 0; i < 12; i++) {
+            insertStudent("stu_scope_it_many" + i, "S-MANY-" + i, "Many " + i,
+                    i % 2 == 0 ? GRADE_A : GRADE_B,
+                    i % 2 == 0 ? "cls_scope_it_7a" : "cls_scope_it_8a", YEAR_CURRENT, 2029);
+        }
+
+        String csv = exportCsv(adminAuth(), "studentList", ExportFilters.none());
+
+        for (int i = 0; i < 12; i++) {
+            String number = "S-MANY-" + i + ",";
+            long occurrences = csv.lines().filter(line -> line.contains(number)).count();
+            assertThat(occurrences).as("%s should appear exactly once", number).isEqualTo(1);
+        }
+    }
+
+    /** Where each marker first appears in the file, in the order the markers were given. */
+    private static java.util.List<Integer> positionsOf(String csv, String... markers) {
+        java.util.List<Integer> positions = new java.util.ArrayList<>();
+        for (String marker : markers) {
+            int at = csv.indexOf(marker);
+            assertThat(at).as("the file should contain %s", marker).isNotNegative();
+            positions.add(at);
+        }
+        return positions;
+    }
+
     private String exportCsv(Authentication auth, String type, ExportFilters filters) throws Exception {
         JobDto job = exportService.create(new CreateExportRequest(type, filters), auth);
         awaitTerminal(job.id());

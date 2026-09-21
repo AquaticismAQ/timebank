@@ -306,6 +306,28 @@ Rules:
 
 ---
 
+### 2.10 Renaming a document does not license editing an applied migration
+
+A repo-wide rewrite of document references — the sort of thing a renumbering
+needs — must **exclude `backend/src/main/resources/db/migration/V*.sql`.**
+
+Flyway checksums the whole file, comments included, and refuses to start against
+a database where an applied migration's checksum has changed. So changing
+`10-RolesAndPermissions.md` to `11-` inside a comment in an already-applied
+migration does not tidy a reference; it takes the application down on the next
+deploy, with an error that names Flyway and says nothing about documents. That
+happened on 2026-09-21 and is written up in `Docs/issues/153-*.md` §4.
+
+Two things that will not save you: it compiles, and it reviews cleanly. The
+files are only read when the application starts against a database that already
+has them.
+
+The repeatable seeds (`R__*.sql`) are the opposite case — they are *designed* to
+re-run when their content changes, so their references should be kept current.
+
+If an applied migration's text genuinely needs to change, it does not: write a
+new migration. The old one is a record of what was run, not a document.
+
 ## 3. Quick checklist before finishing any doc edit
 
 - [ ] If this is a new doc, is it English-only (no new `_CN.md` created)?
