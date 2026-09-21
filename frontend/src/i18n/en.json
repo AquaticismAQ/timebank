@@ -364,7 +364,7 @@
       "status": "Status",
       "timeCoins": "Time Coins",
       "actions": "Actions",
-      "resubmit": "Resubmit",
+      "reviseResubmit": "Revise & Resubmit",
       "loadedReturned": "Returned record loaded, please supplement materials",
       "delete": "Delete",
       "deleteRecord": "Delete Draft Record",

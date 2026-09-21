@@ -1532,3 +1532,13 @@ Follow-up to 41.33, at Aquaticism's request. A checklist line was the alternativ
 **Issue 140 — a renamed label stopped the demonstration.** `认定时长` became `认定时长（小时）` in issue 132 and the step matched the label exactly. The real defect was that **three copies** of that locator existed and only one had been hardened — a duplicated helper does not share a lesson. There is one now, in `stage.ts`, matching by prefix, which also subsumes the required-marker asterisk the record steps handled by hand. The failure message was the other half: a renamed label used to surface as a timeout waiting for an xpath, and now names the field and lists the labels actually on screen. Two details came from red-checking the message rather than assuming it read well — it has to be scoped to the open dialog, and each label flattened, or a `<select>`'s options drown the line.
 
 **Issue 141 — the ledger offers no page size.** The student's Transaction History rendered `PageControls` without the `pageSize`/`onPageSizeChange` pair, so it was fixed at twenty rows — on the list most likely to be long. Worth noting the list guard did not catch it: it deliberately checks search and the empty state only, because page size would have fired on several screens at once. That judgement stands, and this is the gap it leaves.
+
+### 41.36 "Resubmit" renamed to say what the click actually starts (2026-09-21)
+
+Issue 142, reported by Aquaticism first as a missing Edit action on returned records and corrected by him on the second message: the action was there, the word was wrong.
+
+Measured before changing anything: a returned record's row offered `["查看", "补充重提"]`, and clicking 补充重提 opened 编辑退回记录 — the full edit form with the record loaded. The flow was complete; it was **named for its ending rather than its beginning**, so *Resubmit* read as "send it back as-is" and nobody looking to *change* the record recognised it.
+
+The word already existed elsewhere: the proposal flow calls the same situation `Revise & Resubmit` / 按意见修改并重提, and cases use 补充并重新提交. Service records were the odd one out, so they now read **Revise & Resubmit / 修改并重提** — the family phrase, minus 按意见, because the row already shows the reviewer's reason directly above the button. `修改` rather than `编辑` on purpose: 编辑 belongs to your own draft, and the draft row two lines up already uses it. Key renamed with the value so the bundle stops calling it the confusing thing.
+
+Verified in both languages with the row height measured, since the label grew and these buttons sit in a table cell: unchanged at 79px, nothing wrapped.

@@ -1066,10 +1066,16 @@ export function ServiceRecords() {
                               <Eye className="w-3 h-3" /> {t('common.view')}
                             </button>
                           )}
+                          {/* A returned record's one action is the edit form: it
+                              opens 编辑退回记录 with the record loaded, and the
+                              resubmit happens at the end of it. It used to be
+                              named "Resubmit", which reads as sending it again
+                              unchanged. Same wording as the proposal flow, which
+                              already had this exact situation (issue 142). */}
                           {rec.status === 'returned' && (
                             <button onClick={() => openResubmit(rec)}
                               className={`text-xs px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.green}`}>
-                              <Send className="w-3 h-3" /> {t('student.records.resubmit')}
+                              <Pencil className="w-3 h-3" /> {t('student.records.reviseResubmit')}
                             </button>
                           )}
                           {rec.status === 'draft' && (
@@ -1186,7 +1192,7 @@ export function ServiceRecords() {
                         {rec.status === 'returned' && (
                           <button onClick={() => openResubmit(rec)}
                             className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${ACTION_COLORS.green}`}>
-                            <Send className="w-3 h-3" /> {t('student.records.resubmit')}
+                            <Pencil className="w-3 h-3" /> {t('student.records.reviseResubmit')}
                           </button>
                         )}
                         {rec.status === 'draft' && (

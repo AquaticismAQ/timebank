@@ -364,7 +364,7 @@
       "status": "状态",
       "timeCoins": "时间币",
       "actions": "操作",
-      "resubmit": "补充重提",
+      "reviseResubmit": "修改并重提",
       "loadedReturned": "已载入退回记录，请补充材料",
       "delete": "删除",
       "deleteRecord": "删除草稿记录",
