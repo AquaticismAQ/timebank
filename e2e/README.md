@@ -22,18 +22,27 @@ pnpm selftest                             # the harness's own pure-logic checks
 ```bash
 ./demo-project.sh                 # the school runs an activity: create → register → record → approve
 ./demo-proposal.sh                # a student proposes one: propose → changes → revise → approve → publish
+./demo-case.sh                    # a student disagrees: file → asked for more → answer → resolved
 ./demo-project.sh --cleanup       # tidy earlier [AUTO] runs first
 ./demo-project.sh --no-gate tts   # silent
 ./demo-project.sh --beat 1500     # slower pauses
 ```
 
-The two flows show the workflow from opposite ends, and the proposal one is the
-better answer to "what can a student actually start?" — it is the only place the
-review is visibly a conversation rather than a gate.
+The three flows show the workflow from three directions. The project one is the
+school running an activity; the proposal one is a student starting one; the case
+one is a student saying the school got it wrong.
 
-Neither launcher is **in git** — it carries the test-server account
-credentials, so both are gitignored and refuse to run if that ever stops being
-true, or if it is found tracked. This repo has twice rewritten its history to
+That third one is worth showing for something neither of the others can: **the
+other two both end with the decision going the student's way**, which is the
+easy half of any review system. A case is the other half — and the return in it
+is not a rejection. The case stays the student's, keeps everything they already
+wrote, and comes back to the same reviewer with the answer appended, so the
+history afterwards reads as a conversation with dates on it. That is what makes
+it answerable to a parent asking why.
+
+No launcher is **in git** — each carries the test-server account
+credentials, so all three are gitignored and refuse to run if that ever stops
+being true, or if one is found tracked. This repo has twice rewritten its history to
 remove leaked data; a credential file that quietly became trackable is how a
 third would start.
 
@@ -114,6 +123,11 @@ Because the proposal demo ends in approval, most of what *that* flow leaves is a
 proposal cleanup deliberately will not remove — while the project it generated is
 cancelled.
 
+The case demo leaves one resolved case per run and **consumes no service-record
+window**: it files nothing against a record, deliberately (see below). Cleanup
+does not touch cases at all — a resolved one is terminal, and the only route
+back would be re-opening a decision nobody made.
+
 | What | Why |
 | :--- | :--- |
 | Cancels `[AUTO]` projects | They can never auto-archive: archive requires every confirmed student's record to be terminal, and a returned record never is |
@@ -125,6 +139,18 @@ cancelled.
 
 Driven through the API rather than the browser, unlike everything else here:
 cleanup is maintenance, not a workflow anyone is being shown.
+
+### Why the case demo attaches no service record
+
+A case has **no title field**. `CaseFilingModal` derives one: the linked
+record's project title, or — with no record — the first line of what the student
+typed. Attaching a record would therefore title the case after whatever project
+it belonged to, which is neither unique nor `[AUTO]`-prefixed, so the flow could
+not find its own case on a shared server.
+
+Filing unattached keeps the title ours and is a real scenario rather than a
+testing convenience: a student claiming service the school has no record of at
+all is exactly the 一般性申诉 the picker's first option offers.
 
 ## The files a demonstration uploads
 

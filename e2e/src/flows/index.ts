@@ -1,4 +1,5 @@
 import type { Flow } from '../harness/types.js';
+import { caseWorkflow } from './caseWorkflow.js';
 import { projectWorkflow } from './projectWorkflow.js';
 import { proposalWorkflow } from './proposalWorkflow.js';
 
@@ -7,7 +8,7 @@ import { proposalWorkflow } from './proposalWorkflow.js';
  * `projectWorkflow.ts` and a line here — the runner, gates, narration,
  * screenshots and exit code are all shared.
  */
-export const FLOWS: Flow[] = [projectWorkflow, proposalWorkflow];
+export const FLOWS: Flow[] = [projectWorkflow, proposalWorkflow, caseWorkflow];
 
 export function findFlow(id: string): Flow {
   const flow = FLOWS.find(f => f.id === id);
