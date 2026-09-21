@@ -70,16 +70,15 @@ The design follows four principles:
 
 Target deployment:
 
-```
-        HTTPS (TLS 1.2/1.3)
-Users ──────────────────────▶ Application server (inside VPC)
-                                      │
-                       ┌──────────────┼──────────────┐
-                       ▼              ▼              ▼
-                   RDS database   OSS object      KMS key
-                   (TDE)          storage         management
-                                  (SSE-KMS)
-                       └──── VPC-internal only, no public exposure ────┘
+```mermaid
+flowchart TB
+    U["Users"] -->|"HTTPS (TLS 1.2/1.3)"| APP
+    subgraph VPC["VPC — database and storage reachable internally only, no public exposure"]
+        APP["Application server"]
+        APP --> RDS["RDS database<br/>(TDE)"]
+        APP --> OSS["OSS object storage<br/>(SSE-KMS)"]
+        APP --> KMS["KMS key management<br/>(managed keys)"]
+    end
 ```
 
 ---
@@ -598,106 +597,147 @@ and ticked during implementation and acceptance, and forms part of the archived 
 (§13). Items marked **[School]** require confirmation from the school; the rest are completed
 by the implementer.
 
+**The "Built" column records what the system actually does as of 2026-09-21**, checked item by
+item against the code and the deployed environment. It is not a forecast. **The "Accepted"
+column is still unticked by design**: it records the school signing an item off in the real
+production environment, which is a different question from whether the system implements it.
+
+**On the external dependencies.** RDS, OSS, KMS, and the VPC listed in §3 are **cloud services
+the school provisions**, and they are not available yet. The system currently runs on **a single
+server**: self-hosted MySQL 8.0, evidence files on the application server's local disk, nginx
+terminating TLS. Every item that cannot hold without those services is therefore marked
+**⏳ awaiting infrastructure** rather than "not implemented" — the system-side design for each is
+complete (§3, §5), but until the services exist the work **can neither be done nor verified**,
+and showing it as passed or failed would be equally untrue.
+
+| Mark | Meaning |
+| :--- | :--- |
+| ✅ | Implemented, and checked against the code or a live environment |
+| ⚠️ | Partially implemented, or differing from this document's own prose — the difference is stated in Notes |
+| ⏳ | Awaiting external infrastructure (RDS/OSS/KMS/VPC) before it can be implemented or verified |
+| ⬜ | Not implemented |
+| — | The school performs or confirms this; there is nothing system-side to check |
+
 ### 12.1 Infrastructure prerequisites
 
-| ID | Check | Status |
-| :--- | :--- | :--- |
-| P-01 | **[School]** RDS provisioned with TDE enabled | [ ] |
-| P-02 | **[School]** OSS bucket provisioned and set to private access | [ ] |
-| P-03 | **[School]** OSS SSE-KMS server-side encryption enabled | [ ] |
-| P-04 | **[School]** KMS provisioned; master keys held in KMS | [ ] |
-| P-05 | RDS and OSS reachable only via VPC; no public database port | [ ] |
-| P-06 | **[School]** Domain and TLS certificate ready | [ ] |
-| P-07 | **[School]** Log storage capacity sufficient for six months | [ ] |
+| ID | Check | Built | Notes | Accepted |
+| :--- | :--- | :--- | :--- | :--- |
+| P-01 | **[School]** RDS provisioned with TDE enabled | ⏳ | Currently self-hosted MySQL 8.0 on one host, no TDE (the community edition does not offer it). Migrating to RDS changes connection configuration only (§3) | [ ] |
+| P-02 | **[School]** OSS bucket provisioned and set to private access | ⏳ | Evidence currently stored on the application server's local disk via `LocalFileStorage` | [ ] |
+| P-03 | **[School]** OSS SSE-KMS server-side encryption enabled | ⏳ | Per P-02 | [ ] |
+| P-04 | **[School]** KMS provisioned; master keys held in KMS | ⏳ | Database password and file-token secret are currently injected through a permission-restricted systemd environment file, never the repository | [ ] |
+| P-05 | RDS and OSS reachable only via VPC; no public database port | ⚠️ | The database listens on `127.0.0.1:3306` on the same host as the application and is not publicly reachable — equivalent on "unreachable from the internet", but not a VPC design. Re-confirm after the RDS migration | [ ] |
+| P-06 | **[School]** Domain and TLS certificate ready | ⚠️ | Ready in the test environment (Let's Encrypt, auto-renewing); **the production domain and certificate are still for the school to supply** | [ ] |
+| P-07 | **[School]** Log storage capacity sufficient for six months | ⚠️ | 180-day retention configured on the test server (see O-01); production capacity still needs sizing by the school against real log volume | [ ] |
 
 ### 12.2 Data and storage
 
-| ID | Check | Status |
-| :--- | :--- | :--- |
-| D-01 | Database TDE active | [ ] |
-| D-02 | Master key backed up separately from data, and recovery verified | [ ] |
-| D-03 | Database backups encrypted, with keys held separately | [ ] |
-| D-04 | No hardcoded passwords or keys; production credentials obtained via instance role | [ ] |
-| D-05 | Guardian name, guardian contact, and roster email are not collected | [ ] |
-| D-06 | **[School]** Name masking follows the §4.1 convention (consistent across Chinese and English) | [ ] |
-| D-07 | **[School]** Student-number hash stability confirmed: unchanged across years and batches | [ ] |
-| D-08 | Application fails at startup if local disk storage is used in production | [ ] |
+| ID | Check | Built | Notes | Accepted |
+| :--- | :--- | :--- | :--- | :--- |
+| D-01 | Database TDE active | ⏳ | Depends on P-01 | [ ] |
+| D-02 | Master key backed up separately from data, and recovery verified | ⏳ | Depends on P-04 | [ ] |
+| D-03 | Database backups encrypted, with keys held separately | ⏳ | No institutional backup process in the test environment. This must be established with production rather than assumed covered by RDS automatic backups — §5.2's whole point is that TDE does not protect an exported file | [ ] |
+| D-04 | No hardcoded passwords or keys; production credentials obtained via instance role | ⚠️ | First half met: no password or key anywhere in the repository, and `deploy.sh`/`verify.sh` read everything from the environment. The second half (RAM Role temporary credentials) depends on P-04 | [ ] |
+| D-05 | Guardian name, guardian contact, and roster email are not collected | ✅ | The `Student` entity carries no such field; the legacy `guardian_name`/`guardian_contact` columns were dropped by migration `V26` | [ ] |
+| D-06 | **[School]** Name masking follows the §4.1 convention (consistent across Chinese and English) | — | Performed by the school before import. The system does not check masking strength, and could not — what reaches it is a string | [ ] |
+| D-07 | **[School]** Student-number hash stability confirmed: unchanged across years and batches | — | The uniqueness constraint and format check are in force system-side (see I-01); "unchanged across years" can only be guaranteed where the value is generated | [ ] |
+| D-08 | Application fails at startup if local disk storage is used in production | ⚠️ | `LocalStorageProductionGate` is implemented and unit-tested. **Known gap, noted in the code**: when the environment marker is missing or unrecognised it warns rather than refusing to start. The current deployment is marked `test-server` | [ ] |
 
 ### 12.3 Evidence files
 
-| ID | Check | Status |
-| :--- | :--- | :--- |
-| F-01 | Bucket forbids anonymous public reads; no fixed accessible address | [ ] |
-| F-02 | Evidence retrieved via signed links valid ≤300 seconds | [ ] |
-| F-03 | Photo metadata (GPS/device) stripped; decode failure treated as rejection | [ ] |
-| F-04 | Magic-byte true type checking plus size limits | [ ] |
-| F-05 | SHA-256 digest stored; verification against the stored file | [ ] |
-| F-06 | Image watermark generated per viewer (account, time, purpose statement) | [ ] |
-| F-07 | PDF watermark generated per viewer via Apache PDFBox | [ ] |
-| F-08 | Embedded JavaScript, automatic actions, and embedded files removed from PDFs | [ ] |
-| F-09 | PDF page-count and size limits; encrypted or corrupt PDFs rejected | [ ] |
-| F-10 | Out-of-scope evidence requests return "not found" without disclosing existence | [ ] |
+| ID | Check | Built | Notes | Accepted |
+| :--- | :--- | :--- | :--- | :--- |
+| F-01 | Bucket forbids anonymous public reads; no fixed accessible address | ⏳ | Depends on P-02. The local storage directory is outside the web root, so there is no static path to it; every retrieval goes through the backend | [ ] |
+| F-02 | Evidence retrieved via signed links valid ≤300 seconds | ✅ | `DownloadTokenService` fixes this at 300 seconds; verified once by waiting out a real expiry rather than reading the constant | [ ] |
+| F-03 | Photo metadata (GPS/device) stripped; decode failure treated as rejection | ✅ | Decode-and-re-encode drops metadata; a failed decode throws rather than passing the original through | [ ] |
+| F-04 | Magic-byte true type checking plus size limits | ✅ | `BasicFileScanner` | [ ] |
+| F-05 | SHA-256 digest stored; verification against the stored file | ✅ | | [ ] |
+| F-06 | Image watermark generated per viewer (account, time, purpose statement) | ✅ | The identifier is now the viewer's **name and email** in RFC 5322 mailbox form rather than their username, which traces to a person more directly; an account with no email falls back to the username | [ ] |
+| F-07 | PDF watermark generated per viewer via Apache PDFBox | ✅ | | [ ] |
+| F-08 | Embedded JavaScript, automatic actions, and embedded files removed from PDFs | ✅ | `PdfSanitizer` | [ ] |
+| F-09 | PDF page-count and size limits; encrypted or corrupt PDFs rejected | ✅ | Rejected, not repaired | [ ] |
+| F-10 | Out-of-scope evidence requests return "not found" without disclosing existence | ✅ | | [ ] |
 
 ### 12.4 Data import
 
-| ID | Check | Status |
-| :--- | :--- | :--- |
-| I-01 | Required, in-file unique, globally unique, valid and consistent reference, format, length checks | [ ] |
-| I-02 | Two-phase execution with full re-validation at commit | [ ] |
-| I-03 | Commit only when the whole file is valid; no partial loads | [ ] |
-| I-04 | Formula injection: rejected on import, escaped on export | [ ] |
-| I-05 | Control characters and bidirectional override characters rejected | [ ] |
-| I-06 | RFC 4180 parsing of quotes and commas; names with commas do not misalign | [ ] |
-| I-07 | Row-count and file-size caps per file | [ ] |
-| I-08 | Import/export constrained by permissions and data scope | [ ] |
-| I-09 | Import/export audited (operator, time, IP, file digest, affected rows) | [ ] |
-| I-10 | Temporary files deleted deterministically | [ ] |
+| ID | Check | Built | Notes | Accepted |
+| :--- | :--- | :--- | :--- | :--- |
+| I-01 | Required, in-file unique, globally unique, valid and consistent reference, format, length checks | ✅ | Rule sets are configured per import type (`ImportRuleSet`) | [ ] |
+| I-02 | Two-phase execution with full re-validation at commit | ✅ | Commit re-runs the same row validator on every row and trusts nothing cached from validation | [ ] |
+| I-03 | Commit only when the whole file is valid; no partial loads | ⚠️ | **Differs from §7.1 principle 3.** What is built skips invalid rows and commits the valid ones, checkpointing by chunk so a failed commit can resume; invalid rows go to the per-row error report. The difference needs deciding — change the code or change §7.1 — rather than leaving this sentence standing | [ ] |
+| I-04 | Formula injection: rejected on import, escaped on export | ✅ | The export triggers include `=`, `+`, `-`, `@`, tab, and carriage return — the last two matter, because a spreadsheet skips them before deciding whether a cell is a formula | [ ] |
+| I-05 | Control characters and bidirectional override characters rejected | ✅ | | [ ] |
+| I-06 | RFC 4180 parsing of quotes and commas; names with commas do not misalign | ✅ | `Rfc4180Reader` | [ ] |
+| I-07 | Row-count and file-size caps per file | ✅ | 10,000 rows / 10 MiB by default, configurable per import type | [ ] |
+| I-08 | Import/export constrained by permissions and data scope | ✅ | Export permissions are split per export type; the system administrator holds no import or export permission at all | [ ] |
+| I-09 | Import/export audited (operator, time, IP, file digest, affected rows) | ⚠️ | **Export** is audited (`exports.<type>`). **Import writes no audit entry for the import itself**: the file's SHA-256 and the affected row count live only in the `job` table. The row-level changes are still audited (one entry per student created), so traceability is not lost — what is missing is the single "who imported which file, when" record | [ ] |
+| I-10 | Temporary files deleted deterministically | ✅ | | [ ] |
 
 ### 12.5 Authentication, account creation, and MFA
 
-| ID | Check | Status |
-| :--- | :--- | :--- |
-| A-01 | Passwords salted and hashed; no recoverable plaintext | [ ] |
-| A-02 | Login-failure lockout enabled | [ ] |
-| A-02a | Password policy in force: ≥12 characters, at least 3 of 4 character classes, rejecting common passwords / the product name / the username / runs | [ ] |
-| A-02b | All three set-password paths (activation, admin account creation, self-change) share one server-side validator; bypassing the UI and calling the API is refused identically | [ ] |
-| A-03 | No public registration; accounts created by administrators or roster import only | [ ] |
-| A-04 | Login accepts a username only, with no fallback to student number or staff ID; comparison is case-insensitive | [ ] |
-| A-05 | Student usernames are eight random digits, no leading zeros, stored as strings, unique database-wide | [ ] |
-| A-06 | The server generates no initial password at any point | [ ] |
-| A-07 | Unactivated accounts have no password hash and cannot be logged into; the pre-authentication check verifies both an enabled status and a stored hash | [ ] |
-| A-08 | Activation codes stored as a SHA-256 digest, single-use, time-limited; the window is configurable and printed on the slip | [ ] |
-| A-09 | Accounts that expire unactivated enter a distinct "expired" state, distinguishable from "locked" | [ ] |
-| A-10 | The activation endpoint enforces both per-IP rate limiting and a system-wide failure budget | [ ] |
-| A-11 | Reissue covers only still-unactivated students, leaving those who set a password untouched | [ ] |
-| A-12 | Every slip carries a provenance line and the site root domain; slip generation and download are permission- and scope-bound and audit-logged | [ ] |
-| A-13 | **[School]** MFA approach selected and signed off per the §8.5 comparison | [ ] |
-| A-14 | MFA enforced for administrator accounts | [ ] |
-| A-15 | Non-production exemption configured so automated testing is unaffected | [ ] |
-| A-16 | No self-service password recovery entry point exists; the only two unauthenticated endpoints are login and activation, and neither issues a credential because a caller named an account | [ ] |
+| ID | Check | Built | Notes | Accepted |
+| :--- | :--- | :--- | :--- | :--- |
+| A-01 | Passwords salted and hashed; no recoverable plaintext | ✅ | bcrypt | [ ] |
+| A-02 | Login-failure lockout enabled | ✅ | | [ ] |
+| A-02a | Password policy in force: ≥12 characters, at least 3 of 4 character classes, rejecting common passwords / the product name / the username / runs | ✅ | | [ ] |
+| A-02b | All three set-password paths share one server-side validator; bypassing the UI and calling the API is refused identically | ✅ | | [ ] |
+| A-03 | No public registration; accounts created by administrators or roster import only | ✅ | | [ ] |
+| A-04 | Login accepts a username only, with no fallback to student number or staff ID; comparison is case-insensitive | ✅ | | [ ] |
+| A-05 | Student usernames are eight random digits, no leading zeros, stored as strings, unique database-wide | ✅ | | [ ] |
+| A-06 | The server generates no initial password at any point | ✅ | | [ ] |
+| A-07 | Unactivated accounts have no password hash and cannot be logged into; the pre-authentication check verifies both an enabled status and a stored hash | ✅ | | [ ] |
+| A-08 | Activation codes stored as a SHA-256 digest, single-use, time-limited; the window is configurable and printed on the slip | ✅ | | [ ] |
+| A-09 | Accounts that expire unactivated enter a distinct "expired" state, distinguishable from "locked" | ✅ | | [ ] |
+| A-10 | The activation endpoint enforces both per-IP rate limiting and a system-wide failure budget | ✅ | Both live in the application, not in reverse-proxy configuration | [ ] |
+| A-11 | Reissue covers only still-unactivated students, leaving those who set a password untouched | ✅ | | [ ] |
+| A-12 | Every slip carries a provenance line and the site root domain; slip generation and download are permission- and scope-bound and audit-logged | ✅ | The site root comes from a deployment variable whose absence refuses the deploy | [ ] |
+| A-13 | **[School]** MFA approach selected and signed off per the §8.5 comparison | ⬜ | Not yet settled with the school; §8.4 already states this is a joint decision rather than an implementation oversight | [ ] |
+| A-14 | MFA enforced for administrator accounts | ⬜ | Depends on A-13 | [ ] |
+| A-15 | Non-production exemption configured so automated testing is unaffected | ⬜ | Ships with MFA | [ ] |
+| A-16 | No self-service password recovery entry point exists; the only two unauthenticated endpoints are login and activation, and neither issues a credential because a caller named an account | ⚠️ | **The first half holds completely**: the recovery endpoints and their table are gone, and `NoSelfServicePasswordRecoveryTest` fails the build if they return. **The second half needs restating**: logout, CSRF-token retrieval, the health probe, and the login page's school-name endpoint are also unauthenticated. None issues any credential, so the substance of the requirement holds — but "only two" does not match the code and should read "only login and activation touch credentials; no other unauthenticated endpoint issues one". Also to clean up: the test server's reverse proxy still carries a rate-limit rule for the removed recovery paths | [ ] |
 
 ### 12.6 Transport and interfaces
 
-| ID | Check | Status |
-| :--- | :--- | :--- |
-| T-01 | Site-wide HTTPS enforced | [ ] |
-| T-02 | TLS 1.2/1.3 only; weak versions and cipher suites disabled | [ ] |
-| T-03 | HSTS enabled | [ ] |
-| T-04 | CSP configured | [ ] |
-| T-05 | Cookies `Secure`/`HttpOnly`/`SameSite`; no sensitive plaintext in local storage | [ ] |
-| T-06 | CSRF token validation enabled | [ ] |
-| T-07 | Every endpoint enforces RBAC and data-scope checks | [ ] |
-| T-08 | Cross-host database connections use TLS | [ ] |
+| ID | Check | Built | Notes | Accepted |
+| :--- | :--- | :--- | :--- | :--- |
+| T-01 | Site-wide HTTPS enforced | ✅ | Port 80 redirects wholesale (301) to 443 | [ ] |
+| T-02 | TLS 1.2/1.3 only; weak versions and cipher suites disabled | ⚠️ | The site serves TLS 1.2/1.3 with modern ciphers, but the reverse proxy's **global** configuration still lists TLSv1 and TLSv1.1. The site-level configuration overrides it; converge them anyway, so a future site does not inherit the default | [ ] |
+| T-03 | HSTS enabled | ⚠️ | Enabled, but `max-age` is 30 days — short of the usual six-month-to-one-year guidance. Raise before go-live | [ ] |
+| T-04 | CSP configured | ✅ | `default-src 'self'`, framing refused (`frame-ancestors 'none'`) | [ ] |
+| T-05 | Cookies `Secure`/`HttpOnly`/`SameSite`; no sensitive plaintext in local storage | ✅ | All three attributes set on the session cookie. Local storage holds the current user's display information and language preference only — no password, session token, or evidence URL | [ ] |
+| T-06 | CSRF token validation enabled | ✅ | Double-submit cookie | [ ] |
+| T-07 | Every endpoint enforces RBAC and data-scope checks | ✅ | Enforced by the `PermissionAnnotationTest` architecture test: an endpoint without a permission annotation fails the build | [ ] |
+| T-08 | Cross-host database connections use TLS | ⏳ | Application and database are currently on one host (`127.0.0.1:3306`), so the requirement is not yet triggered. Mandatory after the RDS migration, and verified then | [ ] |
 
 ### 12.7 Logging and audit
 
-| ID | Check | Status |
+| ID | Check | Built | Notes | Accepted |
+| :--- | :--- | :--- | :--- | :--- |
+| O-01 | **Statutory**: application, server, database, and access logs retained ≥6 months | ⚠️ | Test server: access logs 180 days, system logs 180 days, application audit and login logs partitioned monthly with 12-month retention — all checked against the live configuration. **Central retention is not yet established** — each stream is retained locally today; the production arrangement is still to settle with the school | [ ] |
+| O-02 | Audit log append-only; not modifiable or deletable through business functions | ✅ | The audit repository exposes only a write and queries — there is no update or delete path. Structural, not a convention | [ ] |
+| O-03 | All data changes recorded, verified by real queries | ✅ | Each verification pass confirms this with a real `GET /audit-logs` query rather than by reading the code | [ ] |
+| O-04 | Review decisions appended, never overwriting the original | ✅ | | [ ] |
+| O-05 | Hour balances derived solely from immutable transactions; no direct balance edit | ✅ | | [ ] |
+
+### 12.8 Outstanding
+
+The items above that **do not depend on school infrastructure** — these, and only these, are the
+implementer's current debt:
+
+| ID | Item | Nature |
 | :--- | :--- | :--- |
-| O-01 | **Statutory**: application, server, database, and access logs retained ≥6 months | [ ] |
-| O-02 | Audit log append-only; not modifiable or deletable through business functions | [ ] |
-| O-03 | All data changes recorded, verified by real queries | [ ] |
-| O-04 | Review decisions appended, never overwriting the original | [ ] |
-| O-05 | Hour balances derived solely from immutable transactions; no direct balance edit | [ ] |
+| I-03 | "Whole file valid before commit" does not match the implementation | Decide: change the code, or change §7.1 |
+| I-09 | No summary audit entry for an import | Implement |
+| A-16 | "Only two unauthenticated endpoints" does not match the code; the proxy still rate-limits removed paths | Restate the sentence; clean up the config |
+| D-08 | The production gate warns rather than refusing when the environment marker is missing | Known gap; tighten before go-live |
+| T-02 | The proxy's global configuration still lists TLSv1/1.1 | Converge the configuration |
+| T-03 | HSTS `max-age` is only 30 days | Adjust the configuration |
+| A-13/A-14/A-15 | MFA approach undecided, not enabled | Implement once the school decides (§8.4) |
+| O-01 | No central log-retention arrangement | Settle with the school alongside production operations |
+
+Items marked ⏳ (P-01–P-05, the second half of D-01–D-04, F-01, T-08) are deliberately not in
+this list: they are not debt but work that **cannot start** until the school provisions RDS, OSS,
+KMS, and the VPC.
 
 ---
 
