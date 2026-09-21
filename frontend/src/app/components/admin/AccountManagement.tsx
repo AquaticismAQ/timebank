@@ -221,9 +221,20 @@ export function AccountManagement() {
                   <span className="text-foreground text-sm font-medium">{student.name[0]}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-foreground font-medium">{student.name}</span>
-                    <span className="text-xs text-muted-foreground">{formatGradeClass(student.gradeLevel, student.className)}</span>
+                  <div className="text-sm text-foreground font-medium truncate">{student.name}</div>
+                  {/* The student number, because the search box above accepts it
+                      (issue 151). Searching by a value the results never show
+                      leaves the operator no way to confirm they found the right
+                      person — and the number is what a teacher actually holds:
+                      display names are masked and repeat across a school.
+
+                      On its own line rather than beside the name: sharing one
+                      line cost the name instead, which at 390px truncated a
+                      masked name to "Taylor …" and made the card worse than it
+                      started. This is the same name-over-number stack the
+                      Student Management list already uses. */}
+                  <div className="text-xs text-muted-foreground truncate">
+                    {student.studentNumber} · {formatGradeClass(student.gradeLevel, student.className)}
                   </div>
                   <div className="text-xs text-muted-foreground">{t('admin.accounts.earnedCoins', { earned: formatCoins(Math.round((student.completedMinutes ?? 0) / 60 * 2 * 100)), redeemed: 0 })}</div>
                 </div>
