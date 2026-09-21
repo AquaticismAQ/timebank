@@ -185,6 +185,17 @@ anywhere you like, including at the real files.
 A demonstration is not a passing test played slowly. `src/harness/stage.ts` wraps
 every interaction so it goes **say it → point at it → do it → pause**:
 
+A related rule the case flow had to be corrected on: **a reviewer reads before
+deciding.** Opening a row and clicking a decision in the same second is a rubber
+stamp on screen, which is the opposite of what a school is being shown — the
+reason a case or a record gets a human at all is that somebody weighs what the
+student wrote. So the record review opens the evidence before approving, and
+each case decision opens the tab the decision is actually about: 相关材料 before
+asking for more (finding it empty is *why* the question is asked), 处理历史
+before resolving (the answer sits next to the question it answers). What the
+reviewer must be able to see is asserted, so a workbench that opened on the
+wrong case fails rather than looking identical.
+
 - **Said first.** `现在打开项目中心`, `现在点击立即报名`, `现在填写服务日期`. An
   audience cannot follow a click they were not told was coming, and account
   switches especially — on screen a login is a half-second flicker.

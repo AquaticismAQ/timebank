@@ -51,8 +51,18 @@ const requestInformation: Phase = {
     const title = ctx.state.caseTitle as string;
     const page = await ctx.as('admin');
 
-    ctx.narrator.step('老师看过申诉，认为凭现有说明无法认定，要求补充具体信息');
-    await decideOnCase(page, ctx.config.baseUrl, title, 'requestInformation', WHAT_THE_TEACHER_NEEDS);
+    ctx.narrator.step('老师打开这份申诉，读完学生的说明，再查看有没有可佐证的材料');
+    await decideOnCase(page, ctx.config.baseUrl, title, 'requestInformation', WHAT_THE_TEACHER_NEEDS, {
+      // The teacher has to have read the claim before answering it, and the
+      // workbench has to be showing *this* student's words rather than
+      // whichever case happened to open.
+      expectOnScreen: [ORIGINAL_CLAIM],
+      // And the reason the answer is "tell me more" rather than yes or no:
+      // 相关材料 is empty. The question asked below names exactly what is
+      // missing from that tab, so the audience sees the judgement being formed
+      // rather than announced.
+      alsoRead: ['materials'],
+    });
 
     const studentPage = await ctx.as('student');
     await assertCaseStatus(studentPage, ctx.config.baseUrl, title, CASE_STATUS.needsInformation);
@@ -88,9 +98,15 @@ const resolve: Phase = {
     const title = ctx.state.caseTitle as string;
     const page = await ctx.as('admin');
 
-    ctx.narrator.step('老师确认信息齐备，处理这份申诉');
+    ctx.narrator.step('老师重新打开申诉，对照自己提的问题读学生的答复，确认信息齐备');
     await decideOnCase(page, ctx.config.baseUrl, title, 'resolve',
-      '已与体育组核实，情况属实。两天的服务时长将按校运会志愿服务补录，后续以正式记录为准。');
+      '已与体育组核实，情况属实。两天的服务时长将按校运会志愿服务补录，后续以正式记录为准。', {
+      // The thing actually being decided on is the answer, so it has to be on
+      // screen. 处理历史 is where it sits next to the question it answers —
+      // which is the view that makes this a second look rather than a first.
+      expectOnScreen: ['学生回复'],
+      alsoRead: ['history'],
+    });
 
     const studentPage = await ctx.as('student');
     await assertCaseStatus(studentPage, ctx.config.baseUrl, title, CASE_STATUS.resolved);

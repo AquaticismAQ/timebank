@@ -1,6 +1,6 @@
 import type { Page } from 'playwright';
 import { assertContains, assertThat } from '../harness/assert.js';
-import { choose, tap, type, visit } from '../harness/stage.js';
+import { choose, narrate, tap, type, visit } from '../harness/stage.js';
 
 /**
  * Case status chips, from `labels.caseStatus` in the zh bundle.
@@ -124,12 +124,21 @@ const CASE_BUTTON: Record<CaseDecision, string> = {
  * `requestInformation` it is the entire content of what the student receives —
  * a return with a blank comment is a case sent back with no explanation, which
  * would demonstrate the opposite of what this workflow is for.
+ *
+ * **The case is read before it is decided** (`review`). Opening a row and
+ * clicking a decision in the same second is a rubber stamp, which is the
+ * opposite of what a school is being shown: the whole reason a case gets a
+ * human is that somebody weighs what the student wrote. The record review step
+ * makes the same argument about opening the evidence before approving, and this
+ * one had been written without it.
  */
 export async function decideOnCase(
   page: Page, baseUrl: string, title: string, decision: CaseDecision, comment: string,
+  review: CaseReviewOptions = {},
 ): Promise<void> {
   await visit(page, `${baseUrl}/admin/cases`, '申诉处理页面');
   await tap(page.getByText(title, { exact: false }).first(), '这份待处理的申诉');
+  await readCase(page, review);
 
   const action = page.getByRole('button', { name: CASE_BUTTON[decision], exact: true }).last();
   await action.waitFor({ state: 'visible', timeout: 15_000 });
@@ -137,6 +146,57 @@ export async function decideOnCase(
 
   await type(page.locator('textarea').last(), '给学生的处理说明', comment);
   await submitDialog(page);
+}
+
+/** Which tab of the workbench a reviewer opens beyond the one it lands on. */
+export type CaseTab = 'history' | 'materials';
+
+const TAB_LABEL: Record<CaseTab, string> = { history: '处理历史', materials: '相关材料' };
+
+export interface CaseReviewOptions {
+  /**
+   * What must actually be legible on screen before a decision is taken.
+   *
+   * Asserted rather than assumed: a demonstration that says the teacher read
+   * the student's account should fail if the account is not there. It also
+   * catches the workbench having opened on the wrong case, which would
+   * otherwise look identical.
+   */
+  expectOnScreen?: string[];
+  /** Tabs beyond 基本信息, which is where the workbench lands. */
+  alsoRead?: CaseTab[];
+}
+
+/**
+ * The reviewer reads the case before deciding on it.
+ *
+ * Which tab matters depends on what is being decided, so the caller says. Asking
+ * for more information is a judgement about what the student has *not* shown —
+ * so 相关材料 is the tab, and finding it empty is the reason for the question.
+ * Resolving afterwards is a judgement about the answer they gave, which is in
+ * 处理历史 alongside the question it answers.
+ */
+async function readCase(page: Page, options: CaseReviewOptions): Promise<void> {
+  // The workbench opens on 基本信息, where the student's own description is.
+  narrate(page, '先看学生在申诉里写了什么');
+  for (const fragment of options.expectOnScreen ?? []) {
+    await page.getByText(fragment, { exact: false }).first()
+      .waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+    assertContains(await page.locator('body').innerText(), fragment,
+      '处理之前，审核人应当能够看到学生写的内容');
+  }
+
+  for (const tab of options.alsoRead ?? []) {
+    const label = TAB_LABEL[tab];
+    const button = page.getByRole('button', { name: label, exact: true }).first();
+    if (!(await button.isVisible().catch(() => false))) continue;
+    await tap(button, label);
+    // Loaded, not merely clicked: both tabs fetch, and a screenshot of a
+    // spinner is not a reviewer reading anything.
+    await page.getByText(/[^\s]/).first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+    await page.getByText('加载中', { exact: false }).first()
+      .waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+  }
 }
 
 /**
