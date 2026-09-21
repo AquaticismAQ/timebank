@@ -664,7 +664,7 @@ and showing it as passed or failed would be equally untrue.
 | :--- | :--- | :--- | :--- | :--- |
 | I-01 | Required, in-file unique, globally unique, valid and consistent reference, format, length checks | ✅ | Rule sets are configured per import type (`ImportRuleSet`) | [ ] |
 | I-02 | Two-phase execution with full re-validation at commit | ✅ | Commit re-runs the same row validator on every row and trusts nothing cached from validation | [ ] |
-| I-03 | Commit only when the whole file is valid; no partial loads | ⚠️ | **Differs from §7.1 principle 3.** What is built skips invalid rows and commits the valid ones, checkpointing by chunk so a failed commit can resume; invalid rows go to the per-row error report. The difference needs deciding — change the code or change §7.1 — rather than leaving this sentence standing | [ ] |
+| I-03 | Commit only when the whole file is valid; no partial loads | ✅ | Code changed 2026-09-21 (issue 146): any invalid row ends the job in `VALIDATION_FAILED`, which commit will not accept, and the commit itself is one transaction — a row that fails re-validation at commit time rolls the whole file back. Checkpoint-resume went with it; there is no half-applied file left to resume | [ ] |
 | I-04 | Formula injection: rejected on import, escaped on export | ✅ | The export triggers include `=`, `+`, `-`, `@`, tab, and carriage return — the last two matter, because a spreadsheet skips them before deciding whether a cell is a formula | [ ] |
 | I-05 | Control characters and bidirectional override characters rejected | ✅ | | [ ] |
 | I-06 | RFC 4180 parsing of quotes and commas; names with commas do not misalign | ✅ | `Rfc4180Reader` | [ ] |
@@ -726,7 +726,6 @@ implementer's current debt:
 
 | ID | Item | Nature |
 | :--- | :--- | :--- |
-| I-03 | "Whole file valid before commit" does not match the implementation | Decide: change the code, or change §7.1 |
 | I-09 | No summary audit entry for an import | Implement |
 | A-16 | "Only two unauthenticated endpoints" does not match the code; the proxy still rate-limits removed paths | Restate the sentence; clean up the config |
 | D-08 | The production gate warns rather than refusing when the environment marker is missing | Known gap; tighten before go-live |

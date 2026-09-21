@@ -29,11 +29,14 @@ class JobReclaimSweep {
     private final JobRepository jobRepository;
     private final ExportJobRunner exportJobRunner;
     private final ImportJobRunner importJobRunner;
+    private final JobProgressWriter progressWriter;
 
-    JobReclaimSweep(JobRepository jobRepository, ExportJobRunner exportJobRunner, ImportJobRunner importJobRunner) {
+    JobReclaimSweep(JobRepository jobRepository, ExportJobRunner exportJobRunner,
+                     ImportJobRunner importJobRunner, JobProgressWriter progressWriter) {
         this.jobRepository = jobRepository;
         this.exportJobRunner = exportJobRunner;
         this.importJobRunner = importJobRunner;
+        this.progressWriter = progressWriter;
     }
 
     @Scheduled(fixedDelay = 120_000)
@@ -46,7 +49,14 @@ class JobReclaimSweep {
             switch (job.getStatus()) {
                 case "RUNNING" -> exportJobRunner.runAsync(job.getId());
                 case "VALIDATING" -> importJobRunner.validateAsync(job.getId());
-                case "COMMITTING" -> importJobRunner.commitAsync(job.getId(), job.getCreatedBy());
+                // Not resubmitted (issue 146). A commit is one transaction now, so
+                // an interrupted one applied nothing — there is no progress to
+                // resume, and an automatic re-run is the only remaining way to get
+                // two live commits for one file. Marked failed instead, which is
+                // what actually happened, and an operator retries it deliberately:
+                // retrying re-runs the whole file, which is safe by construction.
+                case "COMMITTING" -> progressWriter.fail(job.getId(), "COMMIT_FAILED",
+                        "The commit was interrupted and nothing was imported. Start it again.");
                 default -> log.error("Job {} in unreclaimable status {}", job.getId(), job.getStatus());
             }
         }

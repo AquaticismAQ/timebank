@@ -1608,7 +1608,7 @@
       "exportStarted": "导出任务已开始…",
       "exportTaskCreated": "「{{label}}」导出任务已创建",
       "importNoValidRows": "没有可导入的有效行",
-      "importInvalidRowsSummary": "{{count}} 行无效：{{details}}",
+      "importInvalidRowsSummary": "{{count}} 行无效，本次未导入任何数据。请修正文件后重新上传。{{details}}",
       "importRowError": "第 {{row}} 行：{{message}}",
       "importCommitComplete": "导入完成：已提交 {{count}} 行",
       "exportFailed": "导出失败",

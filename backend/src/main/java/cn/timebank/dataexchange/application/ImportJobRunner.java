@@ -1,15 +1,11 @@
 package cn.timebank.dataexchange.application;
 
-import cn.timebank.account.application.AccountService;
-import cn.timebank.account.application.dto.AccountRequests.AdjustmentRequest;
 import cn.timebank.dataexchange.application.validation.ImportRuleSet;
 import cn.timebank.dataexchange.application.validation.Rfc4180Reader;
 import cn.timebank.dataexchange.application.validation.RuleEngine;
 import cn.timebank.dataexchange.application.validation.RuleSetSource;
 import cn.timebank.dataexchange.domain.Job;
 import cn.timebank.file.application.FileStorage;
-import cn.timebank.iam.application.UserService;
-import cn.timebank.student.application.StudentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -34,31 +30,17 @@ import static cn.timebank.dataexchange.application.JobExecutorConfig.JOB_EXECUTO
  * module supports ({@code serviceRecordsHistorical} and {@code students} —
  * {@link Job#getResourceType()} says which). Both stream the source file
  * line by line (bounded heap regardless of file size, Design.md §16.2) and
- * re-run the same row validator commit trusts nothing cached from
- * validate, so the two phases can never disagree.
+ * re-run the same row validator, so commit trusts nothing cached from
+ * validate and the two phases can never disagree.
  *
- * Only {@link #commitAsync} needs true checkpoint-resume: it is the one
- * run with an external side effect (crediting the ledger, or creating a
- * student), so restarting it from row zero after a crash would double-
- * apply already-committed rows. {@link #validateAsync} is side-effect-free
- * — a reclaim that re-runs it from scratch produces the identical report,
- * so it is deliberately *not* checkpoint-resumed, only re-launched.
- *
- * <p><b>Known gap, named rather than hidden</b> (historical import only —
- * see {@link #commitHistorical}): the checkpoint is persisted at chunk
- * boundaries ({@code CHUNK_SIZE} rows) and once more unconditionally at
- * the end of a successful run — not after every row. A crash exactly
- * mid-chunk therefore resumes from the *previous* chunk boundary and
- * re-credits the rows already applied within the in-flight chunk. Closing
- * this fully would mean making each row's {@code AccountService} write and
- * its checkpoint update atomic together, which {@code AccountService}'s
- * per-call transaction ownership does not currently support. Reducing
- * {@code CHUNK_SIZE} narrows the exposure window; it does not remove it.
- * {@link #commitStudents} does not share this exposure the same way — a
- * re-committed row is caught by {@code studentNumberExists} and reported
- * as a per-row error rather than silently duplicated, since student
- * creation (unlike a ledger credit) is naturally idempotent-checkable by
- * its own unique key.</p>
+ * <p>Neither run is checkpoint-resumed any more (issue 146). Validation
+ * never was — it is side-effect-free, so a reclaim that re-runs it from
+ * scratch produces the identical report. Commit used to be, because it
+ * applied rows one transaction at a time and a crash left the ones before
+ * it applied; it is now a single transaction in {@link
+ * ImportCommitTransaction}, so a crash leaves nothing and there is nothing
+ * to resume from. The known mid-chunk double-credit gap that the
+ * checkpoint scheme carried went with it.</p>
  */
 @Component
 class ImportJobRunner {
@@ -66,32 +48,34 @@ class ImportJobRunner {
     private static final Logger log = LoggerFactory.getLogger(ImportJobRunner.class);
     private static final int CHUNK_SIZE = 500;
 
+    /**
+     * A commit's lease, in seconds — far longer than validation's 2 minutes,
+     * because nothing renews it any more (issue 146). The renewals existed to
+     * carry the checkpoint; with the whole commit in one transaction there is
+     * no checkpoint to carry, and a lease long enough to outlast the work is
+     * simpler than a heartbeat that exists only to say "still going".
+     */
+    private static final int COMMIT_LEASE_SECONDS = 30 * 60;
+
     private final JobProgressWriter progressWriter;
+    private final ImportCommitTransaction commitTransaction;
     private final HistoricalImportRowValidator historicalRowValidator;
     private final StudentImportRowValidator studentRowValidator;
-    private final AccountService accountService;
-    private final StudentService studentService;
-    private final UserService userService;
     private final FileStorage fileStorage;
     private final RuleEngine ruleEngine;
     private final RuleSetSource ruleSetSource;
-    private final HistoricalImportWindowService windowService;
 
-    ImportJobRunner(JobProgressWriter progressWriter, HistoricalImportRowValidator historicalRowValidator,
-                     StudentImportRowValidator studentRowValidator, AccountService accountService,
-                     StudentService studentService, UserService userService, FileStorage fileStorage,
-                     RuleEngine ruleEngine, RuleSetSource ruleSetSource,
-                     HistoricalImportWindowService windowService) {
+    ImportJobRunner(JobProgressWriter progressWriter, ImportCommitTransaction commitTransaction,
+                     HistoricalImportRowValidator historicalRowValidator,
+                     StudentImportRowValidator studentRowValidator, FileStorage fileStorage,
+                     RuleEngine ruleEngine, RuleSetSource ruleSetSource) {
         this.progressWriter = progressWriter;
+        this.commitTransaction = commitTransaction;
         this.historicalRowValidator = historicalRowValidator;
         this.studentRowValidator = studentRowValidator;
-        this.accountService = accountService;
-        this.studentService = studentService;
-        this.userService = userService;
         this.fileStorage = fileStorage;
         this.ruleEngine = ruleEngine;
         this.ruleSetSource = ruleSetSource;
-        this.windowService = windowService;
     }
 
     /**
@@ -139,7 +123,7 @@ class ImportJobRunner {
      * is what a localized UI should render from; the message is the fallback for
      * a human reading the raw CSV.
      */
-    private static final String REPORT_LANGUAGE = "en";
+    static final String REPORT_LANGUAGE = "en";
 
     private record LineOutcome(boolean valid, String field, String code, String message) {
         static final LineOutcome VALID = new LineOutcome(true, null, null, null);
@@ -245,8 +229,16 @@ class ImportJobRunner {
                     fileStorage.store(errorRef, errIn);
                 }
             }
-            progressWriter.completeValidation(jobId, "VALIDATED", errorRef, total, valid);
-            log.info("Import job {} validated: {} rows, {} valid, {} errors", jobId, total, valid, errors);
+            // A single bad row ends it here (issue 146). This used to land on
+            // VALIDATED regardless, leaving commit to skip what it could not
+            // apply — which is how a 200-row roster became 197 students under a
+            // success message. The error report is still written and still
+            // served by GET /imports/{id}/errors; it is now the end of the road
+            // rather than a footnote beside a partial success.
+            String status = errors > 0 ? "VALIDATION_FAILED" : "VALIDATED";
+            progressWriter.completeValidation(jobId, status, errorRef, total, valid);
+            log.info("Import job {} {}: {} rows, {} valid, {} errors",
+                    jobId, errors > 0 ? "rejected" : "validated", total, valid, errors);
         } catch (Exception e) {
             log.error("Import job {} validation failed", jobId, e);
             progressWriter.fail(jobId, "VALIDATION_FAILED", String.valueOf(e.getMessage()));
@@ -258,121 +250,28 @@ class ImportJobRunner {
         }
     }
 
-    /** Resumes from {@code checkpointOffset} raw lines already processed — the correctness-critical path (D5's "survives a deploy mid-job"). */
+    /**
+     * Applies the file, or applies none of it (issue 146).
+     *
+     * <p>No resume: {@link ImportCommitTransaction} is one transaction, so an
+     * interrupted commit left nothing behind and re-running from row zero is
+     * the only correct thing to do. The checkpoint machinery this method used
+     * to carry existed to recover a half-applied file, and there is no longer
+     * such a thing.</p>
+     */
     @Async(JOB_EXECUTOR)
     void commitAsync(String jobId, String actorId) {
-        Job claimed = progressWriter.claim(jobId, "COMMITTING");
-        switch (claimed.getResourceType()) {
-            case "serviceRecordsHistorical" -> commitHistorical(claimed, actorId);
-            case "students" -> commitStudents(claimed, actorId);
-            default -> {
-                log.error("Import job {} commit failed: unknown resource type {}", jobId, claimed.getResourceType());
-                progressWriter.fail(jobId, "COMMIT_FAILED", "Unknown import type: " + claimed.getResourceType());
-            }
-        }
-    }
-
-    private void commitHistorical(Job claimed, String actorId) {
-        String jobId = claimed.getId();
-        int resumeFromLine = claimed.getCheckpointOffset();
-        try (InputStream in = fileStorage.open(claimed.getSourceFileKey());
-             BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-            reader.readLine(); // header
-            String line;
-            int rowNumber = 0;
-            // Deliberately NOT seeded from job.validRows: that column means
-            // something different depending on which phase last wrote it —
-            // "how many rows are valid" after validate, vs. "how many have
-            // been committed so far" after a partial commit — and reading it
-            // here misread the former as the latter, over-counting by
-            // exactly the valid-row count on every fresh (non-resumed)
-            // commit. A real bug, caught live (see 00-Status.md §18): the
-            // ledger was correct either way (crediting is still governed
-            // solely by the skip-below), but the reported committed count
-            // was wrong. Fixed by recomputing it honestly: every row is
-            // re-validated even when skipped, so `committed` always equals
-            // the true count of valid rows seen so far, in this run or a
-            // resumed one, with no dependency on a value another phase wrote.
-            int committed = 0;
-            RuleEngine.Run run = ruleEngine.newRun();
-            while ((line = reader.readLine()) != null) {
-                if (line.isBlank()) continue;
-                rowNumber++;
-                var result = historicalRowValidator.validate(line, run, REPORT_LANGUAGE);
-                boolean alreadyProcessed = rowNumber <= resumeFromLine;
-                if (result instanceof HistoricalImportRowValidator.Valid v) {
-                    if (!alreadyProcessed) {
-                        accountService.adjustForStudent(v.studentId(), v.gradeId(), v.classId(),
-                                new AdjustmentRequest(v.rule().convertMinutesToCentiCoins(v.rule().roundToNearestGranularity(v.durationMinutes())),
-                                        "HISTORICAL_IMPORT", v.description()),
-                                actorId);
-                    }
-                    committed++;
-                }
-                if (!alreadyProcessed && rowNumber % CHUNK_SIZE == 0) {
-                    progressWriter.renewCommitProgress(jobId, rowNumber, rowNumber, committed);
-                }
-            }
-            // Unconditional final checkpoint write, not just at chunk
-            // boundaries — a file whose row count isn't a multiple of
-            // CHUNK_SIZE (or is smaller than one chunk entirely) would
-            // otherwise finish with a stale checkpointOffset, making a later
-            // reclaim of this already-COMMITTED job re-run and double-credit
-            // every row again. A real bug, caught live: see 00-Status.md §18.
-            progressWriter.renewCommitProgress(jobId, rowNumber, rowNumber, committed);
-            // 11-DataImport.md §6.1: the *first* successful historical import
-            // starts the 15-day clock. Before succeed(), so a job that is
-            // COMMITTED always has a window row behind it rather than the two
-            // facts being able to disagree; idempotent, so this same call from a
-            // reclaimed run re-finishing an already committed job does not move
-            // the expiry (§6.1 — "later imports do not extend the window").
-            windowService.openOnFirstCommit(jobId, actorId);
-            progressWriter.succeed(jobId, "COMMITTED", null, rowNumber, committed);
-            log.info("Import job {} committed: {} rows credited (resumed from line {})", jobId, committed, resumeFromLine);
+        Job claimed = progressWriter.claim(jobId, "COMMITTING", COMMIT_LEASE_SECONDS);
+        try {
+            int committed = commitTransaction.commit(jobId, claimed.getResourceType(),
+                    claimed.getSourceFileKey(), actorId);
+            log.info("Import job {} committed: {} rows applied", jobId, committed);
+        } catch (ImportCommitTransaction.ClaimLost e) {
+            // Someone else owns the job now and this run rolled back. Saying so
+            // would overwrite their status with a stale one; the log is enough.
+            log.warn("Import job {} commit abandoned: {}", jobId, e.getMessage());
         } catch (Exception e) {
-            log.error("Import job {} commit failed", jobId, e);
-            progressWriter.fail(jobId, "COMMIT_FAILED", String.valueOf(e.getMessage()));
-        }
-    }
-
-    private void commitStudents(Job claimed, String actorId) {
-        String jobId = claimed.getId();
-        int resumeFromLine = claimed.getCheckpointOffset();
-        RuleEngine.Run run = ruleEngine.newRun();
-        try (InputStream in = fileStorage.open(claimed.getSourceFileKey());
-             BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-            reader.readLine(); // header
-            String line;
-            int rowNumber = 0;
-            int committed = 0;
-            while ((line = reader.readLine()) != null) {
-                if (line.isBlank()) continue;
-                rowNumber++;
-                var result = studentRowValidator.validate(line, run, REPORT_LANGUAGE);
-                boolean alreadyProcessed = rowNumber <= resumeFromLine;
-                if (result instanceof StudentImportRowValidator.Valid v) {
-                    if (!alreadyProcessed) {
-                        // resolvedLanguage only shapes the returned DTO's localized names, which this
-                        // fire-and-forget path never reads — fixed default is fine, no request context exists here.
-                        var created = studentService.create(v.request(), actorId, "zh-CN");
-                        // 10-StudentIdentityAndOnboarding.md §3.3: the roster row on its own
-                        // answers nothing about how the student gets in. The account is created
-                        // here, in the same pass, with no password and PENDING_ACTIVATION status
-                        // — inert until the activation code on their slip is redeemed (§2.4).
-                        userService.createPendingStudentAccount(created.id(), created.displayName(),
-                                "zh-CN", actorId);
-                    }
-                    committed++;
-                }
-                if (!alreadyProcessed && rowNumber % CHUNK_SIZE == 0) {
-                    progressWriter.renewCommitProgress(jobId, rowNumber, rowNumber, committed);
-                }
-            }
-            progressWriter.renewCommitProgress(jobId, rowNumber, rowNumber, committed);
-            progressWriter.succeed(jobId, "COMMITTED", null, rowNumber, committed);
-            log.info("Import job {} committed: {} students created (resumed from line {})", jobId, committed, resumeFromLine);
-        } catch (Exception e) {
-            log.error("Import job {} commit failed", jobId, e);
+            log.error("Import job {} commit failed — nothing was applied", jobId, e);
             progressWriter.fail(jobId, "COMMIT_FAILED", String.valueOf(e.getMessage()));
         }
     }

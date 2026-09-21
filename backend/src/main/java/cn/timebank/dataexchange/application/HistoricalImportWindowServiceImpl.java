@@ -96,7 +96,12 @@ class HistoricalImportWindowServiceImpl implements HistoricalImportWindowService
                     + " on the server console.";
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    // Joins the caller's transaction, deliberately (issue 146). It was
+    // REQUIRES_NEW, which was right while the commit applied rows one
+    // transaction at a time — and wrong the moment the commit became
+    // all-or-nothing, since an import that rolled back would still have
+    // started the 15-day window, and §6.1 gives no way to restart it.
+    @Transactional
     public void openOnFirstCommit(String jobId, String actorId) {
         Instant openedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
         Instant expiresAt = openedAt.plus(Duration.ofDays(windowDays));

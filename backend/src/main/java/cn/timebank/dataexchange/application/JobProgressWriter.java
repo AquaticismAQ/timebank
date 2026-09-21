@@ -33,12 +33,22 @@ public class JobProgressWriter {
     /** @return the claimed job, or empty if it was already claimed/finished by another run (race guard). */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Job claim(String jobId, String runningStatus) {
+        return claim(jobId, runningStatus, LEASE_SECONDS);
+    }
+
+    /**
+     * As above, with a lease long enough for a run that never renews it —
+     * an import commit, since issue 146 made it one transaction with no
+     * chunk boundaries to renew at.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Job claim(String jobId, String runningStatus, int leaseSeconds) {
         Job job = jobRepository.findById(jobId).orElseThrow(() -> ApiException.notFound("Job not found."));
         Instant now = Instant.now();
         job.setStatus(runningStatus);
         job.setClaimedBy(hostname());
         job.setClaimedAt(now);
-        job.setLeaseExpiresAt(now.plusSeconds(LEASE_SECONDS));
+        job.setLeaseExpiresAt(now.plusSeconds(leaseSeconds));
         if (job.getStartedAt() == null) {
             job.setStartedAt(now);
         }

@@ -1839,31 +1839,38 @@ export function SystemAdmin() {
       const job = await api.imports.create(type, file);
       await api.imports.validate(job.id);
       const validated = await pollImportJob(job.id, ['VALIDATED', 'VALIDATION_FAILED']);
+      // A file with any bad row stops here (issue 146). It used to report the
+      // errors and then import the rest, which left the operator holding a
+      // spreadsheet that no longer described the database.
       if (validated.status === 'VALIDATION_FAILED') {
-        toast.error(t('common.unknownError'));
+        const errResult = await api.imports.errors(job.id);
+        if (errResult.errors.length > 0) {
+          const details = errResult.errors.slice(0, 3)
+            .map(e => t('admin.system.importRowError', { row: e.rowNumber, message: e.message })).join('; ');
+          toast.error(t('admin.system.importInvalidRowsSummary', { count: errResult.totalErrors, details }));
+        } else {
+          // Validation itself fell over — no per-row report to show.
+          toast.error(t('common.unknownError'));
+        }
+        await api.imports.cancel(job.id);
         return;
       }
-      const totalRows = validated.totalRows ?? 0;
-      const validRows = validated.validRows ?? 0;
-      const invalidRows = totalRows - validRows;
-      if (invalidRows > 0) {
-        const errResult = await api.imports.errors(job.id);
-        const details = errResult.errors.slice(0, 3)
-          .map(e => t('admin.system.importRowError', { row: e.rowNumber, message: e.message })).join('; ');
-        toast.error(t('admin.system.importInvalidRowsSummary', { count: invalidRows, details }));
-      }
-      if (validRows > 0) {
-        await api.imports.commit(job.id, newIdempotencyKey());
-        const committed = await pollImportJob(job.id, ['COMMITTED', 'COMMIT_FAILED']);
-        if (committed.status === 'COMMIT_FAILED') {
-          toast.error(t('common.unknownError'));
-        } else {
-          // `validRows` doubles as "rows committed" once status is COMMITTED (JobProgressWriter.succeed) — same field, different meaning post-commit.
-          toast.success(t('admin.system.importCommitComplete', { count: committed.validRows ?? 0 }));
-        }
-      } else {
+      if ((validated.totalRows ?? 0) === 0) {
         await api.imports.cancel(job.id);
         toast.error(t('admin.system.importNoValidRows'));
+        return;
+      }
+      await api.imports.commit(job.id, newIdempotencyKey());
+      const committed = await pollImportJob(job.id, ['COMMITTED', 'COMMIT_FAILED']);
+      if (committed.status === 'COMMIT_FAILED') {
+        // Nothing was written — the commit is one transaction now, so there is
+        // no half-applied file to warn about separately. The specific reason is
+        // an English sentence the server composed and this layer does not
+        // render server prose; it is in the job row and the server log.
+        toast.error(t('common.unknownError'));
+      } else {
+        // `validRows` doubles as "rows committed" once status is COMMITTED — same field, different meaning post-commit.
+        toast.success(t('admin.system.importCommitComplete', { count: committed.validRows ?? 0 }));
       }
     } catch (err) {
       if (err instanceof ApiError) toast.error(mapApiError(err).message);

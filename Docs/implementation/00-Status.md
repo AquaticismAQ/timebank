@@ -1593,3 +1593,17 @@ Five minutes, not one, because nothing a person sees depends on it: the reads st
 The job logged `advanced 1 project(s)`, the `shedlock` row for `projectStatusSweep` was taken and released, and the audit entry is the same `project.autoArchiveNoRegistrants` / `NO_REGISTRANTS_AT_REGISTRATION_CLOSE` the lazy path writes — with `actor_id` NULL, not attributed to the admin who last touched the project.
 
 `ProjectLifecycleIT.theSweepAdvancesAProjectNobodyHasReadAndLeavesAFutureOneAlone` covers it (12/12 in that class), reading through `ProjectRepository` for the same reason the live check used SQL. Red-checked: stub the sweep to find nothing and it fails alone.
+
+### 41.40 Imports are all-or-nothing now (issue 146, 2026-09-21)
+
+§12's self-assessment pass found one row it had to mark as diverging: I-03, "整份文件全部有效才提交". The code committed the valid rows and skipped the invalid ones. Aquaticism: *"for 'I-03', we need change the code to avoid partial import."*
+
+**Three changes, and one deletion.** Validation is now a gate — any row error ends the job in `VALIDATION_FAILED`, which commit will not accept, so a file with one bad row cannot land 99% of itself. `ImportCommitTransaction` (its own bean, so the proxy actually applies) runs the whole commit in one transaction and throws on a row that fails re-validation instead of skipping it. The job's terminal status is written *inside* that transaction by a conditional update, so "rows applied" and "job says COMMITTED" can no longer disagree.
+
+The deletion is checkpoint-resume. It existed to recover a half-applied file, and there is no longer such a thing — which also removes the mid-chunk double-credit gap that scheme carried and that the class javadoc had named. With it goes the reclaim sweep's automatic resubmission of an interrupted commit: that was the last way to get two live commits for one file, and an interrupted commit applied nothing, so marking it `COMMIT_FAILED` for a deliberate retry is both accurate and safe. The commit's lease rises from 2 minutes to 30, since nothing renews it any more.
+
+`openOnFirstCommit` — which starts the unrestartable 15-day historical-import window — moves from `REQUIRES_NEW` to joining the commit transaction. Under the old row-at-a-time commit it was right; under an all-or-nothing one it would have burned the window on an import that rolled back.
+
+**Verified with a control** (see the issue doc): a two-row roster with one bad row was refused whole and *its good row did not land*, beside a clean file through the same endpoints that committed. The rollback half — an already-applied row coming back out — is proven by an integration test that asserts on the **first** row rather than the bad one, red-checked against the old skip-and-continue.
+
+§12's I-03 row and §12.8 updated in both language versions.

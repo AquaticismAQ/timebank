@@ -1608,7 +1608,7 @@
       "exportStarted": "Export started...",
       "exportTaskCreated": "\"{{label}}\" export task created",
       "importNoValidRows": "No valid rows to import",
-      "importInvalidRowsSummary": "{{count}} invalid rows: {{details}}",
+      "importInvalidRowsSummary": "{{count}} invalid rows — nothing was imported. Fix the file and upload it again. {{details}}",
       "importRowError": "Row {{row}}: {{message}}",
       "importCommitComplete": "Import complete: {{count}} rows committed",
       "exportFailed": "Export failed",

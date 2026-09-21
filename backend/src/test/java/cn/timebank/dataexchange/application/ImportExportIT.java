@@ -66,13 +66,19 @@ class ImportExportIT extends AbstractIntegrationTest {
 
     private static final AtomicInteger SEQ = new AtomicInteger();
 
+    /**
+     * A file with bad rows never reaches commit (issue 146). It still produces
+     * the full per-row report — the operator needs to know what to fix — but it
+     * ends in VALIDATION_FAILED, and the two valid rows in it are not an
+     * invitation to import 40% of the file.
+     */
     @Test
-    void importValidateProducesCorrectCountsAndErrorReport() {
+    void aFileWithAnyBadRowIsRejectedWholeAndCannotBeCommitted() {
         StudentDetailDto s1 = createStudent();
         StudentDetailDto s2 = createStudent();
-        JobDto job = createAndValidateImport(s1, s2);
+        JobDto job = createAndRejectImport(s1, s2);
 
-        assertThat(job.status()).isEqualTo("VALIDATED");
+        assertThat(job.status()).isEqualTo("VALIDATION_FAILED");
         assertThat(job.totalRows()).isEqualTo(5);
         assertThat(job.validRows()).isEqualTo(2);
 
@@ -80,6 +86,13 @@ class ImportExportIT extends AbstractIntegrationTest {
         assertThat(errors.totalErrors()).isEqualTo(3);
         assertThat(errors.errors()).extracting(ImportErrorReportDto.RowError::code)
                 .containsExactlyInAnyOrder("STUDENT_NOT_FOUND", "INVALID_DATE", "INVALID_DURATION");
+
+        // And the two good rows stay out of the ledger: the refusal is the
+        // point, not the report.
+        assertThatThrownBy(() -> importService.commit(job.id(), "usr_test_admin", "idem-rejected-" + job.id()))
+                .isInstanceOf(ApiException.class);
+        assertThat(accountService.getBalanceForStudent(s1.id())).isZero();
+        assertThat(accountService.getBalanceForStudent(s2.id())).isZero();
     }
 
     @Test
@@ -121,31 +134,50 @@ class ImportExportIT extends AbstractIntegrationTest {
         assertThat(accountService.getBalanceForStudent(s1.id())).isEqualTo(200);
     }
 
+    /**
+     * The case that makes all-or-nothing mean something (issue 146): a file
+     * that was valid at validation time and is not valid at commit time.
+     *
+     * <p>Row 1 is applied before row 2 is found to be bad, so only the
+     * transaction rolling back can undo it — and row 1's student is what this
+     * asserts on, not row 2's. A test that only checked "the bad row was not
+     * imported" would pass against the old skip-and-continue behaviour too.</p>
+     *
+     * <p>The race is real, not contrived: two administrators importing
+     * overlapping rosters, minutes apart.</p>
+     */
     @Test
-    void aResumedCommitSkipsAlreadyCommittedRowsAndDoesNotDoubleCredit() {
-        StudentDetailDto s1 = createStudent();
-        StudentDetailDto s2 = createStudent();
-        JobDto validated = createAndValidateImport(s1, s2);
-        importService.commit(validated.id(), "usr_test_admin", "idem-resume-commit-" + validated.id());
-        awaitStatus(validated.id(), "COMMITTED");
-        assertThat(accountService.getBalanceForStudent(s1.id())).isEqualTo(200);
-        assertThat(accountService.getBalanceForStudent(s2.id())).isEqualTo(100);
+    void aRowThatGoesBadBetweenValidateAndCommitTakesTheWholeFileDown() {
+        String first = "SWEEPA" + SEQ.incrementAndGet();
+        String second = "SWEEPB" + SEQ.incrementAndGet();
+        String csv = "studentNumber,displayName,gradeId,classId,enrollmentAcademicYearId,graduationYear,joinedAt\n"
+                + first + ",First Student,grade_6,class_6A,ay_2025_2026,2031,2025-09-01\n"
+                + second + ",Second Student,grade_6,class_6A,ay_2025_2026,2031,2025-09-01\n";
+        JobDto job = importService.create("students",
+                new MockMultipartFile("file", "roster.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8)),
+                "usr_test_admin");
+        importService.validate(job.id(), "usr_test_admin");
+        awaitStatus(job.id(), "VALIDATED");
 
-        // Simulate a reclaim: the job's checkpoint/validRows already reflect
-        // "every row processed" from the completed run (never reset by
-        // succeed()); flip status back to COMMITTING and re-invoke the
-        // runner directly, exactly what JobReclaimSweep does for a job whose
-        // lease expired mid-run. The resume-skip arithmetic must recognize
-        // every row as already handled and credit nothing further.
-        Job job = jobRepository.findById(validated.id()).orElseThrow();
-        job.setStatus("COMMITTING");
-        jobRepository.saveAndFlush(job);
+        // Somebody else takes the second student number in the meantime.
+        studentService.create(new cn.timebank.student.application.dto.StudentRequests.CreateStudentRequest(
+                second, "Claimed Elsewhere", "grade_6", "class_6A", "ay_2025_2026", 2031,
+                java.time.LocalDate.of(2025, 9, 1)), "usr_test_admin", "zh-CN");
 
-        importJobRunner.commitAsync(validated.id(), "usr_test_admin");
-        awaitStatus(validated.id(), "COMMITTED");
+        importService.commit(job.id(), "usr_test_admin", "idem-conflict-" + job.id());
+        awaitStatus(job.id(), "COMMIT_FAILED");
 
-        assertThat(accountService.getBalanceForStudent(s1.id())).isEqualTo(200);
-        assertThat(accountService.getBalanceForStudent(s2.id())).isEqualTo(100);
+        // The first row was applied and then rolled back. This is the assertion
+        // the old behaviour would have failed.
+        assertThat(studentNumberExists(first)).isFalse();
+    }
+
+    private boolean studentNumberExists(String studentNumber) {
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(*) from student where student_number = :n",
+                new org.springframework.jdbc.core.namedparam.MapSqlParameterSource("n", studentNumber),
+                Integer.class);
+        return count != null && count > 0;
     }
 
     @Test
@@ -260,15 +292,31 @@ class ImportExportIT extends AbstractIntegrationTest {
     }
 
     private JobDto createAndValidateImport(StudentDetailDto s1, StudentDetailDto s2) {
-        byte[] bytes = csvBytes(s1, s2);
+        return uploadAndAwait(csvBytes(s1, s2), "VALIDATED");
+    }
+
+    private JobDto createAndRejectImport(StudentDetailDto s1, StudentDetailDto s2) {
+        return uploadAndAwait(mixedCsvBytes(s1, s2), "VALIDATION_FAILED");
+    }
+
+    private JobDto uploadAndAwait(byte[] bytes, String expected) {
         JobDto job = importService.create("serviceRecordsHistorical",
                 new MockMultipartFile("file", "ledger.csv", "text/csv", bytes), "usr_test_admin");
         importService.validate(job.id(), "usr_test_admin");
-        awaitStatus(job.id(), "VALIDATED");
+        awaitStatus(job.id(), expected);
         return jobRepository.findById(job.id()).map(this::toDto).orElseThrow();
     }
 
+    /** Two good rows only — anything else can no longer be committed at all (issue 146). */
     private byte[] csvBytes(StudentDetailDto s1, StudentDetailDto s2) {
+        String csv = "studentNumber,serviceDate,durationMinutes,description\n"
+                + s1.studentNumber() + ",2025-10-01,120,Valid row one\n"
+                + s2.studentNumber() + ",2025-10-02,60,Valid row two\n";
+        return csv.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** The same two good rows plus three bad ones, for the rejection path. */
+    private byte[] mixedCsvBytes(StudentDetailDto s1, StudentDetailDto s2) {
         String csv = "studentNumber,serviceDate,durationMinutes,description\n"
                 + s1.studentNumber() + ",2025-10-01,120,Valid row one\n"
                 + s2.studentNumber() + ",2025-10-02,60,Valid row two\n"

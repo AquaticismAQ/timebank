@@ -2,9 +2,7 @@ package cn.timebank.dataexchange.application;
 
 import cn.timebank.account.application.AccountService;
 import cn.timebank.dataexchange.application.validation.RuleEngine;
-import cn.timebank.dataexchange.application.validation.RuleSetSource;
-import cn.timebank.dataexchange.domain.Job;
-import cn.timebank.dataexchange.domain.JobKind;
+import cn.timebank.dataexchange.infrastructure.JobRepository;
 import cn.timebank.file.application.FileStorage;
 import cn.timebank.iam.application.UserService;
 import cn.timebank.student.application.StudentService;
@@ -19,10 +17,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -41,39 +42,37 @@ class StudentImportProvisionsAccountsTest {
 
     private static final String STUDENT_ID = "std_0000000000000000000000001";
 
-    private final JobProgressWriter progressWriter = mock(JobProgressWriter.class);
+    private final JobRepository jobRepository = mock(JobRepository.class);
     private final StudentImportRowValidator rowValidator = mock(StudentImportRowValidator.class);
     private final StudentService studentService = mock(StudentService.class);
     private final UserService userService = mock(UserService.class);
     private final FileStorage fileStorage = mock(FileStorage.class);
     private final RuleEngine ruleEngine = mock(RuleEngine.class);
 
-    private ImportJobRunner runner() {
-        return new ImportJobRunner(progressWriter, mock(HistoricalImportRowValidator.class), rowValidator,
+    private ImportCommitTransaction commitTransaction() {
+        return new ImportCommitTransaction(jobRepository, mock(HistoricalImportRowValidator.class), rowValidator,
                 mock(AccountService.class), studentService, userService, fileStorage, ruleEngine,
-                mock(RuleSetSource.class), mock(HistoricalImportWindowService.class));
+                mock(HistoricalImportWindowService.class));
     }
 
-    private Job queuedStudentImport() {
-        Job job = new Job("job_1", JobKind.IMPORT, "students", "VALIDATED", "usr_admin", Instant.now());
-        job.setSourceFileKey("import_job_1.csv");
-        return job;
+    private void rosterFile(String body) {
+        when(fileStorage.open("import_job_1.csv")).thenReturn(new ByteArrayInputStream(
+                ("studentNumber,displayName\n" + body).getBytes(StandardCharsets.UTF_8)));
     }
 
     @Test
     void committing_a_roster_row_creates_the_student_and_a_pending_account() {
-        Job job = queuedStudentImport();
-        when(progressWriter.claim("job_1", "COMMITTING")).thenReturn(job);
-        when(fileStorage.open("import_job_1.csv")).thenReturn(new ByteArrayInputStream(
-                "studentNumber,displayName\nHKTZ4HKV,Example Student\n".getBytes(StandardCharsets.UTF_8)));
+        rosterFile("HKTZ4HKV,Example Student\n");
         CreateStudentRequest request = new CreateStudentRequest("HKTZ4HKV", "Example Student",
                 "grd_1", "cls_1", "ay_1", 2031, LocalDate.of(2026, 9, 1));
         when(rowValidator.validate(anyString(), any(), anyString()))
                 .thenReturn(new StudentImportRowValidator.Valid(request));
         when(studentService.create(any(), anyString(), anyString())).thenReturn(detail());
+        when(jobRepository.finishCommitIfStillCommitting(anyString(), anyInt(), any())).thenReturn(1);
 
-        runner().commitAsync("job_1", "usr_admin");
+        int committed = commitTransaction().commit("job_1", "students", "import_job_1.csv", "usr_admin");
 
+        assertThat(committed).isEqualTo(1);
         verify(studentService).create(eq(request), eq("usr_admin"), anyString());
         ArgumentCaptor<String> studentId = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> displayName = ArgumentCaptor.forClass(String.class);
@@ -84,25 +83,59 @@ class StudentImportProvisionsAccountsTest {
                 anyString(), eq("usr_admin"));
         assertThat(studentId.getValue()).isEqualTo(STUDENT_ID);
         assertThat(displayName.getValue()).isEqualTo("Example Student");
-        verify(progressWriter).succeed(eq("job_1"), eq("COMMITTED"), any(), eq(1), eq(1));
+        verify(jobRepository).finishCommitIfStillCommitting(eq("job_1"), eq(1), any());
     }
 
+    /**
+     * Issue 146. This replaces a test about resuming a half-committed file,
+     * because a half-committed file is no longer a state the system can reach.
+     *
+     * <p>The row that fails is the <em>second</em> one deliberately: the first
+     * has already been applied by the time the failure is found, so nothing but
+     * the transaction rolling back can undo it. Throwing is what makes that
+     * happen — a skip would leave student one created and student two missing,
+     * under a success message.</p>
+     */
     @Test
-    void an_already_committed_row_is_not_provisioned_again_on_a_resumed_commit() {
-        Job job = queuedStudentImport();
-        job.setCheckpointOffset(1); // the one data row was already committed before the crash
-        when(progressWriter.claim("job_1", "COMMITTING")).thenReturn(job);
-        when(fileStorage.open("import_job_1.csv")).thenReturn(new ByteArrayInputStream(
-                "studentNumber,displayName\nHKTZ4HKV,Example Student\n".getBytes(StandardCharsets.UTF_8)));
+    void one_bad_row_takes_the_whole_file_down_with_it() {
+        rosterFile("HKTZ4HKV,First Student\nZZZZZZZZ,Second Student\n");
+        when(rowValidator.validate(anyString(), any(), anyString()))
+                .thenReturn(new StudentImportRowValidator.Valid(new CreateStudentRequest("HKTZ4HKV",
+                        "First Student", "grd_1", "cls_1", "ay_1", 2031, LocalDate.of(2026, 9, 1))))
+                .thenReturn(new StudentImportRowValidator.Invalid("studentNumber", "DUPLICATE_STUDENT_NUMBER",
+                        "This student number already exists."));
+        when(studentService.create(any(), anyString(), anyString())).thenReturn(detail());
+
+        assertThatThrownBy(() -> commitTransaction().commit("job_1", "students", "import_job_1.csv", "usr_admin"))
+                .isInstanceOf(ImportCommitTransaction.RowRejected.class)
+                .hasMessageContaining("Row 2")
+                .hasMessageContaining("DUPLICATE_STUDENT_NUMBER")
+                // The operator has to be told the file did not land, or they
+                // will go looking for the rows that did.
+                .hasMessageContaining("Nothing was imported");
+
+        // The job is never marked committed — the exception is what rolls the
+        // first row back, and a status write here would survive that rollback
+        // only if it ran in its own transaction, which is the bug this fix removed.
+        verify(jobRepository, never()).finishCommitIfStillCommitting(anyString(), anyInt(), any());
+    }
+
+    /**
+     * The job moved on under this run — reclaimed as failed after its lease
+     * expired, or retried by an operator. Its own work must come off, rather
+     * than both runs writing a finished status over each other.
+     */
+    @Test
+    void a_run_that_no_longer_owns_the_job_rolls_itself_back() {
+        rosterFile("HKTZ4HKV,Example Student\n");
         when(rowValidator.validate(anyString(), any(), anyString()))
                 .thenReturn(new StudentImportRowValidator.Valid(new CreateStudentRequest("HKTZ4HKV",
                         "Example Student", "grd_1", "cls_1", "ay_1", 2031, LocalDate.of(2026, 9, 1))));
+        when(studentService.create(any(), anyString(), anyString())).thenReturn(detail());
+        when(jobRepository.finishCommitIfStillCommitting(anyString(), anyInt(), any())).thenReturn(0);
 
-        runner().commitAsync("job_1", "usr_admin");
-
-        verify(studentService, org.mockito.Mockito.never()).create(any(), anyString(), anyString());
-        verify(userService, org.mockito.Mockito.never())
-                .createPendingStudentAccount(anyString(), anyString(), anyString(), anyString());
+        assertThatThrownBy(() -> commitTransaction().commit("job_1", "students", "import_job_1.csv", "usr_admin"))
+                .isInstanceOf(ImportCommitTransaction.ClaimLost.class);
     }
 
     private StudentDetailDto detail() {
