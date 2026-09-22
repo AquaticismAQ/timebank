@@ -86,9 +86,14 @@ export function ProjectTimeline({ projectId, projectTitle, onClose }: {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
-      <div className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 mb-4 sm:mb-0 z-50 max-h-[85vh] overflow-y-auto overscroll-contain"
+      {/* A column, not a scrolling box: the header and the way out stay put
+          while only the table moves. A long history used to scroll Close off
+          the bottom, so the only exit from a 60-row timeline was the Escape
+          key — and the panel that has no visible exit is the one people get
+          stuck in (issue 102's rule). */}
+      <div className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 mb-4 sm:mb-0 z-50 max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-4 shrink-0">
           <History className="w-5 h-5 text-muted-foreground shrink-0" />
           <div className="min-w-0">
             <h3 className="text-foreground">{t('admin.projects.timeline')}</h3>
@@ -100,9 +105,13 @@ export function ProjectTimeline({ projectId, projectTitle, onClose }: {
           emptyLabel={t('admin.projects.timelineEmpty')} />
 
         {entries.length > 0 && (
-          <div className="rounded-xl border border-border overflow-hidden">
+          // `min-h-0` is load-bearing: a flex child defaults to min-height:auto,
+          // which refuses to shrink below its content, so the scroll never
+          // engages and the dialog grows past its own max height instead.
+          <div className="rounded-xl border border-border overflow-y-auto overscroll-contain min-h-0 flex-1">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50">
+              {/* Sticky, so you can still tell which column is which forty rows down. */}
+              <thead className="bg-muted sticky top-0 z-10">
                 <tr className="text-left text-xs text-muted-foreground">
                   <th className="px-3 py-2 font-normal whitespace-nowrap">{t('admin.projects.timelineWhen')}</th>
                   <th className="px-3 py-2 font-normal">{t('admin.projects.timelineAction')}</th>
@@ -133,10 +142,12 @@ export function ProjectTimeline({ projectId, projectTitle, onClose }: {
                         more clearly than a blank cell. */}
                     <td className="px-3 py-2 text-xs text-muted-foreground">{entry.subject ?? '—'}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">
-                      {/* No actor means the system did it — a scheduled sweep,
-                          not a person — and saying so is more honest than
-                          printing an opaque id or an empty cell. */}
-                      {entry.actorName ?? (entry.actorId ? entry.actorId : t('admin.projects.timelineSystem'))}
+                      {/* No actor means no *person* is on record for this event:
+                          a scheduled sweep, or a registration the audit log
+                          never saw. An em dash says that; "System" would claim a
+                          machine registered a student, and the action's own
+                          label already says when something ran automatically. */}
+                      {entry.actorName ?? entry.actorId ?? '—'}
                     </td>
                   </tr>
                 ))}
@@ -145,7 +156,7 @@ export function ProjectTimeline({ projectId, projectTitle, onClose }: {
           </div>
         )}
 
-        <div className="mt-4 pt-3 border-t border-border flex justify-end">
+        <div className="mt-4 pt-3 border-t border-border flex justify-end shrink-0">
           <button type="button" onClick={onClose}
             className="px-4 py-2 rounded-xl border border-border text-foreground hover:bg-accent text-sm transition-colors">
             {t('common.close')}

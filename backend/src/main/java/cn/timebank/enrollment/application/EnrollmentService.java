@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -54,5 +55,17 @@ public interface EnrollmentService {
      * does not say <i>whose</i>, which is the first thing anyone reading it
      * wants to know.</p>
      */
-    Map<String, String> enrollmentSubjectsOf(String projectId, String resolvedLanguage);
+    List<EnrollmentSubject> enrollmentSubjectsOf(String projectId, String resolvedLanguage);
+
+    /**
+     * @param appliedAt when the student actually registered, carried so the
+     *                  timeline can show a registration the audit log never
+     *                  recorded — a row seeded by direct SQL, or one predating
+     *                  the audit of this action. The column is a fact about the
+     *                  registration, not a guess.
+     * @param status    where that registration ended up, shown as the entry's
+     *                  detail.
+     */
+    record EnrollmentSubject(String enrollmentId, String studentName, Instant appliedAt, String status) {
+    }
 }

@@ -12,8 +12,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Everything that happened to one project, assembled from the audit log
@@ -78,6 +81,27 @@ public class ProjectTimelineService {
 
     private static final List<String> CREATE_ACTIONS = List.of("project.create", "project.generatedFromProposal");
 
+    /**
+     * The same idea for a registration the log never recorded.
+     *
+     * <p>The seeded dataset inserts confirmed enrollments with direct SQL
+     * (`integration-test/seed.ts` Phase 3.5), because registering through the API
+     * needs the student's own session and an open window, which a project seeded
+     * straight into {@code COMPLETED} does not have. Those registrations are
+     * real rows — they simply never passed through the application, so no
+     * {@code enrollment.register} entry exists, and a timeline built only from
+     * the log showed service records appearing for students who had apparently
+     * never signed up.</p>
+     *
+     * <p>Derived from {@code enrollment.applied_at}, which is a recorded fact
+     * about when the student registered — not a guess. A distinct code from the
+     * audited {@code enrollment.register} so provenance stays legible to anyone
+     * reading the DTO, while the client gives both the same words.</p>
+     */
+    private static final String SYNTHETIC_REGISTER = "enrollment.registered";
+
+    private static final String AUDITED_REGISTER = "enrollment.register";
+
     private final ProjectService projectService;
     private final EnrollmentService enrollmentService;
     private final ServiceRecordService serviceRecordService;
@@ -100,23 +124,51 @@ public class ProjectTimelineService {
 
         // Three sources, one story. The project's own rows are about the
         // project; the other two are about a person, and carry whose.
-        Map<String, String> registrants = enrollmentService.enrollmentSubjectsOf(projectId, resolvedLanguage);
+        List<EnrollmentService.EnrollmentSubject> registrants =
+                enrollmentService.enrollmentSubjectsOf(projectId, resolvedLanguage);
+        Map<String, String> registrantNames = registrants.stream().collect(Collectors.toMap(
+                EnrollmentService.EnrollmentSubject::enrollmentId,
+                EnrollmentService.EnrollmentSubject::studentName, (a, b) -> a, LinkedHashMap::new));
         Map<String, String> records = serviceRecordService.recordSubjectsOfProject(projectId);
+
+        List<AuditLogDto> enrollmentRows = auditLogQueryService.entriesFor(ENROLLMENT_RESOURCE, registrantNames.keySet());
 
         List<TimelineEntryDto> entries = new ArrayList<>();
         entries.addAll(mapped(auditLogQueryService.entriesFor(PROJECT_RESOURCE, List.of(projectId)), Map.of()));
-        entries.addAll(mapped(auditLogQueryService.entriesFor(ENROLLMENT_RESOURCE, registrants.keySet()), registrants));
+        entries.addAll(mapped(enrollmentRows, registrantNames));
         entries.addAll(mapped(auditLogQueryService.entriesFor(SERVICE_RECORD_RESOURCE, records.keySet()), records));
 
         if (entries.stream().noneMatch(e -> CREATE_ACTIONS.contains(e.action()))) {
             entries.add(new TimelineEntryDto(SYNTHETIC_CREATE, project.ownerId(), null, null, null, project.createdAt()));
         }
+        entries.addAll(derivedRegistrations(registrants, enrollmentRows));
 
         // Oldest first: a life story reads forwards. The id is not available to
         // break ties across the two reads, so equal timestamps keep whatever
         // order they arrived in — a stable sort, not an arbitrary one.
         entries.sort(Comparator.comparing(TimelineEntryDto::occurredAt));
         return entries;
+    }
+
+    /**
+     * A "registered" entry for each enrollment the audit log has no record of
+     * signing up — see {@link #SYNTHETIC_REGISTER}.
+     *
+     * <p>Keyed on the enrollment, not on a global flag: one project can have both
+     * seeded and real registrations, and adding a derived line for a student the
+     * log already covers would show their registration twice.</p>
+     */
+    private static List<TimelineEntryDto> derivedRegistrations(
+            List<EnrollmentService.EnrollmentSubject> registrants, List<AuditLogDto> enrollmentRows) {
+        Set<String> audited = enrollmentRows.stream()
+                .filter(row -> AUDITED_REGISTER.equals(row.action()))
+                .map(AuditLogDto::resourceId)
+                .collect(Collectors.toSet());
+        return registrants.stream()
+                .filter(r -> !audited.contains(r.enrollmentId()) && r.appliedAt() != null)
+                .map(r -> new TimelineEntryDto(SYNTHETIC_REGISTER, null, null,
+                        subjectOrNull(r.studentName()), r.status(), r.appliedAt()))
+                .toList();
     }
 
     private List<TimelineEntryDto> mapped(List<AuditLogDto> rows, Map<String, String> subjects) {

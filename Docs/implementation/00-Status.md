@@ -1822,3 +1822,17 @@ All seven record actions are in — drafted, edited, submitted, withdrawn, delet
 
 **Verified through the real dialog** on a project with 22 entries: created → published → registered → three full draft/edit/submit/review cycles ending `APPROVED`, `RETURNED` and `REJECTED`. Every label resolved rather than falling back to the humanized code, and every review row showed subject and actor as two different people — which is the thing the Subject column was added for.
 
+### 41.56 Registrations the audit log never saw, and a dialog that scrolled itself (issue 158, 2026-09-22)
+
+Two things Aquaticism raised on the finished timeline.
+
+**"Why do some projects have service records but no registration — issues in the database seeding?"** The registrations exist; their audit trail does not. `integration-test/seed.ts` Phase 3.5 inserts confirmed enrollments with **direct SQL**, and its own comment says why — registering through the API needs the student's session and an open registration window, which a project seeded straight into `COMPLETED` does not have. The service records go through the API, which is why each has its three audit rows while the enrollments have none. Nothing is corrupt and production is unaffected: a real registration always passes through the endpoint and is audited.
+
+Fixed in the timeline rather than in the log. A registration with no `enrollment.register` entry is **derived** from the enrollment's `applied_at` — a recorded fact about when the student registered, not a guess — with the enrollment's status as its detail. Keyed per enrollment, so a project holding both seeded and real registrations never shows one twice, and carrying **no actor**: the row exists, but no person is on record for it, so the column reads `—` rather than "System", which would claim a machine registered a student. The same move `project.created` already made, for the same reason.
+
+**Deliberately not** fixed by backfilling audit rows. Inventing entries in an append-only log is precisely what that log must never contain. Whether the seed should drive the API instead is a separate question, raised rather than assumed.
+
+**The dialog scrolled itself, not its table**, so a 22-row history pushed Close off the bottom and left Escape as the only exit — the thing issue 102's rule exists to prevent. It is a flex column now: header and footer fixed, the table the only thing that moves, `thead` sticky so the columns stay labelled forty rows down. `min-h-0` on the scrolling child is load-bearing — a flex item defaults to `min-height: auto` and refuses to shrink below its content, so without it the scroll never engages and the panel grows past its own max height.
+
+**Measured on the deployed page**: panel `scrollHeight == clientHeight` (it no longer moves), table 972px of rows in a 462px window, header still visible after scrolling to the bottom, Close visible at both ends.
+

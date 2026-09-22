@@ -54,6 +54,48 @@ The consequence worth having: **no migration and no backfill.** The join works
 against every audit row already written, so a project that ran months ago has its
 full history the first time anyone opens the dialog.
 
+### Registrations the log never saw — which is not a data bug
+
+Aquaticism: *"why do some projects have service records but no registration — issues in
+the database seeding?"*
+
+The registrations **are there**. What is missing is their audit trail:
+
+```
+project                          enrollment rows   enrollment audit rows   record rows
+School Library Organisation            5                    0                  5
+Community Reading Companions           4                    0                  4
+Neighbourhood Digital Help Desk        3                    0                  4
+```
+
+`integration-test/seed.ts` Phase 3.5 inserts confirmed enrollments with **direct
+SQL**, and its own comment says why: registering through the API needs the
+student's session and an open registration window, which a project seeded
+straight into `COMPLETED` does not have. The service records, by contrast, are
+created through the API — which is why each has its three audit rows and the
+enrollments have none.
+
+So nothing is corrupt, and nothing in production is affected: a real registration
+always goes through `POST /projects/{id}/register` and is audited. But a timeline
+that showed a student's service record with no sign of them ever signing up was
+telling a story with a hole in it.
+
+**Fix: derive the registration from the enrollment row** when the log has no
+`enrollment.register` for it, using `applied_at` — a recorded fact about when
+they registered, not a guess — and the enrollment's status as the detail. This is
+the same move the synthetic create line below already makes, for the same reason,
+and it is keyed per enrollment so a project with both seeded and real
+registrations never shows one twice.
+
+The derived entry carries **no actor**: the row exists, but no person is on
+record for it. The Who column shows `—` rather than "System", which would claim a
+machine registered a student.
+
+**Not** fixed by backfilling audit rows. Inventing entries in an append-only log
+is precisely what that log must never contain, and the seed's use of SQL is a
+considered decision with its reasoning written down — reworking it to drive the
+API is a separate question, raised rather than assumed.
+
 ### A synthetic first line, for projects the log never saw
 
 Seeded projects were inserted directly rather than through `POST /projects`, so
@@ -149,6 +191,24 @@ deliberately gives any `projects.update` holder the whole school. The claim in
 grades" — was wrong, and is corrected above rather than quietly dropped. The
 test that could have failed was the one that found this out.
 
+**The dialog scrolls its table, not itself.** A 22-row timeline used to push the
+Close button off the bottom of the panel, leaving Escape as the only exit — which
+is exactly what issue 102's rule exists to prevent. The panel is now a flex
+column: header and footer fixed, the table the only thing that moves, with a
+sticky `thead` so the columns stay labelled forty rows down. Measured on the
+deployed page rather than eyeballed:
+
+```
+dialog scrolls   false          ← the panel itself no longer moves
+table scrolls    true           972px of rows in a 462px window
+header visible   after scrolling to the bottom
+Close visible    at the top and at the bottom of the scroll
+```
+
+`min-h-0` on the scrolling child is load-bearing and easy to lose: a flex item
+defaults to `min-height: auto`, which refuses to shrink below its content, so
+without it the scroll never engages and the panel grows past its own max height.
+
 **Cosmetic defect found and fixed in the same pass.** `detail` first rendered as
 `"CONFIRMED"` with the JSON quotes showing, because `afterSummary` is stored as
 compact JSON and a bare status is a quoted scalar. Stripped, and only for a
@@ -161,6 +221,11 @@ single quoted scalar — trimming an object or array summary would corrupt it.
   the old stub could not see, and the reason the two bridges exist.
 - **Must not leave a review decision anonymous in its subject.** The actor is the
   reviewer; the Subject column says whose record it was.
+- **Must not show a registration twice.** The derived entry is suppressed per
+  enrollment when the log already has one.
+- **Must not claim an actor it does not have.** A derived registration shows `—`,
+  not "System" and not the student inferred from the row.
+- **Must not hide the way out.** The table scrolls; the header and Close do not.
 - **Must not show more than the project page shows.** It resolves the project
   through the same scope-checked `getDetail`, so its visibility can never
   diverge from the page it is opened from — whatever that rule becomes.
