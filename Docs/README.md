@@ -328,6 +328,56 @@ re-run when their content changes, so their references should be kept current.
 If an applied migration's text genuinely needs to change, it does not: write a
 new migration. The old one is a record of what was run, not a document.
 
+### 2.11 A design document states the design, never how it got there
+
+`Design/chinese/*.md` and their English mirrors describe **the system as
+designed, in the present tense.** They are read by someone asking "how does this
+work and why is it like that" — never "what changed last Tuesday".
+
+So none of the following belongs in one, no matter how true it is:
+
+| Do not write | Write instead |
+| :--- | :--- |
+| "changed 2026-09-22 — previously teachers held it" | the rule as it stands, with its reason |
+| "this design changes two of the groups" | which groups need explaining, and why |
+| "X used to live inside Y; we split it out" | why X and Y are separate things |
+| "§5a is a section added later" | nothing — the section is simply there |
+| "`V34` carries the migration; `INSERT IGNORE` cannot update a row" | nothing — that is implementation mechanics |
+| "not yet implemented" / "planned for a later phase" | the design; build state lives elsewhere |
+| "reversing the earlier merge", "X loses Y" | what each role holds now, and why they differ |
+
+**Where the history goes instead**, because it is genuinely worth keeping:
+
+- *why a change was made and what it cost* → the issue doc (`Docs/issues/0NN-*.md`)
+- *what state the build is in* → `Docs/implementation/00-Status.md`
+- *what broke in live use* → `integration-test/STATUS.md`
+- *what actually ran against the database* → the migration file itself
+
+A design doc that carries its own changelog decays in a specific way: the reader
+cannot tell which sentences describe the system and which describe a detour, so
+every statement needs dating before it can be trusted. §2.5 says the same thing
+about the status docs from the other direction — they hold current state, not
+everything that ever happened.
+
+**When revising one, rewrite the affected passage in place.** Do not append a
+correction, do not leave the superseded sentence beside the new one, and do not
+mark what changed. The diff already records that; the document should read as
+though it had always said this.
+
+Two things this rule does **not** forbid:
+
+- **Citing another document** for a rule's basis or a mechanism's detail. A
+  cross-reference is navigation, not narration.
+- **Naming something retired**, when the retired thing still exists and a reader
+  will meet it — a permission row that grants nothing, a status a state machine
+  no longer reaches. State what it is now ("grants nothing, cannot be assigned"),
+  not the story of its retirement.
+
+One constraint on tidying: **section numbers stay put** (§2.2). A section that
+reads like an insertion — `§5a` — is still better than renumbering, because
+section numbers are cited from applied migrations, which cannot be edited
+(§2.10).
+
 ## 3. Quick checklist before finishing any doc edit
 
 - [ ] If this is a new doc, is it English-only (no new `_CN.md` created)?
@@ -336,6 +386,9 @@ new migration. The old one is a record of what was run, not a document.
       treated as the source of truth?
 - [ ] If this doc is one of the three existing bilingual pairs, did I update its `_CN.md` twin too?
 - [ ] Did I preserve every existing cross-reference and section number?
+- [ ] If this is a design doc, does every sentence describe the system as it is
+      — no dates, no "previously", no "this design changes", no migration
+      filenames, no changelog (§2.11)?
 - [ ] If this is a new numbered doc, did I check the highest existing number
       in that directory just now (not from memory)?
 - [ ] If this specifies work nobody is building yet, is it in `backlog/` (§2.9)

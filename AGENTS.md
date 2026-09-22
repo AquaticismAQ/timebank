@@ -169,7 +169,7 @@ secrets handling — live in `Docs/README.md`.** Read it before creating or
 editing any doc; it is written for exactly this situation (an agent picking
 up this repo cold) and is binding, not optional.
 
-Two rules from `Docs/README.md` are easy to get backwards and worth
+Three rules from `Docs/README.md` are easy to get backwards and worth
 restating here:
 
 - **File the issue doc as work starts, not after the fix ships silently.**
@@ -179,6 +179,12 @@ restating here:
 - **A data-only fix still gets a doc.** If the root cause is a live-database
   gap fixed via direct SQL with no application code touched, it is exactly
   as reportable as a code fix.
+- **A design document states the design, never how it got there**
+  (`Docs/README.md` §2.11). No dates, no "previously", no "this design
+  changes", no migration filenames, no section described as added later.
+  When revising one, rewrite the passage in place so it reads as though it
+  had always said this — the *why it changed* belongs in the issue doc, the
+  build state in `Docs/implementation/00-Status.md`.
 
 ## Operational conventions for every agent and collaborator
 
