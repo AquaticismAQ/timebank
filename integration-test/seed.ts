@@ -987,6 +987,58 @@ async function main() {
   // centi-coins/unit). A mismatch means either the rounding assumption broke
   // or something credited the ledger outside the record flow — both of which
   // would leave a number on screen nobody can explain.
+  // ── Phase 6.6: SQL — backdate the audit log to match ────────────────────
+  //
+  // Phase 6.5 moves the *business* columns into the past. The `audit_log` rows
+  // describing those same events were left on the afternoon of the run, which
+  // did not matter while nothing read them for storytelling — and then issue 158
+  // built the project timeline out of `audit_log.created_at`.
+  //
+  // The visible symptom is a history that reads backwards: registrations dated
+  // last August (Phase 3.6 moved those) sitting *above* a "Project created"
+  // stamped today, because the project's own audit rows never moved.
+  //
+  // So each audit row is pinned to the row it describes. Nothing is invented —
+  // every timestamp below is copied from a business column that already says
+  // when the thing happened.
+  console.log('== Phase 6.6: SQL — backdating the audit log ==');
+  runSqlOnServer([
+    'START TRANSACTION;',
+    // A project is drafted a couple of days before registration opens, and
+    // published when it opens. `LEAST(..., NOW(3))` keeps a project whose window
+    // opens next week from being "created" in the future.
+    `UPDATE audit_log a JOIN project p ON p.id = a.resource_id
+       SET a.created_at = LEAST(p.registration_open_at - INTERVAL 2 DAY, NOW(3))
+       WHERE a.resource_type = 'project' AND a.action IN ('project.create', 'project.generatedFromProposal');`,
+    `UPDATE audit_log a JOIN project p ON p.id = a.resource_id
+       SET a.created_at = LEAST(p.registration_open_at, NOW(3))
+       WHERE a.resource_type = 'project' AND a.action = 'project.publish';`,
+    // Anything else done to a project — edited, archived, cancelled — belongs
+    // after it ran rather than before it existed.
+    `UPDATE audit_log a JOIN project p ON p.id = a.resource_id
+       SET a.created_at = LEAST(GREATEST(p.end_at, p.registration_close_at), NOW(3))
+       WHERE a.resource_type = 'project'
+         AND a.action NOT IN ('project.create', 'project.generatedFromProposal', 'project.publish');`,
+    // A service record's own three moments are already in the record: drafted,
+    // submitted, last decided.
+    `UPDATE audit_log a JOIN service_record sr ON sr.id = a.resource_id
+       SET a.created_at = sr.created_at
+       WHERE a.resource_type = 'serviceRecord' AND a.action IN ('serviceRecord.create', 'serviceRecord.update');`,
+    `UPDATE audit_log a JOIN service_record sr ON sr.id = a.resource_id
+       SET a.created_at = COALESCE(sr.submitted_at, sr.created_at)
+       WHERE a.resource_type = 'serviceRecord' AND a.action = 'serviceRecord.submit';`,
+    `UPDATE audit_log a JOIN service_record sr ON sr.id = a.resource_id
+       SET a.created_at = GREATEST(sr.updated_at, COALESCE(sr.submitted_at, sr.created_at))
+       WHERE a.resource_type = 'serviceRecord'
+         AND a.action NOT IN ('serviceRecord.create', 'serviceRecord.update', 'serviceRecord.submit');`,
+    // The ledger entry belongs to the approval that created it, which Phase 6.5
+    // has already dated.
+    `UPDATE audit_log a JOIN account_transaction t ON t.id = a.resource_id
+       SET a.created_at = t.created_at
+       WHERE a.resource_type = 'account';`,
+    'COMMIT;',
+  ].join('\n'));
+
   console.log('== Phase 7: verifying balances are consistent with approved records ==');
   const admin = session('admin001');
   const mismatches: string[] = [];

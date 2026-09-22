@@ -1860,3 +1860,19 @@ The derived-registration fallback from §41.56 stays, and now only serves data t
 
 **Menu order**: *View Timeline* moved above *Archive* and *Cancel and archive*. A read of what already happened should not sit below the two actions that end the project. Verified live as `admin001`, who holds `projects.cancel` — worth noting because the first check was made as a teacher, who holds neither terminal permission, so neither item was on screen to be ordered.
 
+### 41.58 The shared test server re-seeded, and the audit log backdated with it (2026-09-22)
+
+Aquaticism: re-seed the test server — so that its enrolments carry the audit trail §41.57 introduced.
+
+A verified `mysqldump` first (`/root/timebank-backups/timebank-pre-reseed-20260922-090806.sql.gz`, 56 tables, data present for every key table), then the schema dropped and recreated, Flyway re-migrated, and the seeder run end to end against the real server. Result: 42 users, 56 students, 13 projects, 656 service records, 36 enrolments, **36 `enrollment.register` audit rows, and zero enrolments without one** — where before the re-seed every one of them was unaudited.
+
+**Everything that was on the server is gone**: the 4,634-row audit log, the probe students and cases left by this session's issues, and every uploaded evidence file (orphaned on disk rather than deleted — issue 060's lesson about `--delete` still holds).
+
+**Passwords did not change.** The seeder mints a fresh random password per account; Aquaticism asked mid-run that they not change, and by then Phase 1 had already written all 42. Rather than leave a half-seeded database, the run was allowed to finish and every hash was then rewritten back to the value in `Docs/TestAccounts.md` (bcrypt cost 12, the same the seeder uses). Verified by logging five accounts in against the real endpoint, not by reading the hashes. Usernames are stable across seeds; student *numbers* are generated per run and did change, which is why that file is keyed on username.
+
+**A defect the re-seed exposed.** `Phase 6.5` has always backdated the *business* columns — `service_record.created_at`, `submitted_at`, `review_decision.created_at` — and never the `audit_log` rows describing those same events. That cost nothing until §41.54 built the project timeline out of `audit_log.created_at`: every project then showed "Project created" stamped on the afternoon of the run, sorting *below* registrations correctly dated last August, so the history read backwards. New `Phase 6.6` pins each audit row to the row it describes — a project drafted two days before its window opens and published when it does, a record's create/submit/decide taken from the record itself — inventing no timestamp that is not already in a business column. The same statements were applied once to the live database, so it did not need a second four-minute run.
+
+The timeline now reads forward on real data: created 08-31 → published 09-02 → five registrations on 09-03 → review decisions on 09-17 and 09-19, 22 rows, ascending throughout.
+
+Still stamped on the run date: `account`, `case` and `eventProposal` audit rows. None of them appears on a timeline, and their `resource_id` does not join to a dated row the way the others do — recorded rather than guessed at.
+
