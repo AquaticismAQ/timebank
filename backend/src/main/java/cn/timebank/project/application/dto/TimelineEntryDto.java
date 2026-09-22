@@ -21,6 +21,12 @@ import java.time.Instant;
  * @param detail      the audit row's reason code or {@code after} summary when it
  *                    carries one — a cancellation reason, a new status. Null for
  *                    the events that are fully described by their action.
+ * @param subject     whose registration or service record this event is about.
+ *                    Null for the project's own events, which are about the
+ *                    project itself. Needed because the actor on a review or a
+ *                    confirmation is the <i>staff member</i>, so without it
+ *                    "Record approved — Teacher Wei Chen" never says whose.
  */
-public record TimelineEntryDto(String action, String actorId, String actorName, String detail, Instant occurredAt) {
+public record TimelineEntryDto(String action, String actorId, String actorName, String subject, String detail,
+                                Instant occurredAt) {
 }

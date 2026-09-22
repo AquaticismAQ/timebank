@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 
 import java.util.List;
+import java.util.Map;
 
 /** The `enrollment` module's published interface (Design.md §6) — the contract's `Application`, REST path `/applications`. */
 public interface EnrollmentService {
@@ -40,11 +41,18 @@ public interface EnrollmentService {
     boolean isConfirmed(String projectId, String studentId);
 
     /**
-     * The ids of every enrollment on a project, for the project timeline
-     * (issue 158). Exposed because an enrollment's audit rows are keyed to the
-     * enrollment and carry no project id, so this is the only bridge from a
-     * project to its registration events — and the `project` module must reach
-     * it through this interface rather than the `enrollment` table.
+     * Every enrollment on a project, as {@code enrollmentId -> student name},
+     * for the project timeline (issue 158).
+     *
+     * <p>Exposed because an enrollment's audit rows are keyed to the enrollment
+     * and carry no project id, so this is the only bridge from a project to its
+     * registration events — and the `project` module must reach it through this
+     * interface rather than the `enrollment` table.</p>
+     *
+     * <p>The name comes with the id rather than being looked up afterwards,
+     * because a timeline row like "Registration confirmed — Teacher Wei Chen"
+     * does not say <i>whose</i>, which is the first thing anyone reading it
+     * wants to know.</p>
      */
-    List<String> enrollmentIdsOf(String projectId);
+    Map<String, String> enrollmentSubjectsOf(String projectId, String resolvedLanguage);
 }

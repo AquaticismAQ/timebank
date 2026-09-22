@@ -14,6 +14,15 @@ import java.util.List;
 public interface ServiceRecordRepository extends JpaRepository<ServiceRecord, String>, JpaSpecificationExecutor<ServiceRecord> {
 
     /**
+     * {@code recordId -> studentName} for one project, for the project timeline
+     * (issue 158). A projection rather than whole entities: the timeline needs
+     * two columns, and {@code studentName} is already denormalized onto the row,
+     * so this costs one query and no name lookups.
+     */
+    @Query("select r.id, r.studentName from ServiceRecord r where r.projectId = :projectId")
+    List<Object[]> findIdAndStudentNameByProjectId(@Param("projectId") String projectId);
+
+    /**
      * B3.3 duplicate detection: the student's other records — excluding
      * drafts (not yet committed) and rejections (already resolved as
      * invalid) — whose time window overlaps this one.

@@ -491,11 +491,11 @@ queued → running → succeeded
 
 项目状态变化使用动作端点，避免用通用 `PATCH status` 绕过业务校验。
 
-**`GET /projects/{id}/timeline`（2026-09-22 重建，issue 158）。** 返回 `TimelineEntryDto[]`——`{ action, actorId, actorName, detail, occurredAt }`——**按时间正序且不分页**：一个项目的事件数以十计，而缺了一页的历史不成其为历史。`action` 是**原始审计操作代码**（`project.publish`、`enrollment.register`、`enrollment.bulk.confirm`），不是句子：服务端不产出任何本地化文案，措辞由客户端提供；遇到不认识的代码应降级为可读形式，而不是渲染成空单元格。系统产生的事件（如无人报名的自动归档）`actorId`/`actorName` 均为 null；账号已被删除时则保留 id、没有姓名。`detail` 取该行的 reason code，没有则取 `after` 摘要——取消的理由、报名落到的状态——若操作本身已说清则为 null。
+**`GET /projects/{id}/timeline`（2026-09-22 重建，issue 158）。** 返回 `TimelineEntryDto[]`——`{ action, actorId, actorName, subject, detail, occurredAt }`——**按时间正序且不分页**：一个项目的事件数以十计，而缺了一页的历史不成其为历史。`action` 是**原始审计操作代码**（`project.publish`、`enrollment.register`、`enrollment.bulk.confirm`），不是句子：服务端不产出任何本地化文案，措辞由客户端提供；遇到不认识的代码应降级为可读形式，而不是渲染成空单元格。系统产生的事件（如无人报名的自动归档）`actorId`/`actorName` 均为 null；账号已被删除时则保留 id、没有姓名。`detail` 取该行的 reason code，没有则取 `after` 摘要——取消的理由、报名落到的状态、审核结果的 `APPROVED`/`RETURNED`/`REJECTED`——若操作本身已说清则为 null。**`subject` 表示这条事件是关于谁的报名或谁的服务记录**，项目自身的事件为 null：审核决定与报名确认的操作人是**教职工**，没有这一列，一行记录永远说不清被批的是谁的记录。
 
-这些条目读自**审计日志**，而不是另建一张历史表。报名是其中不显然的一环：报名的审计行挂在 *enrollment* 上，行内不含项目 id，因此 enrollment 表是唯一的桥梁——也正因如此，这个接口对很久以前就跑完的项目同样正确，无需任何回填。当日志中没有创建事件时（直接插入而非经 `POST /projects` 的种子项目），会依据项目自身的 `createdAt`/`ownerId` 合成一条 `project.created`，使故事始终有开头。
+这些条目读自**审计日志**，而不是另建一张历史表，覆盖三类资源：项目本身、它的**报名**、它的**服务记录**。后两类是其中不显然的一环——它们的审计行分别挂在 enrollment 与 service_record 上，行内不含项目 id，因此这两张表是唯一的桥梁。也正因如此，这个接口对很久以前就跑完的项目同样正确，无需任何回填。当日志中没有创建事件时（直接插入而非经 `POST /projects` 的种子项目），会依据项目自身的 `createdAt`/`ownerId` 合成一条 `project.created`，使故事始终有开头。
 
-刻意**不**包含：字段级的前后值（时间线是序列，不是差异对比——那是系统管理 → 审计日志回答的问题），以及该项目下的服务记录（那属于学生本人，在审核中心处理）。
+刻意**不**包含：字段级的前后值——时间线是序列，不是差异对比，那是系统管理 → 审计日志回答的问题。
 
 **发布（issue 130）。** `POST /projects/{id}/publish` 适用与下文 `PATCH` 相同的年级规则；此外，若 `DRAFT` 的 `registrationCloseAt` 已不在未来，则拒绝发布——返回 `409`，`fieldErrors[0].code = PROJECT_REGISTRATION_WINDOW_PASSED`，`message` 为报名截止时间。发布这样的草稿会在下一次读取时直接走完 `PUBLISHED → REGISTRATION_OPEN → ARCHIVED`，而此时已无人能够报名。
 

@@ -30,17 +30,25 @@ recorded there by the append-only log that exists precisely so no action is
 deniable. A second history would be a second thing to keep in step with the
 first, and the moment the two disagreed neither would be trustworthy.
 
-### The bridge to registrations, which is the part that isn't obvious
+### The bridge to registrations and records, which is the part that isn't obvious
 
-A registration's audit rows are recorded against the **enrollment**
-(`resource_type='enrollment'`, `resource_id=<enrollment id>`), and **nothing on
-those rows names the project**. So "the registration events of project X" is not
-a question the audit log can answer alone.
+A registration's audit rows are recorded against the **enrollment**, and a
+service record's against the **record** — and **nothing on either names the
+project**. So "the registration and record events of project X" is not a question
+the audit log can answer alone.
 
-The `enrollment` table is the only link. The timeline asks it through
-`EnrollmentService.enrollmentIdsOf(projectId)` — through the owning module's
+The two owning tables are the only link. The timeline asks them through
+`EnrollmentService.enrollmentSubjectsOf` and
+`ServiceRecordService.recordSubjectsOfProject` — through each owning module's
 interface, not by reaching into its tables — and then asks the audit log for
 those ids.
+
+**Both bridges return the student's name with the id**, which is not decoration.
+The actor on a review decision is the *reviewer*, so "Review decision · APPROVED
+— Teacher Wei Chen" never says whose record it was. The same gap existed for
+`enrollment.confirm`. A fourth column, **Subject**, carries whose registration or
+record each event is about, and reads `—` for the project's own events, which are
+about the project.
 
 The consequence worth having: **no migration and no backfill.** The join works
 against every audit row already written, so a project that ran months ago has its
@@ -53,16 +61,25 @@ no `project.create` row exists for them and their story would open in the middle
 When the log has no create event, one is synthesized from the project's own
 `createdAt` and `ownerId`, so a timeline always has a beginning.
 
-### What it deliberately does not show
+### Service records are in, at Aquaticism's instruction
 
-- **Field diffs.** Three columns: when, what, who. A timeline is read to
-  reconstruct a sequence, and the moment it carries before/after values it stops
-  being scannable. The full detail of any one change is in System Admin → Audit
-  Logs, which is the screen for that question.
-- **Service records.** A project's students submitting and having records
-  reviewed is arguably lifecycle too, but it is the *student's* record, reviewed
-  in Audit Center, and thirty students would bury the six project events under
-  sixty rows. Raised with Aquaticism rather than decided silently.
+The first pass left them out on the grounds that a record belongs to the student
+and thirty students would bury six project events under sixty rows. Aquaticism asked
+for them, and he is right: a project's point is the service done on it, so a
+history that stops at "registered" stops one step before the part that matters.
+All seven record actions are included — drafted, edited, submitted, withdrawn,
+deleted, reviewer assigned, and the review decision, whose `detail` carries the
+resulting `APPROVED`/`RETURNED`/`REJECTED`.
+
+On the real data this lands at roughly twenty to twenty-five rows for a busy
+project, which is still one scannable table.
+
+### What it still deliberately does not show
+
+- **Field diffs.** A timeline is read to reconstruct a sequence, and the moment
+  it carries before/after values it stops being scannable. The full detail of any
+  one change is in System Admin → Audit Logs, which is the screen for that
+  question.
 
 ## 3. Where the code lives
 
@@ -98,24 +115,31 @@ permission was always for.
 
 **On the deployed server, against real history rather than a fixture.**
 
-As `admin001`, a project that had actually lived a whole life:
+As `admin001`, a project that had actually lived a whole life — 22 rows, read
+through the real dialog:
 
 ```
-2026-09-20 14:07  Project created          Teacher Wei Chen
-2026-09-20 14:07  Published                Teacher Wei Chen
-2026-09-20 14:07  Student registered       Alex L.(李*红)      CONFIRMED
-2026-09-20 14:47  Cancelled and archived   Teacher Wei Chen    Automated end-to-end run cleanup (e2e --cleanup).
+When              Action                    Subject          Who
+2026-09-21 00:08  Project created           —                Teacher Wei Chen
+2026-09-21 00:08  Published                 —                Teacher Wei Chen
+2026-09-21 00:08  Student registered        Alex L.(李*红)   Alex L.(李*红)     CONFIRMED
+2026-09-21 00:08  Service record drafted    Alex L.(李*红)   Alex L.(李*红)
+2026-09-21 00:08  Service record edited     Alex L.(李*红)   Alex L.(李*红)
+2026-09-21 00:08  Service record submitted  Alex L.(李*红)   Alex L.(李*红)     SUBMITTED
+2026-09-21 00:08  Review decision           Alex L.(李*红)   Teacher Wei Chen   APPROVED
+…                 (two more record cycles, ending RETURNED and REJECTED)
 ```
 
-The third line is the one that matters: a registration, by the student who made
-it, on a project whose enrollment audit row names no project. That is the row the
-old stub could not have produced by any amount of fixing — and it is historical
-data, written months before this existed, which is the point of reading the audit
-log rather than starting a new history.
+Three things that could each have failed separately. The **registration** and the
+**record rows** are reached only through their bridges, since neither audit row
+names the project. The **Review decision** rows show the split the Subject column
+exists for — subject `Alex L.`, actor `Teacher Wei Chen`. And all of it is
+historical data written on 2026-09-21, months before this code existed, which is
+the whole point of reading the audit log rather than starting a new history.
 
 As `teacher001`, after `V36`: `projects.audit.read` present, **View Timeline** in
 the card menu, and the timeline of a project owned by someone else returning its
-four entries — consistent with the project page, which already shows it.
+entries — consistent with the project page, which already shows it.
 
 **A wrong turn worth recording.** The first scope test looked for a project a
 teacher could not read, and could not find one — twelve probed ids all returned
@@ -133,8 +157,10 @@ single quoted scalar — trimming an object or array summary would corrupt it.
 ## 6. What it must not do
 
 - **Must not invent a second history.** §2 — the audit log is the record.
-- **Must not miss registrations.** §2 — they are the events the old stub could
-  not see, and the reason the enrollment bridge exists.
+- **Must not miss registrations or service records.** §2 — they are the events
+  the old stub could not see, and the reason the two bridges exist.
+- **Must not leave a review decision anonymous in its subject.** The actor is the
+  reviewer; the Subject column says whose record it was.
 - **Must not show more than the project page shows.** It resolves the project
   through the same scope-checked `getDetail`, so its visibility can never
   diverge from the page it is opened from — whatever that rule becomes.

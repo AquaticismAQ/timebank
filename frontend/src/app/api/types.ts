@@ -448,6 +448,12 @@ export interface ProjectTimelineEntry {
   actorId: string | null;
   /** Null when there is no actor, or the account has since been deleted. */
   actorName: string | null;
+  /**
+   * Whose registration or service record this is. Null for the project's own
+   * events — the actor on a review or a confirmation is the staff member, so
+   * without this "Record approved — Teacher Wei Chen" never says whose.
+   */
+  subject: string | null;
   /** A reason code or resulting status, when the row carries one. */
   detail: string | null;
   occurredAt: string;

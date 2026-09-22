@@ -1810,3 +1810,15 @@ Action codes travel raw (`project.publish`, `enrollment.register`); the client s
 
 **Verified live against real history**, not a fixture: a project showing created → published → *a student registering* → cancelled-with-reason, all written on 2026-09-20, months before this code existed. Along the way the issue doc's first-draft scope claim — "a teacher cannot read a project outside their grades" — proved **false** and is corrected there; twelve probed ids all returned 200 to a teacher, including another staff member's draft.
 
+### 41.55 Service records join the project timeline (issue 158 §2, 2026-09-22)
+
+Aquaticism, on reading §41.54: also add the service-record actions.
+
+§41.54 left them out, on the grounds that a record belongs to the student and thirty students would bury six project events under sixty rows. That was the wrong call: a project's point is the service done on it, so a history that stops at "registered" stops one step before the part that matters. On the real data a busy project lands at twenty to twenty-five rows, which is still one scannable table.
+
+All seven record actions are in — drafted, edited, submitted, withdrawn, deleted, reviewer assigned, and the review decision, whose detail carries the resulting `APPROVED`/`RETURNED`/`REJECTED`. The bridge is the same shape as the enrollment one and needed for the same reason: a record's audit rows are keyed to the record and name no project, so `service_record` is the only link, asked through `ServiceRecordService`.
+
+**It also exposed a gap that already existed for registrations.** The actor on a review decision is the *reviewer*, so "Review decision · APPROVED — Teacher Wei Chen" never said whose record it was; `enrollment.confirm` had the same problem. Both bridges now return the student's name alongside the id, and a fourth **Subject** column carries whose registration or record each event is about, reading `—` for the project's own events.
+
+**Verified through the real dialog** on a project with 22 entries: created → published → registered → three full draft/edit/submit/review cycles ending `APPROVED`, `RETURNED` and `REJECTED`. Every label resolved rather than falling back to the humanized code, and every review row showed subject and actor as two different people — which is the thing the Subject column was added for.
+

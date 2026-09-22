@@ -4,6 +4,7 @@ import cn.timebank.audit.application.AuditLogQueryService;
 import cn.timebank.audit.application.dto.AuditLogDto;
 import cn.timebank.enrollment.application.EnrollmentService;
 import cn.timebank.project.application.dto.ProjectDto;
+import cn.timebank.servicerecord.application.ServiceRecordService;
 import cn.timebank.project.application.dto.TimelineEntryDto;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Everything that happened to one project, assembled from the audit log
@@ -32,14 +34,19 @@ import java.util.List;
  * a second thing to keep in step with the first, and the moment they disagreed
  * neither would be trustworthy. This reads the record that already exists.</p>
  *
- * <h2>The bridge to registrations</h2>
+ * <h2>The bridge to registrations and service records</h2>
  *
- * <p>An enrollment's audit rows are recorded against the <b>enrollment</b>
- * ({@code resource_type='enrollment'}), and nothing on those rows names the
- * project. So "the registration events of project X" is not a query the audit
- * log can answer alone: the enrollment table is the only link, and it is asked
- * through {@link EnrollmentService} rather than by reaching into another module's
+ * <p>An enrollment's audit rows are recorded against the <b>enrollment</b>, and
+ * a service record's against the <b>record</b> — and nothing on either names the
+ * project. So "the registration and record events of project X" is not a query
+ * the audit log can answer alone: the two owning tables are the only link, and
+ * they are asked through {@link EnrollmentService} and
+ * {@link ServiceRecordService} rather than by reaching into another module's
  * tables.</p>
+ *
+ * <p>Both bridges return the <b>student's name alongside the id</b>, because the
+ * actor on a confirmation or a review decision is the staff member: without it,
+ * "Record approved — Teacher Wei Chen" never says whose record.</p>
  *
  * <p>This is also why nothing needed a migration or a backfill — the join works
  * on every audit row already written.</p>
@@ -58,6 +65,7 @@ public class ProjectTimelineService {
 
     private static final String PROJECT_RESOURCE = "project";
     private static final String ENROLLMENT_RESOURCE = "enrollment";
+    private static final String SERVICE_RECORD_RESOURCE = "serviceRecord";
 
     /**
      * Synthesized when the log has no create event for a project, so a timeline
@@ -72,12 +80,14 @@ public class ProjectTimelineService {
 
     private final ProjectService projectService;
     private final EnrollmentService enrollmentService;
+    private final ServiceRecordService serviceRecordService;
     private final AuditLogQueryService auditLogQueryService;
 
     ProjectTimelineService(ProjectService projectService, EnrollmentService enrollmentService,
-                           AuditLogQueryService auditLogQueryService) {
+                           ServiceRecordService serviceRecordService, AuditLogQueryService auditLogQueryService) {
         this.projectService = projectService;
         this.enrollmentService = enrollmentService;
+        this.serviceRecordService = serviceRecordService;
         this.auditLogQueryService = auditLogQueryService;
     }
 
@@ -88,13 +98,18 @@ public class ProjectTimelineService {
         // grades, and an out-of-scope id 404s rather than reporting who exists.
         ProjectDto project = projectService.getDetail(projectId, auth, resolvedLanguage);
 
+        // Three sources, one story. The project's own rows are about the
+        // project; the other two are about a person, and carry whose.
+        Map<String, String> registrants = enrollmentService.enrollmentSubjectsOf(projectId, resolvedLanguage);
+        Map<String, String> records = serviceRecordService.recordSubjectsOfProject(projectId);
+
         List<TimelineEntryDto> entries = new ArrayList<>();
-        entries.addAll(mapped(auditLogQueryService.entriesFor(PROJECT_RESOURCE, List.of(projectId))));
-        entries.addAll(mapped(auditLogQueryService.entriesFor(
-                ENROLLMENT_RESOURCE, enrollmentService.enrollmentIdsOf(projectId))));
+        entries.addAll(mapped(auditLogQueryService.entriesFor(PROJECT_RESOURCE, List.of(projectId)), Map.of()));
+        entries.addAll(mapped(auditLogQueryService.entriesFor(ENROLLMENT_RESOURCE, registrants.keySet()), registrants));
+        entries.addAll(mapped(auditLogQueryService.entriesFor(SERVICE_RECORD_RESOURCE, records.keySet()), records));
 
         if (entries.stream().noneMatch(e -> CREATE_ACTIONS.contains(e.action()))) {
-            entries.add(new TimelineEntryDto(SYNTHETIC_CREATE, project.ownerId(), null, null, project.createdAt()));
+            entries.add(new TimelineEntryDto(SYNTHETIC_CREATE, project.ownerId(), null, null, null, project.createdAt()));
         }
 
         // Oldest first: a life story reads forwards. The id is not available to
@@ -104,11 +119,16 @@ public class ProjectTimelineService {
         return entries;
     }
 
-    private List<TimelineEntryDto> mapped(List<AuditLogDto> rows) {
+    private List<TimelineEntryDto> mapped(List<AuditLogDto> rows, Map<String, String> subjects) {
         return rows.stream()
                 .map(row -> new TimelineEntryDto(row.action(), row.actorId(), row.actorDisplayName(),
-                        detailOf(row), row.createdAt()))
+                        subjectOrNull(subjects.get(row.resourceId())), detailOf(row), row.createdAt()))
                 .toList();
+    }
+
+    /** A blank name is no name: a deleted student should read as absent, not as an empty column. */
+    private static String subjectOrNull(String name) {
+        return name == null || name.isBlank() ? null : name;
     }
 
     /**

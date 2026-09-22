@@ -14,12 +14,18 @@ function humanize(action: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** Groups the row colour by what kind of event it is, so a scan finds the shape before the words. */
+/**
+ * Groups the row colour by what kind of event it is, so a scan finds the shape
+ * before the words. Order matters: the refusals are checked before the family
+ * they belong to, since a rejected registration reads as a refusal first.
+ */
 function actionColor(action: string): string {
-  if (action.startsWith('enrollment.')) return 'bg-blue-500';
-  if (action.includes('cancel') || action.includes('reject')) return 'bg-red-500';
+  if (action.includes('cancel') || action.includes('reject') || action.includes('withdraw')
+      || action.includes('delete')) return 'bg-red-500';
   if (action.includes('publish')) return 'bg-green-500';
   if (action.includes('archive')) return 'bg-muted-foreground';
+  if (action.startsWith('enrollment.')) return 'bg-blue-500';
+  if (action.startsWith('serviceRecord.')) return 'bg-amber-500';
   return 'bg-[oklch(0.488_0.243_264.376)]';
 }
 
@@ -100,6 +106,7 @@ export function ProjectTimeline({ projectId, projectTitle, onClose }: {
                 <tr className="text-left text-xs text-muted-foreground">
                   <th className="px-3 py-2 font-normal whitespace-nowrap">{t('admin.projects.timelineWhen')}</th>
                   <th className="px-3 py-2 font-normal">{t('admin.projects.timelineAction')}</th>
+                  <th className="px-3 py-2 font-normal">{t('admin.projects.timelineSubject')}</th>
                   <th className="px-3 py-2 font-normal">{t('admin.projects.timelineWho')}</th>
                 </tr>
               </thead>
@@ -121,6 +128,10 @@ export function ProjectTimeline({ projectId, projectTitle, onClose }: {
                         <span className="block text-xs text-muted-foreground mt-0.5 break-words">{entry.detail}</span>
                       )}
                     </td>
+                    {/* Empty for the project's own events: they are about the
+                        project, not about a person, and an em dash says that
+                        more clearly than a blank cell. */}
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{entry.subject ?? '—'}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">
                       {/* No actor means the system did it — a scheduled sweep,
                           not a person — and saying so is more honest than

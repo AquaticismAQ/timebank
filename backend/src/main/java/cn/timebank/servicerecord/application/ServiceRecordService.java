@@ -13,6 +13,7 @@ import org.springframework.security.core.Authentication;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /** The `servicerecord` module's published interface (Design.md §6). */
@@ -69,4 +70,16 @@ public interface ServiceRecordService {
      * {@code recordNumber} (issue-03 §5.3) — never falls back to exposing the raw record id.
      */
     Optional<String> recordLabel(String id);
+
+    /**
+     * Every service record filed against a project, as
+     * {@code recordId -> studentName}, for the project timeline (issue 158).
+     *
+     * <p>A record's audit rows are keyed to the record and name no project, so —
+     * exactly as with enrollments — this table is the only bridge. The student's
+     * name travels with the id because the actor on a review row is the
+     * *reviewer*, and "Record approved — Teacher Wei Chen" does not say whose
+     * record it was.</p>
+     */
+    Map<String, String> recordSubjectsOfProject(String projectId);
 }

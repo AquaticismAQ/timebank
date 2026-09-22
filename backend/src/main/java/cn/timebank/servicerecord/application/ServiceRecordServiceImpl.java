@@ -369,6 +369,16 @@ class ServiceRecordServiceImpl implements ServiceRecordService {
         return repository.findById(id).map(ServiceRecord::getRecordNumber).filter(n -> n != null && !n.isBlank());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, String> recordSubjectsOfProject(String projectId) {
+        Map<String, String> subjects = new java.util.LinkedHashMap<>();
+        for (Object[] row : repository.findIdAndStudentNameByProjectId(projectId)) {
+            subjects.put((String) row[0], row[1] == null ? "" : (String) row[1]);
+        }
+        return subjects;
+    }
+
     // --- issue 03: source-aware field resolution ---
 
     private record OrgSnapshotEntry(String organizationId, String organizationName, String role) {

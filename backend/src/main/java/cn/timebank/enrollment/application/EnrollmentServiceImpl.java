@@ -262,8 +262,14 @@ class EnrollmentServiceImpl implements EnrollmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<String> enrollmentIdsOf(String projectId) {
-        return repository.findIdsByProjectId(projectId);
+    public Map<String, String> enrollmentSubjectsOf(String projectId, String resolvedLanguage) {
+        List<Enrollment> enrollments = repository.findByProjectId(projectId);
+        Map<String, String> studentNames = studentNameMap(enrollments, resolvedLanguage);
+        Map<String, String> subjects = new java.util.LinkedHashMap<>();
+        for (Enrollment e : enrollments) {
+            subjects.put(e.getId(), studentNames.getOrDefault(e.getStudentId(), ""));
+        }
+        return subjects;
     }
 
     private EnrollmentDto toDto(Enrollment e, Map<String, String> projectTitles, Map<String, String> studentNames) {
