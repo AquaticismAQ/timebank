@@ -68,9 +68,10 @@ Every paginated list was checked for work done in the browser over one page.
 | **Student Management** | sort by grade / hours / coins | **orders one page, presented as ordering the list** — the second (§4a) |
 | Student Management | the three summary tiles | counts one page (`0 / 20 / 20` against 56 students) |
 | Time Coin Accounts | sort by balance, **always on** | "highest balances" is the highest *on this page* |
-| Project Management | sort by registrations | orders one page |
-| Project Center (student) | sort by registrations | orders one page |
-| Notifications | unread count | counts one page; the sidebar badge uses the real endpoint, so the two can differ |
+| Project Management | sort by registrations | orders one page (§4b) |
+| Project Center (student) | sort by registrations | orders one page (§4b) |
+| Notifications | unread count | counts one page; the sidebar badge uses the real endpoint, so the two can differ (§4b) |
+| Project Management / Project Center / Organizations | "N items" heading | counts one page — invisible while everything fits on one (§4b) |
 
 Only the first hides rows. The rest mislead without hiding: a sort that orders
 twenty of fifty-six rows answers "who is top" with "who is top of this page",
@@ -233,19 +234,78 @@ after    Hours ↓ → Alex L.(李*红) 30h 120%, first row
          sort changed while on page 3 → back to page 1
 ```
 
-## 4b. Still page-only, and not fixed here
+## 4b. The rest of the app — Aquaticism's question, answered
 
-| Page | Sort | Why not fixed |
+> what about other pages, the issues only occur in student management page?
+
+No. Every list page was re-swept for the whole family: a **filter**, a **sort**
+or a **count** computed in the browser over one page. Six more instances, in two
+kinds.
+
+| Page | What | State |
 | :--- | :--- | :--- |
-| Project Management | registrations | `enrolledCount` has no backend column |
-| Project Center | registrations | same |
+| Project Management | sort by registrations | **fixed** — server-side |
+| Project Center | sort by registrations | **fixed** — server-side |
+| Notifications | "N unread" | **fixed** — reads the real endpoint |
+| Project Management | "N projects" | **fixed** — `totalItems` |
+| Project Center | "N projects" | **fixed** — `totalItems` |
+| Student Management | second "N students" label | **fixed** — `totalItems` |
+| Organization Management | "N organizations" | **fixed** — `totalItems` |
+| Service Categories | "N categories" | correct — `GET /service-categories` is unpaged |
+| Role Management | "N roles", "N templates" | correct — neither list is paged |
 
-Raised rather than quietly left: the options are to make them server-sortable or
-to remove the controls, and removing a control is a product decision.
+**Three of these were invisible on today's data, which is the point.** Eighteen
+projects fit on a page of twenty, six organizations fit on a page of twenty.
+Each was correct by accident and would have started lying at the twenty-first
+row, silently, with nothing on screen to say so. Found by reading, then
+confirmed by forcing the page size down to ten — a size the control offers —
+rather than by waiting for the data to grow.
 
-Time Coin Accounts is no longer blocked — `GET /students` now sorts by
-`timeCoinBalance` — but that screen has no sort control to restore it to, so
-adding one is the same product decision rather than part of this fix.
+### The registrations sort
+
+`enrolledCount` is counted out of `enrollment`, so it has no column, the same
+shape as hours and coins. Same fix: `ProjectController.SORTABLE` accepts it,
+`ProjectServiceImpl` resolves the filters to the whole matching list, counts for
+all of it in one query, then orders and slices. Ties break on `id` ascending.
+
+Measured at page size 10, admin view, 15 visible projects:
+
+```
+old (browser sorted page 1)   5 5 5 2 1 0 0 0 0 0
+new (server sorted the list)  5 5 5 4 2 2 1 1 1 0   then  0 0 0 0 0
+```
+
+The old page 1 was missing two projects on 5, the one on 4 and the one on 3 —
+while calling itself the most-subscribed projects. Controls: `sort=-startAt`
+still comes back ordered, `sort=title` still fails with `Cannot sort by
+'title'.`
+
+### The unread count
+
+`items.filter(n => !n.isRead).length` counted the page. On a student with **22
+notifications, all unread**, page one holds exactly 20 — so the heading read
+"20 unread" while the sidebar badge four centimetres away read 22, because the
+badge already used `GET /notifications/unread-count`. The page now reads the
+same endpoint. Verified live: heading 22, badge 22, server 22.
+
+*Mark all read* sat directly beside that number, offering to clear a total that
+was never the total.
+
+### Counts
+
+Four headings counted rows on screen. Student Management had *two* labels in
+identical wording eight lines apart — "56 students" under the title and "20
+students" above the table. All now read `page.totalItems`; the pager below
+already says how much of it is on screen.
+
+Organization Management's is corrected but not demonstrable on this dataset: six
+organizations, page size twenty. It is a latent fix, stated as one.
+
+### Still page-only, and now genuinely nothing
+
+Time Coin Accounts could sort by balance server-side today — `GET /students`
+carries and sorts `timeCoinBalance` — but that screen has no sort control to
+restore it to, and adding one is a product decision rather than a bug fix.
 
 ## 5. What it must not do
 

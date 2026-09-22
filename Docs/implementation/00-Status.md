@@ -1928,3 +1928,21 @@ Grade, hours and coins each have no column to order by: `grade_id` is a string, 
 In the browser on the live server: *Hours ↓* puts the 30h / 120% student first; *Coins ↓* starts at 304.5, the true maximum, where it used to start at 152.5 (that student now sits fourth); *Grade ↑* runs G6…G12 rather than putting G10 first; *On Track ≥50%* plus *Hours ↓* returns that one student and a pager reading "1 students"; and changing the sort from page 3 returns to page 1.
 
 **Still page-only and raised rather than quietly left:** the `enrolledCount` sort on Project Management and Project Center has no backend column. Time Coin Accounts is no longer blocked — `GET /students` sorts by balance now — but that screen has no sort control to restore it to, and adding one is a product decision, not a bug fix.
+
+### 41.62 The same defect in six more places (issue 159 §4b, 2026-09-23)
+
+Aquaticism, after §41.61: *"what about other pages, the issues only occur in student management page?"*
+
+No. Every list page was re-swept for the whole family — a filter, a sort **or a count** computed in the browser over one page — and six more instances turned up.
+
+**Two sorts.** `enrolledCount` on Project Management and Project Center is counted out of `enrollment`, so it has no column, the same shape as hours and coins. Same fix: `ProjectController.SORTABLE` accepts it and `ProjectServiceImpl` resolves the filters to the whole matching list, counts for all of it in one query, then orders and slices, tie-breaking on `id` ascending.
+
+**One count that was already contradicting itself.** The Notifications heading counted unread rows on the page. On a student with 22 notifications, all unread, page one holds exactly 20 — so the heading read "20 unread" while the sidebar badge four centimetres away read 22, because the badge already used `GET /notifications/unread-count`. The page now reads that same endpoint. *Mark all read* sat beside that number, offering to clear a total that was never the total.
+
+**Four headings counting rows on screen.** Project Management, Project Center, Organization Management, and a *second* Student Management label — that page carried two counts in identical wording eight lines apart, "56 students" under the title and "20 students" above the table. All read `page.totalItems` now; the pager below already says how much of it is on screen.
+
+**Three of these were invisible on today's data, which is the point.** Eighteen projects fit on a page of twenty; six organizations fit on a page of twenty. Each was correct by accident and would have begun lying at the twenty-first row with nothing on screen to say so. Found by reading, then confirmed by forcing the page size down to ten — a size the control offers — rather than by waiting for the data to grow. Measured at that size on the admin's 15 visible projects, the old browser sort produced `5 5 5 2 1 0 0 0 0 0` for page 1 where the true top ten is `5 5 5 4 2 2 1 1 1 0`: it was missing two projects on 5, the one on 4 and the one on 3, while calling itself the most-subscribed projects.
+
+**Two were already correct and were left alone**, rather than "fixed" for symmetry: `GET /service-categories` is unpaged, and Role Management pages nothing, so counting their arrays is counting everything.
+
+Verified live: Project Management at page size 10 runs `5 5 5 4 2 2 1 1 1 0` into `0 0 0 0 0` across the page boundary with the heading holding at 15; Student Management's two labels now agree at 56; the Notifications heading, the sidebar badge and the server all read 22. Controls unchanged: `sort=-startAt` still ordered, `sort=title` still refused. Organization Management's correction is latent — six organizations on a page of twenty — and is recorded as such rather than claimed as observed.

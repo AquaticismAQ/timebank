@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Bell, CheckCheck, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -35,7 +35,20 @@ export function NotificationsPage() {
   // the page that makes them read (issue 154).
   const badges = useBadgeCounts();
 
-  const unreadCount = items.filter(n => !n.isRead).length;
+  /**
+   * The school's unread count, not this page's (issue 159 §4b).
+   *
+   * Counting `items` counted the twenty notifications on screen, so "3 unread"
+   * meant "3 on this page" — and *Mark all read* sat next to it, claiming to
+   * clear a number that was never the whole number. `GET /notifications/
+   * unread-count` is the same endpoint the sidebar badge reads, which is also
+   * why the two could disagree.
+   */
+  const [unreadCount, setUnreadCount] = useState(0);
+  const loadUnreadCount = useCallback(() => {
+    api.notifications.unreadCount().then(setUnreadCount).catch(() => {});
+  }, []);
+  useEffect(loadUnreadCount, [loadUnreadCount, items]);
 
   const selectFilterTab = (val: 'all' | 'unread') => {
     setFilterTab(val);
@@ -43,14 +56,14 @@ export function NotificationsPage() {
   };
 
   const markRead = (id: string) => {
-    api.notifications.markRead(id).then(() => { refetch(); badges.refresh(); }).catch((err) => {
+    api.notifications.markRead(id).then(() => { refetch(); loadUnreadCount(); badges.refresh(); }).catch((err) => {
       if (err?.message) toast.error(err.message);
     });
   };
 
   const markAllRead = () => {
     api.notifications.markAllRead()
-      .then(() => { toast.success(t('student.notifications.allMarkedRead')); refetch(); badges.refresh(); })
+      .then(() => { toast.success(t('student.notifications.allMarkedRead')); refetch(); loadUnreadCount(); badges.refresh(); })
       .catch((err) => { if (err?.message) toast.error(err.message); });
   };
 

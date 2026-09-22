@@ -38,7 +38,6 @@ type FilterStatus = ProjectStatus | 'all' | 'canApply';
 const ACTIVE_APPLICATION_STATUSES = ['pending', 'confirmed', 'waitlisted', 'completed'];
 
 type SortKey = 'createdAt' | 'startAt' | 'enrolledCount';
-const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['enrolledCount'];
 
 export function ProjectCenter() {
   const { t } = useTranslation();
@@ -75,8 +74,7 @@ export function ProjectCenter() {
     const nextDesc = sortKey === key ? !sortDesc : true;
     setSortKey(key);
     setSortDesc(nextDesc);
-    if (!CLIENT_ONLY_SORT_KEYS.includes(key)) setSort(nextDesc ? `-${key}` : key);
-    else setSort(undefined);
+    setSort(nextDesc ? `-${key}` : key);
   };
 
   const handleApply = async (proj: Project) => {
@@ -150,17 +148,11 @@ export function ProjectCenter() {
     { key: 'enrolledCount', label: t('student.projects.sortEnrolled') },
   ];
 
-  // Search/status/category filtering happen server-side (see apply*Filter above). Server-sortable keys
-  // arrive pre-sorted in `items`; enrolledCount has no backend column, so it's sorted locally, page-only —
-  // same split as ProjectManagement.tsx's admin view.
-  const sorted = useMemo(() => {
-    if (!CLIENT_ONLY_SORT_KEYS.includes(sortKey)) return items;
-    return [...items].sort((a, b) => {
-      const av = a[sortKey] as number;
-      const bv = b[sortKey] as number;
-      return sortDesc ? bv - av : av - bv;
-    });
-  }, [items, sortKey, sortDesc]);
+  // Filtering and sorting are both the server's (issue 159 §4b). `enrolledCount`
+  // used to sort here, over whichever page had arrived — which answered "which
+  // projects are filling up" with "which of these twenty are". It looked right
+  // only while every project fit on one page.
+  const sorted = items;
 
   if (loading && items.length === 0) return <div className="p-4 lg:p-6 text-muted-foreground">{t('common.loading')}</div>;
 
@@ -169,7 +161,10 @@ export function ProjectCenter() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-foreground">{t('student.projects.title')}</h2>
-          <p className="text-sm text-muted-foreground">{t('student.projects.count', { count: items.length })}</p>
+          {/* `totalItems`, not `items.length` — the list is paged, so counting
+              the rows on screen would have read "20 projects" for any school
+              with more than twenty (issue 159 §4b). */}
+          <p className="text-sm text-muted-foreground">{t('student.projects.count', { count: page?.totalItems ?? items.length })}</p>
         </div>
       </div>
 

@@ -133,7 +133,10 @@ export function OrganizationManagement() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">{t('admin.organizations.count', { count: items.length })}</p>
+        {/* `totalItems`, not `items.length` — the list is paged, so counting the
+            rows on screen would cap the count at one page (issue 159 §4b). Six
+            organizations fit today; the twenty-first would have been invisible. */}
+        <p className="text-xs text-muted-foreground">{t('admin.organizations.count', { count: page?.totalItems ?? items.length })}</p>
         {canManage && (
           <button onClick={() => { fieldErrors.clearAll(); setCreateForm(EMPTY_FORM); setShowForm(true); }}
             className="flex items-center gap-1.5 px-4 py-2 bg-[oklch(0.488_0.243_264.376)] text-white rounded-xl text-sm hover:opacity-90">

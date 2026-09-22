@@ -443,7 +443,12 @@ export function StudentList() {
         ))}
       </div>
 
-      <div className="text-xs text-muted-foreground">{t('admin.students.count', { count: filtered.length })}</div>
+      {/* The same figure as the headline above, not this page's row count
+          (issue 159 §4b). Two labels reading "56 students" and "20 students" in
+          identical wording, eight lines apart, is a contradiction rather than
+          extra detail — the pager below already says how much of it is on
+          screen. */}
+      <div className="text-xs text-muted-foreground">{t('admin.students.count', { count: page?.totalItems ?? filtered.length })}</div>
 
       {/* The retention deadline, stated where the graduates are read rather than
           left in a design doc. A cohort's records are purged on 31 August of the

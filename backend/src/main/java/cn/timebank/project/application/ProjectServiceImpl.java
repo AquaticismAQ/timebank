@@ -43,7 +43,9 @@ import cn.timebank.student.application.dto.GradeDto;
 import cn.timebank.iam.application.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -52,6 +54,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -119,24 +122,77 @@ class ProjectServiceImpl implements ProjectService {
                 eligibleGradeSpecification(gradeId),
                 academicYearSpecification(academicYearId, auth),
                 FilterSpecifications.searchAnyContains(search, "title"));
-        Page<Project> page = repository.findAll(FilterSpecifications.and(visibilitySpec(auth), filterSpec), pageable);
-        page.getContent().forEach(this::syncTimeBasedStatus);
+        Specification<Project> spec = FilterSpecifications.and(visibilitySpec(auth), filterSpec);
+
+        if (sortsByEnrolledCount(pageable)) {
+            return enrolledCountSortedPage(spec, pageable, auth, resolvedLanguage);
+        }
+
+        Page<Project> page = repository.findAll(spec, pageable);
+        return new PageImpl<>(toDtos(page.getContent(), auth, resolvedLanguage), pageable, page.getTotalElements());
+    }
+
+    private static boolean sortsByEnrolledCount(Pageable pageable) {
+        return pageable.getSort().stream().anyMatch(o -> "enrolledCount".equals(o.getProperty()));
+    }
+
+    /**
+     * Sorting by registrations (issue 159 §4b).
+     *
+     * <p>{@code enrolledCount} is counted out of {@code enrollment}, not stored
+     * on {@code project}, so it cannot appear in an {@code order by} — which is
+     * why both project screens sorted it in the browser, over whichever page had
+     * arrived. That answered "which projects filled up" with "which of these
+     * twenty filled up". It looked right here only because eighteen projects fit
+     * on one page of twenty; at twenty-one it would have started lying, quietly,
+     * with nothing on screen to say so.</p>
+     *
+     * <p>So the filters resolve to the whole matching list, the counts are read
+     * for all of it in one query, and only then is it ordered and cut to the
+     * page — the same arrangement {@code StudentServiceImpl} uses for hours and
+     * coins. Ties break on {@code id} ascending, matching the stable-ordering
+     * guarantee {@code PageableFactory} appends to every database sort.</p>
+     */
+    private Page<ProjectDto> enrolledCountSortedPage(
+            Specification<Project> spec, Pageable pageable, Authentication auth, String resolvedLanguage) {
+        List<ProjectDto> rows = new ArrayList<>(
+                toDtos(repository.findAll(spec), auth, resolvedLanguage));
+        Sort.Order order = pageable.getSort().getOrderFor("enrolledCount");
+        Comparator<ProjectDto> by = Comparator.comparingInt(ProjectDto::enrolledCount);
+        if (order != null && order.isDescending()) {
+            by = by.reversed();
+        }
+        rows.sort(by.thenComparing(ProjectDto::id));
+
+        int from = (int) Math.min(pageable.getOffset(), rows.size());
+        int to = Math.min(from + pageable.getPageSize(), rows.size());
+        return new PageImpl<>(rows.subList(from, to), pageable, rows.size());
+    }
+
+    /**
+     * The per-row lookups a project list needs, done once for the whole list
+     * rather than once per row.
+     */
+    private List<ProjectDto> toDtos(List<Project> projects, Authentication auth, String resolvedLanguage) {
+        projects.forEach(this::syncTimeBasedStatus);
         // Same reason as getDetail's flush — any row's version here might be
         // chained straight into an action call.
-        repository.saveAllAndFlush(page.getContent());
+        repository.saveAllAndFlush(projects);
 
         Map<String, String> categoryNames = categoryNameMap(resolvedLanguage);
         Map<String, String> gradeNames = gradeNameMap(resolvedLanguage);
-        List<String> projectIds = page.getContent().stream().map(Project::getId).toList();
+        List<String> projectIds = projects.stream().map(Project::getId).toList();
         Map<String, Integer> enrolledCounts = enrollmentReadRepository.countConfirmedByProjectIds(projectIds);
         TimeBankPrincipal principal = (CookieSessionUserDetails) auth.getPrincipal();
         Map<String, String> myStatuses = enrollmentReadRepository.myApplicationStatusByProjectIds(projectIds, principal.studentId());
         Map<String, String> ownerNames = userService.displayNamesOf(
-                page.getContent().stream().map(Project::getOwnerId).distinct().toList());
-        Map<String, String> orgNames = organizationNameMap(page.getContent());
+                projects.stream().map(Project::getOwnerId).distinct().toList());
+        Map<String, String> orgNames = organizationNameMap(projects);
         OrganizationDto schoolOrg = schoolOrganization();
 
-        return page.map(p -> toDto(p, categoryNames, gradeNames, enrolledCounts, myStatuses, ownerNames, orgNames, schoolOrg));
+        return projects.stream()
+                .map(p -> toDto(p, categoryNames, gradeNames, enrolledCounts, myStatuses, ownerNames, orgNames, schoolOrg))
+                .toList();
     }
 
     @Override

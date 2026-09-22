@@ -371,9 +371,6 @@ function EditModal({ project, form, onChange, onClose, onSave, organizations, re
 }
 
 type SortKey = 'createdAt' | 'startAt' | 'enrolledCount';
-// `enrolledCount` is a computed field with no backend column to sort on (ProjectController's SORTABLE
-// set only allows id/startAt/registrationOpenAt/status/createdAt), so it stays client-side, current-page-only.
-const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['enrolledCount'];
 
 export function ProjectManagement() {
   const { t } = useTranslation();
@@ -499,20 +496,14 @@ export function ProjectManagement() {
     const nextDesc = sortKey === key ? !sortDesc : true;
     setSortKey(key);
     setSortDesc(nextDesc);
-    if (!CLIENT_ONLY_SORT_KEYS.includes(key)) setSort(nextDesc ? `-${key}` : key);
-    else setSort(undefined);
+    setSort(nextDesc ? `-${key}` : key);
   };
 
-  // Search/status/category filtering happen server-side (see handle*Change above). Server-sortable keys
-  // arrive pre-sorted in `projects`; enrolledCount has no backend column, so it's sorted locally, page-only.
-  const sorted = useMemo(() => {
-    if (!CLIENT_ONLY_SORT_KEYS.includes(sortKey)) return projects;
-    return [...projects].sort((a, b) => {
-      const av = a[sortKey] as number;
-      const bv = b[sortKey] as number;
-      return sortDesc ? bv - av : av - bv;
-    });
-  }, [projects, sortKey, sortDesc]);
+  // Filtering and sorting are both the server's (issue 159 §4b). `enrolledCount`
+  // has no column, but the server orders it over the whole filtered list rather
+  // than letting the page reorder itself; it used to sort here, which answered
+  // "which projects are filling up" with "which of these twenty are".
+  const sorted = projects;
 
   const openEdit = (proj: Project) => {
     setMenuOpenId(null);
@@ -687,7 +678,9 @@ export function ProjectManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-foreground">{t('admin.projects.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('admin.projects.count', { count: projects.length })}</p>
+          {/* `totalItems`, not the page's row count (issue 159 §4b) — the same
+              correction Student Management's headline already carries. */}
+          <p className="text-sm text-muted-foreground">{t('admin.projects.count', { count: page?.totalItems ?? projects.length })}</p>
         </div>
         {canManage && (
           <button onClick={() => { fieldErrors.clearAll(); setShowForm(true); }}

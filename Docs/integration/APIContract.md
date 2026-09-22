@@ -267,6 +267,8 @@ These labels are **read-only point-in-time snapshots for display**. They are nev
 
 **3. Server-computed aggregates are part of the resource.** `enrolledCount`, `projectCount`, `revisionCount`, `daysWaiting`, and progress totals are derived server-side. The client renders them and never recomputes or overrides them.
 
+**3a. A computed aggregate is still sortable, and the client never sorts a page.** `GET /projects` accepts `sort=enrolledCount`, and `GET /students` accepts `gradeLevel`, `completedMinutes` and `timeCoinBalance` (issue 159). None of them is a column, so the server resolves the scope and filters to the whole matching list, computes the values for all of it, then orders and slices the page — ties breaking on `id` ascending, the same stable-ordering guarantee (§2.7) a database sort gets. **The client must never reorder or re-filter a page it has been given, and never count one:** sorting twenty of fifty-six rows answers "who is top" with "who is top of this page", and a heading that counts `items.length` reports the page size as the total. Both are silent while everything fits on one page. A list's total comes from `page.totalItems`; a count the list does not carry — unread notifications, for instance — comes from its own endpoint.
+
 ---
 
 ## 3. Core Resources & Statuses

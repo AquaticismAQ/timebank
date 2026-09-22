@@ -37,7 +37,15 @@ import java.util.Set;
 @RequestMapping("/api/v1/projects")
 public class ProjectController {
 
-    private static final Set<String> SORTABLE = Set.of("id", "startAt", "registrationOpenAt", "status", "createdAt");
+    /**
+     * {@code enrolledCount} is not a column — it is counted out of {@code
+     * enrollment} — so the service orders that one in memory (issue 159 §4b).
+     * It is listed here because this set is what the request is validated
+     * against, and refusing it is what left the sort running in the browser
+     * over a single page.
+     */
+    private static final Set<String> SORTABLE =
+            Set.of("id", "startAt", "registrationOpenAt", "status", "createdAt", "enrolledCount");
 
     private final ProjectService projectService;
     private final ProjectTimelineService projectTimelineService;
