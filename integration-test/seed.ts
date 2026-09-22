@@ -243,13 +243,50 @@ for u, p in passwords.items():
 /** A `429` from the API — retryable, unlike every other failure here. */
 class RateLimitedError extends Error {}
 
+/**
+ * A connection that died rather than an answer that was refused.
+ *
+ * Phase 2 has always retried these for logins, with its own list and the
+ * comment explaining why: a dropped TLS handshake killed a run that had already
+ * written 50 students. The same thing happens to the other 1,500 calls in a run
+ * — seen for real on Phase 4, `SocketError: other side closed` after fifteen
+ * minutes of work — and losing the whole seed to one dropped socket is a bad
+ * trade when the fix is to try again.
+ *
+ * Matched on the error chain's text because a transport failure has no HTTP
+ * status to switch on; `fetch` reports them all as a bare `TypeError`.
+ */
+const TRANSPORT_FAILURE = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|UND_ERR_SOCKET|socket disconnected|other side closed|fetch failed/i;
+
+function isTransportFailure(err: unknown): boolean {
+  const cause = (err as { cause?: unknown })?.cause;
+  return TRANSPORT_FAILURE.test(`${err}${cause ? ` ${cause}` : ''}`);
+}
+
+/**
+ * The maintenance gate's bypass cookie, when the target server has one.
+ *
+ * A server in maintenance mode answers **every** request — including
+ * `/api/*` — with the bilingual 503 page (`Docs/operations/MaintenanceMode.md`),
+ * so the seeder's first login gets HTML where it expects JSON and the run dies
+ * with `Unexpected token '<'`. The documented way through is a cookie, not an
+ * IP allowlist, which is exactly the kind of thing a script can carry.
+ *
+ * Optional: unset on a server with no gate, which is most of them. Turning
+ * maintenance *off* to seed would work too and is worse — it opens the site to
+ * everyone for the length of a four-minute run, to spare one header.
+ */
+const MAINTENANCE_BYPASS_KEY = process.env.TIMEBANK_MAINTENANCE_BYPASS_KEY ?? '';
+
 class Session {
   cookies = new Map<string, string>();
   csrfToken = '';
   userId = '';
   username = '';
 
-  constructor(private baseUrl: string) {}
+  constructor(private baseUrl: string) {
+    if (MAINTENANCE_BYPASS_KEY) this.cookies.set('tb_ops_bypass', MAINTENANCE_BYPASS_KEY);
+  }
 
   private cookieHeader(): string {
     return [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
@@ -290,13 +327,29 @@ class Session {
       try {
         return await this.requestOnce(method, path, body, idempotencyKey);
       } catch (err) {
-        const rateLimited = err instanceof RateLimitedError;
-        if (!rateLimited || attempt === maxAttempts) throw err;
+        const retryable = err instanceof RateLimitedError
+          || (isTransportFailure(err) && this.safeToRetry(method, idempotencyKey));
+        if (!retryable || attempt === maxAttempts) throw err;
         const waitMs = 4000 * attempt;
-        process.stdout.write(`  rate limited on ${path}, waiting ${waitMs / 1000}s (attempt ${attempt}/${maxAttempts - 1})\n`);
+        const why = err instanceof RateLimitedError ? 'rate limited' : 'connection dropped';
+        process.stdout.write(`  ${why} on ${path}, waiting ${waitMs / 1000}s (attempt ${attempt}/${maxAttempts - 1})\n`);
         await new Promise(resolve => setTimeout(resolve, waitMs));
       }
     }
+  }
+
+  /**
+   * Whether replaying this call can only produce the same result.
+   *
+   * A dropped socket says nothing about whether the server processed the
+   * request — so a blind retry of `POST /service-records` would create a second
+   * record if the first one landed and only the response was lost. Reads are
+   * free to repeat, and a write carrying an `Idempotency-Key` is defined to be;
+   * everything else fails loudly, because a duplicate row in a fixture is far
+   * more expensive to notice than a run that stops.
+   */
+  private safeToRetry(method: string, idempotencyKey?: string): boolean {
+    return method === 'GET' || idempotencyKey !== undefined;
   }
 
   private async requestOnce(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<any> {
