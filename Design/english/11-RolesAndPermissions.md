@@ -5,8 +5,7 @@
 > (`12-DataImport.md`) and data export (`13-DataExport.md`) designs.
 > Keep `Design/chinese/11-RolesAndPermissions.md` in sync when editing this file
 > — the Chinese version is the source of truth.
-> Related: compliance basis in `08-mlps-level1-security-design-guide.md`;
-> the earlier role adjustment record in `Docs/optimization/07-RoleFinetune.md`.
+> Related: compliance basis in `08-mlps-level1-security-design-guide.md`.
 
 ---
 
@@ -81,12 +80,12 @@ scope.
 **Deliberately cannot**:
 - **Import anything.** Bulk writes to the roster and to historical records are a
   Student Development Centre responsibility, not a year-group one.
-- **Maintain partner organisations** (admin-only from 2026-09-22; the teacher
-  role held `organizations.manage` until then). A partner organisation is shared
+- **Maintain partner organisations.** A partner organisation is shared
   vocabulary — every project and every service record points at one, so renaming
-  or archiving one changes what other people's records say about themselves. The
-  teacher keeps `organizations.read`: they pick a host organisation when creating
-  a project.
+  or archiving one changes what other people's records say about themselves. That
+  makes it a school-wide action rather than a year-group one. The teacher holds
+  `organizations.read`, which is exactly what picking a project's host
+  organisation needs.
 - Manage users, roles or system settings.
 - Adjust or reverse time-coin accounts.
 - Export the Review Efficiency report — that is peer performance comparison, §5.3.
@@ -137,8 +136,9 @@ groups:
 **`serviceCategories`**, `reports`, **`exports`**, **`imports`**, `users`,
 `roles`, `auditLogs`, `securityLogs`, `settings`, `lifecycle`, `directory`.
 
-This design changes two of them: `exports` and `imports`.
-`serviceCategories` is a group added later — see §5a.
+Most groups are a plain "resource plus action" and need no explanation. Three
+have a division that does: `exports` in §5, `serviceCategories` in §5a, `imports`
+in §6.
 
 ---
 
@@ -152,9 +152,10 @@ export Review Efficiency — a report whose every row is a colleague's review co
 and approval rate. At that grain the only options are granting too much or
 granting nothing.
 
-**So each export type has its own permission**, and `exports.create` is retired:
-its row survives so the audit trail of who once held it still resolves, but it
-grants nothing and cannot be assigned (§5.2).
+**So each export type has its own permission.** The catalogue also carries an
+`exports.create` row: it grants nothing and can be assigned to no role, and it
+exists only so that the code stored in historical audit entries still resolves
+(§5.2's last rule).
 
 ### 5.2 Naming rules
 
@@ -197,23 +198,21 @@ buys.
 
 ---
 
-## 5a. The `serviceCategories` group: split out of `rules.manage`
+## 5a. The `serviceCategories` group: kept apart from `rules`
 
-### 5a.1 Why it should never have lodged inside `rules.manage`
+### 5a.1 Why it is not folded into `rules.manage`
 
-Service categories had no permission of their own. All three write endpoints
-checked `rules.manage`, and the catalogue row's own description admitted it:
-*"Create or edit rule drafts **and service categories**."* One permission, two
-unrelated things.
+Service categories and rule versions both look like "configuration", and they are
+not alike. A rule version is a versioned, immutable-once-published policy object
+whose change recalculates every student's compliance; a service category is a
+word on a dropdown.
 
-They are not alike. A rule version is a versioned, immutable-once-published
-policy object whose change recalculates every student's compliance; a service
-category is a word on a dropdown. Binding them to one permission means a school
-cannot draw a line between "let someone tidy the category list" and "hand over
-the rules that decide who graduates" — exactly the grain §5.1 rejected for
-exports, where the only choices are *too much* or *nothing*.
+Sharing one permission would mean a school cannot draw a line between "let
+someone tidy the category list" and "hand over the rules that decide who
+graduates" — exactly the grain §5.1 rejects for exports, where the only choices
+are *too much* or *nothing*.
 
-### 5a.2 Two permissions, and a third deliberately not added
+### 5a.2 Two permissions, and a third deliberately not defined
 
 | Permission | Covers | Student | Teacher | SDC Admin | System Admin |
 | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -238,19 +237,12 @@ management view. The only thing it adds over the form's list is **what has been
 retired**. So the permission guards a real boundary rather than a nominal one —
 the line falls exactly where the extra information does.
 
-### 5a.4 `rules.manage` changes its description, never its code
+### 5a.4 `rules.manage` covers rule drafts only
 
-`rules.manage` keeps its code and its rule-drafting meaning: a permission code is
-a string in historical audit entries and must go on meaning what it meant (§9.3).
-Only its wording narrows, now that the second half of it has a home.
-
-Landing it takes both halves (§2.1's both-halves rule). The new permissions and
-grants could ship through `R__seed_permissions_and_roles.sql` alone — it is
-`INSERT IGNORE` throughout and re-runs on the live schema when its content
-changes — but **correcting an existing row's description is something only a
-versioned migration can do**, since `INSERT IGNORE` cannot update one. So
-`V34__service_category_permissions.sql` carries both, and the seed keeps every
-from-scratch schema correct.
+`rules.manage` means drafting and editing rule versions, and nothing about
+service categories. Neither group implies the other: holding `rules.manage` does
+not allow editing a category, and holding `serviceCategories.manage` does not
+allow touching a rule.
 
 ---
 
@@ -271,11 +263,10 @@ stand on either side of. If a second importing role ever appears, split then.
 
 **All three are held by SDC Admin only.**
 
-### 6.1 Why System Admin loses import and export
+### 6.1 Why System Admin holds neither import nor export
 
-`Docs/optimization/07-RoleFinetune.md` §2.3 merged `admin` and `sysadmin` into an
-identical permission set (migration `V21`). **This design reverses that merge for
-import and export specifically**, because the risk in those two actions has
+`admin` and `sysadmin` hold identical permissions everywhere else. **Import and
+export are the two places they differ**, because the risk in those actions has
 nothing to do with technical administration:
 
 - **Import** writes student data in bulk, and the historical service-record
@@ -296,10 +287,9 @@ expires, only a system administrator can reopen it, from the server console
 the *window* and grants the operator no `imports.*` — **the switch is not the
 door**, and after reopening, only an SDC Admin can still perform an import.
 
-> **Not done here**: apart from import and export, `admin` and `sysadmin` keep
-> identical permissions. Whether the two roles should separate further — user
-> management, rule publication — is a separate question needing its own
-> discussion, and is out of scope for this design.
+> **An open question**: whether the two roles should separate further — user
+> management, rule publication — is not decided here. It is a separate question
+> needing its own discussion.
 
 ---
 
