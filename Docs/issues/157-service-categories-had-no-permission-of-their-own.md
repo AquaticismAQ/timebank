@@ -119,7 +119,103 @@ categories after   6          probe gone
 
 The server is left exactly as it was found. Nothing else was written.
 
-## 4. What it must not do
+### The stale-session fix, with the failing condition forced
+
+A pre-migration session was reconstructed rather than waited for: the stored
+user's permission list was doctored in `localStorage` to what it would have held
+before `V34`/`V35` ran — `serviceCategories.*` stripped out, `organizations.manage`
+put back — and the page reloaded once.
+
+```
+admin001    doctored 53 perms → after one reload 55, serviceCategories.read back
+            tabs: all nine, Categories among them
+            GET /api/v1/me fired (network panel), which is the mechanism
+
+teacher001  doctored: serviceCategories.read absent, organizations.manage present
+            after one reload:  serviceCategories.read  present   (added back)
+                               serviceCategories.manage absent   (never granted)
+                               organizations.manage    absent    (revoked)
+            tabs: Rules · Data Export · Categories · Organizations · System
+```
+
+The **removal** is the half that proves the mechanism. Restoring a missing
+permission could be explained by a union; dropping an injected one cannot. The
+refreshed list is the server's answer, not a merge of it with whatever the
+browser was holding — which is what makes a *revoked* permission take effect
+without signing out.
+
+### Organisations, read-only for teachers and still editable by admins
+
+```
+teacher001  GET  /organizations      200, six rows, zero action buttons on screen
+            PATCH /organizations/{id} 403
+            POST  /organizations      403
+admin001    PATCH /organizations/{id} 200   ← the control
+```
+
+Both `PATCH`es send the organisation's **current** name, so the probe changes
+nothing whichever way the permission check goes; the name afterwards is still
+`Example Community Service Centre`. Without the admin line, two 403s would only
+show that something was broken.
+
+## 4. The fallout, found by Aquaticism within the hour: the tab vanished for admins
+
+> "why you remove the 'Service Categories' tab from admin?"
+
+Nothing removed it. `admin` holds `serviceCategories.read` and always did from
+the moment `V34` ran. What was missing was the *browser's* knowledge of it.
+
+`AuthProvider` captured the user — permissions included — at **login**, wrote it
+to `localStorage['timebank-user']`, and never re-read it. So a session that began
+before the migration carried a permission list that could not contain a
+permission which had not existed yet. Gate a tab on that permission and the tab
+disappears for exactly the people who are entitled to it, until they sign out and
+back in.
+
+The staleness was years old and harmless while nothing was gated on it. Issues
+156 and 157 are what turned it into a visible defect, so it is fixed here rather
+than logged as a discovery of its own.
+
+**Fix:** `AuthProvider` re-reads `GET /me` on every app load and merges the
+authorization facts — permissions, roles, workspaces, scope grades, feature flags
+— into the stored user. Merged rather than replaced, because `username` is not a
+field `/me` returns. A failure is ignored: a network blip must not sign anyone
+out, and a genuinely expired session is already handled by the 401 handler.
+
+This also closes the same hole in the other direction, which matters more: a
+permission *revoked* mid-session used to keep its UI affordances until the user
+next logged in. Only the server ever enforced it, which was correct but meant the
+screen disagreed with the system for as long as the session lasted.
+
+## 5. Also in this pass: partner organisations become admin-only
+
+> "Organization can only be modify by admin"
+
+`organizations.manage` had been granted to the teacher role on 2026-08-08,
+widening it from admin-only. `V35` reverses that for `teacher` and for the
+Teacher role template, and the seed drops both lines — the both-halves rule
+again, since only a versioned migration can revoke from the live schema.
+
+The reasoning is the one that separates a year-group action from a school-wide
+one: **a partner organisation is shared vocabulary.** Every project and every
+service record points at one, so renaming or archiving one changes what other
+people's records say about themselves. Teachers keep `organizations.read`,
+because picking a project's host organisation needs exactly that and nothing
+more.
+
+`OrganizationManagement.tsx` already gates its create/edit/archive controls on
+`organizations.manage`, so the screen simply becomes read-only for them rather
+than offering buttons that 403 — no frontend change was needed.
+
+**Not to be confused with the tab appearing.** Aquaticism also asked why teachers now
+have an Organizations tab in System Admin that "not exists before". It did exist:
+before issue 156 the tab was rendered unconditionally for everyone
+(`git show df4679e^` — `{ key: 'organizations', ... }` with no gate), and the
+pre-156 live measurement of `teacher001` recorded `Rules · Data Export · Audit
+Logs · Categories · Organizations · System`. What changed is that it is now
+*deliberate* and read-only, rather than unconditional and editable.
+
+## 6. What it must not do
 
 - **Must not break the category picker for a student.** §2 — the plain read is
   unchanged and ungated.
@@ -131,3 +227,7 @@ The server is left exactly as it was found. Nothing else was written.
   §2.1's both-halves rule.
 - **Must not reuse or rename an existing permission code.** `rules.manage` keeps
   its code and its rule-drafting meaning; only its description narrows.
+- **Must not require signing out to see a permission change.** §4 — the cached
+  user is refreshed from `/me` on every load.
+- **Must not take `organizations.read` from teachers.** §5 — they pick a host
+  organisation when creating a project.

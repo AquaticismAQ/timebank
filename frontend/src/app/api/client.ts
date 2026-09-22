@@ -242,8 +242,21 @@ export const api = {
       await http.get<void>('/auth/csrf');
       await http.post<void>('/auth/activate', { code, newPassword });
     },
-    async me(): Promise<User | MeResponse> {
-      return http.get<MeResponse>('/me');
+    /**
+     * The signed-in user as the *server* currently sees them.
+     *
+     * `AuthProvider` calls this on every app load, not just at login. The
+     * cached `timebank-user` in localStorage is a snapshot taken when the
+     * session began, and permission grants change underneath it: adding
+     * `serviceCategories.read` made the Service Categories tab vanish for
+     * admins who were already signed in, because their cached list could not
+     * know about a permission that had not existed when they logged in.
+     */
+    async me(): Promise<User> {
+      const me = await http.get<MeResponse>('/me');
+      // `MeResponse` carries no username — it is not a field `/me` returns.
+      // The caller merges this into the stored user, which has it from login.
+      return meResponseToUser(me, '');
     },
     async logout(): Promise<void> {
       await http.post<void>('/auth/logout');

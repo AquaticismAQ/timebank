@@ -74,13 +74,19 @@ an administrator, who also chooses the username.
 
 **Can**: within their **bound grades**, review service records and event
 proposals, view the student directory and progress, create and publish projects,
-maintain partner organisations, view the service-category vocabulary read-only
+view partner organisations and the service-category vocabulary read-only
 (retired entries included, §5a), and export the student-facing reports for that
 scope.
 
 **Deliberately cannot**:
 - **Import anything.** Bulk writes to the roster and to historical records are a
   Student Development Centre responsibility, not a year-group one.
+- **Maintain partner organisations** (admin-only from 2026-09-22; the teacher
+  role held `organizations.manage` until then). A partner organisation is shared
+  vocabulary — every project and every service record points at one, so renaming
+  or archiving one changes what other people's records say about themselves. The
+  teacher keeps `organizations.read`: they pick a host organisation when creating
+  a project.
 - Manage users, roles or system settings.
 - Adjust or reverse time-coin accounts.
 - Export the Review Efficiency report — that is peer performance comparison, §5.3.

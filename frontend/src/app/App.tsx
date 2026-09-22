@@ -158,6 +158,40 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  /**
+   * Re-reads `/me` on every app load, because the cached user is a snapshot
+   * taken when the session began and the server's answer moves underneath it.
+   *
+   * Permissions are the part that bites. They are captured at login and were
+   * never refreshed, so a grant added afterwards stayed invisible for the life
+   * of the session: adding `serviceCategories.read` made the Service Categories
+   * tab disappear for admins who were already signed in, since a screen gated on
+   * a permission cannot see one the cached list predates. The staleness was
+   * always there; gating tabs on permissions is what made it visible.
+   *
+   * Merged rather than replaced — `username` is not a field `/me` returns, and
+   * the stored user has it from login. Failures are ignored on purpose: a
+   * network blip should not sign anyone out, and a session that has genuinely
+   * expired is caught by the 401 handler above, which is the mechanism for that.
+   */
+  useEffect(() => {
+    if (!user) return;
+    api.auth.me()
+      .then(fresh => updateUser({
+        displayName: fresh.displayName,
+        roles: fresh.roles,
+        workspaces: fresh.workspaces,
+        studentId: fresh.studentId,
+        scopeGradeIds: fresh.scopeGradeIds,
+        permissions: fresh.permissions,
+        featureFlags: fresh.featureFlags,
+      }))
+      .catch(() => {});
+    // Once per load, not per render: `user` is only read to decide whether
+    // anyone is signed in at all.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <AuthContext.Provider value={{ user, login, logout, updateUser }}>
       {children}

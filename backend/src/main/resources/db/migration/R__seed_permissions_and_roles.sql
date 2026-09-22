@@ -136,7 +136,12 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_teacher', 'perm_students_read'),
     ('role_teacher', 'perm_progress_read'),
     ('role_teacher', 'perm_organizations_read'),
-    ('role_teacher', 'perm_organizations_manage'),
+    -- `organizations.manage` deliberately absent (§3.2, 2026-09-22): a teacher
+    -- reads the list to pick a project's host organisation, but a partner
+    -- organisation is shared vocabulary — every project and service record
+    -- points at one, so renaming or archiving one changes what other
+    -- people's records say about themselves. V35 removes the live grant;
+    -- dropping this line is only the from-scratch half.
     ('role_teacher', 'perm_accounts_read'),
     ('role_teacher', 'perm_rules_read'),
     ('role_teacher', 'perm_reports_read'),
@@ -301,7 +306,7 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_template_teacher', 'perm_students_read'),
     ('role_template_teacher', 'perm_progress_read'),
     ('role_template_teacher', 'perm_organizations_read'),
-    ('role_template_teacher', 'perm_organizations_manage'),
+    -- No `perm_organizations_manage`: the template tracks the teacher role (§3.2).
     ('role_template_teacher', 'perm_accounts_read'),
     ('role_template_teacher', 'perm_rules_read'),
     ('role_template_teacher', 'perm_reports_read'),

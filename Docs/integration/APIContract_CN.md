@@ -714,7 +714,7 @@ queued → running → succeeded
 
 **服务类别有了自己的权限（2026-09-22 新增，issue 157）。** 此前它们借用 `rules.manage`，这意味着学校无法在不同时交出"决定谁能毕业的那套规则"的前提下，让某个人去整理类别列表。`serviceCategories.read` 授予教师/SDC 管理员/系统管理员，`serviceCategories.manage` 授予 SDC 管理员/系统管理员。**`GET` 需要哪个权限由查询参数决定**——这一点足够反常，必须写明：不带参数的列表是各表单选择器背后的那份字典，学生必须能拿到，因此仅要求已登录；`?includeInactive=true` 是管理视图，它唯一多出来的东西是*哪些类别已被停用*，所以权限正落在多出来的那部分信息上。不持有 `serviceCategories.read` 而请求该参数，返回 `403`。
 
-`organizations.manage` 现由 `role_admin` 和 `role_teacher` 共同持有（2026-08-08 变更——此前仅管理员持有）。同一变更中，`Organization` 新增了 `description`（自由文本简介）字段，与既有的结构化字段 `type`/`contactName`/`contactEmail`/`contactPhone`/`address` 并列；`CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` 均已携带该字段。
+`organizations.manage` **自 2026-09-22 起重新收归管理员专属**（`V35`）：2026-08-08 曾将其放宽给 `role_teacher`，现予以撤销。合作组织是共享词表——每个项目、每条服务记录都指向其中一条，改名或归档会改变别人的记录对自身的描述。教师保留 `organizations.read`，那正是创建项目时挑选主办方所需要的。同一变更中，`Organization` 新增了 `description`（自由文本简介）字段，与既有的结构化字段 `type`/`contactName`/`contactEmail`/`contactPhone`/`address` 并列；`CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` 均已携带该字段。
 
 `OrganizationDto` 还携带只读的 `isSchoolOrganization` 布尔字段（见 `Docs/optimization/03-ServiceRecordFormOptimization.md` §4.1）——全系统恰有一条记录为 `true`，仅通过一次性种子创建，永远不经由 `POST /organizations`。`PATCH /organizations/{id}` 与 `POST /organizations/{id}/archive` 对该行均返回 `409`——其名称/地址/联系方式只能通过 `PATCH /school/info`（§4.16，仅 `sysadmin`）修改，不能走普通的组织管理流程，也永远不可被归档。每个项目的本校组织（见 §3.1）都解析自这一条记录。
 
