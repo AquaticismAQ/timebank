@@ -209,6 +209,20 @@ for (const p of projects) {
     ['teacher', 'admin'].some(role => userByRef.get(p.ownerUsername)?.roleCodes.includes(role)),
     `${at}: owner ${p.ownerUsername} does not hold projects.create`);
 
+  // Registrations are made through the API now (issue 158), which imposes two
+  // rules SQL inserts never had to meet. Both are caught offline here rather
+  // than four minutes into a run.
+  const registrants = p.registrantStudentNumbers ?? [];
+  check('BACKEND', 'registrants fit the project capacity', registrants.length <= p.capacity,
+    `${at}: ${registrants.length} registrants for capacity ${p.capacity} — the overflow registers as WAITLISTED, not CONFIRMED`);
+  check('BACKEND', 'a draft has no registrants', !(p.targetStatus === 'draft' && registrants.length > 0),
+    `${at}: a draft is never published, so nobody can register for it`);
+  for (const number of registrants) {
+    check('BACKEND', 'registrant has a login account',
+      users.some(u => u.linkedStudentNumber === number),
+      `${at}: registrant ${number} has no account — only an account can register`);
+  }
+
   // `ProjectServiceImpl.syncTimeBasedStatus` sends a project whose registration
   // window closed with zero confirmed registrants straight to ARCHIVED, with no
   // error — so the seed "succeeds" with the project in a status nobody asked for.

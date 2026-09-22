@@ -386,7 +386,15 @@ export interface SeedProject {
   registrationOpenOffsetDays: number;
   registrationCloseOffsetDays: number;
   targetStatus: ProjectStatusTarget;
-  /** Inserted as CONFIRMED enrollments via SQL — a PROJECT-sourced record requires one, and the API's own registration path can't reach CONFIRMED without an admin acting per student. */
+  /**
+   * Registered through `POST /projects/{id}/register` as each student, so the
+   * enrollment carries a real audit trail (issue 158). Registering while the
+   * project is under capacity lands directly on CONFIRMED, which is what a
+   * PROJECT-sourced service record requires — no admin step needed.
+   *
+   * Every number here must belong to a student **with a login account**, and the
+   * list must be no longer than `capacity`; the seeder stops on either.
+   */
   registrantStudentNumbers?: string[];
 }
 
@@ -1225,7 +1233,12 @@ function assignRegistrants(list: SeedProject[]): SeedProject[] {
     if (p.registrationOpenOffsetDays >= 0) return p;
 
     const eligible = generatedStudents.filter(s =>
-      p.eligibleGradeIds.includes(s.gradeId)
+      // Only an account can register: `POST /projects/{id}/register` is the
+      // student's own action, so a roster-only student cannot hold an
+      // enrolment at all (issue 158). The seed used to insert them with SQL,
+      // which produced a state the product cannot reach.
+      s.username
+      && p.eligibleGradeIds.includes(s.gradeId)
       // …and who had actually joined the school by the time registration
       // opened. Without this a Grade 6 student — whose cohort arrived this
       // September — is enrolled in a project that ran last spring, and the
@@ -1236,10 +1249,11 @@ function assignRegistrants(list: SeedProject[]): SeedProject[] {
       throw new Error(`Project "${p.title}" has no enrolled students in its eligible grades — it would auto-archive.`);
     }
 
-    // Students with a login come first: only they can file a service record, so
-    // a project whose registrants are all roster-only shows participants and no
-    // hours on the Top Projects report however correct the rest of the data is.
-    const ordered = [...eligible.filter(s => s.username), ...eligible.filter(s => !s.username)];
+    // Every eligible student now has a login (above), so there is no ordering
+    // left to do — the old "login students first" pass existed to keep a
+    // project from being registered entirely by students who could never file a
+    // record against it.
+    const ordered = eligible;
     const wanted = Math.min(ordered.length, p.capacity, 2 + Math.floor(rnd() * 4));
     const picked: string[] = [];
     for (let i = 0; i < wanted; i++) {

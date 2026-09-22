@@ -842,6 +842,16 @@ export function ProjectManagement() {
                           <CheckCircle className="w-3.5 h-3.5" /> {t('admin.projects.publish')}
                         </button>
                       )}
+                      {/* Reads what already happened rather than doing anything, so
+                          no status forbids it — and it sits above Archive and
+                          Cancel because those two end the project, and the
+                          actions that end something belong last. */}
+                      {canViewTimeline && (
+                        <button onClick={() => { setMenuOpenId(null); setTimelineProject(proj); }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-accent">
+                          <History className="w-3.5 h-3.5" /> {t('admin.projects.viewTimeline')}
+                        </button>
+                      )}
                       {canArchive && proj.status === 'completed' && (
                         <button onClick={() => handleAction(proj, 'archive')}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground hover:bg-accent">
@@ -857,15 +867,6 @@ export function ProjectManagement() {
                         <button onClick={() => openCancel(proj)}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
                           <X className="w-3.5 h-3.5" /> {t('admin.projects.cancelAndArchive')}
-                        </button>
-                      )}
-                      {/* Last, and offered on every status including draft: it
-                          reads what already happened rather than doing anything,
-                          so no state forbids it. */}
-                      {canViewTimeline && (
-                        <button onClick={() => { setMenuOpenId(null); setTimelineProject(proj); }}
-                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-accent">
-                          <History className="w-3.5 h-3.5" /> {t('admin.projects.viewTimeline')}
                         </button>
                       )}
                     </div>

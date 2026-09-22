@@ -1836,3 +1836,27 @@ Fixed in the timeline rather than in the log. A registration with no `enrollment
 
 **Measured on the deployed page**: panel `scrollHeight == clientHeight` (it no longer moves), table 972px of rows in a 462px window, header still visible after scrolling to the bottom, Close visible at both ends.
 
+### 41.57 The seeder registers through the API (issue 158 §2, 2026-09-22)
+
+Aquaticism, on the diagnosis in §41.56: update the seeding script to register through the API. And: keep *Archive* and *Cancel and archive* last in the project card menu.
+
+Phase 3.5 now drives `POST /projects/{id}/applications` as each student rather than inserting `CONFIRMED` rows with direct SQL, so every enrollment carries a real `enrollment.register` entry. No separate confirm call is needed — registering while the project is under capacity lands directly on `CONFIRMED`.
+
+**Two things had to move around it, both because the API refuses to pretend.** Every project is now created inside a **live registration window** and given its real dates back in a new Phase 3.6: a draft whose window has closed cannot be published at all (issue 130), and registration requires the project to be `REGISTRATION_OPEN` *now*, so a fixture largely made of finished projects could not be built any other way. That also fixes a latent breakage — publishing a past-dated project would have 409'd regardless of registrations. And **registrants must hold login accounts**: `assignRegistrants` used to fall back to roster-only students, which SQL accepted and the API cannot, because registering is the student's own action. That was a state the product can never reach, so the fixture stopped asking for it.
+
+`verify-fixture.ts` gained three offline checks — registrant has an account, registrants fit capacity, a draft has no registrants — which caught five roster-only registrants in a second rather than four minutes into a run.
+
+**Tested by running the whole seed against a clean Docker database**, which is the only place a re-seed can be tested at all, since the shared server's data cannot be dropped:
+
+```
+enrollments                              36   (36 CONFIRMED)
+enrollment.register audit rows           36   ← was 0
+enrollments with no register audit row    0
+```
+
+Projects came back on their real dates and statuses (a completed one reads `2026-06-24 … 2026-08-23`, status `COMPLETED`), and the registration audit rows span 2026-05-26…2026-09-18 rather than all landing on the day of the run. The first run 404'd at Phase 3.5: the path is `/projects/{id}/applications`, not `/register` — the REST vocabulary stayed `applications` even though the module is `enrollment`.
+
+The derived-registration fallback from §41.56 stays, and now only serves data that already exists — nothing was backfilled into the audit log.
+
+**Menu order**: *View Timeline* moved above *Archive* and *Cancel and archive*. A read of what already happened should not sit below the two actions that end the project. Verified live as `admin001`, who holds `projects.cancel` — worth noting because the first check was made as a teacher, who holds neither terminal permission, so neither item was on screen to be ordered.
+

@@ -24,6 +24,7 @@ import {
   organizations, users, students, projects, serviceRecords, eventProposals, cases,
   namedClasses, expectedCoinsByUsername, reviewerForGrade, generatedStudents, cohortAcademicYearStarts,
   type SeedProject, type SeedServiceRecord, type SeedEventProposal, type SeedCase, type SeedUser,
+  type ProjectStatusTarget,
 } from './mock-data.ts';
 
 // ── Config ──────────────────────────────────────────────────────────────
@@ -621,20 +622,60 @@ async function main() {
   };
 
   console.log('== Phase 3: API — projects ==');
+
+  // Every project is created inside a **live registration window**, not the one
+  // the fixture asks for, and the real dates are written back in Phase 3.6.
+  //
+  // Two things force this, and both are the API refusing to pretend:
+  //
+  //   · `POST /publish` rejects a draft whose registration window has already
+  //     closed (issue 130) — "publishing it would archive it immediately" —
+  //     and most of this fixture's projects are finished ones with windows
+  //     months in the past.
+  //   · `POST /register` requires the project to be REGISTRATION_OPEN *now*,
+  //     which is time-derived from these same columns.
+  //
+  // So the project is born registrable, really published and really registered
+  // for, and only then moved to where the story says it happened. That is the
+  // same shape Phase 6.5 already uses for service records: do it for real, then
+  // put the clock back.
+  const SEEDING_WINDOW = {
+    registrationOpenAt: daysFromNow(-1, 12),
+    registrationCloseAt: daysFromNow(2, 23.5),
+    startAt: daysFromNow(3, 8),
+    endAt: daysFromNow(4, 17),
+  };
+
   const projectIdByTitle = new Map<string, string>();
+  /** The dates each project should end up with, applied in Phase 3.6. */
+  const intendedDates = new Map<string, {
+    startAt: string; endAt: string; openAt: string; closeAt: string;
+    status: ProjectStatusTarget;
+    /** When the registrations should read as having happened: the day after the window opened. */
+    appliedAt: string;
+  }>();
+
   for (const p of projects as SeedProject[]) {
     const owner = session(p.ownerUsername);
     const created = await owner.request('POST', '/api/v1/projects', {
       title: p.title, summary: p.summary, description: p.description, categoryId: p.categoryId,
       organizationId: p.organizationName ? orgIdByName.get(p.organizationName) : undefined,
       deliveryScope: p.deliveryScope,
-      startAt: daysFromNow(p.startOffsetDays, 8), endAt: daysFromNow(p.endOffsetDays, 17),
+      startAt: SEEDING_WINDOW.startAt, endAt: SEEDING_WINDOW.endAt,
       location: p.location, capacity: p.capacity, recognizedMinutes: p.recognizedMinutes,
       eligibleGradeIds: p.eligibleGradeIds, evidenceRequirements: p.evidenceRequirements,
-      registrationOpenAt: daysFromNow(p.registrationOpenOffsetDays, 0),
-      registrationCloseAt: daysFromNow(p.registrationCloseOffsetDays, 23.5),
+      registrationOpenAt: SEEDING_WINDOW.registrationOpenAt,
+      registrationCloseAt: SEEDING_WINDOW.registrationCloseAt,
     });
     projectIdByTitle.set(p.title, created.id);
+    intendedDates.set(created.id, {
+      startAt: daysFromNow(p.startOffsetDays, 8),
+      endAt: daysFromNow(p.endOffsetDays, 17),
+      openAt: daysFromNow(p.registrationOpenOffsetDays, 0),
+      closeAt: daysFromNow(p.registrationCloseOffsetDays, 23.5),
+      status: p.targetStatus,
+      appliedAt: daysFromNow(p.registrationOpenOffsetDays + 1, 10),
+    });
     let version = created.version;
     if (p.targetStatus !== 'draft') {
       const published = await owner.request('POST', `/api/v1/projects/${created.id}/publish`, { version });
@@ -643,34 +684,93 @@ async function main() {
     console.log(`  project "${p.title}" -> ${p.targetStatus}`);
   }
 
-  console.log('== Phase 3.5: SQL — enrollments (see SeedProject.registrantStudentNumbers doc comment) ==');
+  console.log('== Phase 3.5: API — registrations ==');
 
-  // This used to reconcile registrants against the PROJECT-sourced records here,
-  // by mutating the imported `projects` array at run time. That hid a real
-  // inconsistency: the fixture as written did not enrol those students, so no
-  // offline check could tell a correct dataset from a broken one, and the whole
-  // question only ever surfaced as a 422 mid-run. `mock-data.ts` now exports
-  // projects whose registrant lists already include them
-  // (`withPinnedRegistrants`), and `verify-fixture.ts` asserts it.
+  // Registrations go through `POST /projects/{id}/register`, as the student,
+  // because that is the only way they acquire an audit trail. They used to be
+  // inserted with direct SQL, which produced correct-looking rows that no
+  // `enrollment.register` entry ever explained — so the project timeline showed
+  // students filing service records for projects they had apparently never
+  // signed up for (issue 158). A fixture that cannot be told from a broken
+  // database is not much of a fixture.
+  //
+  // No separate confirm call: registering while the project is under capacity
+  // lands directly on CONFIRMED (`EnrollmentServiceImpl.register`), which is
+  // exactly the state this fixture wants.
+  const userRefByStudentNumber = new Map<string, string>();
+  for (const u of users as SeedUser[]) {
+    if (u.linkedStudentNumber) userRefByStudentNumber.set(u.linkedStudentNumber, refOf(u));
+  }
 
-  const enrollmentInserts: string[] = [];
+  let registeredCount = 0;
   for (const p of projects as SeedProject[]) {
     if (!p.registrantStudentNumbers?.length) continue;
     const projectId = projectIdByTitle.get(p.title)!;
-    const appliedAt = daysFromNow(p.registrationOpenOffsetDays + 1, 10);
-    const confirmedAt = daysFromNow(p.registrationOpenOffsetDays + 1, 11);
+    if (p.targetStatus === 'draft') {
+      // A draft is never published, so nobody can register for it. Loud rather
+      // than skipped: it means the fixture is asking for something the product
+      // cannot do, and silently dropping the registrants is how the old
+      // reconcile-at-run-time bug hid exactly this kind of inconsistency.
+      throw new Error(`Project "${p.title}" is a draft but lists registrants — a draft cannot be registered for.`);
+    }
     for (const studentNumber of p.registrantStudentNumbers) {
-      const studentId = studentIdByNumber.get(studentNumber);
-      if (!studentId) throw new Error(`Project "${p.title}" references unknown student number "${studentNumber}".`);
-      enrollmentInserts.push(
-        `INSERT INTO enrollment (id, project_id, student_id, status, applied_at, confirmed_at, version) VALUES ` +
-        `(${sqlString(genId('enr'))}, ${sqlString(projectId)}, ${sqlString(studentId)}, 'CONFIRMED', ${sqlDateTime(appliedAt)}, ${sqlDateTime(confirmedAt)}, 1);`
-      );
+      if (!studentIdByNumber.get(studentNumber)) {
+        throw new Error(`Project "${p.title}" references unknown student number "${studentNumber}".`);
+      }
+      const ref = userRefByStudentNumber.get(studentNumber);
+      if (!ref) {
+        throw new Error(`Project "${p.title}" registrant "${studentNumber}" has no login account — only an account can register.`);
+      }
+      const enrollment = await session(ref).request(
+        'POST', `/api/v1/projects/${projectId}/applications`, {}, randomUUID());
+      if (enrollment.status !== 'CONFIRMED') {
+        // WAITLISTED means the registrant list is longer than `capacity`, which
+        // changes the fixture into a different one. Worth stopping for: every
+        // PROJECT-sourced service record below assumes a confirmed place.
+        throw new Error(`Project "${p.title}": registrant "${studentNumber}" landed on ${enrollment.status}, not CONFIRMED — check capacity vs registrant count.`);
+      }
+      registeredCount++;
     }
   }
-  if (enrollmentInserts.length > 0) {
-    runSqlOnServer(['START TRANSACTION;', ...enrollmentInserts, 'COMMIT;'].join('\n'));
-    console.log(`Inserted ${enrollmentInserts.length} CONFIRMED enrollments.`);
+  console.log(`Registered ${registeredCount} students through the API (all CONFIRMED).`);
+
+  console.log('== Phase 3.6: SQL — restoring the projects\' real dates ==');
+
+  // Phase 3 borrowed a live window; this gives each project back the dates its
+  // story is told in, and moves the registrations to match. `status` is written
+  // too rather than left to the lazy sync: the column would otherwise stay on
+  // REGISTRATION_OPEN until something happened to read that project, and a
+  // fixture should be correct the moment it finishes, not the first time
+  // somebody looks at it.
+  const TARGET_STATUS_COLUMN: Record<ProjectStatusTarget, string> = {
+    draft: 'DRAFT', published: 'PUBLISHED', registrationOpen: 'REGISTRATION_OPEN',
+    closed: 'CLOSED', inProgress: 'IN_PROGRESS', completed: 'COMPLETED',
+  };
+  const dateFixups: string[] = [];
+  for (const [projectId, d] of intendedDates) {
+    dateFixups.push(
+      `UPDATE project SET start_at = ${sqlDateTime(d.startAt)}, end_at = ${sqlDateTime(d.endAt)}, ` +
+      `registration_open_at = ${sqlDateTime(d.openAt)}, registration_close_at = ${sqlDateTime(d.closeAt)}, ` +
+      `status = ${sqlString(TARGET_STATUS_COLUMN[d.status])} WHERE id = ${sqlString(projectId)};`
+    );
+    // The registration happened the day after the window opened, and the audit
+    // row it wrote has to move with it — otherwise the timeline reports a
+    // student signing up months after the project finished.
+    const appliedAt = d.appliedAt;
+    dateFixups.push(
+      `UPDATE enrollment SET applied_at = ${sqlDateTime(appliedAt)}, ` +
+      `confirmed_at = IF(confirmed_at IS NULL, NULL, ${sqlDateTime(appliedAt)}) ` +
+      `WHERE project_id = ${sqlString(projectId)};`
+    );
+    dateFixups.push(
+      `UPDATE audit_log a JOIN enrollment e ON e.id = a.resource_id ` +
+      `SET a.created_at = ${sqlDateTime(appliedAt)} ` +
+      `WHERE a.resource_type = 'enrollment' AND e.project_id = ${sqlString(projectId)};`
+    );
+  }
+  if (dateFixups.length > 0) {
+    runSqlOnServer(['START TRANSACTION;', ...dateFixups, 'COMMIT;'].join('\n'));
+    console.log(`Restored dates for ${intendedDates.size} projects.`);
   }
 
   console.log(`== Phase 4: API — ${serviceRecords.length} service records ==`);

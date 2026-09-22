@@ -80,7 +80,26 @@ always goes through `POST /projects/{id}/register` and is audited. But a timelin
 that showed a student's service record with no sign of them ever signing up was
 telling a story with a hole in it.
 
-**Fix: derive the registration from the enrollment row** when the log has no
+**Root-cause fix: the seed registers through the API now.** Phase 3.5 drives
+`POST /projects/{id}/applications` as each student, so every enrollment carries a
+real `enrollment.register` entry. Two things had to change around it, both
+because the API refuses to pretend:
+
+- **Every project is created inside a live registration window** and given its
+  real dates back in a new Phase 3.6. A draft whose window has closed cannot be
+  published at all (issue 130), and registration needs the project
+  `REGISTRATION_OPEN` *now* — so a fixture full of finished projects could not
+  be built any other way. This also fixes a latent breakage: publishing a
+  past-dated project would have 409'd regardless of registrations.
+- **Registrants must have login accounts.** `assignRegistrants` used to fall
+  back to roster-only students, which the SQL insert accepted and the API cannot
+  — registering is the student's own action. That was a state the product can
+  never reach, so the fixture no longer asks for it. `verify-fixture.ts` gained
+  three offline checks (account, capacity, not-a-draft) that catch it in a second
+  rather than four minutes into a run.
+
+**And a fallback for data that already exists: derive the registration from the
+enrollment row** when the log has no
 `enrollment.register` for it, using `applied_at` — a recorded fact about when
 they registered, not a guess — and the enrollment's status as the detail. This is
 the same move the synthetic create line below already makes, for the same reason,
@@ -92,9 +111,9 @@ record for it. The Who column shows `—` rather than "System", which would clai
 machine registered a student.
 
 **Not** fixed by backfilling audit rows. Inventing entries in an append-only log
-is precisely what that log must never contain, and the seed's use of SQL is a
-considered decision with its reasoning written down — reworking it to drive the
-API is a separate question, raised rather than assumed.
+is precisely what that log must never contain — so the shared server's existing
+enrollments keep no audit trail, and the derived entry is what makes their
+timelines readable. A re-seed is what clears it for good.
 
 ### A synthetic first line, for projects the log never saw
 
@@ -191,6 +210,32 @@ deliberately gives any `projects.update` holder the whole school. The claim in
 grades" — was wrong, and is corrected above rather than quietly dropped. The
 test that could have failed was the one that found this out.
 
+**The seed, run end to end on a clean Docker database** — the only place a
+re-seed can be tested, since the shared server's data cannot be dropped:
+
+```
+enrollments                              36   (36 CONFIRMED)
+enrollment.register audit rows           36   ← was 0
+enrollments with no register audit row    0
+
+per project:   project audit   enrolment rows   enrolment audit   record audit
+               2               5                5                 15
+               2               5                5                 15
+               2               3                3                  6
+```
+
+`enrolment rows == enrolment audit` on every project is the assertion that
+matters; before this they were 5 and 0. The restored dates were checked too — a
+completed project reads `2026-06-24 … 2026-08-23` with status `COMPLETED`, and
+the registration audit rows span 2026-05-26 to 2026-09-18 rather than all landing
+on the day of the run.
+
+**A wrong turn**: the first run failed at Phase 3.5 with `404: No such endpoint`.
+The path is `POST /projects/{id}/applications`, not `/register` — the REST
+vocabulary is `applications` even though the internal module is `enrollment`.
+Worth the failure: it is exactly the kind of thing that cannot be found by
+reading.
+
 **The dialog scrolls its table, not itself.** A 22-row timeline used to push the
 Close button off the bottom of the panel, leaving Escape as the only exit — which
 is exactly what issue 102's rule exists to prevent. The panel is now a flex
@@ -226,6 +271,10 @@ single quoted scalar — trimming an object or array summary would corrupt it.
 - **Must not claim an actor it does not have.** A derived registration shows `—`,
   not "System" and not the student inferred from the row.
 - **Must not hide the way out.** The table scrolls; the header and Close do not.
+- **Must not put a read above a terminal action.** *View Timeline* sits above
+  *Archive* and *Cancel and archive*: the actions that end a project stay last.
+- **Must not seed a state the product cannot reach.** §2 — registrations go
+  through the API, and a roster-only student cannot hold one.
 - **Must not show more than the project page shows.** It resolves the project
   through the same scope-checked `getDetail`, so its visibility can never
   diverge from the page it is opened from — whatever that rule becomes.
