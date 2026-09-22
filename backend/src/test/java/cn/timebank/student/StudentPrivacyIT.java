@@ -64,7 +64,7 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
         // StudentListItemDto has no email/guardianName/guardianContact accessors
         // at all — this is a compile-time guarantee, not a runtime check. The
         // live assertion here is that the list actually returns the row.
-        Page<StudentListItemDto> page = studentService.list(PageRequest.of(0, 20), adminAuth(), null, null, null, null, "zh-CN");
+        Page<StudentListItemDto> page = studentService.list(PageRequest.of(0, 20), adminAuth(), null, null, null, null, null, "zh-CN");
         assertThat(page.getContent()).anyMatch(s -> s.studentNumber().equals(number));
     }
 
@@ -73,19 +73,19 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
         String number = createStudent("stu_privacy_4").studentNumber();
         Authentication auth = adminAuth();
 
-        Page<StudentListItemDto> byGrade = studentService.list(PageRequest.of(0, 20), auth, "grade_6", null, null, null, "zh-CN");
+        Page<StudentListItemDto> byGrade = studentService.list(PageRequest.of(0, 20), auth, "grade_6", null, null, null, null, "zh-CN");
         assertThat(byGrade.getContent()).anyMatch(s -> s.studentNumber().equals(number));
 
-        Page<StudentListItemDto> wrongGrade = studentService.list(PageRequest.of(0, 20), auth, "grade_9", null, null, null, "zh-CN");
+        Page<StudentListItemDto> wrongGrade = studentService.list(PageRequest.of(0, 20), auth, "grade_9", null, null, null, null, "zh-CN");
         assertThat(wrongGrade.getContent()).noneMatch(s -> s.studentNumber().equals(number));
 
         // Searched in the case it was *typed*, not the case it is stored in —
         // the column's collation is case-insensitive, and an operator typing a
         // number off a printed slip should not have to match its casing.
-        Page<StudentListItemDto> bySearch = studentService.list(PageRequest.of(0, 20), auth, null, null, null, "privacy_4", "zh-CN");
+        Page<StudentListItemDto> bySearch = studentService.list(PageRequest.of(0, 20), auth, null, null, null, null, "privacy_4", "zh-CN");
         assertThat(bySearch.getContent()).anyMatch(s -> s.studentNumber().equals(number));
 
-        Page<StudentListItemDto> noMatch = studentService.list(PageRequest.of(0, 20), auth, null, null, null, "no-such-student", "zh-CN");
+        Page<StudentListItemDto> noMatch = studentService.list(PageRequest.of(0, 20), auth, null, null, null, null, "no-such-student", "zh-CN");
         assertThat(noMatch.getContent()).isEmpty();
     }
 
@@ -134,7 +134,7 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
         assertThatThrownBy(() -> studentService.getDetail(outOfScopeStudent.id(), teacherAuth, "zh-CN"))
                 .isInstanceOf(ApiException.class);
 
-        Page<StudentListItemDto> list = studentService.list(PageRequest.of(0, 20), teacherAuth, null, null, null, null, "zh-CN");
+        Page<StudentListItemDto> list = studentService.list(PageRequest.of(0, 20), teacherAuth, null, null, null, null, null, "zh-CN");
         assertThat(list.getContent()).extracting(StudentListItemDto::id)
                 .contains(inScopeStudent.id())
                 .doesNotContain(outOfScopeStudent.id());

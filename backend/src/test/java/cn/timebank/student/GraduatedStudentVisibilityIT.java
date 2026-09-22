@@ -118,7 +118,7 @@ class GraduatedStudentVisibilityIT extends AbstractIntegrationTest {
     // ── fixture ──────────────────────────────────────────────────────────
 
     private Page<StudentListItemDto> list(String gradeId, String status) {
-        return studentService.list(PageRequest.of(0, 200), adminAuth(), gradeId, null, status, null, "zh-CN");
+        return studentService.list(PageRequest.of(0, 200), adminAuth(), gradeId, null, status, null, null, "zh-CN");
     }
 
     private static java.util.List<String> ids(Page<StudentListItemDto> page) {

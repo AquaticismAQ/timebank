@@ -129,9 +129,20 @@ export function AccountManagement() {
   const getBalance = useCallback((s: Student) => accountMap[s.id]?.balance ?? s.timeCoinBalance ?? 0, [accountMap]);
   const getEarned = useCallback((s: Student) => accountMap[s.id]?.earned ?? 0, [accountMap]);
 
-  const filtered = useMemo(() => {
-    return [...items].sort((a, b) => getBalance(b) - getBalance(a));
-  }, [items, getBalance]);
+  /**
+   * The server's order, unchanged (issue 159).
+   *
+   * This used to re-sort by balance, descending. The list is a *page* of the
+   * roster, so that ordered twenty rows and presented them as "the highest
+   * balances" — measured live, page 1 topped out at 152.5 coins while page 2
+   * held 304.5. Every page looked sorted and the list was not.
+   *
+   * Not repaired by asking the server to sort: the paged resource here is
+   * `/students`, and the balance is merged in afterwards from `/accounts`, so
+   * there is no column to sort on. Roster order is what the page actually has,
+   * and this screen is reached by searching for a student anyway.
+   */
+  const filtered = items;
 
   const colorMap: Record<string, string> = {
     green: 'text-green-600 dark:text-green-400',

@@ -37,8 +37,15 @@ public interface StudentService {
      * than throwing. {@code auth} narrows the result to the caller's
      * data scope (B1.7) before any of the above filters are applied.
      */
+    /**
+     * @param progressStatus {@code onTrack} / {@code behind} / {@code critical},
+     *        resolved <b>server-side</b> so the page and its total describe the
+     *        same list (issue 159). It used to be applied in the browser to
+     *        whichever twenty rows arrived, which emptied pages the pager still
+     *        counted.
+     */
     Page<StudentListItemDto> list(Pageable pageable, Authentication auth, String gradeId, String classId,
-                                   String status, String search, String resolvedLanguage);
+                                   String status, String progressStatus, String search, String resolvedLanguage);
 
     /**
      * Unscoped — resolves a student by id regardless of the caller's data

@@ -1,6 +1,12 @@
 package cn.timebank.student.application;
 
 import cn.timebank.audit.application.AuditEntry;
+import cn.timebank.rules.application.RuleResolutionService;
+import cn.timebank.rules.application.dto.EffectiveRule;
+import cn.timebank.student.infrastructure.StudentProgressQueryRepository;
+import java.util.Set;
+import cn.timebank.student.infrastructure.AcademicYearRepository;
+import cn.timebank.student.domain.AcademicYear;
 import cn.timebank.audit.application.AuditService;
 import cn.timebank.common.OpaqueIds;
 import cn.timebank.common.concurrency.ConcurrencyControl;
@@ -48,16 +54,24 @@ class StudentServiceImpl implements StudentService {
     private final StudentRepository studentRepository;
     private final GradeRepository gradeRepository;
     private final SchoolClassRepository classRepository;
+    private final AcademicYearRepository academicYearRepository;
+    private final StudentProgressQueryRepository progressQueryRepository;
+    private final RuleResolutionService ruleResolutionService;
     private final AuditService auditService;
     private final DataScopeResolver dataScopeResolver;
     private final StudentScopeFields scopeFields = new StudentScopeFields();
 
     StudentServiceImpl(StudentRepository studentRepository, GradeRepository gradeRepository,
-                        SchoolClassRepository classRepository, AuditService auditService,
+                        SchoolClassRepository classRepository, AcademicYearRepository academicYearRepository,
+                        StudentProgressQueryRepository progressQueryRepository,
+                        RuleResolutionService ruleResolutionService, AuditService auditService,
                         DataScopeResolver dataScopeResolver) {
         this.studentRepository = studentRepository;
         this.gradeRepository = gradeRepository;
         this.classRepository = classRepository;
+        this.academicYearRepository = academicYearRepository;
+        this.progressQueryRepository = progressQueryRepository;
+        this.ruleResolutionService = ruleResolutionService;
         this.auditService = auditService;
         this.dataScopeResolver = dataScopeResolver;
     }
@@ -65,19 +79,127 @@ class StudentServiceImpl implements StudentService {
     @Override
     @Transactional(readOnly = true)
     public Page<StudentListItemDto> list(Pageable pageable, Authentication auth, String gradeId, String classId,
-                                          String status, String search, String resolvedLanguage) {
+                                          String status, String progressStatus, String search, String resolvedLanguage) {
         Specification<Student> scopeSpec = scopeSpecification(auth);
         Specification<Student> filterSpec = FilterSpecifications.and(
                 FilterSpecifications.equalTo("gradeId", gradeId),
                 FilterSpecifications.equalTo("classId", classId),
                 statusSpecification(status),
                 FilterSpecifications.searchAnyContains(search, "displayName", "studentNumber"));
-        Page<Student> page = studentRepository.findAll(FilterSpecifications.and(scopeSpec, filterSpec), pageable);
+
         Map<String, Grade> grades = gradeRepository.findAll().stream()
                 .collect(Collectors.toMap(Grade::getId, Function.identity()));
         Map<String, SchoolClass> classes = classRepository.findAll().stream()
                 .collect(Collectors.toMap(SchoolClass::getId, Function.identity()));
-        return page.map(s -> toListItem(s, grades, classes));
+        ProgressYardstick yardstick = progressYardstick();
+
+        // Resolved into an id set *before* paging, so the page and its total both
+        // describe the filtered list (issue 159). Doing it after — which is what
+        // the browser used to do — leaves the pager counting rows the filter has
+        // already removed, and a selective bucket then empties whole pages that
+        // the pager insists exist.
+        if (progressStatus != null && !progressStatus.isBlank()) {
+            Specification<Student> matching = progressSpecification(
+                    scopeSpec, filterSpec, progressStatus, grades, yardstick);
+            filterSpec = FilterSpecifications.and(filterSpec, matching);
+        }
+
+        Page<Student> page = studentRepository.findAll(FilterSpecifications.and(scopeSpec, filterSpec), pageable);
+        Map<String, Long> minutes = yardstick == null ? Map.of()
+                : progressQueryRepository.approvedMinutesByStudent(
+                        page.getContent().stream().map(Student::getId).toList(),
+                        yardstick.from(), yardstick.to());
+        return page.map(s -> toListItem(s, grades, classes, minutes, yardstick));
+    }
+
+    /**
+     * The year the progress is measured over and the rule it is measured against.
+     *
+     * <p>Null when either is missing — no current academic year, or no rule in
+     * effect. The list still renders in that case with zeroed progress, rather
+     * than failing: a roster is useful without a completion figure, and the
+     * progress endpoint already reports the same two conditions as faults where
+     * they actually matter.</p>
+     */
+    private ProgressYardstick progressYardstick() {
+        AcademicYear year = academicYearRepository.findAll().stream()
+                .filter(AcademicYear::isCurrent).findFirst().orElse(null);
+        if (year == null) {
+            return null;
+        }
+        return ruleResolutionService.resolveEffectiveAt(Instant.now())
+                .map(rule -> new ProgressYardstick(year.getStartDate(), year.getEndDate(), rule))
+                .orElse(null);
+    }
+
+    /**
+     * Turns a bucket name into the set of students in it.
+     *
+     * <p>Two queries rather than one clever one: the candidates this filter could
+     * match, then their approved minutes. The roster this is built for is under
+     * two hundred students (`Docs/implementation/01-Overview.md`'s sizing), so
+     * reading it to answer "who is behind" costs less than owning a second copy
+     * of the list query's scope, filter, sort and paging logic in SQL — and that
+     * second copy is the thing that would drift.</p>
+     */
+    private Specification<Student> progressSpecification(
+            Specification<Student> scopeSpec, Specification<Student> filterSpec, String progressStatus,
+            Map<String, Grade> grades, ProgressYardstick yardstick) {
+        if (yardstick == null) {
+            // Nothing to measure against: match nobody rather than everybody. An
+            // unanswerable filter that silently returns the whole roster is the
+            // failure this issue is about, in the opposite direction.
+            return (root, query, cb) -> cb.disjunction();
+        }
+        List<Student> candidates = studentRepository.findAll(FilterSpecifications.and(scopeSpec, filterSpec));
+        Map<String, Long> minutes = progressQueryRepository.approvedMinutesByStudent(
+                candidates.stream().map(Student::getId).toList(), yardstick.from(), yardstick.to());
+
+        Set<String> matched = candidates.stream()
+                .filter(s -> matchesBucket(progressStatus, ratioOf(s, grades, minutes, yardstick)))
+                .map(Student::getId)
+                .collect(Collectors.toSet());
+        if (matched.isEmpty()) {
+            return (root, query, cb) -> cb.disjunction();
+        }
+        return (root, query, cb) -> root.get("id").in(matched);
+    }
+
+    /**
+     * Completion as a fraction of what this student's stage is asked for.
+     *
+     * <p>A zero requirement yields zero rather than dividing — it means no rule
+     * covers this grade, and "infinitely behind" is not a more useful answer than
+     * "not measured".</p>
+     */
+    private double ratioOf(Student student, Map<String, Grade> grades,
+                            Map<String, Long> minutes, ProgressYardstick yardstick) {
+        Grade grade = grades.get(student.getGradeId());
+        int required = yardstick.rule().annualRequiredMinutesForGradeLevel(grade != null ? grade.getSequence() : 0);
+        if (required <= 0) {
+            return 0d;
+        }
+        return minutes.getOrDefault(student.getId(), 0L) / (double) required;
+    }
+
+    /**
+     * The three buckets the Student Management filter offers.
+     *
+     * <p>They overlap deliberately: {@code critical} is a subset of {@code behind},
+     * because a student at 10% is both, and a filter offering "behind" that
+     * excluded the worst cases would be actively misleading. An unknown value
+     * matches nobody rather than everybody — see {@code progressSpecification}.</p>
+     */
+    private static boolean matchesBucket(String bucket, double ratio) {
+        return switch (bucket) {
+            case "onTrack" -> ratio >= 0.5;
+            case "behind" -> ratio < 0.5;
+            case "critical" -> ratio < 0.25;
+            default -> false;
+        };
+    }
+
+    private record ProgressYardstick(java.time.LocalDate from, java.time.LocalDate to, EffectiveRule rule) {
     }
 
     /**
@@ -324,14 +446,18 @@ class StudentServiceImpl implements StudentService {
         }
     }
 
-    private StudentListItemDto toListItem(Student s, Map<String, Grade> grades, Map<String, SchoolClass> classes) {
+    private StudentListItemDto toListItem(Student s, Map<String, Grade> grades, Map<String, SchoolClass> classes,
+                                           Map<String, Long> minutes, ProgressYardstick yardstick) {
         Grade grade = grades.get(s.getGradeId());
         SchoolClass schoolClass = classes.get(s.getClassId());
+        int gradeLevel = grade != null ? grade.getSequence() : 0;
+        int required = yardstick == null ? 0 : yardstick.rule().annualRequiredMinutesForGradeLevel(gradeLevel);
         return new StudentListItemDto(
                 s.getId(), s.getStudentNumber(), s.getDisplayName(),
-                s.getGradeId(), grade != null ? grade.getSequence() : 0,
+                s.getGradeId(), gradeLevel,
                 s.getClassId(), schoolClass != null ? schoolClass.getName() : "",
-                s.getStatus().name(), s.getGraduationYear(), s.getVersion());
+                s.getStatus().name(), s.getGraduationYear(),
+                minutes.getOrDefault(s.getId(), 0L), required, s.getVersion());
     }
 
     private record StudentSummaryForAudit(String studentNumber, String displayName, String status) {

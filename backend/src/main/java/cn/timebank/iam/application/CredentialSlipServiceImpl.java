@@ -201,7 +201,7 @@ class CredentialSlipServiceImpl implements CredentialSlipService {
     private List<StudentListItemDto> roster(String classId, Authentication auth, String resolvedLanguage) {
         Page<StudentListItemDto> page = studentService.list(
                 PageRequest.of(0, MAX_CLASS_SIZE, Sort.by("displayName")), auth,
-                null, classId, "ACTIVE", null, resolvedLanguage);
+                null, classId, "ACTIVE", null, null, resolvedLanguage);
         if (page.getTotalElements() > MAX_CLASS_SIZE) {
             throw ApiException.invalidRequest(
                     "This class has more than " + MAX_CLASS_SIZE + " active students, "

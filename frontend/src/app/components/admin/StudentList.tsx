@@ -82,7 +82,7 @@ export function StudentList() {
    */
   const [filterGrade, setFilterGrade] = useState('all');
   const [filterClass, setFilterClass] = useState('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'onTrack' | 'below50' | 'below25'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'onTrack' | 'behind' | 'critical'>('all');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDesc, setSortDesc] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -121,54 +121,35 @@ export function StudentList() {
     }).catch(() => {});
   }, [items]);
 
-  // `GET /students` carries no service hours either — the same
-  // StudentListItemDto gap as the balance above — so the Service Hours column
-  // and Annual Progress rendered "—" and 0% for every student regardless of
-  // their actual data, while the student's own portal showed the real figures
-  // from `/students/{id}/progress`. Merged in from that same endpoint here.
-  //
-  // There is no bulk progress endpoint, so this is one request per student.
-  // Concurrency is capped because a page can hold 100 students; a failed row
-  // is left blank rather than failing the whole list.
-  const [progressMap, setProgressMap] = useState<Record<string, { completedMinutes: number; annualRequiredMinutes: number }>>({});
+  // `completedMinutes`/`annualRequiredMinutes` arrive on the list row now
+  // (issue 159). They used to be fetched from `/students/{id}/progress` once per
+  // row — twenty requests a page — because the list endpoint did not carry them,
+  // which is also why the completion filter had to run in the browser and could
+  // only see one page.
 
   // Escape closes the topmost open dialog (issue 102 §5).
   useEscapeToClose(() => setEditStudent(null), Boolean(editStudent));
-  useEffect(() => {
-    if (items.length === 0) return;
-    let cancelled = false;
-    const queue = [...items];
-    const map: Record<string, { completedMinutes: number; annualRequiredMinutes: number }> = {};
-    const worker = async () => {
-      while (queue.length > 0 && !cancelled) {
-        const student = queue.shift();
-        if (!student) return;
-        try {
-          const p = await api.students.progressSummary(student.id);
-          map[student.id] = { completedMinutes: p.completedMinutes, annualRequiredMinutes: p.annualRequiredMinutes };
-        } catch {
-          // leave this row's hours blank
-        }
-      }
-    };
-    Promise.all(Array.from({ length: Math.min(6, items.length) }, worker))
-      .then(() => { if (!cancelled) setProgressMap(map); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [items]);
 
   useEffect(() => {
     setStudents(items.map(s => ({
       ...s,
       timeCoinBalance: balanceMap[s.id] ?? s.timeCoinBalance,
-      completedMinutes: progressMap[s.id]?.completedMinutes ?? s.completedMinutes,
-      annualRequiredMinutes: progressMap[s.id]?.annualRequiredMinutes ?? s.annualRequiredMinutes,
     })));
-  }, [items, balanceMap, progressMap]);
+  }, [items, balanceMap]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
     setApiSearch(value);
+  };
+
+  /**
+   * The completion bucket is a server filter (issue 159), so it resets to page 1
+   * like every other one — `setFilter` does that. Filtering in the browser could
+   * not, which is how page 2 of 3 came to be empty.
+   */
+  const handleStatusChange = (value: typeof filterStatus) => {
+    setFilterStatus(value);
+    setFilter('progressStatus', value === 'all' ? undefined : value);
   };
 
   const handleGradeChange = (value: string) => {
@@ -323,26 +304,23 @@ export function StudentList() {
   const sortValue = (s: Student, key: SortKey): string | number =>
     key === 'completedHours' ? (s.completedMinutes ?? 0) : key === 'timeCoinBalance' ? (s.timeCoinBalance ?? 0) : s[key];
 
-  // Search and grade filtering now happen server-side (see handleSearchChange/handleGradeChange above).
-  // The status bucket (onTrack/below50/below25) is derived from a ratio the backend doesn't expose as a
-  // filterable field, so it's still applied client-side to whatever page came back.
-  // Sorting: server-sortable keys arrive pre-sorted in `students`; completedHours/timeCoinBalance have no
-  // backend column to sort on, so they're sorted locally, within the current page only.
+  // Search, grade, class **and the completion bucket** all filter server-side
+  // now (issue 159). The bucket used to be applied here, to whichever twenty
+  // rows had arrived, while the pager went on reporting the unfiltered total —
+  // so selecting "On Track" emptied pages one and two and left the pager
+  // insisting all three existed.
+  //
+  // Sorting: server-sortable keys arrive pre-sorted. The three that have no
+  // backend column still sort here, and still only within the page — see the
+  // note on CLIENT_ONLY_SORT_KEYS.
   const filtered = useMemo(() => {
-    const statusFiltered = students.filter(s => {
-      const pct = (s.completedMinutes ?? 0) / (s.annualRequiredMinutes ?? 1);
-      return filterStatus === 'all' ? true :
-        filterStatus === 'onTrack' ? pct >= 0.5 :
-        filterStatus === 'below50' ? pct < 0.5 :
-        pct < 0.25;
-    });
-    if (!CLIENT_ONLY_SORT_KEYS.includes(sortKey)) return statusFiltered;
-    return [...statusFiltered].sort((a, b) => {
+    if (!CLIENT_ONLY_SORT_KEYS.includes(sortKey)) return students;
+    return [...students].sort((a, b) => {
       const av = sortValue(a, sortKey);
       const bv = sortValue(b, sortKey);
       return sortDesc ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
     });
-  }, [students, filterStatus, sortKey, sortDesc]);
+  }, [students, sortKey, sortDesc]);
 
   /**
    * The purge dates for the cohorts actually on screen — 31 August of the year
@@ -357,15 +335,32 @@ export function StudentList() {
     return [...years].sort((a, b) => a - b).map(y => `${y + 1}-08-31`).join(', ');
   }, [filtered]);
 
-  // Computed from the current page only (the real /students list is paginated, not fetched in full, and
-  // there's no aggregate-stats endpoint) — these read as "on this page", not school-wide. `total` is kept
-  // consistent with onTrack/atRisk (both page-only) rather than mixed with `page.totalItems`, so the
-  // "behind" card (total - onTrack) doesn't produce a nonsense number.
-  const stats = {
-    total: students.length,
-    onTrack: students.filter(s => (s.completedMinutes ?? 0) / (s.annualRequiredMinutes ?? 1) >= 0.5).length,
-    atRisk: students.filter(s => (s.completedMinutes ?? 0) / (s.annualRequiredMinutes ?? 1) < 0.25).length,
-  };
+  /**
+   * The three tiles, counted by the **server** (issue 159).
+   *
+   * They used to count the current page, which is how a roster of 56 students
+   * announced `0 / 20 / 20`: twenty rows, bucketed, presented as a school-wide
+   * summary. Now each bucket is a `pageSize: 1` request read for its
+   * `totalItems` — the same trick `api.cases.pendingCount()` already uses to
+   * count without fetching.
+   *
+   * Deliberately scoped by the *other* active filters (grade, class, search) and
+   * not by the bucket filter itself: the tiles are how you choose a bucket, so
+   * narrowing them to the chosen one would collapse two of them to zero the
+   * moment you used them.
+   */
+  const [stats, setStats] = useState({ total: 0, onTrack: 0, atRisk: 0 });
+  useEffect(() => {
+    let cancelled = false;
+    const scope = { ...params.filter, progressStatus: undefined };
+    const countOf = (progressStatus?: string) => api.students
+      .list({ pageSize: 1, search: params.search, filter: { ...scope, progressStatus } })
+      .then(r => r.page?.totalItems ?? 0)
+      .catch(() => 0);
+    Promise.all([countOf(), countOf('onTrack'), countOf('critical')])
+      .then(([total, onTrack, atRisk]) => { if (!cancelled) setStats({ total, onTrack, atRisk }); });
+    return () => { cancelled = true; };
+  }, [params.filter, params.search]);
 
   // 05-SearchFilterSortConsistency.md §2.2 (D2): headers are a static, non-clickable indicator of the
   // active sort column — the sort-button row below is now the only way to change sort.
@@ -451,12 +446,12 @@ export function StudentList() {
             <option value="all">{t('admin.students.allClasses')}</option>
             {availableClasses.map(c => <option key={c.id} value={c.id}>{formatClassName(c.name)}</option>)}
           </select>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)}
+          <select value={filterStatus} onChange={e => handleStatusChange(e.target.value as typeof filterStatus)}
             className="px-3 py-2.5 rounded-xl border border-border bg-input-background dark:bg-muted text-foreground text-sm focus:outline-none">
             <option value="all">{t('admin.students.allStatuses')}</option>
             <option value="onTrack">{t('admin.students.statusOnTrack')}</option>
-            <option value="below50">{t('admin.students.statusBehind')}</option>
-            <option value="below25">{t('admin.students.statusCritical')}</option>
+            <option value="behind">{t('admin.students.statusBehind')}</option>
+            <option value="critical">{t('admin.students.statusCritical')}</option>
           </select>
         </div>
       </div>

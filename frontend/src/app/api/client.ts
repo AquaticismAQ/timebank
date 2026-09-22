@@ -55,6 +55,13 @@ interface StudentListItemDtoWire {
   gradeId: string; gradeLevel: number; classId: string; className: string;
   status: string; graduationYear: number; version: number;
   joinedAt?: string;
+  /**
+   * This academic year's approved minutes and what the rule asks of this
+   * student's stage (issue 159). On the row itself now — the roster page used to
+   * fetch them per student from `/students/{id}/progress`, which is why its
+   * completion filter could only ever see one page.
+   */
+  completedMinutes?: number; annualRequiredMinutes?: number;
 }
 /** Backend enum fields (status, sourceType, type, ...) arrive UPPER_SNAKE; the frontend renders/compares camelCase literals directly in JSX. Run every response through this for whichever fields the resource has. */
 function mapEnumFields<T extends object>(obj: T, fields: (keyof T)[]): T {
@@ -136,6 +143,8 @@ function fromStudentDto(dto: StudentListItemDtoWire): Student {
     status: dto.status.toLowerCase() as Student['status'],
     graduationYear: dto.graduationYear,
     joinedAt: dto.joinedAt ?? '',
+    completedMinutes: dto.completedMinutes,
+    annualRequiredMinutes: dto.annualRequiredMinutes,
     version: dto.version,
   };
 }

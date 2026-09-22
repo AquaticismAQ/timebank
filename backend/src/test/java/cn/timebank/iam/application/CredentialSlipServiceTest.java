@@ -200,7 +200,7 @@ class CredentialSlipServiceTest {
 
         assertThat(activationService.issuedFor).isEmpty();
         verifyNoInteractions(auditService);
-        verify(studentService, never()).list(any(), any(), any(), any(), any(), any(), any());
+        verify(studentService, never()).list(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     // ------------------------------------------------------- audit hygiene
@@ -351,7 +351,10 @@ class CredentialSlipServiceTest {
 
     private void roster(StudentListItemDto... students) {
         Page<StudentListItemDto> page = new PageImpl<>(List.of(students), Pageable.unpaged(), students.length);
-        when(studentService.list(any(), any(), eq(null), eq(CLASS_ID), eq("ACTIVE"), eq(null), anyString()))
+        // The `eq(null)` before `anyString()` is the progress filter (issue 159):
+        // a credential-slip roster is every active student in the class, never a
+        // completion bucket.
+        when(studentService.list(any(), any(), eq(null), eq(CLASS_ID), eq("ACTIVE"), eq(null), eq(null), anyString()))
                 .thenReturn(page);
     }
 
@@ -360,8 +363,11 @@ class CredentialSlipServiceTest {
     }
 
     private static StudentListItemDto student(String id, String displayName) {
+        // Progress is zeroed: a credential slip names a student and a code, and
+        // nothing on it depends on how many hours they have served (issue 159
+        // added the two fields for Student Management's filter).
         return new StudentListItemDto(id, "SN-" + id, displayName, "grd_7", 7, CLASS_ID, "Class 7-1",
-                "ACTIVE", 2029, 0L);
+                "ACTIVE", 2029, 0L, 0, 0L);
     }
 
     private static StudentAccount account(String studentId, UserStatus status) {

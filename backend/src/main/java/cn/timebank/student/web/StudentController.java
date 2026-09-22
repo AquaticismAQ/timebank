@@ -56,7 +56,8 @@ public class StudentController {
             Authentication auth) {
         Pageable pageable = PageableFactory.toPageable(query, SORTABLE);
         Page<StudentListItemDto> page = studentService.list(pageable, auth, query.filter("gradeId"), query.filter("classId"),
-                query.filter("status"), query.search(), resolveLanguage(acceptLanguage, auth));
+                query.filter("status"), query.filter("progressStatus"), query.search(),
+                resolveLanguage(acceptLanguage, auth));
         return ApiResponse.ofList(page.getContent(), PageMeta.of(page));
     }
 
