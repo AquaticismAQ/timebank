@@ -74,7 +74,8 @@ an administrator, who also chooses the username.
 
 **Can**: within their **bound grades**, review service records and event
 proposals, view the student directory and progress, create and publish projects,
-maintain partner organisations, and export the student-facing reports for that
+maintain partner organisations, view the service-category vocabulary read-only
+(retired entries included, §5a), and export the student-facing reports for that
 scope.
 
 **Deliberately cannot**:
@@ -127,10 +128,11 @@ groups:
 
 `projects`, `eventProposals`, `applications`, `serviceRecords`, `reviews`,
 `cases`, `students`, `progress`, `organizations`, `accounts`, `rules`,
-`reports`, **`exports`**, **`imports`**, `users`, `roles`, `auditLogs`,
-`securityLogs`, `settings`, `lifecycle`, `directory`.
+**`serviceCategories`**, `reports`, **`exports`**, **`imports`**, `users`,
+`roles`, `auditLogs`, `securityLogs`, `settings`, `lifecycle`, `directory`.
 
 This design changes two of them: `exports` and `imports`.
+`serviceCategories` is a group added later — see §5a.
 
 ---
 
@@ -186,6 +188,63 @@ reasonable in a management context and not between peers.
 pinned to themselves** — the permission allows the report, the scope decides it
 covers only their own decisions. This is exactly what separating the two axes
 buys.
+
+---
+
+## 5a. The `serviceCategories` group: split out of `rules.manage`
+
+### 5a.1 Why it should never have lodged inside `rules.manage`
+
+Service categories had no permission of their own. All three write endpoints
+checked `rules.manage`, and the catalogue row's own description admitted it:
+*"Create or edit rule drafts **and service categories**."* One permission, two
+unrelated things.
+
+They are not alike. A rule version is a versioned, immutable-once-published
+policy object whose change recalculates every student's compliance; a service
+category is a word on a dropdown. Binding them to one permission means a school
+cannot draw a line between "let someone tidy the category list" and "hand over
+the rules that decide who graduates" — exactly the grain §5.1 rejected for
+exports, where the only choices are *too much* or *nothing*.
+
+### 5a.2 Two permissions, and a third deliberately not added
+
+| Permission | Covers | Student | Teacher | SDC Admin | System Admin |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| `serviceCategories.read` | the management view — the full list **including retired** categories | — | ✓ | ✓ | ✓ |
+| `serviceCategories.manage` | create, rename, retire, delete | — | — | ✓ | ✓ |
+
+**The teacher holds read.** A teacher works with categories all day when
+reviewing records, and seeing the whole vocabulary — including what has been
+retired, and so why an old record names something no longer offered — is reading
+the school's own dictionary, not an administrative power.
+
+### 5a.3 The plain dictionary read stays ungated
+
+`GET /service-categories` — selectable categories only, the list behind every
+form's picker — **remains merely authenticated**. A student submitting a service
+record has to have it, and **a permission every single role must hold never
+denies anything**: it is decoration with a failure mode attached, since the day
+it is not granted to one role, that role's forms silently break.
+
+What `serviceCategories.read` actually gates is `?includeInactive=true`, the
+management view. The only thing it adds over the form's list is **what has been
+retired**. So the permission guards a real boundary rather than a nominal one —
+the line falls exactly where the extra information does.
+
+### 5a.4 `rules.manage` changes its description, never its code
+
+`rules.manage` keeps its code and its rule-drafting meaning: a permission code is
+a string in historical audit entries and must go on meaning what it meant (§9.3).
+Only its wording narrows, now that the second half of it has a home.
+
+Landing it takes both halves (§2.1's both-halves rule). The new permissions and
+grants could ship through `R__seed_permissions_and_roles.sql` alone — it is
+`INSERT IGNORE` throughout and re-runs on the live schema when its content
+changes — but **correcting an existing row's description is something only a
+versioned migration can do**, since `INSERT IGNORE` cannot update one. So
+`V34__service_category_permissions.sql` carries both, and the seed keeps every
+from-scratch schema correct.
 
 ---
 
@@ -332,6 +391,7 @@ assigned any grade" rather than producing an empty file.
 | Students | — | read | read/manage | read/manage |
 | Accounts | read (own) | read | read/adjust/reverse/freeze | read/adjust/reverse/freeze |
 | Rules | — | read | read/manage/publish | read/manage/publish |
+| **Service categories** | — | **read** | **read/manage** | **read/manage** |
 | Reports | — | read | read | read |
 | **Exports** | — | **6 of 7 (§5.3)** | **all 7** | **none** |
 | **Imports** | — | **none** | **create/read/commit** | **none** |

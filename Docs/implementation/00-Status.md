@@ -1740,7 +1740,7 @@ Aquaticism: the Audit Logs tab should be hidden for a non-student user who does 
 
 Five of the nine tabs already asked for one (`users.read`, `roles.read`, `imports.create`, any `exports.*`, and Settings' sysadmin-only blocks). Four never had. For a teacher that meant two dead tabs: **Audit Logs** rendering its filters, its sort controls and an empty list, because every request behind it 403s — and an empty log is a very different claim from "you cannot see this" — and **Service Categories**, worse in kind, offering create, rename and retire actions that all fail at the server.
 
-Each tab now names the permission its content needs: `rules.read` for Rule Settings, `auditLogs.read` for Audit Logs, `rules.manage` for Service Categories (it is a management screen; *reading* categories is every authenticated user), `organizations.read` for Partner Organizations.
+Each tab now names the permission its content needs: `rules.read` for Rule Settings, `auditLogs.read` for Audit Logs, `rules.manage` for Service Categories (it is a management screen; *reading* categories is every authenticated user), `organizations.read` for Partner Organizations. **Superseded the same day for Service Categories** — Aquaticism's next question was where that tab's own permission was, and the answer was that it had none; see §41.51.
 
 **Settings stays ungated, deliberately.** Every row in it is either readable by any authenticated user (school info, the version, the academic-year start) or already behind a sysadmin role check of its own (the Phase 3/4 toggles, the School Info edit button). `settings.read` exists but nothing on the tab is behind it, so gating on it would hide facts a teacher may see. It is also what keeps the tab list from ever being empty.
 
@@ -1749,4 +1749,20 @@ Each tab now names the permission its content needs: `rules.read` for Rule Setti
 The lists behind hidden tabs no longer fetch. `usePagedApi` gained an `enabled` flag — a screen that correctly hides a tab and still fires its request on mount is hidden in the UI and still asking on the wire, and a teacher opening System Admin was collecting four `403`s before touching anything.
 
 **Verified by measuring both the tab list and the `403` count across the same deploy**, as a teacher whose permissions were read from the live `GET /me` rather than from the seed file. Six tabs became four; all four `403`s disappeared; and `/rules` still returned 200 for that same teacher — the control, since turning every list off would have produced an identical "no more 403s". As `admin001` all nine tabs remain and both newly gated ones still load.
+
+### 41.51 Service categories get permissions of their own (issue 157, 2026-09-22)
+
+Aquaticism, on reading 41.50: "where is the permission for service categories create/edit/view? seems missed" — then, "teacher role should have view permission."
+
+They had none. All three write endpoints checked `rules.manage`, and the catalogue row's own description admitted it — *"Create or edit rule drafts **and service categories**"*. One permission, two unrelated things: a rule version is a versioned, immutable-once-published policy object whose change recalculates every student's compliance; a service category is a word on a dropdown. Binding them together means a school cannot let someone tidy the category list without also handing over the rules that decide who graduates — the same too-much-or-nothing grain `11-RolesAndPermissions.md` §5.1 rejected for exports.
+
+It is also why 41.50's gate was wrong as a resting place: with `rules.manage` the only permission available, a teacher's read-only view of the tab was not expressible.
+
+`serviceCategories.read` (teacher, admin, sysadmin, and the Teacher role template) and `serviceCategories.manage` (admin, sysadmin) — the same holders who could edit categories before, so nobody gains or loses a capability today; the point is that the two can now move apart. `rules.manage` keeps its code and its rule-drafting meaning and loses only the second half of its description.
+
+**The third permission deliberately not added.** `GET /service-categories` — selectable categories, the list behind every form's picker — stays merely authenticated. A student submitting a service record has to have it, and **a permission every single role must hold never denies anything**: decoration with a failure mode attached, since the day it is missed for one role, that role's forms silently break. What `serviceCategories.read` gates is `?includeInactive=true`, the management view, whose only extra content is *what has been retired*. The permission therefore sits exactly where the extra information does. New design section: `11-RolesAndPermissions.md` §5a, both language twins.
+
+Shipped as `V34__service_category_permissions.sql` **plus** the seed edit. The inserts alone would have been fine through `R__seed_permissions_and_roles.sql`, which re-runs on the live schema when its content changes; correcting an existing row's description is the half only a versioned migration can do, since `INSERT IGNORE` cannot update one.
+
+**Verified live as all three kinds of person.** Teacher: tab visible, six categories, no management buttons anywhere on the page, `POST`/`PATCH` both 403 and `cat_other` unchanged afterwards. Student — the control that decides whether the split is real: `GET /service-categories` 200 with six rows while `?includeInactive=true` is 403, one endpoint answering two ways on a query parameter, and the student's actual service-record wizard checked in the browser rather than at the API, since a broken picker is what would really hurt. Admin: a probe category created, renamed and deleted through the real endpoints, count back to six, nothing left behind.
 

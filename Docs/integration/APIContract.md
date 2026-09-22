@@ -723,10 +723,13 @@ As on `/projects`: **absent means every year**, and an **unknown id is a 404** r
 | `GET` | `/organizations/{id}` | `organizations.read` | Detail |
 | `PATCH` | `/organizations/{id}` | `organizations.manage` | Update |
 | `POST` | `/organizations/{id}/archive` | `organizations.manage` | Archive — the only removal action; there is no hard delete, by design (`02-PorjectOrganization.md` §4) |
-| `GET` | `/service-categories` | Authenticated | Service categories. Active ones only by default; `?includeInactive=true` adds retired ones, for the management screen |
-| `POST` | `/service-categories` | `rules.manage` | Create category |
-| `PATCH` | `/service-categories/{id}` | `rules.manage` | Update category (both names, `active`) |
-| `DELETE` | `/service-categories/{id}` | `rules.manage` | Delete category; `409` when any record/project/proposal still references it |
+| `GET` | `/service-categories` | Authenticated | Service categories, active ones only — the list behind every form's picker |
+| `GET` | `/service-categories?includeInactive=true` | `serviceCategories.read` | The management view: retired categories included |
+| `POST` | `/service-categories` | `serviceCategories.manage` | Create category |
+| `PATCH` | `/service-categories/{id}` | `serviceCategories.manage` | Update category (both names, `active`) |
+| `DELETE` | `/service-categories/{id}` | `serviceCategories.manage` | Delete category; `409` when any record/project/proposal still references it |
+
+**Service categories got permissions of their own (added 2026-09-22, issue 157).** They used to borrow `rules.manage`, which meant a school could not let someone tidy the category list without also handing them the rules that decide who graduates. `serviceCategories.read` goes to teacher/admin/sysadmin, `serviceCategories.manage` to admin/sysadmin. The **query parameter decides which permission the `GET` needs**, which is unusual enough to state plainly: the plain list is the dictionary behind every form's picker and a student has to have it, so it stays merely authenticated; `?includeInactive=true` is the management view and the only thing it adds is *what has been retired*, so the permission sits exactly where the extra information does. Asking for it without `serviceCategories.read` is a `403`.
 
 `organizations.manage` is granted to `role_admin` and `role_teacher` (changed 2026-08-08 — previously admin-only). `Organization` gained a `description` field (free text, alongside the existing structured `type`/`contactName`/`contactEmail`/`contactPhone`/`address`) in the same change; `CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` all carry it.
 

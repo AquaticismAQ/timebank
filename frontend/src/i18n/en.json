@@ -1947,6 +1947,7 @@
         "organizations": "Organizations",
         "accounts": "Accounts",
         "rules": "Rules",
+        "serviceCategories": "Service Categories",
         "reports": "Reports",
         "exports": "Exports",
         "imports": "Imports",
@@ -2016,8 +2017,12 @@
         },
         "rules": {
           "read": "View rule versions",
-          "manage": "Create or edit rule drafts and service categories",
+          "manage": "Create or edit rule drafts",
           "publish": "Publish a rule version"
+        },
+        "serviceCategories": {
+          "read": "View the service category list, including retired categories",
+          "manage": "Create, rename, retire or delete a service category"
         },
         "reports": {
           "read": "View dashboards and reports"

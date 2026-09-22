@@ -706,10 +706,13 @@ queued → running → succeeded
 | `GET` | `/organizations/{id}` | `organizations.read` | 详情 |
 | `PATCH` | `/organizations/{id}` | `organizations.manage` | 更新 |
 | `POST` | `/organizations/{id}/archive` | `organizations.manage` | 归档——唯一的移除方式；按设计不提供永久删除（见 `02-PorjectOrganization.md` §4） |
-| `GET` | `/service-categories` | 已登录 | 服务类别。默认仅返回启用项；`?includeInactive=true` 同时返回已停用项，供管理页使用 |
-| `POST` | `/service-categories` | `rules.manage` | 创建类别 |
-| `PATCH` | `/service-categories/{id}` | `rules.manage` | 更新类别（中英文名称、`active`） |
-| `DELETE` | `/service-categories/{id}` | `rules.manage` | 删除类别；若仍被记录/项目/提案引用则返回 `409` |
+| `GET` | `/service-categories` | 已登录 | 服务类别，仅返回启用项——各表单选择器背后的那份列表 |
+| `GET` | `/service-categories?includeInactive=true` | `serviceCategories.read` | 管理视图：同时返回已停用的类别 |
+| `POST` | `/service-categories` | `serviceCategories.manage` | 创建类别 |
+| `PATCH` | `/service-categories/{id}` | `serviceCategories.manage` | 更新类别（中英文名称、`active`） |
+| `DELETE` | `/service-categories/{id}` | `serviceCategories.manage` | 删除类别；若仍被记录/项目/提案引用则返回 `409` |
+
+**服务类别有了自己的权限（2026-09-22 新增，issue 157）。** 此前它们借用 `rules.manage`，这意味着学校无法在不同时交出"决定谁能毕业的那套规则"的前提下，让某个人去整理类别列表。`serviceCategories.read` 授予教师/SDC 管理员/系统管理员，`serviceCategories.manage` 授予 SDC 管理员/系统管理员。**`GET` 需要哪个权限由查询参数决定**——这一点足够反常，必须写明：不带参数的列表是各表单选择器背后的那份字典，学生必须能拿到，因此仅要求已登录；`?includeInactive=true` 是管理视图，它唯一多出来的东西是*哪些类别已被停用*，所以权限正落在多出来的那部分信息上。不持有 `serviceCategories.read` 而请求该参数，返回 `403`。
 
 `organizations.manage` 现由 `role_admin` 和 `role_teacher` 共同持有（2026-08-08 变更——此前仅管理员持有）。同一变更中，`Organization` 新增了 `description`（自由文本简介）字段，与既有的结构化字段 `type`/`contactName`/`contactEmail`/`contactPhone`/`address` 并列；`CreateOrganizationRequest`/`UpdateOrganizationRequest`/`OrganizationDto` 均已携带该字段。
 

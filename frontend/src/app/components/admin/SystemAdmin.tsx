@@ -1257,11 +1257,12 @@ export function SystemAdmin() {
   const canReadRoles = hasPermission('roles.read');
   const canManageRoles = hasPermission('roles.manage');
   const canReadUsers = hasPermission('users.read');
-  // Issue 156: the three tabs that had no gate at all, plus Service Categories,
-  // which uses `canManageRules` above. See the `tabs` array for why each.
+  // Issue 156: the four tabs that had no gate at all. See the `tabs` array for
+  // why each one asks for the permission it does.
   const canReadRules = hasPermission('rules.read');
   const canReadAuditLogs = hasPermission('auditLogs.read');
   const canReadOrganizations = hasPermission('organizations.read');
+  const canReadServiceCategories = hasPermission('serviceCategories.read');
   /**
    * Import is now the SDC admin's alone (`11-RolesAndPermissions.md` §6.1 —
    * `imports.*` was revoked from sysadmin, and teachers never held it), so the
@@ -1990,9 +1991,10 @@ export function SystemAdmin() {
     ...(canImport ? [{ key: 'import' as const, label: t('admin.system.tabImport'), icon: Upload }] : []),
     ...(canExportAnything ? [{ key: 'export' as const, label: t('admin.system.tabExport'), icon: Download }] : []),
     ...(canReadAuditLogs ? [{ key: 'logs' as const, label: t('admin.system.tabLogs'), icon: FileText }] : []),
-    // A management screen, so `rules.manage` rather than the read every
-    // authenticated user already has on `GET /service-categories`.
-    ...(canManageRules ? [{ key: 'categories' as const, label: t('admin.system.tabCategories'), icon: Tags }] : []),
+    // Issue 157: its own `serviceCategories.read`, not `rules.manage` borrowed.
+    // A teacher holds it and lands here read-only — the buttons inside are
+    // separately gated on `serviceCategories.manage`.
+    ...(canReadServiceCategories ? [{ key: 'categories' as const, label: t('admin.system.tabCategories'), icon: Tags }] : []),
     ...(canReadOrganizations ? [{ key: 'organizations' as const, label: t('admin.system.tabOrganizations'), icon: Building2 }] : []),
     { key: 'settings', label: t('admin.system.tabSettings'), icon: Settings },
   ];

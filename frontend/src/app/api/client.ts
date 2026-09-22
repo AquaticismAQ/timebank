@@ -374,7 +374,12 @@ export const api = {
     },
   },
 
-  /** Service-category management (issue 078) — admin-only, gated on `rules.manage`. */
+  /**
+   * Service-category management (issue 078). Gated on its own permissions since
+   * issue 157: `serviceCategories.read` for the list below (it includes retired
+   * categories, which the plain `dictionaries.serviceCategories()` does not),
+   * `serviceCategories.manage` for the three writes.
+   */
   serviceCategories: {
     /** Management view: inactive categories included, so they can be re-activated. */
     async list(): Promise<ServiceCategory[]> {

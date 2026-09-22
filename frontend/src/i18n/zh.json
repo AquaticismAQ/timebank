@@ -1947,6 +1947,7 @@
         "organizations": "合作组织",
         "accounts": "时间币账户",
         "rules": "规则",
+        "serviceCategories": "服务类别",
         "reports": "统计报表",
         "exports": "数据导出",
         "imports": "数据导入",
@@ -2016,8 +2017,12 @@
         },
         "rules": {
           "read": "查看规则版本",
-          "manage": "创建或编辑规则草稿与服务类别",
+          "manage": "创建或编辑规则草稿",
           "publish": "发布规则版本"
+        },
+        "serviceCategories": {
+          "read": "查看服务类别列表，含已停用的类别",
+          "manage": "创建、重命名、停用或删除服务类别"
         },
         "reports": {
           "read": "查看统计报表与仪表盘"

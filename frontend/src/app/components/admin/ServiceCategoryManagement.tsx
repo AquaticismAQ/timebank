@@ -56,7 +56,9 @@ function findByEitherName(items: ServiceCategory[], nameEn: string, nameZh: stri
 export function ServiceCategoryManagement() {
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
-  const canManage = hasPermission('rules.manage');
+  // Issue 157: its own permission now, not `rules.manage` borrowed. A teacher
+  // holds `serviceCategories.read` and lands here read-only.
+  const canManage = hasPermission('serviceCategories.manage');
   const fieldErrors = useFieldErrors();
 
   const [items, setItems] = useState<ServiceCategory[]>([]);

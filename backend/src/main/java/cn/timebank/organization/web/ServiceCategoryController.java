@@ -22,7 +22,30 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** Contract §4.10: `/service-categories` — read for any authenticated user, writes behind `rules.manage`. */
+/**
+ * Contract §4.10: `/service-categories`.
+ *
+ * <p>Issue 157 gave these their own permissions. They used to borrow
+ * {@code rules.manage}, whose description admitted it — "Create or edit rule
+ * drafts <i>and service categories</i>". A rule version is a versioned,
+ * immutable-once-published policy object whose change recalculates every
+ * student's compliance; a service category is a word on a dropdown. Sharing one
+ * permission meant a school could not let someone tidy the category list without
+ * also handing them the rules that decide who graduates.</p>
+ *
+ * <p>Three levels now, and the split is where the information is:</p>
+ *
+ * <ul>
+ *   <li>the plain list — selectable categories, the one behind every form's
+ *       picker — stays {@code isAuthenticated()}, because a student submitting a
+ *       service record has to have it, and a permission every role must hold
+ *       never denies anything;</li>
+ *   <li>{@code ?includeInactive=true} needs {@code serviceCategories.read}: it
+ *       is the management view, and the only thing it adds is what has been
+ *       <i>retired</i>;</li>
+ *   <li>the writes need {@code serviceCategories.manage}.</li>
+ * </ul>
+ */
 @RestController
 public class ServiceCategoryController {
 
@@ -35,7 +58,10 @@ public class ServiceCategoryController {
     }
 
     @GetMapping("/api/v1/service-categories")
-    @PreAuthorize("isAuthenticated()")
+    // `isAuthenticated()` first and always: without it, `!#includeInactive`
+    // alone evaluates true for an anonymous caller and the dictionary becomes
+    // a public endpoint.
+    @PreAuthorize("isAuthenticated() and (!#includeInactive or hasAuthority('serviceCategories.read'))")
     public ApiResponse<List<ServiceCategoryDto>> list(
             @RequestParam(defaultValue = "false") boolean includeInactive,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
@@ -48,7 +74,7 @@ public class ServiceCategoryController {
     }
 
     @PostMapping("/api/v1/service-categories")
-    @PreAuthorize("hasAuthority('rules.manage')")
+    @PreAuthorize("hasAuthority('serviceCategories.manage')")
     public ApiResponse<ServiceCategoryDto> create(
             @Valid @RequestBody CreateServiceCategoryRequest request,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage, Authentication auth) {
@@ -56,7 +82,7 @@ public class ServiceCategoryController {
     }
 
     @PatchMapping("/api/v1/service-categories/{id}")
-    @PreAuthorize("hasAuthority('rules.manage')")
+    @PreAuthorize("hasAuthority('serviceCategories.manage')")
     public ApiResponse<ServiceCategoryDto> update(
             @PathVariable String id,
             @Valid @RequestBody UpdateServiceCategoryRequest request,
@@ -65,7 +91,7 @@ public class ServiceCategoryController {
     }
 
     @DeleteMapping("/api/v1/service-categories/{id}")
-    @PreAuthorize("hasAuthority('rules.manage')")
+    @PreAuthorize("hasAuthority('serviceCategories.manage')")
     public ApiResponse<Void> delete(@PathVariable String id, Authentication auth) {
         serviceCategoryService.delete(id, principalId(auth));
         return ApiResponse.of(null);

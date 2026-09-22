@@ -48,7 +48,18 @@ INSERT IGNORE INTO permission (id, code, description) VALUES
     ('perm_accounts_reverse', 'accounts.reverse', 'Reverse an account transaction'),
     ('perm_accounts_freeze', 'accounts.freeze', 'Freeze or unfreeze an account'),
     ('perm_rules_read', 'rules.read', 'View rule versions'),
-    ('perm_rules_manage', 'rules.manage', 'Create or edit rule drafts and service categories'),
+    -- Issue 157: "and service categories" moved out to the two rows below.
+    -- The code is unchanged and never will be — it is a string in historical
+    -- audit entries (§9.3); only the description narrows. V34 carries the
+    -- same correction to the live row, which INSERT IGNORE cannot update.
+    ('perm_rules_manage', 'rules.manage', 'Create or edit rule drafts'),
+    -- 11-RolesAndPermissions.md §5a. `serviceCategories.read` gates the
+    -- management view — the list *including retired* categories. The plain
+    -- `GET /service-categories` behind every form's picker stays
+    -- `isAuthenticated()`: a permission every role must hold never denies
+    -- anything, and forgetting one role would silently break its forms.
+    ('perm_serviceCategories_read', 'serviceCategories.read', 'View the service category list, including retired categories'),
+    ('perm_serviceCategories_manage', 'serviceCategories.manage', 'Create, rename, retire or delete a service category'),
     ('perm_rules_publish', 'rules.publish', 'Publish a rule version'),
     ('perm_reports_read', 'reports.read', 'View dashboards and reports'),
     ('perm_exports_create', 'exports.create', 'Retired (11-RolesAndPermissions.md §5.1): superseded by one exports.* permission per export type, grants revoked in V31. Row kept, never deleted and never reused — the code is a string in historical audit entries.'),
@@ -140,6 +151,11 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_teacher', 'perm_exports_studentParticipation'),
     ('role_teacher', 'perm_exports_projects'),
     ('role_teacher', 'perm_exports_reviewHistory'),
+    -- 11-RolesAndPermissions.md §5a: read, never manage. Seeing the whole
+    -- vocabulary — including what has been retired, and so why an old record
+    -- names something no longer offered — is reading the school's own
+    -- dictionary, not an administrative power.
+    ('role_teacher', 'perm_serviceCategories_read'),
     -- 07-RoleFinetune.md §2.3: admin and sysadmin hold an identical,
     -- unioned permission set — same reasoning as is_protected above, this
     -- repeatable migration is what makes a from-scratch schema correct
@@ -178,6 +194,8 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_admin', 'perm_rules_read'),
     ('role_admin', 'perm_rules_manage'),
     ('role_admin', 'perm_rules_publish'),
+    ('role_admin', 'perm_serviceCategories_read'),
+    ('role_admin', 'perm_serviceCategories_manage'),
     ('role_admin', 'perm_reports_read'),
     -- 11-RolesAndPermissions.md §5.3: all seven export types. Deliberately
     -- *not* 'perm_exports_create' — that permission is retired (§5.1) and
@@ -235,6 +253,8 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_sysadmin', 'perm_rules_read'),
     ('role_sysadmin', 'perm_rules_manage'),
     ('role_sysadmin', 'perm_rules_publish'),
+    ('role_sysadmin', 'perm_serviceCategories_read'),
+    ('role_sysadmin', 'perm_serviceCategories_manage'),
     ('role_sysadmin', 'perm_reports_read'),
     -- 11-RolesAndPermissions.md §6.1 reverses V21's admin/sysadmin merge for
     -- import and export only: no exports.* and no imports.* line here on
@@ -293,4 +313,5 @@ INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES
     ('role_template_teacher', 'perm_exports_studentCompletion'),
     ('role_template_teacher', 'perm_exports_studentParticipation'),
     ('role_template_teacher', 'perm_exports_projects'),
-    ('role_template_teacher', 'perm_exports_reviewHistory');
+    ('role_template_teacher', 'perm_exports_reviewHistory'),
+    ('role_template_teacher', 'perm_serviceCategories_read');
