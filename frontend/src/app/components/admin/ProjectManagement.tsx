@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Search, MapPin, Clock, Users, MoreHorizontal, CheckCircle, X, Edit, Archive, Eye, Copy, AlertTriangle } from 'lucide-react';
+import { Plus, Search, MapPin, Clock, Users, MoreHorizontal, CheckCircle, X, Edit, Archive, Eye, Copy, AlertTriangle, History } from 'lucide-react';
 import { PROJECT_STATUS_LABELS } from '../../lib/statusLabels';
 import { type Project, type ProjectStatus, type Organization, type Grade, type Role } from '../../api/types';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ import { usePagedApi } from '../../api/useApi';
 import { PageControls } from '../PageControls';
 import { ListStateBanner } from '../ListStateBanner';
 import { ProjectRegistrants } from './ProjectRegistrants';
+import { ProjectTimeline } from './ProjectTimeline';
 import { SearchPicker, type SearchPickerOption } from '../SearchPicker';
 import { GradePicker } from '../GradePicker';
 import { minutesToHours } from '../../lib/format';
@@ -391,6 +392,11 @@ export function ProjectManagement() {
   const canArchive = hasPermission('projects.archive');
   const canCancel = hasPermission('projects.cancel');
   const canViewRegistrants = hasPermission('applications.read');
+  // Issue 158: `projects.audit.read` finally has a screen. Teachers hold it —
+  // they create, publish and confirm registrants for these projects, so "what
+  // has happened to this one" is a question about their own work. The data scope
+  // still decides which projects; an out-of-scope id 404s as it does elsewhere.
+  const canViewTimeline = hasPermission('projects.audit.read');
   const fieldErrors = useFieldErrors();
   const { items, page, loading, error, params, setFilter, setSearch: setPagedSearch, setSort, setPage, setPageSize, refetch } =
     usePagedApi<Project>(api.projects.list, {});
@@ -431,6 +437,7 @@ export function ProjectManagement() {
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [registrantsProject, setRegistrantsProject] = useState<Project | null>(null);
+  const [timelineProject, setTimelineProject] = useState<Project | null>(null);
   /** The refused publish above, held for the dialog that explains it. */
   const [staleWindow, setStaleWindow] = useState<{ project: Project; closedAt: string } | null>(null);
   const [cancelProject, setCancelProject] = useState<Project | null>(null);
@@ -852,6 +859,15 @@ export function ProjectManagement() {
                           <X className="w-3.5 h-3.5" /> {t('admin.projects.cancelAndArchive')}
                         </button>
                       )}
+                      {/* Last, and offered on every status including draft: it
+                          reads what already happened rather than doing anything,
+                          so no state forbids it. */}
+                      {canViewTimeline && (
+                        <button onClick={() => { setMenuOpenId(null); setTimelineProject(proj); }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-accent">
+                          <History className="w-3.5 h-3.5" /> {t('admin.projects.viewTimeline')}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1064,6 +1080,10 @@ export function ProjectManagement() {
 
       {registrantsProject && (
         <ProjectRegistrants projectId={registrantsProject.id} projectTitle={registrantsProject.title} onClose={() => setRegistrantsProject(null)} />
+      )}
+
+      {timelineProject && (
+        <ProjectTimeline projectId={timelineProject.id} projectTitle={timelineProject.title} onClose={() => setTimelineProject(null)} />
       )}
 
       {cancelProject && (

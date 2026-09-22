@@ -18,7 +18,6 @@ import cn.timebank.project.application.dto.ProjectGenerationRequest;
 import cn.timebank.project.application.dto.ProjectRequests.CancelProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.CreateProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.UpdateProjectRequest;
-import cn.timebank.project.application.dto.TimelineEntryDto;
 import cn.timebank.project.domain.DeliveryScope;
 import cn.timebank.project.domain.Project;
 import cn.timebank.project.domain.ProjectOrganization;
@@ -340,18 +339,6 @@ class ProjectServiceImpl implements ProjectService {
         return toSingleDtoNoScope(project, actorId, resolvedLanguage);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<TimelineEntryDto> timeline(String id, Authentication auth) {
-        Project project = findInScopeOrThrow(id, auth);
-        List<TimelineEntryDto> entries = new ArrayList<>();
-        entries.add(new TimelineEntryDto("created", "Project created", project.getOwnerId(), project.getCreatedAt()));
-        for (ProjectRevision rev : revisionRepository.findByProjectIdOrderByRevisionNumberAsc(id)) {
-            entries.add(new TimelineEntryDto("revised", "Fields updated", rev.getEditedBy(), rev.getCreatedAt()));
-        }
-        entries.sort(java.util.Comparator.comparing(TimelineEntryDto::occurredAt));
-        return entries;
-    }
 
     @Override
     @Transactional

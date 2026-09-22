@@ -434,6 +434,25 @@ export interface TimelineEntry {
   occurredAt: string;
 }
 
+/**
+ * `GET /projects/{id}/timeline` (issue 158). Deliberately *not* the shared
+ * `TimelineEntry` above: this one is assembled from the audit log, so it carries
+ * a raw `action` code the client turns into words, the actor's resolved name, and
+ * an optional `detail` — where the other three carry a server-written
+ * `description`.
+ */
+export interface ProjectTimelineEntry {
+  /** Raw audit action code, e.g. `project.publish`, `enrollment.register`. */
+  action: string;
+  /** Null for a system-generated event, such as the auto-archive sweep. */
+  actorId: string | null;
+  /** Null when there is no actor, or the account has since been deleted. */
+  actorName: string | null;
+  /** A reason code or resulting status, when the row carries one. */
+  detail: string | null;
+  occurredAt: string;
+}
+
 export interface Organization {
   id: string;
   name: string;

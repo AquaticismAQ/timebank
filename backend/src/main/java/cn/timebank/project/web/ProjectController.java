@@ -6,6 +6,7 @@ import cn.timebank.common.web.ApiResponse;
 import cn.timebank.common.web.PageMeta;
 import cn.timebank.organization.application.RequestLanguageService;
 import cn.timebank.project.application.ProjectService;
+import cn.timebank.project.application.ProjectTimelineService;
 import cn.timebank.project.application.dto.ProjectDto;
 import cn.timebank.project.application.dto.ProjectRequests.ActionRequest;
 import cn.timebank.project.application.dto.ProjectRequests.CancelProjectRequest;
@@ -39,10 +40,13 @@ public class ProjectController {
     private static final Set<String> SORTABLE = Set.of("id", "startAt", "registrationOpenAt", "status", "createdAt");
 
     private final ProjectService projectService;
+    private final ProjectTimelineService projectTimelineService;
     private final RequestLanguageService requestLanguageService;
 
-    public ProjectController(ProjectService projectService, RequestLanguageService requestLanguageService) {
+    public ProjectController(ProjectService projectService, ProjectTimelineService projectTimelineService,
+                             RequestLanguageService requestLanguageService) {
         this.projectService = projectService;
+        this.projectTimelineService = projectTimelineService;
         this.requestLanguageService = requestLanguageService;
     }
 
@@ -107,10 +111,26 @@ public class ProjectController {
         return ApiResponse.of(projectService.cancel(id, request, principalId(auth), resolveLanguage(acceptLanguage, auth)));
     }
 
+    /**
+     * The project's whole life, oldest first (issue 158) — created, edited,
+     * published, registered for, cancelled, archived, with who and when.
+     *
+     * <p>Assembled from the audit log rather than a history table of its own:
+     * every one of these events is already recorded there, and a second history
+     * would be a second thing to keep in step with the first. Unpaged, because a
+     * story with a page missing is not a story — see
+     * {@code AuditLogQueryService.entriesFor}.</p>
+     *
+     * <p>Action codes travel raw ({@code project.publish},
+     * {@code enrollment.register}); the client supplies the words, as everywhere
+     * else in this API.</p>
+     */
     @GetMapping("/{id}/timeline")
     @PreAuthorize("hasAuthority('projects.audit.read')")
-    public ApiResponse<List<TimelineEntryDto>> timeline(@PathVariable String id, Authentication auth) {
-        return ApiResponse.of(projectService.timeline(id, auth));
+    public ApiResponse<List<TimelineEntryDto>> timeline(
+            @PathVariable String id, @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            Authentication auth) {
+        return ApiResponse.of(projectTimelineService.timeline(id, auth, resolveLanguage(acceptLanguage, auth)));
     }
 
     private String resolveLanguage(String acceptLanguage, Authentication auth) {

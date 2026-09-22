@@ -34,6 +34,7 @@ import type {
   SchoolLifecycleConfig,
   ServiceCategory,
   TimelineEntry,
+  ProjectTimelineEntry,
   Permission,
   RoleSummary,
   RoleTemplateSummary,
@@ -411,6 +412,19 @@ export const api = {
   },
 
   projects: {
+    /**
+     * `GET /projects/{id}/timeline` (issue 158) — the project's whole life from
+     * the audit log: created, edited, published, registered for, cancelled,
+     * archived, oldest first. Unpaged by design; `projects.audit.read` gated.
+     *
+     * The endpoint existed since B3 but returned a stub built from
+     * `project_revision` with hardcoded English labels and no registrations, so
+     * this is the first client wiring of a real answer rather than of a new
+     * backend capability.
+     */
+    async timeline(id: string): Promise<ProjectTimelineEntry[]> {
+      return http.get(`/projects/${id}/timeline`);
+    },
     async list(params?: ListParams): Promise<PageResult<Project>> {
       const filter = { ...params?.filter };
       if (filter.status) filter.status = toBackendEnum(filter.status);

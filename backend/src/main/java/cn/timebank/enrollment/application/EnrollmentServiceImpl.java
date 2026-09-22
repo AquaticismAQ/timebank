@@ -260,6 +260,12 @@ class EnrollmentServiceImpl implements EnrollmentService {
                 .orElse(false);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> enrollmentIdsOf(String projectId) {
+        return repository.findIdsByProjectId(projectId);
+    }
+
     private EnrollmentDto toDto(Enrollment e, Map<String, String> projectTitles, Map<String, String> studentNames) {
         return new EnrollmentDto(e.getId(), e.getProjectId(), projectTitles.getOrDefault(e.getProjectId(), ""),
                 e.getStudentId(), studentNames.getOrDefault(e.getStudentId(), ""), e.getStatus().name(),

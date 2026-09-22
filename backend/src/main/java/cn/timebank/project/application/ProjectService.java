@@ -6,7 +6,6 @@ import cn.timebank.project.application.dto.ProjectGenerationRequest;
 import cn.timebank.project.application.dto.ProjectRequests.CancelProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.CreateProjectRequest;
 import cn.timebank.project.application.dto.ProjectRequests.UpdateProjectRequest;
-import cn.timebank.project.application.dto.TimelineEntryDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -58,7 +57,6 @@ public interface ProjectService {
     /** The manager override — archives a live (or completed-but-unreviewed) project outright, reason required (02-PorjectOrganization.md §2.1). */
     ProjectDto cancel(String id, CancelProjectRequest request, String actorId, String resolvedLanguage);
 
-    List<TimelineEntryDto> timeline(String id, Authentication auth);
 
     // --- Consumed by `enrollment`/`proposal` without reaching into this module's domain/infrastructure ---
 

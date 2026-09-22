@@ -38,4 +38,13 @@ public interface EnrollmentService {
      * whichever one the client happened to hit first).
      */
     boolean isConfirmed(String projectId, String studentId);
+
+    /**
+     * The ids of every enrollment on a project, for the project timeline
+     * (issue 158). Exposed because an enrollment's audit rows are keyed to the
+     * enrollment and carry no project id, so this is the only bridge from a
+     * project to its registration events — and the `project` module must reach
+     * it through this interface rather than the `enrollment` table.
+     */
+    List<String> enrollmentIdsOf(String projectId);
 }

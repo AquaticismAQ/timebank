@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +77,14 @@ class AuditLogQueryServiceImpl implements AuditLogQueryService {
             left join `user` u on u.id = a.actor_id
             """;
 
+    /** Shared by both reads, so the two cannot drift in which columns they map. */
+    private static final RowMapper<AuditLogDto> ROW_MAPPER = (rs, rowNum) -> new AuditLogDto(
+            rs.getString("id"), rs.getString("actor_id"), rs.getString("actor_display_name"),
+            rs.getString("permission_used"), rs.getString("action"),
+            rs.getString("resource_type"), rs.getString("resource_id"), rs.getString("before_summary"),
+            rs.getString("after_summary"), rs.getString("reason_code"), rs.getString("request_id"),
+            rs.getString("ip_address"), rs.getString("user_agent"), rs.getTimestamp("created_at").toInstant());
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     AuditLogQueryServiceImpl(NamedParameterJdbcTemplate jdbcTemplate) {
@@ -91,12 +101,7 @@ class AuditLogQueryServiceImpl implements AuditLogQueryService {
 
         String sql = SELECT_COLUMNS + FROM_AND_JOINS + where
                 + orderByClause(pageable.getSort()) + " limit :limit offset :offset";
-        List<AuditLogDto> content = jdbcTemplate.query(sql, params, (rs, rowNum) -> new AuditLogDto(
-                rs.getString("id"), rs.getString("actor_id"), rs.getString("actor_display_name"),
-                rs.getString("permission_used"), rs.getString("action"),
-                rs.getString("resource_type"), rs.getString("resource_id"), rs.getString("before_summary"),
-                rs.getString("after_summary"), rs.getString("reason_code"), rs.getString("request_id"),
-                rs.getString("ip_address"), rs.getString("user_agent"), rs.getTimestamp("created_at").toInstant()));
+        List<AuditLogDto> content = jdbcTemplate.query(sql, params, ROW_MAPPER);
 
         String countSql = "select count(*) " + FROM_AND_JOINS + where;
         Long total = jdbcTemplate.queryForObject(countSql, params, Long.class);
@@ -115,6 +120,25 @@ class AuditLogQueryServiceImpl implements AuditLogQueryService {
      * populate the dropdowns, so narrowing them to what the active filter
      * already matches would make it impossible to switch to any other value.</p>
      */
+    @Override
+    @Transactional(readOnly = true)
+    public List<AuditLogDto> entriesFor(String resourceType, Collection<String> resourceIds) {
+        if (resourceIds.isEmpty()) {
+            return List.of();
+        }
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("resourceType", resourceType)
+                .addValue("resourceIds", resourceIds);
+        // Ascending, with the same id tiebreaker the paged read uses — several
+        // rows share a millisecond when one transaction writes them, and a
+        // timeline that reorders them between reads is worse than one that
+        // picks an arbitrary but stable order.
+        String sql = SELECT_COLUMNS + FROM_AND_JOINS
+                + " where a.resource_type = :resourceType and a.resource_id in (:resourceIds)"
+                + " order by a.created_at asc, a.id asc";
+        return jdbcTemplate.query(sql, params, ROW_MAPPER);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Facets facets() {

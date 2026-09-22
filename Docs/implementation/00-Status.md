@@ -1792,3 +1792,21 @@ Nothing was erased — `service_category` held its six rows, all active, through
 
 **Verification gap, recorded rather than glossed.** Demonstrating this needs a permission to change *while a session is live*, and every session available was created after the migrations — so the refresher correctly does nothing for them, which is a test that cannot fail. Forcing the condition means revoking and restoring a grant on the shared server; that was offered and declined in favour of Aquaticism reloading one of his own genuinely-stale tabs, which is the reported case itself. Until that comes back, what is proven is that nothing was erased, that a current session lists all six categories, and that 373 backend tests pass. The next session here should close this out rather than assume it.
 
+### 41.54 The project timeline permission finally has a screen (issue 158, 2026-09-22)
+
+Aquaticism: `projects.audit.read` exists but is not implemented — add *View Timeline* to a project card's more menu, showing the whole lifecycle in a compact table of datetime, action and username; collect it from the audit log if that works; and give the permission to teachers.
+
+`GET /projects/{id}/timeline` did exist, gated correctly, and answered with a stub: a synthetic "created" line plus one row per `project_revision`, carrying two hardcoded English sentences and raw user ids. It knew nothing about publishing, archiving, cancelling or any registration — so the one question a timeline exists to answer it could not answer. Nothing called it, which is why that never showed.
+
+**Rebuilt on the audit log**, which already records every one of these events by the append-only mechanism that exists so no action is deniable. A second history would be a second thing to keep in step with the first, and the moment they disagreed neither would be trustworthy.
+
+**The bridge to registrations is the part that is not obvious.** An enrollment's audit rows are recorded against the *enrollment*, and nothing on those rows names the project — so "the registration events of project X" is not a question the audit log can answer alone. The `enrollment` table is the only link, asked through `EnrollmentService.enrollmentIdsOf` rather than by reaching into another module's tables. The consequence worth having: **no migration, no backfill** — the join works against every row already written, so a project that ran months ago has its full history the first time anyone opens the dialog.
+
+`ProjectTimelineService` sits beside `ProjectService` and is called from the controller, because `EnrollmentServiceImpl` injects `ProjectService` and a project-module service injected by `ProjectServiceImpl` would close a bean cycle — the same shape as `StudentReminderService` (§41.49).
+
+Action codes travel raw (`project.publish`, `enrollment.register`); the client supplies the words and degrades an unknown code to a humanized form rather than an empty cell. Field diffs are deliberately absent — a timeline is a sequence, and System Admin → Audit Logs is the screen for a before/after.
+
+`V36` grants `projects.audit.read` to `teacher` and the Teacher template. **It widens nothing**: the timeline resolves the project through the same scope-checked `getDetail` the project page uses, and for staff that rule is already school-wide (`visibilitySpec` returns no restriction to a `projects.update` holder — a teacher browses any project and is stopped at *editing* one outside their grades). The grant adds history for projects a teacher could already open.
+
+**Verified live against real history**, not a fixture: a project showing created → published → *a student registering* → cancelled-with-reason, all written on 2026-09-20, months before this code existed. Along the way the issue doc's first-draft scope claim — "a teacher cannot read a project outside their grades" — proved **false** and is corrected there; twelve probed ids all returned 200 to a teacher, including another staff member's draft.
+

@@ -73,9 +73,9 @@ an administrator, who also chooses the username.
 
 **Can**: within their **bound grades**, review service records and event
 proposals, view the student directory and progress, create and publish projects,
-view partner organisations and the service-category vocabulary read-only
-(retired entries included, §5a), and export the student-facing reports for that
-scope.
+read a project's change timeline, view partner organisations and the
+service-category vocabulary read-only (retired entries included, §5a), and export
+the student-facing reports for that scope.
 
 **Deliberately cannot**:
 - **Import anything.** Bulk writes to the roster and to historical records are a
@@ -378,7 +378,7 @@ assigned any grade" rather than producing an empty file.
 
 | Group | Student | Teacher | SDC Admin | System Admin |
 | :--- | :---: | :---: | :---: | :---: |
-| Projects | read | read/create/update/publish | all | all |
+| Projects | read | read/create/update/publish/timeline | all | all |
 | Event proposals | create/read | read/review/assign | all | all |
 | Registrations | create/read | read | all | all |
 | Service records | create/read | read | all | all |

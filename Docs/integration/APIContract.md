@@ -493,11 +493,17 @@ The frontend polls the job query endpoint; long-lived connections are not a requ
 | `POST` | `/projects/{id}/publish` | `projects.publish` | Publish |
 | `POST` | `/projects/{id}/archive` | `projects.archive` | Archive a completed project |
 | `POST` | `/projects/{id}/cancel` | `projects.cancel` | Cancel and archive a live (or completed) project outright, with a reason |
-| `GET` | `/projects/{id}/timeline` | `projects.audit.read` | Project change timeline |
+| `GET` | `/projects/{id}/timeline` | `projects.audit.read` | Everything that happened to the project, oldest first — unpaged. See below |
 
 `deliveryScope` (`onCampus`/`offCampus`/`hybrid`) is required on `POST /projects`, optional on `PATCH` — see §3.1.
 
 Project status changes use action endpoints to avoid bypassing business validation via a generic `PATCH status`.
+
+**`GET /projects/{id}/timeline` (rebuilt 2026-09-22, issue 158).** Returns `TimelineEntryDto[]` — `{ action, actorId, actorName, detail, occurredAt }` — **oldest first and unpaged**: a project has tens of events, and a history with a page missing is not a history. `action` is a **raw audit action code** (`project.publish`, `enrollment.register`, `enrollment.bulk.confirm`), never a sentence: the server authors no localized copy, so the client supplies the words and should degrade an unrecognized code to a humanized form rather than an empty cell. `actorId`/`actorName` are both null for a system-generated event such as the auto-archive sweep; a deleted account leaves the id and drops the name. `detail` carries the row's reason code, or its `after` summary when there is no reason — a cancellation's reason, a registration's resulting status — and is null for events their action fully describes.
+
+The entries are read from the **audit log**, not from a history table of its own. Registrations are the non-obvious part: an enrollment's audit rows are keyed to the *enrollment* and carry no project id, so the enrollment table is the bridge, and the endpoint is therefore correct for projects that ran long before this was built — no backfill was needed. When the log holds no create event (a seeded project, inserted directly rather than through `POST /projects`), a `project.created` entry is synthesized from the project's own `createdAt`/`ownerId` so the story always has a beginning.
+
+Deliberately **not** included: field-level before/after (the timeline is a sequence, not a diff — System Admin → Audit Logs answers that), and the project's service records (those belong to the student and are reviewed in Audit Center).
 
 **Publishing (issue 130).** `POST /projects/{id}/publish` applies the same grade rule as `PATCH` (below), and additionally refuses a `DRAFT` whose `registrationCloseAt` is not in the future — `409` with `fieldErrors[0].code = PROJECT_REGISTRATION_WINDOW_PASSED` and the close date as its `message`. Publishing such a draft would send it `PUBLISHED → REGISTRATION_OPEN → ARCHIVED` on the next read with nobody able to enrol.
 

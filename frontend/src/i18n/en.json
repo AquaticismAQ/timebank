@@ -1199,7 +1199,31 @@
       "summaryPlaceholder": "Briefly describe the project content and goals...",
       "toastDraftCreated": "Project draft created",
       "toastPublished": "Project published",
-      "locationPlaceholder": "Event location"
+      "locationPlaceholder": "Event location",
+      "viewTimeline": "View Timeline",
+      "timeline": "Project Timeline",
+      "timelineWhen": "When",
+      "timelineAction": "Action",
+      "timelineWho": "Who",
+      "timelineSystem": "System",
+      "timelineEmpty": "Nothing has been recorded for this project yet.",
+      "timelineActions": {
+        "project.created": "Project created",
+        "project.create": "Project created",
+        "project.generatedFromProposal": "Created from an approved proposal",
+        "project.update": "Project edited",
+        "project.publish": "Published",
+        "project.archive": "Archived",
+        "project.cancel": "Cancelled and archived",
+        "project.autoArchiveNoRegistrants": "Auto-archived — nobody registered",
+        "enrollment.register": "Student registered",
+        "enrollment.cancel": "Registration cancelled",
+        "enrollment.confirm": "Registration confirmed",
+        "enrollment.reject": "Registration rejected",
+        "enrollment.markComplete": "Marked as completed",
+        "enrollment.bulk.confirm": "Registrations confirmed in bulk",
+        "enrollment.bulk.reject": "Registrations rejected in bulk"
+      }
     },
     "organizations": {
       "count": "{{count}} partner organizations",

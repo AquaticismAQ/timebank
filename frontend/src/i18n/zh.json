@@ -1199,7 +1199,31 @@
       "summaryPlaceholder": "简要描述项目内容和目标...",
       "toastDraftCreated": "项目草稿已创建",
       "toastPublished": "项目已发布",
-      "locationPlaceholder": "活动地点"
+      "locationPlaceholder": "活动地点",
+      "viewTimeline": "查看时间线",
+      "timeline": "项目时间线",
+      "timelineWhen": "时间",
+      "timelineAction": "操作",
+      "timelineWho": "操作人",
+      "timelineSystem": "系统",
+      "timelineEmpty": "该项目暂无任何记录。",
+      "timelineActions": {
+        "project.created": "项目创建",
+        "project.create": "项目创建",
+        "project.generatedFromProposal": "由通过的活动提案生成",
+        "project.update": "项目修改",
+        "project.publish": "发布",
+        "project.archive": "归档",
+        "project.cancel": "取消并归档",
+        "project.autoArchiveNoRegistrants": "无人报名，自动归档",
+        "enrollment.register": "学生报名",
+        "enrollment.cancel": "取消报名",
+        "enrollment.confirm": "报名确认",
+        "enrollment.reject": "报名驳回",
+        "enrollment.markComplete": "标记为已完成",
+        "enrollment.bulk.confirm": "批量确认报名",
+        "enrollment.bulk.reject": "批量驳回报名"
+      }
     },
     "organizations": {
       "count": "共 {{count}} 个合作组织",
