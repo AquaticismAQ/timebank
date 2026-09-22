@@ -1778,3 +1778,17 @@ Aquaticism, within the hour of 41.51: "why you remove the 'Service Categories' t
 
 **Verified by reconstructing a pre-migration session rather than waiting for one.** The stored permission list was doctored to what it would have held before the migrations — `serviceCategories.*` stripped out, `organizations.manage` injected — and a single reload corrected it in **both** directions: the missing permission restored, the revoked one dropped, `GET /me` visible in the network panel. The removal is the half that proves the mechanism, since restoring could be explained by a union and dropping cannot. On the organisations side, teacher `PATCH`/`POST` 403 against admin `PATCH` 200 as the control, both probes deliberately writing the organisation's existing name so that neither could alter anything whichever way the check went.
 
+### 41.53 The session's authorities were a snapshot too (issue 157 §4a, 2026-09-22)
+
+Aquaticism, minutes after 41.52: "why both teacher and admin show '0 service categories', you erase the db of it?"
+
+Nothing was erased — `service_category` held its six rows, all active, throughout, and the endpoint returned all six to a freshly signed-in caller.
+
+§41.52 fixed the browser's cached permissions. It was half the cause. Authorities are permission codes carried on `CookieSessionUserDetails`, which is **serialized into the session row at login** and read back on every later request, so the server's idea of what a caller may do is the same kind of snapshot — and a staff session lasts eight hours.
+
+**Half a fix was worse than none**, and the shape of that is worth keeping. Before it, a stale admin saw no Service Categories tab: a hidden tab is a legible permission boundary. After it, the browser had learned about `serviceCategories.read` and offered the tab, while the session behind it had not, so the management read answered 403 and the screen reported **0 service categories** to someone holding every permission in the system. A boundary became a claim about the data — which is exactly how it was read.
+
+`SessionAuthorityRefresher` re-seats the session's authorities from the database, invoked from `GET /me` — the same request the client already makes on every app load, so the two halves move together by construction instead of drifting. It reloads through `UserDetailsService`, compares the authority sets, and only when they differ re-seats the `SecurityContext` and saves it back; an unchanged load writes nothing and stays a read. A log line names the granted and revoked codes, since a role changing under a live session is rare and is the first thing worth seeing when a permission question arrives. Account revalidation is deliberately not attached to it: a user disabled since login keeps their session, because tearing one down is a different decision with a different blast radius.
+
+**Verification gap, recorded rather than glossed.** Demonstrating this needs a permission to change *while a session is live*, and every session available was created after the migrations — so the refresher correctly does nothing for them, which is a test that cannot fail. Forcing the condition means revoking and restoring a grant on the shared server; that was offered and declined in favour of Aquaticism reloading one of his own genuinely-stale tabs, which is the reported case itself. Until that comes back, what is proven is that nothing was erased, that a current session lists all six categories, and that 373 backend tests pass. The next session here should close this out rather than assume it.
+

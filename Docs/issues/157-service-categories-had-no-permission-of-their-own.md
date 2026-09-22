@@ -158,6 +158,30 @@ nothing whichever way the permission check goes; the name afterwards is still
 `Example Community Service Centre`. Without the admin line, two 403s would only
 show that something was broken.
 
+### The server-session half — what is proven, and what is not
+
+Proven directly:
+
+```
+service_category         6 rows, all active, throughout     ← nothing was erased
+GET ?includeInactive=true   200 with 6 rows to a current session
+admin001, fresh session     Categories tab → "6 service categories"
+mvn test                    373 pass
+```
+
+**Not yet proven, and this is a real gap rather than a formality.** Demonstrating
+`SessionAuthorityRefresher` needs a permission to change *while a session is
+live*, and every session available here was created after the migrations, so the
+refresher correctly does nothing for them — a test that cannot fail. Forcing the
+condition means revoking and restoring a grant on the shared server, which is a
+live database write; offered and declined in favour of Aquaticism reloading one of his
+own genuinely-stale tabs, which is the reported case itself.
+
+So the two directions still to see confirmed are: a tab that was showing **0**
+listing its six categories after one reload with no re-login, and a revoked
+permission losing its affordance the same way. The next session that touches this
+should close this paragraph out rather than assume it.
+
 ## 4. The fallout, found by Aquaticism within the hour: the tab vanished for admins
 
 > "why you remove the 'Service Categories' tab from admin?"
@@ -186,6 +210,51 @@ This also closes the same hole in the other direction, which matters more: a
 permission *revoked* mid-session used to keep its UI affordances until the user
 next logged in. Only the server ever enforced it, which was correct but meant the
 screen disagreed with the system for as long as the session lasted.
+
+**That was only half the cause, and fixing half of it made things worse.** See
+§4a — Aquaticism's next report was "why both teacher and admin show '0 service
+categories'".
+
+## 4a. The other half: the session's authorities were a snapshot too
+
+> "why both teacher and admin show '0 service categories', you erase the db of it?"
+
+Nothing was erased — `service_category` held its six rows throughout, all active,
+and the endpoint returned all six to a freshly signed-in caller.
+
+Authorities are permission codes carried on `CookieSessionUserDetails`, which is
+**serialized into the session row at login** and read back on every later
+request. So the server's idea of what a caller may do is a snapshot taken when
+the session began, with the same two failure directions as the browser's copy —
+and a staff session lasts eight hours.
+
+Fixing only the client made this *visible instead of invisible*, and in the worst
+possible shape:
+
+| | before §4 | after §4, before §4a |
+| :--- | :--- | :--- |
+| browser knows about `serviceCategories.read` | no | **yes** |
+| session holds the authority | no | no |
+| what the user sees | no tab at all | a tab that says **0 service categories** |
+
+A hidden tab is a legible permission boundary. A tab that opens and reports zero
+is a claim about the data — which is exactly how Aquaticism read it, and why the
+question was "did you erase the db". **Half a fix was worse than none**, because
+it converted a boundary into a lie about content.
+
+**Fix:** `SessionAuthorityRefresher`, called from `GET /me` — the same request the
+browser already makes on every app load, so the two halves move together by
+construction rather than drifting. It reloads the user through
+`UserDetailsService`, compares the authority sets, and only when they differ
+re-seats the `SecurityContext` and saves it back to the session. Unchanged
+authorities write nothing, so a page load stays a read. A log line records the
+granted/revoked codes, since a role changing under a live session is rare and is
+the first thing worth seeing when a permission question arrives.
+
+Deliberately **not** included: revalidating the account itself. If the user has
+been disabled or locked since login, the session is left alone — tearing it down
+is a different decision with a different blast radius, and attaching it to a
+tab-visibility fix would be the wrong place to make it.
 
 ## 5. Also in this pass: partner organisations become admin-only
 

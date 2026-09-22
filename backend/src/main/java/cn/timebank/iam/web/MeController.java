@@ -6,7 +6,10 @@ import cn.timebank.iam.application.dto.MeResponse;
 import cn.timebank.iam.application.dto.UpdateProfileRequest;
 import cn.timebank.iam.application.dto.UserDto;
 import cn.timebank.security.application.CookieSessionUserDetails;
+import cn.timebank.security.application.SessionAuthorityRefresher;
 import cn.timebank.security.application.TeacherScopeAssignmentService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -28,21 +31,36 @@ public class MeController {
 
     private final UserService userService;
     private final TeacherScopeAssignmentService teacherScopeAssignmentService;
+    private final SessionAuthorityRefresher sessionAuthorityRefresher;
 
-    public MeController(UserService userService, TeacherScopeAssignmentService teacherScopeAssignmentService) {
+    public MeController(UserService userService, TeacherScopeAssignmentService teacherScopeAssignmentService,
+                        SessionAuthorityRefresher sessionAuthorityRefresher) {
         this.userService = userService;
         this.teacherScopeAssignmentService = teacherScopeAssignmentService;
+        this.sessionAuthorityRefresher = sessionAuthorityRefresher;
     }
 
+    /**
+     * Also re-seats the session's authorities from the database (issue 157 §6).
+     *
+     * <p>They are a snapshot taken at login — serialized onto the session row —
+     * so a permission granted or revoked afterwards did not reach a live session
+     * for up to eight hours. The client re-reads this endpoint on every app load
+     * for exactly the same reason, and doing both halves here is what keeps the
+     * screen and the server from disagreeing: the alternative was a browser that
+     * had learned about a new permission talking to a session that had not,
+     * which showed as an empty management screen rather than as a refusal.</p>
+     */
     @GetMapping("/api/v1/me")
     @PreAuthorize("isAuthenticated()")
-    public ApiResponse<MeResponse> me(Authentication auth) {
+    public ApiResponse<MeResponse> me(Authentication auth, HttpServletRequest request, HttpServletResponse response) {
+        sessionAuthorityRefresher.refresh(auth, request, response);
         String userId = ((CookieSessionUserDetails) auth.getPrincipal()).id();
-        MeResponse response = userService.buildMeResponse(userId);
-        Set<String> grades = response.user().roles().contains("teacher")
+        MeResponse me = userService.buildMeResponse(userId);
+        Set<String> grades = me.user().roles().contains("teacher")
                 ? teacherScopeAssignmentService.gradesOf(userId)
                 : Set.of();
-        return ApiResponse.of(response.withScopeGradeIds(grades));
+        return ApiResponse.of(me.withScopeGradeIds(grades));
     }
 
     @PatchMapping("/api/v1/me/profile")
