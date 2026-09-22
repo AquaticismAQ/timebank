@@ -1224,11 +1224,8 @@
         "enrollment.markComplete": "Marked as completed",
         "enrollment.bulk.confirm": "Registrations confirmed in bulk",
         "enrollment.bulk.reject": "Registrations rejected in bulk",
-        "serviceRecord.create": "Service record drafted",
-        "serviceRecord.update": "Service record edited",
         "serviceRecord.submit": "Service record submitted",
         "serviceRecord.withdraw": "Service record withdrawn",
-        "serviceRecord.delete": "Service record deleted",
         "serviceRecord.assignReviewer": "Reviewer assigned",
         "serviceRecord.reviewTransition": "Review decision"
       }

@@ -1224,11 +1224,8 @@
         "enrollment.markComplete": "标记为已完成",
         "enrollment.bulk.confirm": "批量确认报名",
         "enrollment.bulk.reject": "批量驳回报名",
-        "serviceRecord.create": "服务记录草稿创建",
-        "serviceRecord.update": "服务记录修改",
         "serviceRecord.submit": "服务记录提交",
         "serviceRecord.withdraw": "服务记录撤回",
-        "serviceRecord.delete": "服务记录删除",
         "serviceRecord.assignReviewer": "指派审核人",
         "serviceRecord.reviewTransition": "审核决定"
       }

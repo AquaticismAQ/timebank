@@ -495,7 +495,7 @@ queued → running → succeeded
 
 这些条目读自**审计日志**，而不是另建一张历史表，覆盖三类资源：项目本身、它的**报名**、它的**服务记录**。后两类是其中不显然的一环——它们的审计行分别挂在 enrollment 与 service_record 上，行内不含项目 id，因此这两张表是唯一的桥梁。也正因如此，这个接口对很久以前就跑完的项目同样正确，无需任何回填。有两类条目是**推导而非审计**得来的，对应那些直接插入、未经 API 的行：`project.created`，在没有创建事件时依据项目自身的 `createdAt`/`ownerId` 推出；`enrollment.registered`，在某条报名没有对应 `enrollment.register` 时依据该行的 `applied_at` 与状态推出。两者都使用与其审计版本不同的 action 代码，以保留来源的可辨识性，客户端应为每一对给出相同的措辞。推导条目**没有操作人**——行确实存在，但没有任何人被记录为执行者——并且按资源逐条抑制：日志里已有的，不会再推导一条，因此不会重复出现。
 
-刻意**不**包含：字段级的前后值——时间线是序列，不是差异对比，那是系统管理 → 审计日志回答的问题。
+刻意**不**包含两类：字段级的前后值——时间线是序列，不是差异对比，那是系统管理 → 审计日志回答的问题；以及服务记录的**起草过程**（`serviceRecord.create`/`.update`/`.delete`），那是学生在别人看得到之前私下书写的部分。项目的历史从 `serviceRecord.submit` 开始，重新提交就是第二条 submit。该过滤采用黑名单，因此日后新增的服务记录动作会自动出现，无需有人记得去放行。
 
 **发布（issue 130）。** `POST /projects/{id}/publish` 适用与下文 `PATCH` 相同的年级规则；此外，若 `DRAFT` 的 `registrationCloseAt` 已不在未来，则拒绝发布——返回 `409`，`fieldErrors[0].code = PROJECT_REGISTRATION_WINDOW_PASSED`，`message` 为报名截止时间。发布这样的草稿会在下一次读取时直接走完 `PUBLISHED → REGISTRATION_OPEN → ARCHIVED`，而此时已无人能够报名。
 

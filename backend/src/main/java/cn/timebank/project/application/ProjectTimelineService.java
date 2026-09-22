@@ -102,6 +102,24 @@ public class ProjectTimelineService {
 
     private static final String AUDITED_REGISTER = "enrollment.register";
 
+    /**
+     * Service-record events that belong to the student's own drafting, not to
+     * the project's story.
+     *
+     * <p>A record is written, edited and re-edited privately before anyone else
+     * can see it — on real data that is three or four rows per record, and a
+     * project with six records drowned its four actual events in twenty lines of
+     * somebody typing. The project's history starts when the student
+     * <b>submits</b>; what happened in the notebook first is between them and
+     * the draft.</p>
+     *
+     * <p>A denylist rather than an allowlist, deliberately: a service-record
+     * action added later should appear here unbidden. Showing an unexpected real
+     * event is a much smaller failure than silently hiding one.</p>
+     */
+    private static final Set<String> DRAFTING_ACTIONS = Set.of(
+            "serviceRecord.create", "serviceRecord.update", "serviceRecord.delete");
+
     private final ProjectService projectService;
     private final EnrollmentService enrollmentService;
     private final ServiceRecordService serviceRecordService;
@@ -136,7 +154,9 @@ public class ProjectTimelineService {
         List<TimelineEntryDto> entries = new ArrayList<>();
         entries.addAll(mapped(auditLogQueryService.entriesFor(PROJECT_RESOURCE, List.of(projectId)), Map.of()));
         entries.addAll(mapped(enrollmentRows, registrantNames));
-        entries.addAll(mapped(auditLogQueryService.entriesFor(SERVICE_RECORD_RESOURCE, records.keySet()), records));
+        entries.addAll(mapped(auditLogQueryService.entriesFor(SERVICE_RECORD_RESOURCE, records.keySet()).stream()
+                .filter(row -> !DRAFTING_ACTIONS.contains(row.action()))
+                .toList(), records));
 
         if (entries.stream().noneMatch(e -> CREATE_ACTIONS.contains(e.action()))) {
             entries.add(new TimelineEntryDto(SYNTHETIC_CREATE, project.ownerId(), null, null, null, project.createdAt()));

@@ -128,12 +128,27 @@ The first pass left them out on the grounds that a record belongs to the student
 and thirty students would bury six project events under sixty rows. Aquaticism asked
 for them, and he is right: a project's point is the service done on it, so a
 history that stops at "registered" stops one step before the part that matters.
-All seven record actions are included — drafted, edited, submitted, withdrawn,
-deleted, reviewer assigned, and the review decision, whose `detail` carries the
-resulting `APPROVED`/`RETURNED`/`REJECTED`.
+The record's **public** events are included — submitted, withdrawn, reviewer
+assigned, and the review decision, whose `detail` carries the resulting
+`APPROVED`/`RETURNED`/`REJECTED`. A re-submission is a second `submit`, so
+returning a record and getting it back reads as two lines rather than one.
 
-On the real data this lands at roughly twenty to twenty-five rows for a busy
-project, which is still one scannable table.
+**Drafting is deliberately not.** Aquaticism: *"we needn't show the student create a
+record draft, only submit, re-submit."* A record is written, edited and
+re-edited privately before anyone else can see it — three or four rows each — so
+a project with six records buried its four real events under twenty lines of
+somebody typing. The project's history starts when the student **submits**; what
+happened in the notebook first is between them and the draft. Filtered on the
+server rather than in the browser: there is no reason to ship rows nobody should
+see.
+
+A denylist (`create`, `update`, `delete`) rather than an allowlist, so a
+service-record action added later shows up unbidden — displaying an unexpected
+real event is a far smaller failure than silently hiding one.
+
+On the real data this takes a busy project from 22 rows to 17, and the shape that
+remains is the one worth reading: created → published → five registrations →
+five submissions → five decisions.
 
 ### What it still deliberately does not show
 
@@ -275,6 +290,8 @@ single quoted scalar — trimming an object or array summary would corrupt it.
   *Archive* and *Cancel and archive*: the actions that end a project stay last.
 - **Must not seed a state the product cannot reach.** §2 — registrations go
   through the API, and a roster-only student cannot hold one.
+- **Must not show private drafting.** §2 — the project's history starts at
+  submit.
 - **Must not show more than the project page shows.** It resolves the project
   through the same scope-checked `getDetail`, so its visibility can never
   diverge from the page it is opened from — whatever that rule becomes.
