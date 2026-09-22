@@ -1734,3 +1734,19 @@ It **refuses rather than pretending** when the message would reach nobody: `NO_L
 
 **Verified live, with the failure paths forced rather than reasoned about.** Two students already on the roster had the two undeliverable shapes — one with no account, one `PENDING_ACTIVATION` — and both produced the refusal and wrote nothing; the second is the sharper test, since that account exists and only its status makes it unreachable. Reader-language rendering was proven by sending from an **English** admin session and reading 志愿服务时长提醒 in the student's Chinese portal, the same row coming back in English when fetched with `Accept-Language: en`. Scope was checked as `teacher001` against two out-of-scope students **with active accounts** (404 both) *and* one in-scope student sent successfully — without that third line, two 404s prove only that something is broken. A second student, never clicked, held its count throughout.
 
+### 41.50 Every System Admin tab names its permission (issue 156, 2026-09-22)
+
+Aquaticism: the Audit Logs tab should be hidden for a non-student user who does not hold the audit-log permission — and then, the same for the page's other tabs.
+
+Five of the nine tabs already asked for one (`users.read`, `roles.read`, `imports.create`, any `exports.*`, and Settings' sysadmin-only blocks). Four never had. For a teacher that meant two dead tabs: **Audit Logs** rendering its filters, its sort controls and an empty list, because every request behind it 403s — and an empty log is a very different claim from "you cannot see this" — and **Service Categories**, worse in kind, offering create, rename and retire actions that all fail at the server.
+
+Each tab now names the permission its content needs: `rules.read` for Rule Settings, `auditLogs.read` for Audit Logs, `rules.manage` for Service Categories (it is a management screen; *reading* categories is every authenticated user), `organizations.read` for Partner Organizations.
+
+**Settings stays ungated, deliberately.** Every row in it is either readable by any authenticated user (school info, the version, the academic-year start) or already behind a sysadmin role check of its own (the Phase 3/4 toggles, the School Info edit button). `settings.read` exists but nothing on the tab is behind it, so gating on it would hide facts a teacher may see. It is also what keeps the tab list from ever being empty.
+
+**Hidden rather than shown-disabled**, for the reason the feature toggles on that same tab already give: a dead control invites the belief that somebody could use it. The control remains the server's `@PreAuthorize`; this list is a courtesy to the reader.
+
+The lists behind hidden tabs no longer fetch. `usePagedApi` gained an `enabled` flag — a screen that correctly hides a tab and still fires its request on mount is hidden in the UI and still asking on the wire, and a teacher opening System Admin was collecting four `403`s before touching anything.
+
+**Verified by measuring both the tab list and the `403` count across the same deploy**, as a teacher whose permissions were read from the live `GET /me` rather than from the seed file. Six tabs became four; all four `403`s disappeared; and `/rules` still returned 200 for that same teacher — the control, since turning every list off would have produced an identical "no more 403s". As `admin001` all nine tabs remain and both newly gated ones still load.
+

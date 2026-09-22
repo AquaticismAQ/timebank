@@ -1257,6 +1257,11 @@ export function SystemAdmin() {
   const canReadRoles = hasPermission('roles.read');
   const canManageRoles = hasPermission('roles.manage');
   const canReadUsers = hasPermission('users.read');
+  // Issue 156: the three tabs that had no gate at all, plus Service Categories,
+  // which uses `canManageRules` above. See the `tabs` array for why each.
+  const canReadRules = hasPermission('rules.read');
+  const canReadAuditLogs = hasPermission('auditLogs.read');
+  const canReadOrganizations = hasPermission('organizations.read');
   /**
    * Import is now the SDC admin's alone (`11-RolesAndPermissions.md` §6.1 —
    * `imports.*` was revoked from sysadmin, and teachers never held it), so the
@@ -1296,7 +1301,8 @@ export function SystemAdmin() {
    * the whole log, not over the loaded page — at 1,000+ rows and 50+ pages the
    * distinction is the difference between an answer and a guess.
    */
-  const auditLogs = usePagedApi<AuditLogEntry>(api.auditLogs.list, { sort: '-createdAt', pageSize: DEFAULT_PAGE_SIZE });
+  const auditLogs = usePagedApi<AuditLogEntry>(api.auditLogs.list,
+    { sort: '-createdAt', pageSize: DEFAULT_PAGE_SIZE }, { enabled: canReadAuditLogs });
   const [logSearch, setLogSearch] = useState('');
   const [filterLogAction, setFilterLogAction] = useState('all');
   const [filterLogResourceType, setFilterLogResourceType] = useState('all');
@@ -1309,8 +1315,9 @@ export function SystemAdmin() {
   // current 20 rows would offer only the actions those rows happen to use, so
   // the filter could never reach the ones it is most useful for (issue 098).
   useEffect(() => {
+    if (!canReadAuditLogs) return;
     api.auditLogs.facets().then(setLogFacets).catch(() => {});
-  }, []);
+  }, [canReadAuditLogs]);
 
   const handleLogSearch = (value: string) => {
     setLogSearch(value);
@@ -1359,7 +1366,8 @@ export function SystemAdmin() {
   const { grades: allGrades, classes: allClasses, academicYears, lifecycle } = useDictionaries();
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
-  const rulesApi = usePagedApi<RuleVersion>(api.rules.list, { sort: '-createdAt', pageSize: DEFAULT_PAGE_SIZE });
+  const rulesApi = usePagedApi<RuleVersion>(api.rules.list,
+    { sort: '-createdAt', pageSize: DEFAULT_PAGE_SIZE }, { enabled: canReadRules });
   const [ruleFormMode, setRuleFormMode] = useState<'create' | 'edit' | null>(null);
   const [ruleFormTarget, setRuleFormTarget] = useState<RuleVersion | null>(null);
   const [publishingRule, setPublishingRule] = useState<RuleVersion | null>(null);
@@ -1480,8 +1488,11 @@ export function SystemAdmin() {
   };
 
   useEffect(() => {
+    // `GET /roles` is `roles.read`-gated; a teacher holds neither that nor the
+    // two tabs that consume the list (issue 156).
+    if (!canReadRoles) return;
     loadRoles();
-  }, []);
+  }, [canReadRoles]);
 
   /**
    * Issue 094: one page of users at a time, with search/filter/sort resolved
@@ -1490,7 +1501,8 @@ export function SystemAdmin() {
    * `users` below is now just the current page, projected from `usersApi.items`
    * into the shape the table and the edit modal already expect.
    */
-  const usersApi = usePagedApi(api.users.list, { sort: 'displayName', pageSize: DEFAULT_PAGE_SIZE });
+  const usersApi = usePagedApi(api.users.list,
+    { sort: 'displayName', pageSize: DEFAULT_PAGE_SIZE }, { enabled: canReadUsers });
   const [userSearch, setUserSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [filterUserStatus, setFilterUserStatus] = useState('all');
@@ -1951,15 +1963,37 @@ export function SystemAdmin() {
    * does not have. So the landing tab is the first one they can actually see
    * rather than always `users`.
    */
+  /**
+   * Issue 156: every tab names the permission its content needs. Four of them
+   * used to be unconditional, which for a teacher meant two dead tabs — Audit
+   * Logs rendering filters, sort controls and an empty list because every
+   * request behind it 403s, and Service Categories offering create/rename/retire
+   * actions that all fail at the server. An empty log is a very different claim
+   * from "you cannot see this".
+   *
+   * **Hidden, not shown-disabled**, for the reason the Settings tab's own
+   * feature toggles already give: a dead control invites the belief that
+   * somebody could use it. And the control is still the server's
+   * `@PreAuthorize` — this list is a courtesy to the reader, never the boundary.
+   *
+   * **Settings is deliberately ungated.** Every row in it is either readable by
+   * any authenticated user (school info, the version, the academic-year start)
+   * or already behind a sysadmin role check of its own (the Phase 3/4 toggles,
+   * the School Info edit button). `settings.read` exists but nothing here is
+   * behind it, so gating on it would hide facts a teacher may see. It is also
+   * what keeps this list from ever being empty.
+   */
   const tabs: { key: Tab; label: string; icon: typeof Users }[] = [
     ...(canReadUsers ? [{ key: 'users' as const, label: t('admin.system.tabUsers'), icon: Users }] : []),
     ...(canReadRoles ? [{ key: 'roles' as const, label: t('admin.system.tabRoles'), icon: KeyRound }] : []),
-    { key: 'rules', label: t('admin.system.tabRules'), icon: Shield },
+    ...(canReadRules ? [{ key: 'rules' as const, label: t('admin.system.tabRules'), icon: Shield }] : []),
     ...(canImport ? [{ key: 'import' as const, label: t('admin.system.tabImport'), icon: Upload }] : []),
     ...(canExportAnything ? [{ key: 'export' as const, label: t('admin.system.tabExport'), icon: Download }] : []),
-    { key: 'logs', label: t('admin.system.tabLogs'), icon: FileText },
-    { key: 'categories', label: t('admin.system.tabCategories'), icon: Tags },
-    { key: 'organizations', label: t('admin.system.tabOrganizations'), icon: Building2 },
+    ...(canReadAuditLogs ? [{ key: 'logs' as const, label: t('admin.system.tabLogs'), icon: FileText }] : []),
+    // A management screen, so `rules.manage` rather than the read every
+    // authenticated user already has on `GET /service-categories`.
+    ...(canManageRules ? [{ key: 'categories' as const, label: t('admin.system.tabCategories'), icon: Tags }] : []),
+    ...(canReadOrganizations ? [{ key: 'organizations' as const, label: t('admin.system.tabOrganizations'), icon: Building2 }] : []),
     { key: 'settings', label: t('admin.system.tabSettings'), icon: Settings },
   ];
 

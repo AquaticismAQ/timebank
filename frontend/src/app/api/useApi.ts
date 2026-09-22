@@ -55,10 +55,26 @@ export interface PagedApiState<T> {
   refetch: () => void;
 }
 
+/**
+ * `enabled: false` means "do not ask" — for a list the signed-in user has no
+ * permission to read (issue 156). Without it, a screen that correctly hides a
+ * tab still fires the request behind it on mount and collects a `403`: hidden in
+ * the UI, still asking on the wire.
+ *
+ * Not the same as a loading state. A disabled list is settled, not pending, so
+ * `loading` is false and the caller renders an empty list rather than a spinner
+ * that never resolves.
+ */
+export interface PagedApiOptions {
+  enabled?: boolean;
+}
+
 export function usePagedApi<T>(
   fn: (params: ListParams) => Promise<PageResult<T>>,
-  initialParams: ListParams = {}
+  initialParams: ListParams = {},
+  options: PagedApiOptions = {}
 ): PagedApiState<T> {
+  const enabled = options.enabled ?? true;
   const [params, setParams] = useState<ListParams>({ page: 1, pageSize: DEFAULT_PAGE_SIZE, ...initialParams });
   const [items, setItems] = useState<T[]>([]);
   const [page, setPageMeta] = useState<PagedApiState<T>['page']>(null);
@@ -70,6 +86,13 @@ export function usePagedApi<T>(
   const paramsKey = JSON.stringify(params);
 
   useEffect(() => {
+    if (!enabled) {
+      setItems([]);
+      setPageMeta(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -89,7 +112,7 @@ export function usePagedApi<T>(
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramsKey, tick]);
+  }, [paramsKey, tick, enabled]);
 
   const setPage = useCallback((n: number) => setParams(p => ({ ...p, page: n })), []);
   // §2.2: changing page size resets to page 1, same as filter/search.
