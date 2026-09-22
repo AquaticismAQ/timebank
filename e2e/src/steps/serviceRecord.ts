@@ -63,6 +63,7 @@ export async function createDraft(page: Page, baseUrl: string, draft: RecordDraf
   await type(serviceDate, '服务日期', draft.date);
   await pickTime(page, '开始时间 *', draft.startHHMM);
   await pickTime(page, '结束时间 *', draft.endHHMM);
+  await clearEndsNextDay(page);
   await type(field(page, '服务内容描述 *'), '服务内容描述', draft.description);
 
   await tap(page.getByRole('button', { name: '保存草稿' }), '保存草稿');
@@ -257,6 +258,33 @@ function say(page: Page, zh: string): void {
  * Both columns contain the same two-digit strings, so `09` is ambiguous across
  * the popover as a whole — the columns have to be addressed positionally.
  */
+/**
+ * Clears "ends the next day", which the project prefill may have set.
+ *
+ * Choosing a school project autofills the date and both times from the
+ * project's own schedule, and also ticks this box when the project's start and
+ * end fall on different calendar dates (issue 063 — a project running 16:00 to
+ * 01:00 otherwise autofills a pair that looks like a negative duration). The
+ * step above then overwrites the date and times with an allocated slot and left
+ * the box exactly as the prefill set it.
+ *
+ * Every slot this harness allocates is inside one day, so a ticked box turns a
+ * two-hour record into a twenty-six-hour one. That is invisible until two of
+ * them overlap — which is precisely how it surfaced: the core phase's record and
+ * the return branch's each spanned 26 hours, the second was refused for
+ * overlapping the first, and the failure read as a stuck submit button.
+ *
+ * It depends on the time of day the demo runs, which is why it stayed hidden:
+ * the demo project is created `now + 8 days` and runs two hours, so it only
+ * straddles midnight when the run itself starts after 22:00.
+ */
+async function clearEndsNextDay(page: Page): Promise<void> {
+  const box = page.getByRole('checkbox', { name: '跨日结束（次日）' });
+  if (await box.isChecked().catch(() => false)) {
+    await box.uncheck();
+  }
+}
+
 async function pickTime(page: Page, labelZh: string, hhmm: string): Promise<void> {
   const [hh, mm] = hhmm.split(':');
   // Radix's PopoverTrigger uses `asChild`, so the trigger *is* the button and it

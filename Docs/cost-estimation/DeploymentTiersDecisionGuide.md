@@ -15,11 +15,11 @@ TimeBank handles student personal data, service records, audit history, and evid
 
 | Tier | Suitable use | Estimated monthly cost | Estimated annual cost | Plain-language recommendation |
 | --- | --- | ---: | ---: | --- |
-| **1. Low-cost pilot** | One school’s limited trial, UAT, demonstrations, or an early controlled rollout | **¥900–¥1,100** | **¥10,800–¥13,200** | Choose only when a service interruption of a day or more is acceptable and the school has a named technical person who can restore the server. |
+| **1. Low-cost pilot** | One school’s limited trial, UAT, demonstrations, or an early controlled rollout | **¥172.01** (annual-price equivalent) | **¥2,064.12** | Choose only when a service interruption of a day or more is acceptable and the school has a named technical person who can restore the server. |
 | **2. Managed-database standard** | A school’s normal first production deployment | **¥1,500–¥1,800** | **¥18,000–¥21,600** | **Recommended starting point for most schools.** It keeps one application server but moves MySQL to Alibaba Cloud RDS, reducing database-operation risk. |
 | **3. Resilient disaster-recovery deployment** | A system relied upon daily by multiple grades, with a low tolerance for interruption or data loss | **¥3,800–¥4,800** | **¥45,600–¥57,600** | Choose when continuity is a school-management requirement and funding is available for operational rehearsals as well as cloud services. |
 
-The ranges deliberately include an allowance for variable RDS pricing, evidence-download traffic, backup growth, and selected-region differences. They do **not** make an unavailable service acceptable simply because its subscription is paid: backup restoration and failover must be tested.
+The Tier 2 and 3 ranges deliberately include an allowance for variable RDS pricing, evidence-download traffic, backup growth, and selected-region differences. Tier 1 is calculated from the lowest annual-purchase prices listed in this guide; it excludes public bandwidth, domain/ICP/WAF, email, backup overage, and OSS request/download charges that are usage-based or procured separately. Paying for a subscription does **not** make an unavailable service acceptable: backup restoration and failover must be tested.
 
 ## 2. What every tier includes
 
@@ -31,23 +31,27 @@ The estimates assume a single school with up to roughly 3,000 students, 300 staf
 
 ### Proposed setup
 
-- One 4 vCPU / 16 GiB server with a 60 GB system disk, running the application, Nginx, and self-managed MySQL.
-- Private object storage for evidence files, plus backup copies and transaction-email delivery.
+- One `ecs.e-c1m1.large` ECS instance (2 vCPU / 2 GiB), running the application and Nginx. This is the lowest-priced ECS shown in the supplied pricing capture and is suitable only for a small pilot.
+- One RDS for MySQL Basic-series instance (2 cores / 4 GB, 50 GB) for the business database; MySQL is not self-managed on the ECS host.
+- 100 GB OSS Standard locally redundant storage for evidence files. The database and object storage use server-side encryption provided by KMS default keys.
+- KMS uses a free default service/master key, not a paid Software Key Management Instance; backup copies and transactional email are procured as needed.
 - A single public entry point; no standby application server and no database standby.
 
 ### Budget composition
 
 | Main cost area | Monthly planning allowance | Notes |
 | --- | ---: | --- |
-| 4 vCPU / 16 GiB ECS, 60 GB SSD, and 5 Mbps fixed bandwidth | ¥773 | ¥600 compute + approximately ¥48 SSD + ¥125 bandwidth. |
-| Object storage, backups, e-mail, and small traffic allowance | ¥100–¥300 | Includes an initial modest evidence and download allowance; actual evidence volume can raise this. |
-| **Total** | **¥900–¥1,100** | **¥10,800–¥13,200 per year** (rounded). |
+| `ecs.e-c1m1.large` ECS (2 vCPU / 2 GiB) | ¥19.86 | Promotional monthly price shown in the supplied capture; ¥238.32/year if the same rate applies for 12 months. |
+| RDS for MySQL Basic series (2 cores / 4 GB, 50 GB) | ¥143.90 (annual-price equivalent) | ¥1,726.80 annual price shown in the supplied capture. The monthly figure is for comparison, not a monthly quotation. |
+| OSS Standard LRS (100 GB) | ¥8.25 (annual-price equivalent) | ¥99.00 annual price shown in the supplied capture. The monthly figure is for comparison, not a monthly quotation. |
+| KMS default service/master key | ¥0 | Cloud-product server-side encryption can use a free default key; this excludes a paid Software Key Management Instance. |
+| **Total** | **¥172.01** (annual-price equivalent) | **¥2,064.12/year** (ECS ¥238.32 + RDS ¥1,726.80 + OSS ¥99.00). |
 
 ### What users experience
 
 In ordinary use, the portal can provide the same core functions as the other tiers: students submit records and evidence, and staff review and audit them. It is the simplest system to purchase and operate initially.
 
-Because this tier now uses four CPU cores, it is a controlled pilot configuration, not a 300-concurrent-user capacity claim. Keep the initial pilot small, schedule bulk imports and reports outside teaching hours, and expand the server after measured load testing rather than relying on this budget figure.
+Because this tier uses a 2 vCPU / 2 GiB ECS host and the lowest captured RDS size, it is a controlled pilot configuration, not a 300-concurrent-user capacity claim. Keep the initial pilot very small, schedule bulk imports and reports outside teaching hours, and expand the service after measured load testing rather than relying on this budget figure.
 
 ### Strengths, limits, and risks
 
@@ -55,7 +59,7 @@ Because this tier now uses four CPU cores, it is a controlled pilot configuratio
 | --- | --- |
 | Lowest recurring cost and fastest to understand. | One server failure, disk failure, failed upgrade, or MySQL problem can stop the entire system. |
 | Suitable for learning the real usage pattern before a wider launch. | Recovery depends on a usable backup and a person able to restore it; downtime may be many hours or longer. |
-| 60 GB local disk keeps the server cost low. | The 60 GB disk is **not** evidence capacity. Local evidence, logs, database growth, and temporary files can fill it quickly. |
+| Managed RDS, private OSS, and a KMS default key meet this system's required database, evidence-storage, and server-side-encryption infrastructure prerequisites. | The 100 GB OSS allocation is only initial evidence capacity; download traffic, requests, backups, and excess storage are billed separately. Do not mistake the annual package prices for the full operating cost. |
 
 **Decision boundary:** use this tier only as a time-bounded pilot. Do not silently let a successful pilot become a school-wide, business-critical service without reassessing the risk and upgrading.
 
@@ -142,8 +146,8 @@ Before signing a contract, the project lead should confirm:
 
 ## 8. Pricing basis and relationship to the detailed estimate
 
-The amounts above were recalculated from Alibaba Cloud’s currently published public planning prices for the China regions, using month-to-month figures and no promotional price: ECS `ecs.c5.2xlarge` (8 vCPU / 16 GiB) ¥1,092/month; ECS `ecs.g5.xlarge` (4 vCPU / 16 GiB) ¥600/month; 5 Mbps fixed bandwidth ¥125/month; RDS MySQL 4 vCPU / 16 GiB Basic Edition ¥480/month; and the corresponding High-availability Edition ¥1,360/month. SSD and RDS storage are charged separately. OSS Standard LRS is ¥0.12/GB-month; the geographically redundant OSS example is ¥0.15/GB-month, while public download traffic is ¥0.50/GB in the published example.
+Tier 1 uses the annual/promotional prices in the supplied captures: `ecs.e-c1m1.large` ECS (2 vCPU / 2 GiB) at a promotional ¥19.86/month, RDS for MySQL Basic series (2 cores / 4 GB, 50 GB) at ¥1,726.80/year, and OSS Standard LRS (100 GB) at ¥99.00/year. It assigns ¥0 to KMS because cloud-product server-side encryption can use a free default service/master key; this must not be confused with a paid Software Key Management Instance, whose minimum listed price is ¥2,499/month. Tiers 2 and 3 continue to use public month-to-month planning prices: ECS `ecs.c5.2xlarge` (8 vCPU / 16 GiB) ¥1,092/month; ECS `ecs.g5.xlarge` (4 vCPU / 16 GiB) ¥600/month; 5 Mbps fixed bandwidth ¥125/month; RDS MySQL 4 vCPU / 16 GiB Basic Edition ¥480/month; and the corresponding High-availability Edition ¥1,360/month. SSD and RDS storage are charged separately. The public reference for OSS Standard LRS is ¥0.12/GB-month; the geographically redundant OSS example is ¥0.15/GB-month, while public download traffic is ¥0.50/GB in the published example.
 
-These are public reference prices, not a locked quotation: selected region, CPU family, disk type, purchase term, RDS edition, backup retention, and traffic all change the bill. Sources: [ECS price list](https://ecs-buy.aliyun.com/price), [ECS public-bandwidth billing](https://help.aliyun.com/zh/ecs/public-bandwidth/), [RDS MySQL public configuration price table](https://developer.aliyun.com/article/1751050), [OSS storage fees](https://help.aliyun.com/zh/oss/storage-fees), and [OSS billing examples](https://help.aliyun.com/zh/oss/billing-examples).
+These are public-reference or captured prices, not a locked quotation: selected region, CPU family, disk type, purchase term, RDS edition, backup retention, and traffic all change the bill; the captured ECS promotion may expire or be unavailable at renewal. Sources: [ECS price list](https://ecs-buy.aliyun.com/price), [ECS public-bandwidth billing](https://help.aliyun.com/zh/ecs/public-bandwidth/), [RDS MySQL public configuration price table](https://developer.aliyun.com/article/1751050), [OSS storage fees](https://help.aliyun.com/zh/oss/storage-fees), [OSS billing examples](https://help.aliyun.com/zh/oss/billing-examples), [KMS keys for cloud-product server-side encryption](https://help.aliyun.com/en/kms/key-management-service/user-guide/integration-with-kms/), and [KMS billing](https://help.aliyun.com/en/kms/key-management-service/product-overview/kms-billing).
 
 This document is a simplified funding decision aid. The detailed component assumptions, capacity assumptions, and overseas comparison remain in [Deployment Cost Estimate](DeploymentCostEstimate.md). In particular, see its §2 for capacity assumptions and §5 for required go-live costs that are intentionally excluded from the headline totals. Its Alibaba Cloud component amounts predate this recalculation and should not be used in place of this guide’s figures.

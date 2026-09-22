@@ -14,6 +14,16 @@ export interface Config {
   headless: boolean;
   closeAtEnd: boolean;
   slowMo: number;
+  /**
+   * The maintenance gate's bypass key, when the target server has one.
+   *
+   * A gated server answers **every** request with the bilingual 503 page —
+   * `/api/*` included (`Docs/operations/MaintenanceMode.md`) — so without this
+   * the first navigation lands on the maintenance page and the run fails on a
+   * missing login form, which reads like a broken selector rather than a closed
+   * door. Empty on a server with no gate, which is most of them.
+   */
+  bypassKey: string;
 }
 
 /**
@@ -56,10 +66,18 @@ export function loadConfig(cli: {
     );
   }
 
-  const { admin, student } = loadAccounts(join(repoRoot, 'Docs', 'TestAccounts.md'));
+  // Scoped by host: the file documents two servers and both call their
+  // administrator `admin001`, so an unscoped read is a coin toss.
+  const { admin, student } = loadAccounts(
+    join(repoRoot, 'Docs', 'TestAccounts.md'), new URL(baseUrl).hostname);
 
   return {
     baseUrl,
+    // Same source as everything else here: the environment, or ~/.timebank.env.
+    // Never a literal — this one is a real key.
+    bypassKey: process.env.TIMEBANK_MAINTENANCE_BYPASS_KEY
+      ?? readFromEnvFile('TIMEBANK_MAINTENANCE_BYPASS_KEY')
+      ?? '',
     repoRoot,
     evidenceDir,
     artifactsDir: join(repoRoot, 'e2e', 'artifacts'),

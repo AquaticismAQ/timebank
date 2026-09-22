@@ -122,6 +122,19 @@ export class BrowserHarness {
     //
     // The argument form, because this file is typechecked as Node: `window` has
     // no type here even though the function runs in the page.
+    // The maintenance gate, if this server has one. Set on the context before
+    // any navigation: the gate is nginx-level and applies to the SPA and the API
+    // alike, so a page that loads without this shows the 503 maintenance page
+    // and every later selector fails for a reason that has nothing to do with
+    // the selector.
+    if (this.config.bypassKey) {
+      const host = new URL(this.config.baseUrl).hostname;
+      await context.addCookies([{
+        name: 'tb_ops_bypass', value: this.config.bypassKey,
+        domain: host, path: '/', secure: true, sameSite: 'Lax',
+      }]);
+    }
+
     const theme = role === 'admin' ? 'dark' : 'light';
     await context.addInitScript((settings: Array<[string, string]>) => {
       for (const [key, value] of settings) localStorage.setItem(key, value);

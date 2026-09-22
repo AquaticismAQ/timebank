@@ -15,6 +15,12 @@ export class Api {
 
   static async loginAs(config: Config, username: string, password: string): Promise<Api> {
     const api = new Api(config.baseUrl);
+    // The maintenance gate applies to `/api/*` exactly as it does to the SPA, so
+    // this client needs the same bypass the browser contexts get. Seeded as an
+    // ordinary cookie, which is all the gate checks — without it the first call
+    // here is a 503 and the run reports "Login failed", which points at the
+    // credentials rather than at the closed door in front of them.
+    if (config.bypassKey) api.cookies.set('tb_ops_bypass', config.bypassKey);
     // The session is cookie-based and CSRF-protected; the token is handed out by
     // /auth/csrf and echoed back in X-XSRF-TOKEN. Same dance the frontend does.
     await api.request('GET', '/auth/csrf');
