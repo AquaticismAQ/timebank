@@ -493,7 +493,9 @@ queued → running → succeeded
 
 **`GET /projects/{id}/timeline`（2026-09-22 重建，issue 158）。** 返回 `TimelineEntryDto[]`——`{ action, actorId, actorName, subject, detail, occurredAt }`——**按时间正序且不分页**：一个项目的事件数以十计，而缺了一页的历史不成其为历史。`action` 是**原始审计操作代码**（`project.publish`、`enrollment.register`、`enrollment.bulk.confirm`），不是句子：服务端不产出任何本地化文案，措辞由客户端提供；遇到不认识的代码应降级为可读形式，而不是渲染成空单元格。系统产生的事件（如无人报名的自动归档）`actorId`/`actorName` 均为 null；账号已被删除时则保留 id、没有姓名。`detail` 取该行的 reason code，没有则取 `after` 摘要——取消的理由、报名落到的状态、审核结果的 `APPROVED`/`RETURNED`/`REJECTED`——若操作本身已说清则为 null。**`subject` 表示这条事件是关于谁的报名或谁的服务记录**，项目自身的事件为 null：审核决定与报名确认的操作人是**教职工**，没有这一列，一行记录永远说不清被批的是谁的记录。
 
-这些条目读自**审计日志**，而不是另建一张历史表，覆盖三类资源：项目本身、它的**报名**、它的**服务记录**。后两类是其中不显然的一环——它们的审计行分别挂在 enrollment 与 service_record 上，行内不含项目 id，因此这两张表是唯一的桥梁。也正因如此，这个接口对很久以前就跑完的项目同样正确，无需任何回填。有两类条目是**推导而非审计**得来的，对应那些直接插入、未经 API 的行：`project.created`，在没有创建事件时依据项目自身的 `createdAt`/`ownerId` 推出；`enrollment.registered`，在某条报名没有对应 `enrollment.register` 时依据该行的 `applied_at` 与状态推出。两者都使用与其审计版本不同的 action 代码，以保留来源的可辨识性，客户端应为每一对给出相同的措辞。推导条目**没有操作人**——行确实存在，但没有任何人被记录为执行者——并且按资源逐条抑制：日志里已有的，不会再推导一条，因此不会重复出现。
+这些条目读自**审计日志**，而不是另建一张历史表，覆盖三类资源：项目本身、它的**报名**、它的**服务记录**。后两类是其中不显然的一环——它们的审计行分别挂在 enrollment 与 service_record 上，行内不含项目 id，因此这两张表是唯一的桥梁。也正因如此，这个接口对很久以前就跑完的项目同样正确，无需任何回填。`systemGenerated` 标记那些由**后端**而非某个人执行的条目——报名窗口开启、活动结束、无人报名时的自动归档。它比"没有操作人"更窄：一条确实发生、却没有任何人被记录在案的事件（例如日志未见的报名）既没有操作人，也**不是**系统生成的，客户端应当区分二者，而不是对两者都打上"系统"。
+
+有四类条目是**推导而非审计**得来的，对应那些直接插入、未经 API 的行：`project.created`，在没有创建事件时依据项目自身的 `createdAt`/`ownerId` 推出；`enrollment.registered`，在某条报名没有对应 `enrollment.register` 时依据该行的 `applied_at` 与状态推出；以及两个无人执行、因而没有任何审计行的时间派生时刻——`project.registrationOpened`（取 `registrationOpenAt`，仅限已发布且该时刻已过）与 `project.completed`（取 `endAt`，仅限状态为 `COMPLETED`——`ARCHIVED` 的项目可能是被取消而非结束）。后两者的 `systemGenerated` 为 true。两者都使用与其审计版本不同的 action 代码，以保留来源的可辨识性，客户端应为每一对给出相同的措辞。推导条目**没有操作人**——行确实存在，但没有任何人被记录为执行者——并且按资源逐条抑制：日志里已有的，不会再推导一条，因此不会重复出现。
 
 刻意**不**包含两类：字段级的前后值——时间线是序列，不是差异对比，那是系统管理 → 审计日志回答的问题；以及服务记录的**起草过程**（`serviceRecord.create`/`.update`/`.delete`），那是学生在别人看得到之前私下书写的部分。项目的历史从 `serviceRecord.submit` 开始，重新提交就是第二条 submit。该过滤采用黑名单，因此日后新增的服务记录动作会自动出现，无需有人记得去放行。
 

@@ -457,6 +457,13 @@ export interface ProjectTimelineEntry {
   /** A reason code or resulting status, when the row carries one. */
   detail: string | null;
   occurredAt: string;
+  /**
+   * The backend did this, not a person — a window opening, a run ending, the
+   * sweep archiving a project nobody joined. Distinct from a merely absent
+   * actor: "no person is on record" and "no person was involved" are different
+   * facts, and only the second reads as *System*.
+   */
+  systemGenerated: boolean;
 }
 
 export interface Organization {

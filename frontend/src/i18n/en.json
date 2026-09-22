@@ -1206,6 +1206,7 @@
       "timelineAction": "Action",
       "timelineSubject": "Subject",
       "timelineWho": "Who",
+      "timelineSystem": "System",
       "timelineEmpty": "Nothing has been recorded for this project yet.",
       "timelineActions": {
         "project.created": "Project created",
@@ -1213,6 +1214,8 @@
         "project.generatedFromProposal": "Created from an approved proposal",
         "project.update": "Project edited",
         "project.publish": "Published",
+        "project.registrationOpened": "Registration opened",
+        "project.completed": "Project completed",
         "project.archive": "Archived",
         "project.cancel": "Cancelled and archived",
         "project.autoArchiveNoRegistrants": "Auto-archived — nobody registered",

@@ -1206,6 +1206,7 @@
       "timelineAction": "操作",
       "timelineSubject": "对象",
       "timelineWho": "操作人",
+      "timelineSystem": "系统",
       "timelineEmpty": "该项目暂无任何记录。",
       "timelineActions": {
         "project.created": "项目创建",
@@ -1213,6 +1214,8 @@
         "project.generatedFromProposal": "由通过的活动提案生成",
         "project.update": "项目修改",
         "project.publish": "发布",
+        "project.registrationOpened": "报名开放",
+        "project.completed": "项目结束",
         "project.archive": "归档",
         "project.cancel": "取消并归档",
         "project.autoArchiveNoRegistrants": "无人报名，自动归档",

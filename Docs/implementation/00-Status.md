@@ -1876,3 +1876,19 @@ The timeline now reads forward on real data: created 08-31 → published 09-02 �
 
 Still stamped on the run date: `account`, `case` and `eventProposal` audit rows. None of them appears on a timeline, and their `resource_id` does not join to a dated row the way the others do — recorded rather than guessed at.
 
+### 41.59 Two moments nobody performed (issue 158 §2, 2026-09-22)
+
+Aquaticism: when a project is completed, add the completion as an event with *System* as the who — the backend handles it — and add registration opening with its datetime.
+
+`syncTimeBasedStatus` advances a project as its dates pass and writes nothing to the audit log. That is correct — nobody did anything — but it means two moments that are genuinely part of the story have no row to read. Both are now derived from the project's own columns, where the fact already lives: `project.registrationOpened` at `registrationOpenAt`, `project.completed` at `endAt`.
+
+Each appears **only once it has happened**. A window that opens next week has not opened; a project still running has not finished; a draft was never published, so its window never opened however its dates read. Printing any of them would turn a history into a schedule.
+
+**Completion is shown for `COMPLETED` only, never `ARCHIVED`** — an archived project may have been cancelled rather than finished, and calling a cancelled project completed is a worse error than omitting the line.
+
+**It also brought *System* back, as a narrower idea than the one removed in §41.56.** There are three cases, not two: a person acted (their name), the **backend** acted (*System*), and a real event with **no person on record** (`—`, such as a registration the audit log never saw). A `systemGenerated` flag on the DTO carries the distinction; the word itself stays on the client. Removing "System" entirely was right when the only null-actor rows were the second kind, and wrong once the first kind existed.
+
+**Flagged rather than silently overridden**: Aquaticism asked for completion "as the last one", and it is placed at `endAt` instead. On real data that is not last — records get submitted after the event and reviewed days later, so a project that ended 09-15 still collects decisions on 09-17 and 09-19. A timeline that asserted an order the data contradicts would be worse than one that reads slightly against expectation. It is a one-line change if pinned-last is what is wanted.
+
+Verified live on the re-seeded server: 报名开放 at 2026-09-02 08:00 and 项目结束 at 2026-09-15 01:00, both attributed to 系统, in a 19-row history that is still ascending throughout.
+

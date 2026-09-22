@@ -115,6 +115,48 @@ is precisely what that log must never contain — so the shared server's existin
 enrollments keep no audit trail, and the derived entry is what makes their
 timelines readable. A re-seed is what clears it for good.
 
+### Two moments nobody performed
+
+Aquaticism: add the completion when a project is finished, with *System* as the who,
+and registration opening with its datetime.
+
+`syncTimeBasedStatus` advances a project as its dates pass and writes nothing to
+the audit log — correctly, since nobody did anything. But two of those moments
+are part of the story: **registration opening**, and the project **finishing**.
+Both are derived from the project's own columns, where the fact already lives.
+
+Each appears only once it has actually happened — a window that opens next week
+has not opened, and a project still running has not finished. Printing either
+would turn a history into a schedule. A draft gets no "registration opened" at
+all, however its dates read, because it was never published.
+
+**Completion is shown only for `COMPLETED`, not `ARCHIVED`.** An archived project
+may have been cancelled rather than finished, and calling a cancelled project
+completed is a worse error than omitting the line.
+
+**Where it sorts, and why not last.** Aquaticism asked for completion "as the last
+one". It is placed at the project's `endAt` instead — which on real data is
+*not* last: records get submitted after the event and reviewed days later, so a
+project that ended 09-15 still collects review decisions on 09-17 and 09-19. A
+timeline that put the ending after events which demonstrably happened later
+would be asserting a false order. Flagged rather than silently overridden; it is
+a one-line change if the pinned-last reading is the wanted one.
+
+### *System* comes back, meaning something narrower
+
+The actor column had three cases collapsed into two. `systemGenerated` on the
+DTO separates them:
+
+| | Who reads |
+| :--- | :--- |
+| a person acted | their name |
+| **the backend acted** — window opened, run ended, sweep archived | **System** |
+| a real event with no person on record — a registration the log never saw | `—` |
+
+"No person is on record" and "no person was involved" are different facts, and
+only the second is the system's. The word itself is still the client's; the
+server sends the flag.
+
 ### A synthetic first line, for projects the log never saw
 
 Seeded projects were inserted directly rather than through `POST /projects`, so
@@ -251,6 +293,21 @@ vocabulary is `applications` even though the internal module is `enrollment`.
 Worth the failure: it is exactly the kind of thing that cannot be found by
 reading.
 
+**The two derived moments, live on the re-seeded server:**
+
+```
+2026-08-31 08:00  项目创建      —                 Casey Z.
+2026-09-02 08:00  发布          —                 Casey Z.
+2026-09-02 08:00  报名开放      —                 系统      ← derived, no audit row exists
+…
+2026-09-15 01:00  项目结束      —                 系统      ← derived, at endAt
+2026-09-17 18:17  审核决定      Jordan S.(孙*静)  Riley H.
+2026-09-19 00:59  审核决定      Casey Z.(张*华)   Casey Z.
+```
+
+The last two lines are the evidence for §2's sorting note: reviews really do land
+after a project ends.
+
 **The dialog scrolls its table, not itself.** A 22-row timeline used to push the
 Close button off the bottom of the panel, leaving Escape as the only exit — which
 is exactly what issue 102's rule exists to prevent. The panel is now a flex
@@ -292,6 +349,9 @@ single quoted scalar — trimming an object or array summary would corrupt it.
   through the API, and a roster-only student cannot hold one.
 - **Must not show private drafting.** §2 — the project's history starts at
   submit.
+- **Must not announce a moment that has not arrived.** A window opening next
+  week, or a project still running, produces no row.
+- **Must not call a cancelled project completed.** §2 — `COMPLETED` only.
 - **Must not show more than the project page shows.** It resolves the project
   through the same scope-checked `getDetail`, so its visibility can never
   diverge from the page it is opened from — whatever that rule becomes.

@@ -10,6 +10,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -117,6 +118,29 @@ public class ProjectTimelineService {
      * action added later should appear here unbidden. Showing an unexpected real
      * event is a much smaller failure than silently hiding one.</p>
      */
+    /**
+     * Time-derived transitions, which no audit row records.
+     *
+     * <p>{@code syncTimeBasedStatus} advances a project as its dates pass and
+     * writes nothing to the log — correctly, since nobody did anything. But two
+     * of those moments are part of the story a reader is reconstructing:
+     * <b>registration opened</b>, and the project <b>finishing</b>. Both are
+     * derived from the project's own columns, which is where the fact already
+     * lives, and both are marked system-generated: the backend did them, and
+     * saying so is more honest than a blank.</p>
+     *
+     * <p>The other two transitions — registration closing, the run starting —
+     * are deliberately absent. Every date on the card would become a row, and a
+     * timeline that narrates the passage of time stops being about what anyone
+     * did.</p>
+     */
+    private static final String SYNTHETIC_REGISTRATION_OPENED = "project.registrationOpened";
+
+    private static final String SYNTHETIC_COMPLETED = "project.completed";
+
+    /** Actions the backend performs on a schedule, so they read as the system's rather than nobody's. */
+    private static final Set<String> SYSTEM_ACTIONS = Set.of("project.autoArchiveNoRegistrants");
+
     private static final Set<String> DRAFTING_ACTIONS = Set.of(
             "serviceRecord.create", "serviceRecord.update", "serviceRecord.delete");
 
@@ -159,9 +183,11 @@ public class ProjectTimelineService {
                 .toList(), records));
 
         if (entries.stream().noneMatch(e -> CREATE_ACTIONS.contains(e.action()))) {
-            entries.add(new TimelineEntryDto(SYNTHETIC_CREATE, project.ownerId(), null, null, null, project.createdAt()));
+            entries.add(new TimelineEntryDto(SYNTHETIC_CREATE, project.ownerId(), null, null, null,
+                    project.createdAt(), false));
         }
         entries.addAll(derivedRegistrations(registrants, enrollmentRows));
+        entries.addAll(derivedStatusMoments(project));
 
         // Oldest first: a life story reads forwards. The id is not available to
         // break ties across the two reads, so equal timestamps keep whatever
@@ -187,14 +213,45 @@ public class ProjectTimelineService {
         return registrants.stream()
                 .filter(r -> !audited.contains(r.enrollmentId()) && r.appliedAt() != null)
                 .map(r -> new TimelineEntryDto(SYNTHETIC_REGISTER, null, null,
-                        subjectOrNull(r.studentName()), r.status(), r.appliedAt()))
+                        subjectOrNull(r.studentName()), r.status(), r.appliedAt(), false))
                 .toList();
+    }
+
+    /**
+     * The two time-derived moments worth a row — see
+     * {@link #SYNTHETIC_REGISTRATION_OPENED}.
+     *
+     * <p>Each is added only once it has actually happened. A window that opens
+     * next week has not opened, and a project still running has not finished;
+     * printing either would turn the history into a schedule.</p>
+     */
+    private static List<TimelineEntryDto> derivedStatusMoments(ProjectDto project) {
+        List<TimelineEntryDto> moments = new ArrayList<>();
+        Instant now = Instant.now();
+
+        // A draft was never published, so its window never opened however its
+        // dates read.
+        boolean published = !"DRAFT".equals(project.status());
+        if (published && project.registrationOpenAt() != null && !project.registrationOpenAt().isAfter(now)) {
+            moments.add(new TimelineEntryDto(SYNTHETIC_REGISTRATION_OPENED, null, null, null, null,
+                    project.registrationOpenAt(), true));
+        }
+
+        // Only COMPLETED. An ARCHIVED project may have been cancelled rather
+        // than finished, and the log cannot always tell the two apart — calling
+        // a cancelled project "completed" would be a worse error than omitting
+        // the line.
+        if ("COMPLETED".equals(project.status()) && project.endAt() != null && !project.endAt().isAfter(now)) {
+            moments.add(new TimelineEntryDto(SYNTHETIC_COMPLETED, null, null, null, null, project.endAt(), true));
+        }
+        return moments;
     }
 
     private List<TimelineEntryDto> mapped(List<AuditLogDto> rows, Map<String, String> subjects) {
         return rows.stream()
                 .map(row -> new TimelineEntryDto(row.action(), row.actorId(), row.actorDisplayName(),
-                        subjectOrNull(subjects.get(row.resourceId())), detailOf(row), row.createdAt()))
+                        subjectOrNull(subjects.get(row.resourceId())), detailOf(row), row.createdAt(),
+                        SYSTEM_ACTIONS.contains(row.action())))
                 .toList();
     }
 

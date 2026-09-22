@@ -26,7 +26,13 @@ import java.time.Instant;
  *                    project itself. Needed because the actor on a review or a
  *                    confirmation is the <i>staff member</i>, so without it
  *                    "Record approved — Teacher Wei Chen" never says whose.
+ * @param systemGenerated the backend did this, not a person — a window opening,
+ *                    a run ending, the sweep archiving a project nobody joined.
+ *                    Distinct from a merely absent actor: "no person is on
+ *                    record" and "no person was involved" are different facts,
+ *                    and only the second should read as <i>System</i>. The word
+ *                    itself is the client's, as always.
  */
 public record TimelineEntryDto(String action, String actorId, String actorName, String subject, String detail,
-                                Instant occurredAt) {
+                                Instant occurredAt, boolean systemGenerated) {
 }

@@ -142,12 +142,16 @@ export function ProjectTimeline({ projectId, projectTitle, onClose }: {
                         more clearly than a blank cell. */}
                     <td className="px-3 py-2 text-xs text-muted-foreground">{entry.subject ?? '—'}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">
-                      {/* No actor means no *person* is on record for this event:
-                          a scheduled sweep, or a registration the audit log
-                          never saw. An em dash says that; "System" would claim a
-                          machine registered a student, and the action's own
-                          label already says when something ran automatically. */}
-                      {entry.actorName ?? entry.actorId ?? '—'}
+                      {/* Three cases, not two. The backend genuinely did some of
+                          these — a window opening, a run ending — and saying
+                          "System" is the truth there. An em dash is for the
+                          other kind of blank: a real event with no person on
+                          record, such as a registration the audit log never saw,
+                          where "System" would claim a machine registered a
+                          student. */}
+                      {entry.systemGenerated
+                        ? t('admin.projects.timelineSystem')
+                        : entry.actorName ?? entry.actorId ?? '—'}
                     </td>
                   </tr>
                 ))}
