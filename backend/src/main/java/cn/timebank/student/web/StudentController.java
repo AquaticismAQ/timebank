@@ -36,7 +36,16 @@ import java.util.Set;
 @RequestMapping("/api/v1/students")
 public class StudentController {
 
-    private static final Set<String> SORTABLE = Set.of("id", "studentNumber", "displayName", "createdAt");
+    /**
+     * {@code gradeLevel}, {@code completedMinutes} and {@code timeCoinBalance} are
+     * not columns — the service orders those in memory (issue 159 §4a). They are
+     * listed here because this set is what the request is validated against, and
+     * refusing them is what pushed the sort into the browser, where it could only
+     * ever order the twenty rows on screen.
+     */
+    private static final Set<String> SORTABLE = Set.of(
+            "id", "studentNumber", "displayName", "createdAt",
+            "gradeLevel", "completedMinutes", "timeCoinBalance");
 
     private final StudentService studentService;
     private final StudentReminderService studentReminderService;

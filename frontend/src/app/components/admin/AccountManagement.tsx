@@ -137,10 +137,11 @@ export function AccountManagement() {
    * balances" — measured live, page 1 topped out at 152.5 coins while page 2
    * held 304.5. Every page looked sorted and the list was not.
    *
-   * Not repaired by asking the server to sort: the paged resource here is
-   * `/students`, and the balance is merged in afterwards from `/accounts`, so
-   * there is no column to sort on. Roster order is what the page actually has,
-   * and this screen is reached by searching for a student anyway.
+   * It *could* now be repaired by asking the server to sort — `GET /students`
+   * carries `timeCoinBalance` on the row and accepts it as a sort key (issue 159
+   * §4a) — but this screen has no sort control to restore it to, and adding one
+   * is a product decision rather than a bug fix. Roster order is what the page
+   * actually has, and this screen is reached by searching for a student anyway.
    */
   const filtered = items;
 

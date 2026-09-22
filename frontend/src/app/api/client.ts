@@ -56,12 +56,14 @@ interface StudentListItemDtoWire {
   status: string; graduationYear: number; version: number;
   joinedAt?: string;
   /**
-   * This academic year's approved minutes and what the rule asks of this
-   * student's stage (issue 159). On the row itself now — the roster page used to
-   * fetch them per student from `/students/{id}/progress`, which is why its
-   * completion filter could only ever see one page.
+   * This academic year's approved minutes, what the rule asks of this student's
+   * stage, and the account balance in centi-coins (issue 159). On the row itself
+   * now — the roster page used to fetch the first two per student from
+   * `/students/{id}/progress` and the third from a whole page of `/accounts`,
+   * which is why its completion filter and its hours/coins sorts could only ever
+   * see the twenty rows already on screen.
    */
-  completedMinutes?: number; annualRequiredMinutes?: number;
+  completedMinutes?: number; annualRequiredMinutes?: number; timeCoinBalance?: number;
 }
 /** Backend enum fields (status, sourceType, type, ...) arrive UPPER_SNAKE; the frontend renders/compares camelCase literals directly in JSX. Run every response through this for whichever fields the resource has. */
 function mapEnumFields<T extends object>(obj: T, fields: (keyof T)[]): T {
@@ -145,6 +147,7 @@ function fromStudentDto(dto: StudentListItemDtoWire): Student {
     joinedAt: dto.joinedAt ?? '',
     completedMinutes: dto.completedMinutes,
     annualRequiredMinutes: dto.annualRequiredMinutes,
+    timeCoinBalance: dto.timeCoinBalance,
     version: dto.version,
   };
 }

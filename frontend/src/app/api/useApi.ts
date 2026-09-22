@@ -122,7 +122,12 @@ export function usePagedApi<T>(
     (key: string, value: string | undefined) => setParams(p => ({ ...p, filter: { ...p.filter, [key]: value }, page: 1 })),
     []
   );
-  const setSort = useCallback((s: string | undefined) => setParams(p => ({ ...p, sort: s })), []);
+  // Resetting to page 1 matters most here, even though this was the one control
+  // that didn't (issue 159 §4a): asking for "most hours first" from page 3 left
+  // you on page 3 of the *new* order, which is the bottom third of it — the top
+  // of the list you just asked for is the one thing you never saw. It was hidden
+  // while sorts only reordered the page you were already on.
+  const setSort = useCallback((s: string | undefined) => setParams(p => ({ ...p, sort: s, page: 1 })), []);
   const refetch = useCallback(() => setTick(t => t + 1), []);
 
   return { items, page, loading, error, params, setPage, setPageSize, setSearch, setFilter, setSort, refetch };

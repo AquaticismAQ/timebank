@@ -1,9 +1,12 @@
-# 159 — A filter that hid rows the pager still counted
+# 159 — A filter and a sort that each only saw one page
 
 **Status:** **Fixed and deployed 2026-09-23.** Aquaticism: on Student Management, filter to
 *On Track ≥50%* and the page shows no students — but the pager says three pages,
 and the last page has them. Asked for the root cause and for every list page to
 be checked for the same thing.
+
+Then, after that fix: sorting by service time could not see the 30h student the
+same filter had just shown. Same root cause, second control — §4a.
 
 ## 1. Reproduced
 
@@ -61,8 +64,8 @@ Every paginated list was checked for work done in the browser over one page.
 
 | Screen | What is client-side | Effect |
 | :--- | :--- | :--- |
-| **Student Management** | status bucket **filter** | **rows disappear, pager lies** — the reported bug |
-| Student Management | sort by grade / hours / coins | orders one page, presented as ordering the list |
+| **Student Management** | status bucket **filter** | **rows disappear, pager lies** — the first reported bug |
+| **Student Management** | sort by grade / hours / coins | **orders one page, presented as ordering the list** — the second (§4a) |
 | Student Management | the three summary tiles | counts one page (`0 / 20 / 20` against 56 students) |
 | Time Coin Accounts | sort by balance, **always on** | "highest balances" is the highest *on this page* |
 | Project Management | sort by registrations | orders one page |
@@ -141,24 +144,108 @@ a client-side filter makes no request at all:
 No filter anywhere else was client-side. The reported bug was the only one of
 its kind.
 
-## 4a. Still page-only, and not fixed here
+## 4a. The sorts — same defect, reported separately
 
-The **sorts** are the same defect in a quieter form, and three remain:
+The **sorts** were the same defect in a quieter form, and were left out of the
+first pass. Aquaticism then found the case that makes it undeniable:
+
+> the on track more than 50% already show a student with 30h service time, but
+> sorting by service time can not see him
+
+Both statements were true at once. The bucket filter was correct and found the
+one on-track student in the school; the hours sort ordered the twenty rows the
+database happened to return and could not reach them. **A screen where the
+filter and the sort disagree about the same student is worse than either bug
+alone** — each control individually looks like it works.
+
+Measured rather than assumed, on Time Coin Accounts: page 1's highest balance
+was **152.5** coins and page 2 held **304.5**. "Sort by balance" was showing the
+top of a page.
+
+### Why these three had no column
+
+| Key | Where the value lives |
+| :--- | :--- |
+| grade | `grade_id` is a string — `order by` puts grade_10 and grade_11 ahead of grade_6 |
+| hours | `service_record`, another module |
+| coins | `account.balance`, another module |
+
+### Fix
+
+**The row carries the value, and the server does the ordering.**
+`StudentListItemDto` gained `timeCoinBalance` beside the minutes it already had,
+read by `StudentProgressQueryRepository.balanceByStudent` — the same raw-SQL
+boundary argument as the minutes, and for the same reason: a Java dependency on
+`account` is not available here.
+
+`StudentController.SORTABLE` now accepts `gradeLevel`, `completedMinutes` and
+`timeCoinBalance`. None of them can appear in an `order by`, so
+`StudentServiceImpl` resolves the scope and filters to the whole matching list
+first, reads the three values for all of it, and orders and slices that — the
+arrangement the progress filter already uses, with the same under-two-hundred-
+student justification. Ties break on `id` ascending, matching the stable-order
+guarantee `PageableFactory` appends to every database sort; without it a page
+boundary could show a student twice or not at all.
+
+**The browser stopped re-sorting.** `CLIENT_ONLY_SORT_KEYS` is gone from
+`StudentList.tsx`, and so is the `GET /accounts?pageSize=200` fetch it used to
+run alongside every roster request to get balances.
+
+**Changing the sort now returns to page 1.** `usePagedApi.setSort` was the one
+control that did not reset the page — search, filter and page size all did.
+Harmless while a sort only reordered the page you were already on; once it
+reorders the roster, asking for "most hours first" from page 3 lands you in the
+bottom third of the new order, and the top of the list you just asked for is the
+one thing you never see. This applies to every list page, not just this one.
+
+### Verified
+
+Against the deployed server, walking **every page** of each sort and checking
+the concatenation — not just that each page looks sorted, which is exactly what
+the bug did:
+
+```
+completedMinutes desc  rows=56 total=56 pages=3 ordered=True unique=True 1800..0
+completedMinutes asc   rows=56 total=56 pages=3 ordered=True unique=True 0..1800
+timeCoinBalance  desc  rows=56 total=56 pages=3 ordered=True unique=True 30450..0
+timeCoinBalance  asc   rows=56 total=56 pages=3 ordered=True unique=True 0..30450
+gradeLevel       desc  rows=56 total=56 pages=3 ordered=True unique=True 12..6
+gradeLevel       asc   rows=56 total=56 pages=3 ordered=True unique=True 6..12
+```
+
+56 rows out of 56, no duplicates and no losses across the page boundaries.
+Cross-checked against a *different* endpoint that sorts in the database —
+`GET /accounts?sort=-balance` and `GET /students?sort=-timeCoinBalance` return
+the same five students in the same order, top to bottom.
+
+Controls, which must not change: `sort=displayName` still comes back
+alphabetically, and `sort=guardianName` still fails with `Cannot sort by
+'guardianName'.` — the validation was widened, not removed.
+
+In the browser, Aquaticism's case:
+
+```
+before   Hours ↓ → page 1 topped out at 11.5h; the 30h student was unreachable
+after    Hours ↓ → Alex L.(李*红) 30h 120%, first row
+         Coins ↓ → 304.5 first (was 152.5, which is now 4th)
+         Grade ↑ → G6…G12, not G10 before G6
+         On Track ≥50% + Hours ↓ → 1 row, the same 30h student, "1 students"
+         sort changed while on page 3 → back to page 1
+```
+
+## 4b. Still page-only, and not fixed here
 
 | Page | Sort | Why not fixed |
 | :--- | :--- | :--- |
-| Student Management | grade / hours / coins | needs the same aggregate work again, as sortable columns |
 | Project Management | registrations | `enrolledCount` has no backend column |
 | Project Center | registrations | same |
 
-Measured rather than assumed, on Time Coin Accounts before its fix: page 1's
-highest balance was **152.5** coins and page 2 held **304.5**. "Sort by balance"
-was showing the top of a page.
+Raised rather than quietly left: the options are to make them server-sortable or
+to remove the controls, and removing a control is a product decision.
 
-These are left because each needs a sortable server column, and inventing three
-more aggregate sorts is a larger change than the bug reported here. Raised rather
-than quietly left: the options are to make them server-sortable or to remove the
-controls, and removing a control is a product decision.
+Time Coin Accounts is no longer blocked — `GET /students` now sorts by
+`timeCoinBalance` — but that screen has no sort control to restore it to, so
+adding one is the same product decision rather than part of this fix.
 
 ## 5. What it must not do
 

@@ -363,11 +363,12 @@ class CredentialSlipServiceTest {
     }
 
     private static StudentListItemDto student(String id, String displayName) {
-        // Progress is zeroed: a credential slip names a student and a code, and
-        // nothing on it depends on how many hours they have served (issue 159
-        // added the two fields for Student Management's filter).
+        // Progress and balance are zeroed: a credential slip names a student and a
+        // code, and nothing on it depends on how many hours they have served or
+        // what their account holds (issue 159 added the fields for Student
+        // Management's filter and sorts).
         return new StudentListItemDto(id, "SN-" + id, displayName, "grd_7", 7, CLASS_ID, "Class 7-1",
-                "ACTIVE", 2029, 0L, 0, 0L);
+                "ACTIVE", 2029, 0L, 0, 0L, 0L);
     }
 
     private static StudentAccount account(String studentId, UserStatus status) {

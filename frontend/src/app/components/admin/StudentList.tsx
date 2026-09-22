@@ -94,48 +94,38 @@ export function StudentList() {
   const { items, page, loading, error, params, setPage, setPageSize, setSearch: setApiSearch, setFilter, setSort, refetch } =
     usePagedApi<Student>(api.students.list, {});
 
-  // Only `name` maps onto a real, sortable backend column (`StudentController.SORTABLE` only allows
-  // id/studentNumber/displayName/createdAt) — the wire property is `displayName`, not `name`. `grade` has
-  // no sortable column at all (grade_id sorts alphabetically as a string, which puts grade_10/11 before
-  // grade_6/7/8/9 — not the pedagogical order — so the backend deliberately doesn't offer it) and
-  // `completedHours`/`timeCoinBalance` are record-derived aggregates with nothing to sort on server-side;
-  // all three stay client-side (current page only). Sending an unsupported `sort` value 400s
-  // ("Cannot sort by '...'") — this used to happen for both `name` and `grade`.
-  const CLIENT_ONLY_SORT_KEYS: SortKey[] = ['gradeLevel', 'completedHours', 'timeCoinBalance'];
-  const SORT_WIRE_KEY: Partial<Record<SortKey, string>> = { name: 'displayName' };
+  // Every sort key is a server sort now (issue 159 §4a). `name` and `grade`
+  // needed a wire name — the row's own property is `name`/`gradeLevel`, the
+  // sortable one is `displayName`/`gradeLevel` — and hours and coins needed the
+  // backend to be able to order by them at all. Grade, hours and coins are not
+  // columns (grade_id sorts as a string, putting grade_10 before grade_6; the
+  // other two are owned by `service_record` and `account`), so the service orders
+  // those in memory over the whole filtered list rather than letting the page
+  // reorder itself. Sending a key outside `StudentController.SORTABLE` still 400s
+  // ("Cannot sort by '...'").
+  const SORT_WIRE_KEY: Record<SortKey, string> = {
+    name: 'displayName',
+    gradeLevel: 'gradeLevel',
+    completedHours: 'completedMinutes',
+    timeCoinBalance: 'timeCoinBalance',
+  };
 
   const [students, setStudents] = useState<Student[]>([]);
   // keep a local editable copy of the current page so admin edits reflect immediately without a refetch
 
-  // `GET /students` never carries a balance (StudentListItemDto has no such
-  // field — issue 006) — fetched separately and merged in, the same pattern
-  // AccountManagement.tsx already uses, rather than coupling the roster
-  // endpoint to account-ledger data.
-  const [balanceMap, setBalanceMap] = useState<Record<string, number>>({});
-  useEffect(() => {
-    if (items.length === 0) return;
-    api.accounts.list({ pageSize: 200 }).then(result => {
-      const map: Record<string, number> = {};
-      for (const acct of result.data) map[acct.studentId] = acct.balance;
-      setBalanceMap(map);
-    }).catch(() => {});
-  }, [items]);
-
-  // `completedMinutes`/`annualRequiredMinutes` arrive on the list row now
-  // (issue 159). They used to be fetched from `/students/{id}/progress` once per
-  // row — twenty requests a page — because the list endpoint did not carry them,
-  // which is also why the completion filter had to run in the browser and could
-  // only see one page.
+  // `completedMinutes`/`annualRequiredMinutes`/`timeCoinBalance` arrive on the
+  // list row now (issue 159). Progress used to be fetched from
+  // `/students/{id}/progress` once per row — twenty requests a page — and the
+  // balance by pulling two hundred accounts alongside every roster request, which
+  // is why the completion filter and the hours/coins sorts could only ever see
+  // one page.
 
   // Escape closes the topmost open dialog (issue 102 §5).
   useEscapeToClose(() => setEditStudent(null), Boolean(editStudent));
 
   useEffect(() => {
-    setStudents(items.map(s => ({
-      ...s,
-      timeCoinBalance: balanceMap[s.id] ?? s.timeCoinBalance,
-    })));
-  }, [items, balanceMap]);
+    setStudents(items);
+  }, [items]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -209,12 +199,8 @@ export function StudentList() {
     const nextDesc = sortKey === k ? !sortDesc : false;
     setSortKey(k);
     setSortDesc(nextDesc);
-    if (!CLIENT_ONLY_SORT_KEYS.includes(k)) {
-      const wireKey = SORT_WIRE_KEY[k] ?? k;
-      setSort(nextDesc ? `-${wireKey}` : wireKey);
-    } else {
-      setSort(undefined);
-    }
+    const wireKey = SORT_WIRE_KEY[k];
+    setSort(nextDesc ? `-${wireKey}` : wireKey);
   };
 
   /**
@@ -301,26 +287,13 @@ export function StudentList() {
     }
   };
 
-  const sortValue = (s: Student, key: SortKey): string | number =>
-    key === 'completedHours' ? (s.completedMinutes ?? 0) : key === 'timeCoinBalance' ? (s.timeCoinBalance ?? 0) : s[key];
-
-  // Search, grade, class **and the completion bucket** all filter server-side
-  // now (issue 159). The bucket used to be applied here, to whichever twenty
-  // rows had arrived, while the pager went on reporting the unfiltered total —
-  // so selecting "On Track" emptied pages one and two and left the pager
-  // insisting all three existed.
-  //
-  // Sorting: server-sortable keys arrive pre-sorted. The three that have no
-  // backend column still sort here, and still only within the page — see the
-  // note on CLIENT_ONLY_SORT_KEYS.
-  const filtered = useMemo(() => {
-    if (!CLIENT_ONLY_SORT_KEYS.includes(sortKey)) return students;
-    return [...students].sort((a, b) => {
-      const av = sortValue(a, sortKey);
-      const bv = sortValue(b, sortKey);
-      return sortDesc ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
-    });
-  }, [students, sortKey, sortDesc]);
+  // Search, grade, class, the completion bucket **and every sort** are the
+  // server's now (issue 159). Both used to happen here, over whichever twenty
+  // rows had arrived: the bucket emptied pages one and two while the pager went
+  // on reporting the unfiltered total, and "sort by service time" ordered the
+  // page rather than the roster — so it could not show the one on-track student
+  // the filter had just found. Rows arrive in order; nothing is reordered here.
+  const filtered = students;
 
   /**
    * The purge dates for the cohorts actually on screen — 31 August of the year

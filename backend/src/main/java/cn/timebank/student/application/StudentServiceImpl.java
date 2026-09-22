@@ -30,6 +30,7 @@ import cn.timebank.student.infrastructure.GradeRepository;
 import cn.timebank.student.infrastructure.SchoolClassRepository;
 import cn.timebank.student.infrastructure.StudentRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -40,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.Locale;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +52,15 @@ import java.util.stream.Collectors;
 class StudentServiceImpl implements StudentService {
 
     private static final String RESOURCE_TYPE = "students";
+
+    /**
+     * Sort keys {@code GET /students} accepts but the database cannot order by —
+     * see {@code computedSortPage}. Kept beside the controller's {@code SORTABLE}
+     * set: that one decides what may be asked for, this one decides which of
+     * those answers cannot come from an {@code order by}.
+     */
+    private static final Set<String> COMPUTED_SORTS =
+            Set.of("gradeLevel", "completedMinutes", "timeCoinBalance");
 
     private final StudentRepository studentRepository;
     private final GradeRepository gradeRepository;
@@ -104,12 +115,101 @@ class StudentServiceImpl implements StudentService {
             filterSpec = FilterSpecifications.and(filterSpec, matching);
         }
 
-        Page<Student> page = studentRepository.findAll(FilterSpecifications.and(scopeSpec, filterSpec), pageable);
-        Map<String, Long> minutes = yardstick == null ? Map.of()
-                : progressQueryRepository.approvedMinutesByStudent(
-                        page.getContent().stream().map(Student::getId).toList(),
-                        yardstick.from(), yardstick.to());
-        return page.map(s -> toListItem(s, grades, classes, minutes, yardstick));
+        Specification<Student> spec = FilterSpecifications.and(scopeSpec, filterSpec);
+
+        String computedSort = computedSortProperty(pageable);
+        if (computedSort != null) {
+            return computedSortPage(spec, pageable, computedSort, grades, classes, yardstick);
+        }
+
+        Page<Student> page = studentRepository.findAll(spec, pageable);
+        return page.map(s -> toListItem(s, grades, classes,
+                minutesFor(page.getContent(), yardstick), balancesFor(page.getContent()), yardstick));
+    }
+
+    /**
+     * The sort properties that are computed rather than stored, or null when the
+     * request asks for an ordinary column.
+     *
+     * <p>Only the <b>first</b> order is consulted, because these three cannot be
+     * combined with anything: the list is sorted in memory below, and a second
+     * order the database applied would be discarded. The wire only ever sends one
+     * sort key anyway.</p>
+     */
+    private static String computedSortProperty(Pageable pageable) {
+        return pageable.getSort().stream()
+                .map(Sort.Order::getProperty)
+                .filter(COMPUTED_SORTS::contains)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Sorting by a value that is not a column (issue 159 §4a).
+     *
+     * <p>Grade <i>level</i>, approved minutes and coin balance are each either
+     * derived or owned by another module, so none can appear in an {@code order
+     * by}: {@code grade_id} sorts as a string and puts grade 10 before grade 6,
+     * and the other two live in {@code service_record} and {@code account}. The
+     * page therefore sorted whichever twenty rows the database had chosen, and
+     * presented that as an ordering of the roster — "sort by service time" could
+     * not surface the one student the on-track filter <i>did</i> show.</p>
+     *
+     * <p>So the scope and filters resolve to the full matching list first, the
+     * three values are read for all of it in two queries, and only then is it
+     * ordered and cut to the page. The total comes from that same list, so the
+     * pager and the rows still describe one thing. This is the arrangement the
+     * progress filter already uses, for the same reason and with the same
+     * under-two-hundred-student justification; the alternative is three more
+     * aggregate columns maintained on {@code student}, each able to disagree with
+     * the ledger it summarises.</p>
+     */
+    private Page<StudentListItemDto> computedSortPage(
+            Specification<Student> spec, Pageable pageable, String property,
+            Map<String, Grade> grades, Map<String, SchoolClass> classes, ProgressYardstick yardstick) {
+        List<Student> all = studentRepository.findAll(spec);
+        Map<String, Long> minutes = minutesFor(all, yardstick);
+        Map<String, Long> balances = balancesFor(all);
+
+        List<StudentListItemDto> rows = all.stream()
+                .map(s -> toListItem(s, grades, classes, minutes, balances, yardstick))
+                .sorted(comparatorFor(property, pageable.getSort().getOrderFor(property)))
+                .toList();
+
+        int from = (int) Math.min(pageable.getOffset(), rows.size());
+        int to = Math.min(from + pageable.getPageSize(), rows.size());
+        return new PageImpl<>(rows.subList(from, to), pageable, rows.size());
+    }
+
+    /**
+     * <p>Ties break on id, ascending, whichever way the sort runs — the same
+     * stable-ordering guarantee {@code PageableFactory} appends to every database
+     * sort (contract §2.7). Without it, two students on 0 minutes could swap
+     * places between page 1 and page 2 and be shown twice or not at all.</p>
+     */
+    private static Comparator<StudentListItemDto> comparatorFor(String property, Sort.Order order) {
+        Comparator<StudentListItemDto> by = switch (property) {
+            case "gradeLevel" -> Comparator.comparingInt(StudentListItemDto::gradeLevel);
+            case "completedMinutes" -> Comparator.comparingLong(StudentListItemDto::completedMinutes);
+            case "timeCoinBalance" -> Comparator.comparingLong(StudentListItemDto::timeCoinBalance);
+            default -> throw new IllegalStateException("Not a computed sort: " + property);
+        };
+        if (order != null && order.isDescending()) {
+            by = by.reversed();
+        }
+        return by.thenComparing(StudentListItemDto::id);
+    }
+
+    private Map<String, Long> minutesFor(List<Student> students, ProgressYardstick yardstick) {
+        if (yardstick == null) {
+            return Map.of();
+        }
+        return progressQueryRepository.approvedMinutesByStudent(
+                students.stream().map(Student::getId).toList(), yardstick.from(), yardstick.to());
+    }
+
+    private Map<String, Long> balancesFor(List<Student> students) {
+        return progressQueryRepository.balanceByStudent(students.stream().map(Student::getId).toList());
     }
 
     /**
@@ -447,7 +547,8 @@ class StudentServiceImpl implements StudentService {
     }
 
     private StudentListItemDto toListItem(Student s, Map<String, Grade> grades, Map<String, SchoolClass> classes,
-                                           Map<String, Long> minutes, ProgressYardstick yardstick) {
+                                           Map<String, Long> minutes, Map<String, Long> balances,
+                                           ProgressYardstick yardstick) {
         Grade grade = grades.get(s.getGradeId());
         SchoolClass schoolClass = classes.get(s.getClassId());
         int gradeLevel = grade != null ? grade.getSequence() : 0;
@@ -457,7 +558,8 @@ class StudentServiceImpl implements StudentService {
                 s.getGradeId(), gradeLevel,
                 s.getClassId(), schoolClass != null ? schoolClass.getName() : "",
                 s.getStatus().name(), s.getGraduationYear(),
-                minutes.getOrDefault(s.getId(), 0L), required, s.getVersion());
+                minutes.getOrDefault(s.getId(), 0L), required,
+                balances.getOrDefault(s.getId(), 0L), s.getVersion());
     }
 
     private record StudentSummaryForAudit(String studentNumber, String displayName, String status) {

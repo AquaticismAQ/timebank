@@ -1892,3 +1892,39 @@ Each appears **only once it has happened**. A window that opens next week has no
 
 Verified live on the re-seeded server: 报名开放 at 2026-09-02 08:00 and 项目结束 at 2026-09-15 01:00, both attributed to 系统, in a 19-row history that is still ascending throughout.
 
+
+### 41.60 A filter that hid rows the pager still counted (issue 159, 2026-09-23)
+
+Aquaticism: on Student Management, select *On Track ≥50%* and the page shows no students — but the pager says three pages, and the last page has them. Asked for the root cause and for every list page to be checked for the same thing.
+
+The bucket was applied **in the browser, to the twenty rows the server happened to send**, while the pager was drawn from the server's unfiltered `page.totalItems`. Pages one and two contained no on-track student, so they rendered empty while insisting two more pages existed. Neither control was broken; they disagreed about what was being paged, and the disagreement stayed invisible until a filter was selective enough to empty a whole page.
+
+It ran there because it had nowhere else to run: `StudentListItemDto` carried no progress at all, so the page fetched `GET /students/{id}/progress` **once per row** after the list arrived. A filter cannot run on the server over a field the server does not return.
+
+**The row now carries what the list is about.** `completedMinutes` and `annualRequiredMinutes` are on the list item, filled for the page in one query — the twenty-requests-a-page N+1 becomes zero. `filter[progressStatus]` resolves to an id set *before* paging, so the page and its total describe the same list. The sums live in `service_record`: a JPA subquery would need that module's entity (`ModuleBoundaryTest` forbids it) and `ServiceRecordService` would close a bean cycle, so `StudentProgressQueryRepository` reads the table in raw SQL with no Java dependency on it — the argument `AuditLogQueryServiceImpl` already makes for joining `user`.
+
+The three summary tiles counted the page too (`0 / 20 / 20` against 56 students); they now read `totalItems` from three `pageSize: 1` requests, scoped by the *other* filters but never by the bucket, since the tiles are how you pick a bucket.
+
+**Every list page was audited**, watching for the request a server-side filter must produce — sharper than counting rows, because a client-side filter makes no request at all. Student Management, Project Management, Audit Center, Case Review and Time Coin Accounts: every other filter was already server-side. This was the only one of its kind.
+
+Verified per bucket: `all` 56, `onTrack` 1, `behind` 55, `critical` 53 — `1 + 55 = 56`, and `critical ⊂ behind`, which is the arithmetic the buckets claim.
+
+### 41.61 The sort could not see the student the filter had just found (issue 159 §4a, 2026-09-23)
+
+Aquaticism, after §41.60: *"the on track more than 50% already show a student with 30h service time, but sorting by service time can not see him."*
+
+Both statements were true. The bucket filter correctly found the school's one on-track student; the hours sort ordered the twenty rows the database returned and could not reach them. **A screen whose filter and sort disagree about the same student is worse than either bug alone** — each control looks like it works. §4a of the issue had recorded these three sorts as page-only and deferred them; that judgement was wrong, and this is what it cost.
+
+Grade, hours and coins each have no column to order by: `grade_id` is a string, so `order by` puts grade_10 and grade_11 ahead of grade_6; the other two live in `service_record` and `account`.
+
+**The row carries the value and the server does the ordering.** `StudentListItemDto` gained `timeCoinBalance`, read by `StudentProgressQueryRepository.balanceByStudent` under the same raw-SQL boundary argument as the minutes. `StudentController.SORTABLE` accepts `gradeLevel`, `completedMinutes` and `timeCoinBalance`; since none can appear in an `order by`, `StudentServiceImpl` resolves scope and filters to the whole matching list, reads the values for all of it, then orders and slices — the arrangement the progress filter already uses, with the same under-two-hundred-student justification. Ties break on `id` ascending, matching the stable-order guarantee `PageableFactory` appends to every database sort; without it a page boundary could show a student twice or not at all.
+
+`CLIENT_ONLY_SORT_KEYS` is gone from `StudentList.tsx`, and with it the `GET /accounts?pageSize=200` fetch that ran alongside every roster request just to supply balances.
+
+**`usePagedApi.setSort` now resets to page 1**, which it alone did not do — search, filter and page size all did. Harmless while a sort only reordered the page you were already on; once it reorders the roster, asking for "most hours first" from page 3 lands you in the bottom third of the new order and never shows you the top of the list you asked for. This applies to every list page.
+
+**Verified by walking every page of each sort and checking the concatenation**, not by checking that each page looks sorted — which is exactly what the bug did. All six orderings (three keys × two directions) returned 56 of 56 rows, monotonic across all three page boundaries, no duplicates and no losses. Cross-checked against a different endpoint that sorts in the database: `GET /accounts?sort=-balance` and `GET /students?sort=-timeCoinBalance` agree on the top five, in order. Controls that must not change: `sort=displayName` still comes back alphabetically and `sort=guardianName` still fails with `Cannot sort by 'guardianName'.` — the validation was widened, not removed.
+
+In the browser on the live server: *Hours ↓* puts the 30h / 120% student first; *Coins ↓* starts at 304.5, the true maximum, where it used to start at 152.5 (that student now sits fourth); *Grade ↑* runs G6…G12 rather than putting G10 first; *On Track ≥50%* plus *Hours ↓* returns that one student and a pager reading "1 students"; and changing the sort from page 3 returns to page 1.
+
+**Still page-only and raised rather than quietly left:** the `enrolledCount` sort on Project Management and Project Center has no backend column. Time Coin Accounts is no longer blocked — `GET /students` sorts by balance now — but that screen has no sort control to restore it to, and adding one is a product decision, not a bug fix.

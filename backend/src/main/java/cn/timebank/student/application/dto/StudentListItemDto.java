@@ -18,6 +18,13 @@ package cn.timebank.student.application.dto;
  * @param annualRequiredMinutes see above. Zero only if no rule is in effect,
  *                              which the progress endpoint treats as a fault
  *                              rather than a default.
+ * @param timeCoinBalance       the student's account balance in minimum units.
+ *                              Here for the same reason as the minutes: the
+ *                              column is on screen and sortable, and the page
+ *                              used to get it by pulling two hundred accounts
+ *                              alongside every roster request and joining them
+ *                              in the browser — which sorted the twenty rows it
+ *                              had and called it "highest balances".
  */
 public record StudentListItemDto(
         String id,
@@ -31,5 +38,6 @@ public record StudentListItemDto(
         int graduationYear,
         long completedMinutes,
         int annualRequiredMinutes,
+        long timeCoinBalance,
         Long version) {
 }

@@ -346,10 +346,14 @@ export interface Notification {
 
 /**
  * Minutes-only on the wire; derive hours via `minutesToHours`. `timeCoinBalance` is centi-coins. Guardian fields
- * omitted from lists (APIContract.md §9). The real `GET /students` list item (`StudentListItemDto`) does not
- * carry progress/balance fields at all — those live on `StudentProgress`/`Account`, fetched separately per
- * contract's resource separation (I1 finding, see `Docs/implementation/00-Status.md`) — so the progress fields
- * here are optional and never populated by this list endpoint; the student list screen renders "—" for them.
+ * omitted from lists (APIContract.md §9).
+ *
+ * `GET /students` carries `completedMinutes`, `annualRequiredMinutes` and `timeCoinBalance` on the row (issue
+ * 159): the list filters and sorts on all three, and a filter or sort can only be server-side over a field the
+ * server returns. The page used to fetch them separately — `/students/&#123;id&#125;/progress` once per row, plus two
+ * hundred accounts alongside every request — and then filter and sort the twenty rows it had, which emptied
+ * pages the pager still counted. `pendingMinutes`/`stageRequiredMinutes` remain `StudentProgress`-only and are
+ * still absent here.
  */
 export interface Student {
   id: string;

@@ -80,4 +80,30 @@ public class StudentProgressQueryRepository {
         });
         return minutes;
     }
+
+    /**
+     * Time-coin balance per student, for sorting the roster by it (issue 159).
+     *
+     * <p>Same boundary argument as the minutes above: {@code account} belongs to
+     * another module, the balance is not a column on {@code student}, and sorting
+     * a page by a value merged in afterwards is what made "highest balances" mean
+     * "highest of these twenty".</p>
+     *
+     * <p>Reads the stored {@code balance} cache rather than re-summing the ledger
+     * — that column is the account module's own answer to "what is this balance",
+     * and a second derivation here could disagree with the page it sorts.</p>
+     */
+    public Map<String, Long> balanceByStudent(Collection<String> studentIds) {
+        if (studentIds.isEmpty()) {
+            return Map.of();
+        }
+        MapSqlParameterSource params = new MapSqlParameterSource().addValue("studentIds", studentIds);
+        String sql = "select a.student_id as student_id, a.balance as balance"
+                + " from account a where a.student_id in (:studentIds)";
+        Map<String, Long> balances = new HashMap<>();
+        jdbcTemplate.query(sql, params, rs -> {
+            balances.put(rs.getString("student_id"), rs.getLong("balance"));
+        });
+        return balances;
+    }
 }
