@@ -25,7 +25,7 @@ pnpm selftest                             # the harness's own pure-logic checks
 ./demo-case.sh                    # a student disagrees: file → asked for more → answer → resolved
 ./demo-project.sh --cleanup       # tidy earlier [AUTO] runs first
 ./demo-project.sh --no-gate tts   # silent
-./demo-project.sh --beat 1500     # slower pauses
+./demo-project.sh --beat 1000     # slower pauses (default 500ms)
 ```
 
 The three flows show the workflow from three directions. The project one is the

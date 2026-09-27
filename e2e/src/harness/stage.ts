@@ -30,10 +30,11 @@ export function bindStage(page: Page, binding: Binding): void {
  * How long to hold still after an action, so a viewer can take it in.
  *
  * Configurable (`--beat <ms>`) because the right value depends on the room and
- * on whether the narration is being spoken over it. Half a second read as rushed
- * once there was a pointer to follow.
+ * on whether the narration is being spoken over it. Half a second: a full second
+ * made the demonstration run long, and the spoken narration already holds each
+ * step for as long as it takes to say.
  */
-let beatMs = 1000;
+let beatMs = 500;
 
 export function setBeat(ms: number): void {
   beatMs = ms;
@@ -97,7 +98,7 @@ async function point(locator: Locator): Promise<void> {
     await page.evaluate(spotlightExpression(box));
     // Long enough for the pointer's own transition to land before the click, so
     // the audience sees it arrive rather than teleport.
-    await page.waitForTimeout(320);
+    await page.waitForTimeout(250);
   } catch (error) {
     // Pointing is decoration: the run carries on and does the thing. But a
     // demonstration that has quietly lost its pointer should say so once.

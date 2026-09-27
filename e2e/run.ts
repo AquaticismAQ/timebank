@@ -41,7 +41,7 @@ async function main(): Promise<number> {
   const config = loadConfig({
     headless: flag('headless'),
     close: flag('close'),
-    slowMo: Number(value('slow-mo') ?? (gates.has('pace') ? 250 : 0)),
+    slowMo: Number(value('slow-mo') ?? (gates.has('pace') ? 100 : 0)),
     evidenceDir: value('evidence-dir'),
   });
 
@@ -65,7 +65,7 @@ async function main(): Promise<number> {
   }
 
   // How long to hold still after each action. Only meaningful with `pace` on.
-  setBeat(Number(value('beat') ?? 1000));
+  setBeat(Number(value('beat') ?? 500));
 
   const runId = newRunId();
   const { speaker, reason } = gates.has('tts')
