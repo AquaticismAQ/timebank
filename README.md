@@ -36,6 +36,13 @@ truth and the English versions must remain synchronized with them.
 | [05-OnlineSystem.md](Design/chinese/05-OnlineSystem.md) | 线上系统设计：功能模块、架构、数据安全与简略实施计划 |
 | [06-Legal.md](Design/chinese/06-Legal.md) | 法律合规方案：中国法规下区块链应用约束、时间币限制边界与合法化路径 |
 | [07-AI.md](Design/chinese/07-AI.md) | AI 技术应用方案：端侧人脸脱敏、多模态内容审核、图像真实性检测、统计学异常风控与见证者信用评分 |
+| [08-mlps-level1-security-design-guide.md](Design/chinese/08-mlps-level1-security-design-guide.md) | 等保一级安全设计方案：安全架构、存储/传输加密、凭证文件安全、身份鉴别与合规自查清单 |
+| [09-StudentIdentity.md](Design/chinese/09-StudentIdentity.md) | 学生身份标识设计：登录名与学号的形态、由来、边界与名册 CSV 准备 |
+| [10-StudentActivationFlow.md](Design/chinese/10-StudentActivationFlow.md) | 学生账号激活流程：名册导入到首次登录的完整路径与激活凭证单 |
+| [11-RolesAndPermissions.md](Design/chinese/11-RolesAndPermissions.md) | 角色与权限设计：角色模板、权限目录与数据范围模型 |
+| [12-DataImport.md](Design/chinese/12-DataImport.md) | 数据导入设计：批量导入类型、流程、校验与权限约束 |
+| [13-DataExport.md](Design/chinese/13-DataExport.md) | 数据导出设计：导出类型目录、筛选范围模型、列规范与权限约束 |
+| [14-AnnualRollover.md](Design/chinese/14-AnnualRollover.md) | 学年升级与毕业流程设计：每学年一次的升年级、毕业与学段衔接 |
 
 ### English Docs · 英文文档
 
@@ -48,6 +55,13 @@ truth and the English versions must remain synchronized with them.
 | [05-OnlineSystem.md](Design/english/05-OnlineSystem.md) | Online system: modules, architecture, data security, and implementation plan |
 | [06-Legal.md](Design/english/06-Legal.md) | Legal compliance under Chinese law: blockchain constraints and the permitted boundaries for time coins |
 | [07-AI.md](Design/english/07-AI.md) | AI applications: on-device face de-identification, multimodal review, image-authenticity checks, statistical fraud controls, and witness scoring |
+| [08-mlps-level1-security-design-guide.md](Design/english/08-mlps-level1-security-design-guide.md) | MLPS Level 1 security design: security architecture, at-rest/in-transit encryption, evidence-file security, authentication, and the compliance self-check list |
+| [09-StudentIdentity.md](Design/english/09-StudentIdentity.md) | Student identity design: the username and student number identifiers, where each comes from, and roster CSV preparation |
+| [10-StudentActivationFlow.md](Design/english/10-StudentActivationFlow.md) | Student account activation: the full path from roster import to first login, and the credential slip |
+| [11-RolesAndPermissions.md](Design/english/11-RolesAndPermissions.md) | Roles and permissions: role templates, the permission catalogue, and the data-scope model |
+| [12-DataImport.md](Design/english/12-DataImport.md) | Data import: bulk import types, workflow, validation, and permission constraints |
+| [13-DataExport.md](Design/english/13-DataExport.md) | Data export: the export catalogue, filter and scope model, column conventions, and permission constraints |
+| [14-AnnualRollover.md](Design/english/14-AnnualRollover.md) | Annual rollover and graduation: the once-a-year promotion process and the two-stage model |
 
 ---
 
@@ -93,7 +107,7 @@ Spring Boot 后端已共同部署到共享测试服务器，并通过真实 API 
 | Automated Review (POV) · 自动审核 | ✅ Specification complete; Phase 3 implementation reserved |
 | Blockchain Evidence Storage · 区块链存证 | ✅ Specification complete; optional Phase 3 capability |
 | Legal Compliance · 法律合规 | ✅ Specification complete |
-| English Design Documentation · 英文设计文档 | ✅ All seven mirrors complete |
+| English Design Documentation · 英文设计文档 | ✅ All fourteen mirrors complete |
 | Phase 2: Online System · 第二阶段：线上系统 | 🔄 Approximately 90% complete; frontend and backend deployed and verified on the shared test server |
 | Phase 3: POV Mini Program · 第三阶段：POV 小程序 | 📋 Reserved behind feature flags; not implemented |
 | Phase 4: Extended Incentives · 第四阶段：拓展激励 | 📋 Reserved behind feature flags; not implemented |
