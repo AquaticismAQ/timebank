@@ -37,6 +37,33 @@ export interface RecordDraft {
  * pressing Next is what validates the step you are leaving (issue 058/066).
  */
 export async function createDraft(page: Page, baseUrl: string, draft: RecordDraft): Promise<void> {
+  await fillSourceAndDetails(page, baseUrl, draft);
+  await tap(page.getByRole('button', { name: '保存草稿' }), '保存草稿');
+  await page.getByText('草稿已保存').waitFor({ state: 'visible', timeout: 15_000 });
+}
+
+/**
+ * Fills the new-record wizard and submits it, in one pass.
+ *
+ * What the demonstration shows: a student who has everything to hand files the
+ * record without stopping. The draft round trip is still exercised by the
+ * branch phases (`createDraft` then `submitDraft`).
+ */
+export async function createAndSubmit(page: Page, baseUrl: string, draft: RecordDraft): Promise<string> {
+  await fillSourceAndDetails(page, baseUrl, draft);
+  await next(page);   // details → evidence
+  const fileName = await attachEvidence(page, draft.evidenceFile);
+  await next(page);   // evidence → declaration
+  const confirm = page.getByRole('button', { name: '确认提交' });
+  await tap(confirm, '确认提交');
+  // The wizard closing is the signal, not the toast. Toasts auto-dismiss, so
+  // waiting on one makes the step depend on winning a race it does not control.
+  await confirm.waitFor({ state: 'hidden', timeout: 25_000 });
+  return fileName;
+}
+
+/** Opens a new record and fills the source and details steps, leaving the details step open. */
+async function fillSourceAndDetails(page: Page, baseUrl: string, draft: RecordDraft): Promise<void> {
   await visit(page, `${baseUrl}/student/records`, '服务记录页面');
   await tap(page.getByRole('button', { name: '新建记录' }).first(), '新建记录');
 
@@ -66,44 +93,6 @@ export async function createDraft(page: Page, baseUrl: string, draft: RecordDraf
   await clearEndsNextDay(page);
   await type(field(page, '服务内容描述 *'), '服务内容描述', draft.description);
 
-  await tap(page.getByRole('button', { name: '保存草稿' }), '保存草稿');
-  await page.getByText('草稿已保存').waitFor({ state: 'visible', timeout: 15_000 });
-}
-
-/**
- * Reopens the draft once and takes it all the way to submitted.
- *
- * One pass, deliberately. An earlier version opened the draft three separate
- * times — once to edit, once to read the edit back, once to upload and submit —
- * which as a demonstration is the same screen three times over and reads as the
- * script being stuck rather than as a student working.
- *
- * The persistence check still happens, and is stronger for being first: what was
- * saved is read back *before* anything is changed, so the draft is proven to
- * have survived rather than merely to be editable.
- */
-export async function continueDraftAndSubmit(
-  page: Page, baseUrl: string, projectTitle: string,
-  draft: { savedDescription: string; finalDescription: string; evidenceFile: string },
-): Promise<string> {
-  await openDraftForEditing(page, baseUrl, projectTitle);
-  await next(page);   // source → details
-
-  const description = field(page, '服务内容描述 *');
-  assertContains(await description.inputValue(), draft.savedDescription,
-    '重新打开草稿后，应当看到之前保存的内容');
-  await type(description, '更详细的服务内容描述', draft.finalDescription);
-
-  await next(page);   // details → evidence
-  const fileName = await attachEvidence(page, draft.evidenceFile);
-
-  await next(page);   // evidence → declaration
-  const confirm = page.getByRole('button', { name: '确认提交' });
-  await tap(confirm, '确认提交');
-  // The wizard closing is the signal, not the toast. Toasts auto-dismiss, so
-  // waiting on one makes the step depend on winning a race it does not control.
-  await confirm.waitFor({ state: 'hidden', timeout: 25_000 });
-  return fileName;
 }
 
 /** Straight from draft to submitted, with no edit — what the branch phases need. */
@@ -162,7 +151,7 @@ export async function assertRecordDetail(
   await page.getByText('证明材料').waitFor({ state: 'visible', timeout: 15_000 });
 
   const body = await page.locator('body').innerText();
-  assertContains(body, expect.description, '记录详情应当显示修改后的服务内容描述');
+  assertContains(body, expect.description, '记录详情应当显示填写的服务内容描述');
   assertContains(body, expect.fileName, `记录详情应当显示已上传的佐证文件：${expect.fileName}`);
   await tap(page.getByRole('button', { name: '关闭' }), '关闭');
 }
