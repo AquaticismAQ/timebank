@@ -31,7 +31,7 @@ export const approve: Phase = {
     const studentId = ctx.state.studentId as string;
 
     const adminPage = await ctx.as('admin');
-    ctx.narrator.step('老师在审核中心打开这条记录，先读学生写的服务内容，再看佐证材料，然后通过');
+    ctx.narrator.step('老师在审核中心打开这条记录，查看然后通过');
     await decideOnRecord(adminPage, ctx.config.baseUrl, ctx.state.projectTitle as string, recordNumber, 'approve',
       '材料齐全，服务属实，予以认定。',
       // 材料齐全，服务属实 is a claim about two things. Both have to be on screen

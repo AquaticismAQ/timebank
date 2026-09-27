@@ -55,7 +55,7 @@ export async function decideOnRecord(
   // the evidence, in that order, because the evidence is judged *against* the
   // claim — looking at a photograph without having read what it is supposed to
   // show is not a check.
-  narrate(page, '先读这条记录：服务日期、时长，以及学生写的服务内容');
+  narrate(page, '先读这条记录中学生写的服务内容');
   for (const fragment of review.expectOnScreen ?? []) {
     await page.getByText(fragment, { exact: false }).first()
       .waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
