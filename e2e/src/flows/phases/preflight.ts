@@ -14,26 +14,17 @@ import type { Phase } from '../../harness/types.js';
  */
 export const preflight: Phase = {
   titleZh: '运行前检查',
+  // Unannounced. The demonstration opens on the teacher logging in to create the
+  // project; everything here is groundwork. The accounts are already proven —
+  // the runner signs both in over the API before the first phase — so the
+  // browser logins that used to open this phase showed nothing new, and each
+  // role now signs in on screen the first time it is actually used.
+  silent: true,
   async run(ctx) {
-    ctx.narrator.step('检查配置与账号');
     ctx.narrator.note(`server: ${ctx.config.baseUrl}`);
     ctx.narrator.note(`run id: ${ctx.runId}`);
+    if (ctx.has('tts')) ctx.narrator.note('TTS: enabled for this run');
 
-    const adminPage = await ctx.as('admin');
-    assertThat(adminPage.url().includes('/admin'), '管理员应当能够登录并进入管理后台');
-
-    const studentPage = await ctx.as('student');
-    assertThat(studentPage.url().includes('/student'), '学生应当能够登录并进入学生端');
-    ctx.narrator.result('管理员与学生账号均可登录');
-
-    if (ctx.has('tts')) {
-      // Checked here rather than discovered mid-demo: a cold TTS start is about
-      // six seconds per line, so the answer to a stopped server is to start it,
-      // not to wait for it.
-      ctx.narrator.note('TTS: enabled for this run');
-    }
-
-    ctx.narrator.step('确认学生所在年级');
     // The project is made eligible for exactly this grade, so it has to be known
     // before anything is created — and a student with no grade would otherwise
     // fail much later, at registration, looking like a permissions problem.
@@ -42,9 +33,8 @@ export const preflight: Phase = {
     const grade = grades.find(g => g.id === student.gradeId);
     assertThat(Boolean(grade), `学生应当有所属年级（gradeId=${student.gradeId}）`);
     ctx.state.studentGradeName = grade!.name;
-    ctx.narrator.result(`该学生就读于${grade!.name}`);
+    ctx.narrator.note(`grade: ${grade!.name}`);
 
-    ctx.narrator.step('检查佐证材料');
     const needed = recordCount(ctx.has('branch:return'), ctx.has('branch:reject'));
     const files = pickEvidenceFiles(ctx.config.evidenceDir, needed);
     for (const file of files) {
@@ -53,18 +43,16 @@ export const preflight: Phase = {
     ctx.state.evidenceFiles = files;
     ctx.narrator.note(`evidence: ${files.map(f => f.split('/').pop()).join(', ')}`);
 
-    ctx.narrator.step('预留服务记录时段');
     // Allocated here, not at filing time, so a shortage is found before a project
     // and an enrolment have been created and left behind permanently.
     const slots: Slot[] = ctx.slots.allocate(needed);
     ctx.state.slots = slots;
     if (SlotAllocator.driftedFromToday(slots)) {
-      // Said out loud rather than logged quietly: it is why the demo's dates may
-      // not read as today, and silence here would look like a bug.
+      // It is why the demo's dates may not read as today, and silence here would
+      // look like a bug to whoever is running it.
       ctx.narrator.note('note: today is full for this student, using earlier dates');
     }
     ctx.narrator.note(`slots: ${slots.map(s => `${s.date} ${s.startHHMM}-${s.endHHMM}`).join(' | ')}`);
-    ctx.narrator.result(`已预留 ${slots.length} 个可用服务时段`);
   },
 };
 

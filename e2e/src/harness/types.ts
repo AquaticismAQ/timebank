@@ -33,6 +33,12 @@ export interface Phase {
   titleZh: string;
   /** Absent means the phase always runs. */
   gate?: Gate;
+  /**
+   * Runs without being announced: no phase title, nothing spoken, nothing in the
+   * script file. For groundwork an audience does not need to watch — it still
+   * fails the run like any other phase.
+   */
+  silent?: boolean;
   run(ctx: FlowContext): Promise<void>;
 }
 

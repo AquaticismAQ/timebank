@@ -65,6 +65,7 @@ export async function runFlow(
   const startedAt = new Date();
 
   let currentRole: 'admin' | 'student' | null = null;
+  const signedIn = new Set<'admin' | 'student'>();
   const ctx: FlowContext = {
     config, api, adminApi, narrator, slots, runId,
     has: (gate: Gate) => gates.has(gate),
@@ -76,9 +77,13 @@ export async function runFlow(
       // so looks like one person doing everything — which is the opposite of the
       // point. The workflow's whole shape is that a student and a teacher each do
       // their own part and neither can do the other's.
+      // Keyed on whether this role has signed in yet, not on whether any role
+      // has: the first time the student appears is a login the audience watches,
+      // not a switch back to a seat they have never seen.
       if (currentRole !== role) {
-        narrator.step(currentRole === null ? FIRST_LOGIN_ZH[role] : SWITCH_ZH[role]);
+        narrator.step(signedIn.has(role) ? SWITCH_ZH[role] : FIRST_LOGIN_ZH[role]);
         currentRole = role;
+        signedIn.add(role);
       }
 
       const page = await browser.open(role);
@@ -107,7 +112,8 @@ export async function runFlow(
       narrator.note(`(skipped: ${phase.titleZh} — gate '${phase.gate}' is off)`);
       continue;
     }
-    narrator.phase(phase.titleZh);
+    if (phase.silent) narrator.note(`(${phase.titleZh})`);
+    else narrator.phase(phase.titleZh);
     try {
       await phase.run(ctx);
     } catch (error) {
