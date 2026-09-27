@@ -149,6 +149,15 @@ export async function assertProposalStatus(page: Page, baseUrl: string, title: s
   await visit(page, `${baseUrl}/student/proposals`, '发起志愿活动页面');
   const row = proposalRow(page, title);
   await row.waitFor({ state: 'visible', timeout: 15_000 });
+  // The teacher's dialog closes before the decision has committed, so without
+  // pacing the student's list can be fetched a few hundred milliseconds too
+  // early. Reloaded a few times rather than read once; a status that never
+  // arrives still fails, on the last read.
+  for (let attempt = 1; attempt < 5 && !(await row.innerText()).includes(expectedZh); attempt++) {
+    await page.waitForTimeout(1_000);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await row.waitFor({ state: 'visible', timeout: 15_000 });
+  }
   assertContains(await row.innerText(), expectedZh, `提案「${title}」应当处于「${expectedZh}」状态`);
 }
 
