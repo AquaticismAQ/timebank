@@ -48,10 +48,10 @@ third would start.
 
 It also does the things that are easy to forget and painful to discover
 mid-demonstration: checks the browser install, generates the evidence files if
-they are missing, and **starts the TTS server and waits for it** — a cold start
-is about six seconds *per line*, so discovering a stopped server during the demo
-means sitting through it rather than fixing it. Everything after the script name
-is passed straight to `pnpm e2e`.
+they are missing, and — if your voice is a local TTS server — starts it and waits
+for it, since discovering a stopped server during the demo means sitting through
+it rather than fixing it. Everything after the script name is passed straight to
+`pnpm e2e`.
 
 Without it, `pnpm e2e` does the same thing given the right environment.
 
@@ -80,6 +80,7 @@ Nothing here contains a hostname, username or password.
 | Accounts | `Docs/TestAccounts.md` (gitignored) | `E2E_ADMIN_USERNAME` / `_PASSWORD`, `E2E_STUDENT_USERNAME` / `_PASSWORD` |
 | Evidence files | `../demo-evidence` beside the repo — see below | `EVIDENCE_DIR`, `--evidence-dir` |
 | Browser binary | `PLAYWRIGHT_BROWSERS_PATH` (set in `~/.bash_profile`) | — |
+| Voice | `TTS_URL` … or `TTS_COMMAND`, else `~/.timebank.env` — see [Narration and voice](#narration-and-voice) | `--no-gate tts` |
 
 Anything missing fails immediately, naming what to set. Playwright is pinned to
 **1.63.0** because its bundled Chromium is revision **1243**, which is already
@@ -290,15 +291,60 @@ every run, with or without a working speaker, because reviewing the wording
 should not depend on audio.
 
 With the `tts` gate on — the `demo` profile's default — each line is also spoken
-through the local Qwen3 server (`../tts`).
+aloud. Which voice speaks it is configuration, not code: set **one** of the two
+options below, in the environment or in `~/.timebank.env`. With neither set, the
+run says so at the start and continues silently.
 
 ```bash
-python qwen_serve.py start     # in ../tts, before the demo
 pnpm e2e                       # narrated
 pnpm e2e --no-gate tts         # silent
 pnpm e2e --dry-narrate         # read the last script aloud, touch nothing
 pnpm e2e --dry-narrate --script narration/260920-150455-XXXX.txt
 ```
+
+### An external TTS service — recommended for a live demo
+
+Any service that implements OpenAI's speech endpoint (`POST …/v1/audio/speech`)
+works: OpenAI itself, another hosted provider with a compatible API, or a TTS
+server you run on another machine. Nothing to install on the demo laptop beyond
+an audio player.
+
+```bash
+export TTS_URL=https://api.openai.com/v1      # base URL, or the full …/audio/speech endpoint
+export TTS_API_KEY=sk-...                     # sent as a bearer token; omit if the service needs none
+export TTS_MODEL=gpt-4o-mini-tts              # the provider's speech model
+export TTS_VOICE=alloy                        # a voice that reads Chinese well
+pnpm e2e --dry-narrate                        # hear the last script before the day
+```
+
+| Setting | Required | Meaning |
+| :--- | :--- | :--- |
+| `TTS_URL` | yes | Base URL (`https://host/v1`) or the full speech endpoint |
+| `TTS_MODEL` | yes | Model name, as the provider spells it |
+| `TTS_VOICE` | yes | Voice name, as the provider spells it |
+| `TTS_API_KEY` | if the service needs one | Bearer token. **Keep it in `~/.timebank.env`, never in a tracked file** |
+| `TTS_FORMAT` | no | Audio format to request; default `mp3` |
+| `TTS_PLAYER` | no | Command that plays a file and waits; default `afplay` on macOS, else `ffplay` or `mpg123` |
+
+The key reaches `curl` on stdin, never on a command line, so it does not show
+up in a process list. Before the demonstration, check the venue's network can
+reach the service — and run `--dry-narrate` there once, because each line now
+waits for a download as well as for playback.
+
+### A local command
+
+`TTS_COMMAND` is any command that speaks the text given as its last argument
+and returns when it has finished. The text is passed as a single argument, so
+quotes in a narration line cannot break it.
+
+```bash
+export TTS_COMMAND='say -v Tingting'                          # macOS built-in Chinese voice, zero setup
+export TTS_COMMAND="$HOME/tts/.venv/bin/python $HOME/tts/client.py"   # a local model server's client
+```
+
+A local model server should be started before the run — a cold start can cost
+seconds *per line*, which wrecks the pacing. The gitignored launchers are the
+right place to start one, since where it lives is a fact about your machine.
 
 Three things worth knowing:
 
@@ -306,11 +352,11 @@ Three things worth knowing:
   That is deliberate: a fire-and-forget call runs ahead of the browser and
   narrates the next step while the audience is still looking at the last one.
   It roughly doubles a run's length, which for a demonstration is the point.
-- **Start the server first.** A cold start is about six seconds *per line*, so
-  the answer to a stopped server is to start it, not to wait for it. Preflight
-  reports whether it found one running.
-- **Losing the voice is never fatal.** If the server is missing or stops
-  responding, the run says so once and carries on silently. Stopping in front of
+- **Check the voice before the audience arrives.** The run prints which voice
+  it found (or why there is none) as it starts; `--dry-narrate` lets you hear it.
+- **Losing the voice is never fatal.** If the service is unreachable, rejects
+  the request, or a command fails, the run says so once and carries on
+  silently. Stopping in front of
   an audience is worse than finishing without sound.
 
 `--dry-narrate` reads a real script back rather than pretending to run the flow,

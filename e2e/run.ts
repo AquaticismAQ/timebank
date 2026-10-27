@@ -69,7 +69,7 @@ async function main(): Promise<number> {
 
   const runId = newRunId();
   const { speaker, reason } = gates.has('tts')
-    ? Speaker.locate(config.repoRoot)
+    ? Speaker.locate()
     : { speaker: null, reason: 'tts gate off' };
   if (gates.has('tts')) console.log(`  ${reason}`);
   const narrator = new Narrator(config.narrationDir, runId, speaker);
@@ -96,7 +96,7 @@ function dryNarrate(narrationDir: string, explicitPath?: string): number {
     console.error('No narration script to read. Run the flow once first, or pass --script <path>.');
     return 1;
   }
-  const { speaker, reason } = Speaker.locate(join(narrationDir, '..', '..'));
+  const { speaker, reason } = Speaker.locate();
   console.log(`  ${reason}`);
   console.log(`  reading ${path}\n`);
   const lines = readFileSync(path, 'utf8').split('\n').map(l => l.trim()).filter(Boolean);

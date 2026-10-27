@@ -90,7 +90,7 @@ export function loadConfig(cli: {
 }
 
 /** Reads one `export NAME=value` from ~/.timebank.env without sourcing it. */
-function readFromEnvFile(name: string): string | null {
+export function readFromEnvFile(name: string): string | null {
   const path = join(homedir(), '.timebank.env');
   if (!existsSync(path)) return null;
   // Last assignment wins, matching shell semantics.
