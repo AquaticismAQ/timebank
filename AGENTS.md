@@ -7,7 +7,14 @@ particular. Read it in full before making changes. A Claude-Code-specific
 file (`CLAUDE.md`) also exists at the repo root with the same project facts
 in Claude Code's preferred format; the two should be kept factually
 consistent when project state changes, but this file is the one every other
-agent and every human collaborator should treat as authoritative.
+agent and every human collaborator should treat as authoritative. The
+tool-specific folders (`.cursor/rules/`, `.devin/`, `.codex/`) deliberately
+hold no rules of their own — they point here, so there is one copy to keep
+current.
+
+New to the project, or a student contributor without access to the shared
+test server? Start with `CONTRIBUTING.md` → "Your First Code Change", which
+runs the whole system on your own machine.
 
 ## Project overview
 
@@ -37,8 +44,10 @@ Docs/integration/APIContract.md   The REST API contract — authoritative for bo
 Docs/implementation/     Phase-by-phase backend + integration build plan and the living status tracker (00-Status.md)
 Docs/optimization/       Post-launch redesign/clarification docs for specific subsystems (numbered)
 Docs/issues/             One doc per live-verified or reported defect (numbered, see Documentation rules)
-Docs/TestAccounts.md     Login credentials for the seeded test accounts on the shared test server
+Docs/operations/         Deployment, configuration, maintenance mode, and the local Docker stack
+Docs/TestAccounts.md     Login credentials for the seeded test accounts on the shared test server (untracked)
 integration-test/        Seeds a realistic dataset onto the shared test server; STATUS.md logs live-testing bugs/fixes
+e2e/                     Drives whole workflows through a real browser — a narrated live demo and a regression check (see e2e/README.md)
 frontend/                React + Vite web app (Student Portal + Admin/Teacher Portal)
 backend/                 Spring Boot 3.4 / Java 21 backend, single Maven module, package root `cn.timebank`
 ```
@@ -62,32 +71,49 @@ typecheck` exist. TypeScript is `strict: true` but
 `noUnusedLocals`/`noUnusedParameters` are off.
 
 **Frontend testing/verification uses the real shared test server, not a
-local mock.** There is no separate staging environment. Real hostname and
-credentials live in the untracked `test-server-credits.md` (this repo is
-meant to eventually go public — `tb.example.com` elsewhere in these docs is
-a placeholder, never the real host). Before any live frontend test or browser verification pass,
+local mock.** There is no separate staging environment. The real hostname
+and credentials live in the untracked `~/.timebank.env`, which every
+deploy/seed script sources, and account passwords in the untracked
+`Docs/TestAccounts.md` (this repo is meant to go public — `tb.example.com`
+in these docs is a placeholder, never the real host; see
+`Docs/operations/DeploymentEnv.md`). The server can sit behind a
+maintenance gate that returns `503` to the SPA **and** `/api/*`; the seeder
+and the e2e harness then need `TIMEBANK_MAINTENANCE_BYPASS_KEY` exported
+(`Docs/operations/MaintenanceMode.md`). Before any live frontend test or browser verification pass,
 check whether frontend source has changed since the last deploy (`git log`
 against the deploy commit) and run `frontend/scripts/deploy.sh` first if so
 — testing stale static output against current backend behavior (or vice
 versa) produces false results. Log in with a real seeded account from
-`Docs/TestAccounts.md`. The server carries a full seeded dataset
+`Docs/TestAccounts.md` — staff keep readable names (`admin001`,
+`teacher001`), but **student logins are 8 random digits**, as a real roster
+import produces (`Design/*/10-StudentActivationFlow.md` §3, issue 105);
+`studentNNN` is only the handle the docs use for a student. The server carries a full seeded dataset
 (`integration-test/`, README + STATUS.md) — check `integration-test/
 STATUS.md` before assuming a bug is new, and before assuming an empty
 screen means missing data.
+
+**Verify on the shared test server, not on the Docker stack**, when you have
+access to it. For an ordinary change — anything needing no re-seed, schema
+rebuild, or destructive experiment — deploy and verify live; the local
+stack's data differs from the real one, so a pass there can be green for a
+shape that never occurs live. Keep the Docker stack for work that would be
+rude or impossible on a shared box. Contributors without server access use
+the Docker stack for everything (`Docs/operations/DockerDevelopment.md`).
 
 Backend commands run from `backend/` (single Maven module, package root
 `cn.timebank`):
 
 ```bash
 cd backend
-JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn compile   # local compile check only
-JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn test       # fast: MockMvc slices + ArchUnit, no external dependency
-JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn verify     # adds *IT integration tests — needs TIMEBANK_DB_HOST/_USERNAME/_PASSWORD
-                                                       # for an account with CREATE/DROP on `timebank_it_%`
+mvn compile   # local compile check only
+mvn test      # fast: MockMvc slices + ArchUnit, no external dependency
+mvn verify    # adds *IT integration tests — needs TIMEBANK_DB_HOST/_USERNAME/_PASSWORD
+              # for an account with CREATE/DROP on `timebank_it_%`
 ```
 
-The machine's default `java` may not be JDK 21 — set `JAVA_HOME` explicitly
-as shown. **No Docker in deployment or tests** — but there
+The build needs JDK 21. If the machine's default `java` is another version,
+point `JAVA_HOME` at a JDK 21 for the command (on Homebrew:
+`JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn test`). **No Docker in deployment or tests** — but there
 *is* a local development stack (`docker-compose.yml`, MySQL + backend on one
 machine, for contributors without a second host: `Docs/operations/DockerDevelopment.md`,
 issue 101). Production remains systemd + fat JAR and no test starts a container. Integration tests (`*IT` classes, run via `mvn
@@ -158,6 +184,47 @@ frontend and backend work must respect them:
 - **Phase 3/4 features are feature-flagged, not half-built**: disabled features must show "Not yet available" rather than a broken/blank action.
 - **IDs are opaque server-generated strings**: never parse or derive meaning from an ID format.
 - **Durations/amounts are integers**: minutes for duration, minimum accounting units for time-coins — no floats.
+- **Review approval is one transaction with five effects**: decision event, record status, ledger credit, student progress, notification (`ReviewDecisionTransaction`) — all or none, never split.
+- **Project lifecycle**: `CLOSED` is time-derived (the registration window elapsed), not an action. `POST /projects/{id}/cancel` with a required reason archives from any status. Archiving a `COMPLETED` project is refused until every confirmed student's record is reviewed. A registration-open project with zero confirmed registrants auto-archives when registration closes. Read `Docs/optimization/02-PorjectOrganization.md` before changing this.
+- **Service-record sources**: new records are `PROJECT` or `SELF`; `EXTERNAL` is rejected on create and survives only for editing/resubmitting historical records (`Docs/optimization/03-ServiceRecordFormOptimization.md`).
+- **Roles**: each user is assigned exactly one `roleCode` through the API (the schema is many-to-many, the API is not). `student`, `admin` and `sysadmin` are protected; `sysadmin` is hidden from the standard Roles/Users UI. Custom roles can never receive the student-only permissions (`eventProposals.create`, `applications.create`, `serviceRecords.create`). Organizations are managed by admin/sysadmin, not teachers — but a student's proposal may name a new organization (`newOrganizationName`) without that permission.
+
+## Backend conventions
+
+Read a similar module before writing new code, and follow it.
+
+- **Layout**: business modules use `web/` (controllers only), `application/` (public service interface + package-private `*ServiceImpl`, request/response records in `dto/`), `domain/` (entities, enums, state machines) and `infrastructure/` (repositories). `lifecycle` and `reporting` have no `domain/`; `common/` is shared utilities.
+- **ArchUnit enforces** (`backend/src/test/java/cn/timebank/architecture/`): `@PreAuthorize` on every mapped `@RestController` method; nothing in `..web..` depends on an `@Entity`; no module reaches into another module's `domain`/`infrastructure` — cross-module calls go through application services.
+- **Responses**: controllers return `ApiResponse<T>`; only file/CSV/PDF downloads return `ResponseEntity`.
+- **Status changes** go through the module's `XxxStateMachine.canTransition(from, to, actor)` and dedicated action endpoints (`/submit`, `/publish`, `/cancel`), never a `PATCH` of `status`.
+- **Multi-module atomic writes** live in `*Transaction` beans (`ReviewDecisionTransaction`, `ProposalApprovalTransaction`, `ImportCommitTransaction`, …), called through the Spring proxy — a `new`-ed or self-invoked `@Transactional` method is not transactional.
+- **Optimistic locking**: editable entities extend `VersionedEntity`; check with `ConcurrencyControl.checkVersion()` (both in `cn.timebank.common.concurrency`). The client sends the version in the request body, never `If-Match`.
+- **Idempotency**: `IdempotencyService.execute()` wraps record submission, review/proposal/case decisions, account adjustments and reversals, and import commit.
+- **Data scope**: `DataScopeResolver` → `ScopeDescriptor` → `DataScopeSpecifications`. `admin`/`sysadmin` are school-wide by role code; every other role, teachers and custom roles included, is scoped by its `teacher_scope_assignment` rows (grade, class or project), else to self. Out of scope answers `404`, not `403`.
+- **IDs**: `OpaqueIds.generate(prefix)` → `prefix_` + 26 random base32 characters, stored as `VARCHAR(32)`.
+- **DTOs** are Java `record`s with Jakarta validation; entity→DTO mapping is hand-written (`toDto`). MapStruct is declared in `pom.xml` but unused — don't introduce it piecemeal. Entities use Lombok `@Getter`/`@Setter`.
+- **Migrations**: Flyway `V{n}__*.sql` plus repeatable `R__*.sql`; `ddl-auto: validate`. Never edit an applied migration — its checksum is recorded on every database it ran on (`Docs/README.md` §2.10).
+- **Infrastructure**: Caffeine cache, 60 s TTL (dictionaries, dashboards, rules); ShedLock on every scheduled job; Java 21 virtual threads.
+- **Tests**: `FooTest` (Surefire, no database) vs `FooIT` (Failsafe) extending `AbstractIntegrationTest`, which gives each class its own `timebank_it_<random>` schema.
+
+## API wire format
+
+`Docs/integration/APIContract.md` is authoritative; these are the rules most often needed.
+
+- Base path `/api/v1`, `camelCase` JSON. Success `{ data, page?, meta: { requestId } }`; error `{ error: { code, message, fieldErrors?, requestId } }`.
+- Error codes: `400 INVALID_REQUEST`, `401 AUTHENTICATION_REQUIRED`, `403 FORBIDDEN`, `404 RESOURCE_NOT_FOUND`, `409 STATE_CONFLICT`, `413 FILE_TOO_LARGE`, `422 VALIDATION_FAILED`, `429 RATE_LIMITED`, `500 INTERNAL_ERROR`, `503 SERVICE_UNAVAILABLE`.
+- Lists: `page[number]`, `page[size]` (capped at 100), `sort=-submittedAt,studentName`, `filter[field]=value`, `search=text`. Filter and sort on the server — a client-side filter over one page is a defect.
+- Durations are integer minutes; amounts are integer centi-coins (`7550` = 75.5 coins). Times are ISO 8601 with offset.
+- `Accept-Language: zh-CN` or `en` on every request.
+- Session cookie is `HttpOnly`, `Secure`, `SameSite=Lax` (Spring Session JDBC); CSRF is cookie-to-header. Session length is per role (`session_timeout_minutes`: 480 staff, 720 student by default).
+
+## Frontend write path
+
+- Use the helpers, not hand-rolled equivalents: `newIdempotencyKey()` (once per user intent, reused on retry), `withVersion(body, version)`, `mapApiError(err)` (all in `api/http.ts`); `toBackendEnum`/`fromBackendEnum` (`lib/pagination.ts`); `localDateTimeToISO`/`isoToLocalDateTime` (`lib/datetime.ts`).
+- Send writable fields only — never status, computed values or display names.
+- No optimistic UI on ledger operations: show what the server returned.
+- Wire `fieldErrors` to the form's fields; never render a raw error object.
+- Every user-visible string goes in both `frontend/src/i18n/en.json` and `zh.json`.
 
 ## Documentation rules
 
@@ -226,8 +293,10 @@ restating here:
   author/committer name `Aquaticism`, email `aquaticism.aq@gmail.com` — set
   via `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL`/`GIT_COMMITTER_NAME`/
   `GIT_COMMITTER_EMAIL` scoped to the `git commit` invocation itself, never
-  by editing git config. This is a standing project convention until
-  explicitly changed.
+  by editing git config. The committer must always equal the author —
+  including after a history rewrite (`git filter-repo`, rebase, amend),
+  which otherwise records whoever ran it as committer. This is a standing
+  project convention until explicitly changed.
 - **No AI attribution trailers.** Do not add `Co-Authored-By: <AI tool>` or
   similar bot/AI-attribution footers to commit messages or PR bodies in
   this repo — the project has opted out of that convention, in both the

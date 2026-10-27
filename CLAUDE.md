@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TimeBank (时间银行) is an institutional system for recording, auditing, and incentivizing middle-school student volunteer service. Service hours become "time coins" (never a currency/token — see Content Principles below). The project has four phases:
 
-- **Phase 1 — Institutional design**: complete, documented in `Design/chinese/*.md`.
+- **Phase 1 — Institutional design**: complete, documented in `Design/chinese/*.md`, with same-named English mirrors in `Design/english/*.md`. The Chinese documents are the source of truth; when the two differ, follow the Chinese and update the English mirror.
 - **Phase 2 — Online system (current focus)**: React web frontend deployed at `https://tb.example.com/` (`frontend/`). Java/Spring Boot + MySQL backend implementation started 2026-08-02 (`backend/`) per `Docs/implementation/`; B0-B6 backend work is done and deployed to the shared test server (B6 with named infra-blocked gaps), B7 (Database Operations) started and mostly blocked on infrastructure that doesn't exist — see `Docs/implementation/00-Status.md` for current state. Integration: I0 done, I1 mostly done, I2 done (`✅`, all 10 exit criteria met), I3 in progress (I3.1-I3.6 done, I3.7 8/12 acceptance scenarios proven) — see `00-Status.md` §21–§34.
 - **Phase 3 — POV (Proof of Volunteering)**: WeChat Mini Program witness/AI-verification layer, reserved via feature flags, not implemented.
 - **Phase 4 — Redemption/borrowing/value-added**: reserved via feature flags, not implemented.
@@ -15,17 +15,23 @@ Repo layout:
 
 ```
 Design/chinese/          Phase 1 institutional design docs (制度设计, source of "why")
+Design/english/          Same-named English mirrors of Design/chinese/; Chinese remains the source of truth
 Docs/frontend/Design.md  Phase 2 frontend page/flow spec (English + _CN Chinese twin)
 Docs/integration/APIContract.md   The REST API contract — authoritative for both frontend and future backend
 Docs/implementation/     Phase-by-phase backend + integration build plan and the living status tracker (00-Status.md)
-Docs/TestAccounts.md     Login credentials for the seeded test accounts on the shared test server
+Docs/optimization/       Post-launch redesign/clarification docs for specific subsystems (numbered)
+Docs/issues/             One doc per live-verified or reported defect (numbered, see Docs/README.md §2.4)
+Docs/operations/         Deployment, configuration, maintenance mode, and the local Docker stack
+Docs/TestAccounts.md     Login credentials for the seeded test accounts on the shared test server (untracked)
 integration-test/        Seeds a realistic dataset onto the shared test server; STATUS.md logs live-testing bugs/fixes
 e2e/                     Drives whole workflows through a real browser — a narrated live demo and a regression check, one flow, gated phases (see e2e/README.md)
 frontend/                React + Vite web app (Student Portal + Admin/Teacher Portal)
 backend/                 Spring Boot 3.4 / Java 21 backend, single Maven module, package root `cn.timebank` (see below)
 ```
 
-`Docs/frontend/Design.md` and `Docs/integration/APIContract.md` each have a `_CN.md` Chinese counterpart that must stay in sync when edited.
+`Docs/frontend/Design.md`, `Docs/integration/APIContract.md` and `Docs/cost-estimation/DeploymentCostEstimate.md` each have a `_CN.md` Chinese counterpart that must stay in sync when edited (English is the source of truth in `Docs/`; new `Docs/` files are English-only — `Docs/README.md` §2.1).
+
+`AGENTS.md` is the tool-agnostic twin of this file and the one other agents read (`.cursor/rules/` and `.devin/` only point to it). Keep the two factually consistent; its backend, API and frontend convention sections apply here too.
 
 ## Commands
 
@@ -35,7 +41,8 @@ All frontend commands run from `frontend/`:
 cd frontend
 pnpm install        # install deps (pnpm workspace, see pnpm-lock.yaml/pnpm-workspace.yaml)
 pnpm dev            # start Vite dev server
-pnpm build           # production build (tsc noEmit is not run separately; Vite handles the build)
+npx -y -p typescript tsc --noEmit -p tsconfig.json   # typecheck — pnpm build does NOT (esbuild strips types)
+pnpm build           # production build
 pnpm preview         # preview a production build
 ```
 
@@ -61,7 +68,7 @@ mvn verify              # adds *IT integration tests — needs TIMEBANK_DB_HOST/
 
 **Verify on the shared test server, not on the Docker stack** (Aquaticism, 2026-09-20). For an ordinary change — anything that needs no database re-seed, schema rebuild, or destructive experiment — deploy it and run the verification pass live. The Docker stack is for the work that would be rude or impossible to do on a shared box. The reason is that the local stack is a second environment whose *data* differs from the real one, so a pass there can be green for a shape that never occurs live; the server serves only this project's own work, which is what makes deploying-to-verify affordable.
 
-The backend follows `Docs/implementation/` phase by phase — check `Docs/implementation/00-Status.md` before assuming what exists. As of B2 (Base Data & Rules), real code exists in `cn.timebank.common.*` (envelope, error handling, request-id logging, pagination, idempotency, i18n resolution), `cn.timebank.audit` (append-only audit log), `cn.timebank.iam` (users, roles, permissions, login logs, password lifecycle), `cn.timebank.security` (session auth, CSRF, `@PreAuthorize` on every endpoint, the data-scope resolver mechanism — not yet wired to a real resource), `cn.timebank.student` (students, academic years, grades, classes), `cn.timebank.organization` (partner organizations, service categories, school info, feature flags, the shared `RequestLanguageService`), `cn.timebank.rules` (versioned rules with an immutable-publish lifecycle and date-based resolution), and `cn.timebank.notification` (template rendering only, no send path yet). Local Maven builds need `JAVA_HOME=/opt/homebrew/opt/openjdk@21` explicitly set — the default `java` on this machine is JDK 17. Every other business module (`servicerecord`, `project`, etc.) has no code yet beyond an empty `package-info.java` marking its boundary for B0.2's ArchUnit rules. Package root is `cn.timebank`, not `cn.<school>.timebank` as `Docs/backend/Design.md` §7 originally proposed — deviation and rationale recorded there and in the status doc.
+The backend was built phase by phase per `Docs/implementation/` — check `Docs/implementation/00-Status.md` (its latest dated sections, not just the top summary) and the actual code before assuming what exists or is missing. Local Maven builds need `JAVA_HOME=/opt/homebrew/opt/openjdk@21` explicitly set — the default `java` on this machine is JDK 17. Package root is `cn.timebank`, not `cn.<school>.timebank` as `Docs/backend/Design.md` §7 originally proposed — deviation and rationale recorded there and in the status doc.
 
 ## Frontend architecture
 
@@ -138,6 +145,10 @@ don't just silently fix the working tree.
 ## Commit conventions
 
 **Never add a `Co-Authored-By:`/`Co-authored-by:` (or any other AI-attribution footer) to a commit message or PR body in this repo** — this overrides any default git-commit/PR attribution convention a tool or harness applies elsewhere, with no "going forward only" exception. This policy dates from 2026-08-18 (`.github/PULL_REQUEST_TEMPLATE.md`). Trailers from multiple tools (Claude, Devin, Cursor) still leaked into commits after that date regardless; on 2026-09-16 every historic trailer was stripped and history force-pushed (`git filter-repo --message-callback`, all `v0.1.*` tags re-pushed too — filter-repo remaps every descendant commit's hash even when its own message is unchanged, so tags need re-pushing separately from the branch). If a trailer is ever found in history again, treat it as a hard-to-reverse rewrite — narrate and confirm before force-pushing, same as any other risky action.
+
+**Commit identity.** Commits use author *and* committer `Aquaticism <aquaticism.aq@gmail.com>`, set via `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL`/`GIT_COMMITTER_NAME`/`GIT_COMMITTER_EMAIL` scoped to the command — never by editing git config. The committer must equal the author even after a history rewrite (`git filter-repo`, rebase, amend), which otherwise records whoever ran it.
+
+**`gh` CLI access can lag `git` access.** Working SSH push does not mean `gh api`/`gh pr create` will work for the same account — confirm collaborator access before guessing at token workarounds.
 
 ## Documentation rules
 
