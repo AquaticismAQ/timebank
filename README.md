@@ -127,13 +127,13 @@ pnpm dev
 
 # Backend
 cd backend
-JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn compile   # local compile check
-JAVA_HOME=/opt/homebrew/opt/openjdk@21 mvn test        # fast tests, no external services
+mvn compile   # local compile check (Java 21)
+mvn test      # fast tests, no external services
 ```
 
-There is no local mock mode and no Docker anywhere in this project — the frontend always talks to a real backend, and `mvn verify`'s integration tests run against real MySQL (see `backend/scripts/verify.sh`, and `Docs/operations/DeploymentEnv.md` for the credentials/config those commands need).
+There is no mock mode — the frontend always talks to a real backend. To run the whole system on your own machine (MySQL and the backend in Docker, the website via `pnpm dev`), follow **[Your First Code Change](CONTRIBUTING.md#your-first-code-change--第一次改代码)** in `CONTRIBUTING.md`; `Docs/operations/DockerDevelopment.md` has the details. Docker is for local development only — deployment is a plain JAR under systemd.
 
-**中文** — 二期线上系统由 React/Vite 前端（`frontend/`）与 Spring Boot / Java 21 / MySQL 后端（`backend/`）组成，详细说明见 `frontend/README.md`、`backend/scripts/` 与 `CLAUDE.md`/`AGENTS.md`。快速开始见上方英文代码块。本项目不提供本地 Mock 模式，也不使用 Docker——前端始终对接真实后端，`mvn verify` 的集成测试运行在真实 MySQL 上（见 `backend/scripts/verify.sh`；所需凭证/配置见 `Docs/operations/DeploymentEnv.md`）。
+**中文** — 二期线上系统由 React/Vite 前端（`frontend/`）与 Spring Boot / Java 21 / MySQL 后端（`backend/`）组成，详细说明见 `frontend/README.md`、`backend/scripts/` 与 `CLAUDE.md`/`AGENTS.md`。快速开始见上方英文代码块。本项目不提供 Mock 模式，前端始终对接真实后端。想在自己电脑上运行整个系统（MySQL 和后端跑在 Docker 里，网站用 `pnpm dev` 打开），请按 `CONTRIBUTING.md` 中的 **[第一次改代码](CONTRIBUTING.md#your-first-code-change--第一次改代码)** 操作，细节见 `Docs/operations/DockerDevelopment.md`。Docker 仅用于本地开发，部署仍是 systemd 下的 JAR。
 
 ---
 

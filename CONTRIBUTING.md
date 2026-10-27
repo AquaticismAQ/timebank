@@ -11,6 +11,7 @@ Thank you for your interest in contributing to the TimeBank project. This guide 
 - [Ways to Contribute](#ways-to-contribute)
 - [Document Structure](#document-structure)
 - [Editing Guidelines](#editing-guidelines)
+- [Your First Code Change](#your-first-code-change--第一次改代码)
 - [Submitting Changes](#submitting-changes)
 - [Language & Style](#language--style)
 - [Content Principles](#content-principles)
@@ -41,18 +42,16 @@ Thank you for your interest in contributing to the TimeBank project. This guide 
 repo/
 ├── README.md              # Project overview (bilingual)
 ├── CONTRIBUTING.md        # This file
-└── Docs/
-    ├── chinese/           # Chinese documentation (primary)
-    │   ├── TimeBankDesign.md   # Top-level institutional design
-    │   ├── ManualAudit.md      # Manual audit process & data design
-    │   ├── AutoAudit.md        # Automated audit (POV) & AI risk control
-    │   ├── Blockchain.md       # Blockchain evidence storage
-    │   ├── OnlineSystem.md     # Online system design
-    │   └── Legal.md            # Legal compliance under Chinese law
-    └── english/           # English documentation (planned)
+├── Design/
+│   ├── chinese/           # Institutional design — the source of truth (01-TimeBankDesign.md, 02-ManualAudit.md, …)
+│   └── english/           # Same-named English mirrors
+├── Docs/                  # Online-system docs: frontend design, API contract, build plan, issue write-ups
+├── frontend/              # The website (React)
+├── backend/               # The server (Java / Spring Boot)
+└── integration-test/      # Script that fills a database with made-up test data
 ```
 
-All sub-documents cross-reference each other and link back to `TimeBankDesign.md`. When editing, maintain these cross-references.
+The design documents cross-reference each other and link back to `01-TimeBankDesign.md`. When editing, maintain these cross-references. When a `Design/chinese/` file changes, update its `Design/english/` twin in the same PR.
 
 ---
 
@@ -71,6 +70,129 @@ All sub-documents cross-reference each other and link back to `TimeBankDesign.md
 - Proposals should reference the relevant sub-document (e.g., `OnlineSystem.md` for system architecture, `AutoAudit.md` for audit logic).
 - Include a pros/cons analysis and a recommendation, consistent with the comparison format used throughout the docs.
 - Flag any legal implications and cross-reference `Legal.md`.
+
+---
+
+## Your First Code Change · 第一次改代码
+
+New to the project? This walks you from an empty computer to an open Pull Request. You **don't** need access to the school's server — everything runs on your own machine: the database and backend in Docker, the website in your browser.
+
+第一次参与？下面带你从零开始，一直到提交 Pull Request。你**不需要**学校服务器的权限——所有东西都在你自己的电脑上运行：数据库和后端跑在 Docker 里，网站在浏览器里打开。
+
+Looking for something to work on? Issues labelled [`good first issue`](https://github.com/AquaticismAQ/timebank/labels/good%20first%20issue) are picked to be small and friendly.
+想找任务？带 `good first issue` 标签的 Issue 是特意挑出来的、适合入门的小任务。
+
+### 1. Install the tools · 安装工具
+
+| Tool · 工具 | What it's for · 用途 |
+| :--- | :--- |
+| [Git](https://git-scm.com/) | Download the code and save your changes · 获取代码、保存修改 |
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Runs the database and backend for you · 帮你运行数据库和后端 |
+| [Node.js](https://nodejs.org/) 18 or newer, then `npm install -g pnpm` | Runs the website and the test-data script · 运行网站和测试数据脚本 |
+| A `mysql` client (macOS: `brew install mysql-client`) | Used by the test-data script · 测试数据脚本需要 |
+| Java 21 + Maven *(optional · 可选)* | Only to run backend tests yourself — CI runs them on every PR anyway · 仅用于自己跑后端测试，CI 也会自动跑 |
+
+Give Docker about 4 GB of memory. 请给 Docker 分配约 4 GB 内存。
+
+### 2. Get the code · 获取代码
+
+Click **Fork** at the top of the GitHub page, then:
+先在 GitHub 页面右上角点 **Fork**，然后：
+
+```bash
+git clone https://github.com/<your-github-name>/timebank.git
+cd timebank
+git checkout -b fix/short-description     # a new branch for your change · 为这次修改新建分支
+```
+
+### 3. Start the backend · 启动后端
+
+```bash
+docker compose up -d --build
+docker compose ps        # wait until backend shows (healthy) · 等到 backend 显示 (healthy)
+```
+
+The first time takes a few minutes while it downloads and compiles. 第一次需要几分钟下载和编译。
+
+### 4. Fill it with test data · 填入测试数据
+
+An empty database means empty screens. This script creates made-up students, teachers, projects and records:
+空数据库意味着页面全是空的。下面的脚本会生成虚构的学生、老师、项目和记录：
+
+```bash
+cd integration-test
+npm install
+TIMEBANK_SEED_DB_HOST=127.0.0.1 \
+TIMEBANK_SEED_DB_PORT=3307 \
+TIMEBANK_DB_USERNAME=timebank_app \
+TIMEBANK_DB_PASSWORD=timebank-not-for-production \
+TIMEBANK_BASE_URL=http://localhost:28080 \
+npm run seed
+cd ..
+```
+
+**At the end it prints every username and password — copy a few somewhere now.** They are shown only once.
+**脚本最后会打印所有用户名和密码，请马上复制几个保存下来**，它们只显示这一次。
+
+### 5. Open the website · 打开网站
+
+```bash
+cd frontend
+pnpm install
+printf 'VITE_DEV_PROXY_TARGET=http://localhost:28080\n' > .env.local
+pnpm dev
+```
+
+Open **http://localhost:5173**. Log in as `admin001` for the teacher/admin pages, or with one of the 8-digit student numbers from step 4 for the student pages.
+打开 **http://localhost:5173**。用 `admin001` 登录可进入教师/管理端，用第 4 步打印出的 8 位数字学号登录可进入学生端。
+
+### 6. Make your change · 动手修改
+
+| You want to change… · 想改的内容 | Look in · 去哪里找 |
+| :--- | :--- |
+| A student page · 学生端页面 | `frontend/src/app/components/student/` |
+| A teacher/admin page · 教师/管理端页面 | `frontend/src/app/components/admin/` |
+| Text on the screen · 界面文字 | `frontend/src/i18n/zh.json` and `en.json` — change both · 两个都要改 |
+| Server logic · 后端逻辑 | `backend/src/main/java/cn/timebank/` |
+| How the system is meant to work · 制度设计 | `Design/chinese/` (with its `Design/english/` twin · 及对应英文版) |
+
+Frontend edits show up in the browser as soon as you save. After a backend edit, run `docker compose up -d --build` again.
+前端修改保存后浏览器会自动刷新；修改后端后需要重新运行 `docker compose up -d --build`。
+
+Two rules matter most: use **made-up data only** — never real names, schools or passwords, not even in screenshots — and remember **time coins are a school record, not money** (see [Content Principles](#content-principles)).
+最重要的两条规则：只用**虚构数据**——不出现真实姓名、学校或密码，截图也不行；以及**时间币是校内记录，不是钱**（见[内容原则](#content-principles)）。
+
+### 7. Check your work · 检查
+
+```bash
+cd frontend
+npx -y -p typescript tsc --noEmit -p tsconfig.json && pnpm build   # frontend · 前端
+cd ../backend
+mvn test                                                            # backend, optional · 后端（可选）
+```
+
+If something fails and you can't see why, open the PR anyway and say so — that's fine.
+如果检查失败又看不出原因，照样提交 PR 并说明情况即可。
+
+### 8. Open a Pull Request · 提交 PR
+
+```bash
+git add .
+git commit -m "fix: short description of what you changed"
+git push -u origin fix/short-description
+```
+
+Then open a Pull Request on GitHub and fill in the short template. The title format is explained in [Submitting Changes](#submitting-changes).
+然后在 GitHub 上发起 Pull Request，填写简短的模板。标题格式见[提交修改](#submitting-changes)。
+
+### When you're done · 收尾
+
+```bash
+docker compose down        # stop, keep your data · 停止并保留数据
+docker compose down -v     # stop and wipe everything, to start fresh · 停止并清空，从头再来
+```
+
+**Stuck? · 遇到问题？** See the troubleshooting section of [`Docs/operations/DockerDevelopment.md`](Docs/operations/DockerDevelopment.md#10-troubleshooting), or open an issue with the **Question** template. 可查看该文档的故障排查部分，或用 **提问（Question）** 模板新建 Issue。
 
 ---
 
