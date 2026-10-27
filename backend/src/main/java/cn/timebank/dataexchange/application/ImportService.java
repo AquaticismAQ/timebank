@@ -1,6 +1,7 @@
 package cn.timebank.dataexchange.application;
 
 import cn.timebank.dataexchange.application.dto.ImportErrorReportDto;
+import cn.timebank.dataexchange.application.dto.ImportTemplateDto;
 import cn.timebank.dataexchange.application.dto.JobDto;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.multipart.MultipartFile;
@@ -8,7 +9,7 @@ import org.springframework.web.multipart.MultipartFile;
 /** Contract §4.14. Validate-before-commit is mandatory — {@link #commit} rejects a job that hasn't reached {@code VALIDATED}. */
 public interface ImportService {
 
-    String template(String type);
+    ImportTemplateDto template(String type);
 
     JobDto create(String type, MultipartFile file, String actorId);
 

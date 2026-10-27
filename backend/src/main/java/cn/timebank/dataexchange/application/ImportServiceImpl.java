@@ -7,6 +7,7 @@ import cn.timebank.common.error.ApiException;
 import cn.timebank.common.idempotency.IdempotencyService;
 import cn.timebank.common.web.RequestContext;
 import cn.timebank.dataexchange.application.dto.ImportErrorReportDto;
+import cn.timebank.dataexchange.application.dto.ImportTemplateDto;
 import cn.timebank.dataexchange.application.dto.JobDto;
 import cn.timebank.dataexchange.domain.Job;
 import cn.timebank.dataexchange.domain.JobKind;
@@ -79,7 +80,7 @@ class ImportServiceImpl implements ImportService {
      * template could advertise a column the validator did not read.
      */
     @Override
-    public String template(String type) {
+    public ImportTemplateDto template(String type) {
         if (!isSupported(type)) {
             throw ApiException.notFound("Unknown import type: " + type);
         }
@@ -89,7 +90,9 @@ class ImportServiceImpl implements ImportService {
                 .map(ImportRuleSet.ColumnSpec::sample)
                 .map(ImportServiceImpl::csvCell)
                 .collect(java.util.stream.Collectors.joining(","));
-        return header + "\n" + sample + "\n";
+        // The rule set's own name, not the path variable: validated above, and the
+        // only value that reaches the Content-Disposition header.
+        return new ImportTemplateDto(ruleSet.type() + "-template.csv", header + "\n" + sample + "\n");
     }
 
     /** Quote a sample value the same way the exporter would, so the template round-trips through the reader. */

@@ -5,8 +5,10 @@ import cn.timebank.dataexchange.application.HistoricalImportWindowService;
 import cn.timebank.dataexchange.application.ImportService;
 import cn.timebank.dataexchange.application.dto.HistoricalImportWindowDto;
 import cn.timebank.dataexchange.application.dto.ImportErrorReportDto;
+import cn.timebank.dataexchange.application.dto.ImportTemplateDto;
 import cn.timebank.dataexchange.application.dto.JobDto;
 import cn.timebank.security.application.CookieSessionUserDetails;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -51,10 +53,14 @@ public class ImportController {
     @GetMapping("/api/v1/imports/templates/{type}")
     @PreAuthorize("hasAuthority('imports.create')")
     public ResponseEntity<String> template(@PathVariable String type) {
+        // Resolved first: an unknown type is a 404 before anything is written, and
+        // the file name comes back from the rule set rather than from the path.
+        ImportTemplateDto template = importService.template(type);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("text/csv"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + type + "-template.csv\"")
-                .body(importService.template(type));
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(template.fileName()).build().toString())
+                .body(template.csv());
     }
 
     @PostMapping(value = "/api/v1/imports", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
