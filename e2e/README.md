@@ -15,6 +15,7 @@ pnpm e2e                                  # demo profile, visible, paced
 pnpm e2e --profile verify --headless      # unattended regression shape
 pnpm e2e --list                           # flows, profiles, gates
 pnpm selftest                             # the harness's own pure-logic checks
+pnpm e2e --snapshots ../snapshots         # also save a picture of each screen (see below)
 ```
 
 ## Running the demonstrations
@@ -54,6 +55,32 @@ it rather than fixing it. Everything after the script name is passed straight to
 `pnpm e2e`.
 
 Without it, `pnpm e2e` does the same thing given the right environment.
+
+## Snapshots
+
+`--snapshots <dir>` saves pictures of the screens a flow passes through, one
+sub-folder per flow (`<dir>/project-workflow/`, …). The repository's own
+`snapshots/` folder is made this way:
+
+```bash
+./demo-project.sh --no-gate tts --headless --snapshots ../snapshots
+./demo-proposal.sh --no-gate tts --headless --snapshots ../snapshots
+./demo-case.sh --no-gate tts --headless --snapshots ../snapshots
+```
+
+Three moments are captured: every page the flow opens, once its data has
+loaded; every dialog or in-page form at the moment it is submitted or
+dismissed — the filled form, the decision being confirmed — named after its
+title; and the
+screen each phase ends on, where that step's result is visible. A picture
+identical to the one before it is skipped, and login pages are never kept.
+Files are numbered in the order they were taken, and a flow's folder is emptied
+when the flow starts, so it always holds one run.
+`--headless` gives every picture the same 1600×1000 viewport.
+
+Before committing new snapshots, look at every one: they show whatever the
+server holds, and only fictional fixture data belongs in this repository
+(`Docs/README.md` §2.8).
 
 ## Profiles and gates
 

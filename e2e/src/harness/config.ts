@@ -8,6 +8,8 @@ export interface Config {
   repoRoot: string;
   evidenceDir: string;
   artifactsDir: string;
+  /** `--snapshots <dir>`: where per-flow screen pictures go; unset means none. */
+  snapshotsDir?: string;
   narrationDir: string;
   admin: Account;
   student: Account;
@@ -40,6 +42,7 @@ export function loadConfig(cli: {
   close: boolean;
   slowMo: number;
   evidenceDir?: string;
+  snapshots?: string;
 }): Config {
   const repoRoot = resolve(new URL('../../..', import.meta.url).pathname);
   const baseUrl = (process.env.TIMEBANK_BASE_URL ?? readFromEnvFile('TIMEBANK_BASE_URL') ?? '').replace(/\/$/, '');
@@ -78,6 +81,8 @@ export function loadConfig(cli: {
     repoRoot,
     evidenceDir,
     artifactsDir: join(repoRoot, 'e2e', 'artifacts'),
+    // Relative to where the command was run, like any other path argument.
+    snapshotsDir: cli.snapshots ? resolve(cli.snapshots) : undefined,
     narrationDir: join(repoRoot, 'e2e', 'narration'),
     admin,
     student,

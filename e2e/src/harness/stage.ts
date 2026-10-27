@@ -1,5 +1,6 @@
 import type { Locator, Page } from 'playwright';
 import type { Narrator } from './narrator.js';
+import { screenIdentity, type Snapshots } from './snapshots.js';
 
 /**
  * Makes the run watchable.
@@ -18,6 +19,7 @@ interface Binding {
   narrator: Narrator;
   paced: boolean;
   visible: boolean;
+  snapshots?: Snapshots;
 }
 
 const BOUND = new WeakMap<Page, Binding>();
@@ -150,15 +152,33 @@ export async function visit(page: Page, url: string, pageNameZh: string): Promis
   say(page, `现在打开${pageNameZh}`);
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await beat(page);
+  await BOUND.get(page)?.snapshots?.take(page, pageNameZh);
 }
 
 export async function tap(locator: Locator, whatZh: string): Promise<void> {
   const page = locator.page();
   say(page, `现在点击${whatZh}`);
   await point(locator);
+  // A dialog or an in-page form is gone the moment its button is clicked, so its
+  // picture has to be taken first — and kept only if the click really did change
+  // the screen (a dialog opened or closed, the view or the page changed).
+  const snapshots = BOUND.get(page)?.snapshots;
+  const before = snapshots?.enabled ? await screenIdentity(page) : null;
+  const held = before !== null ? await snapshots!.grab(page) : null;
   await locator.click();
   await unpoint(page);
   await beat(page);
+  if (held) {
+    // A submit that waits on the server changes the screen after the beat, not
+    // within it; give it a moment before deciding nothing changed.
+    for (let i = 0; i < 10; i++) {
+      if ((await screenIdentity(page)) !== before) {
+        snapshots!.save(held.frame, held.title || whatZh);
+        break;
+      }
+      await page.waitForTimeout(200);
+    }
+  }
 }
 
 /**

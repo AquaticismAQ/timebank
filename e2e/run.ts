@@ -43,6 +43,7 @@ async function main(): Promise<number> {
     close: flag('close'),
     slowMo: Number(value('slow-mo') ?? (gates.has('pace') ? 100 : 0)),
     evidenceDir: value('evidence-dir'),
+    snapshots: value('snapshots'),
   });
 
   const cleanupOnly = flag('cleanup-only');

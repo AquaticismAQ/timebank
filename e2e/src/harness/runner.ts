@@ -10,6 +10,7 @@ import { SlotAllocator } from './slots.js';
 import type { Flow, FlowContext, Gate } from './types.js';
 import { signIn } from '../steps/auth.js';
 import { bindStage } from './stage.js';
+import { Snapshots } from './snapshots.js';
 
 export interface RunOutcome {
   flowId: string;
@@ -49,6 +50,8 @@ export async function runFlow(
 ): Promise<RunOutcome> {
   const artifactDir = join(config.artifactsDir, runId);
   mkdirSync(artifactDir, { recursive: true });
+  const snapshots = new Snapshots(config.snapshotsDir);
+  snapshots.startFlow(flow.id);
 
   // A student-scoped API session, used only for reads the UI makes expensive:
   // the existing records the allocator needs, and balances as numbers.
@@ -93,6 +96,7 @@ export async function runFlow(
         narrator,
         paced: gates.has('pace'),
         visible: !config.headless,
+        snapshots,
       });
       // Once per role per run. The context persists, so a later switch back is a
       // tab change rather than another trip through the login form.
@@ -116,6 +120,12 @@ export async function runFlow(
     else narrator.phase(phase.titleZh);
     try {
       await phase.run(ctx);
+      // The screen a phase ends on is where its result is visible. Silent phases
+      // are checks, not screens.
+      if (!phase.silent) {
+        const page = (() => { try { return browser.page(); } catch { return null; } })();
+        if (page) await snapshots.take(page, phase.titleZh);
+      }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       const kind = error instanceof AssertionFailure ? '断言失败' : '执行出错';
