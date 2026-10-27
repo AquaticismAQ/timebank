@@ -162,7 +162,7 @@ domain and names here are placeholders):
 │   HKTZ4-9QP2M                                               │
 │                                                             │
 │   Check the address bar says exactly                        │
-│   https://timebank.example.com                              │
+│   https://tb.example.com                                    │
 │                                                             │
 │   Issued by Teacher Wei Chen at 2026-09-17 08:15 UTC        │
 │     —  valid before 2026-09-24 08:15 UTC                    │

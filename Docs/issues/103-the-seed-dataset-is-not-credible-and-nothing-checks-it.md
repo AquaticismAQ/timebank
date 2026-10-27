@@ -294,7 +294,7 @@ contract rather than being a fixture change.
 ## 7. Still open
 
 - **The shared test server has not been re-seeded.** The user asked to verify on
-  Docker first; re-seeding `timebank.example.com` is a separate, destructive
+  Docker first; re-seeding it is a separate, destructive
   action needing its own go-ahead.
 - **Reviewer load is lopsided** — 339 decisions for the grade 10/11 teacher
   against 9 for the Grade 6 one. It is a correct consequence of the scope map

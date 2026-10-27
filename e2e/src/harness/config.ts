@@ -66,10 +66,7 @@ export function loadConfig(cli: {
     );
   }
 
-  // Scoped by host: the file documents two servers and both call their
-  // administrator `admin001`, so an unscoped read is a coin toss.
-  const { admin, student } = loadAccounts(
-    join(repoRoot, 'Docs', 'TestAccounts.md'), new URL(baseUrl).hostname);
+  const { admin, student } = loadAccounts(join(repoRoot, 'Docs', 'TestAccounts.md'));
 
   return {
     baseUrl,
@@ -96,8 +93,7 @@ export function loadConfig(cli: {
 function readFromEnvFile(name: string): string | null {
   const path = join(homedir(), '.timebank.env');
   if (!existsSync(path)) return null;
-  // Last assignment wins, matching shell semantics — the file carries more than
-  // one block and the later one is the active server.
+  // Last assignment wins, matching shell semantics.
   let found: string | null = null;
   for (const line of readFileSync(path, 'utf8').split('\n')) {
     const m = line.match(new RegExp(`^\\s*(?:export\\s+)?${name}=(.*)$`));

@@ -1116,7 +1116,7 @@ One writer owns every column convention (`ExportCsvWriter`). Issue 107's three c
 
 ## 41. Import/export rework deployed to the shared test server (2026-09-20)
 
-First deployment of everything in §39 and §40. Backend and frontend both shipped to the active server; **no re-seed**, because none was needed — see below.
+First deployment of everything in §39 and §40. Backend and frontend both shipped to the shared test server; **no re-seed**, because none was needed — see below.
 
 **Migrations.** The server was at `V30`; `V31`, `V32` and `V33` applied cleanly and are recorded successful in `flyway_schema_history`. A `mysqldump` was taken first (`/root/tb-backups/timebank-pre-V31-*.sql.gz`, gzip-verified) because this deploy carried a `DELETE` of live permission grants and an `ALTER` that drops and re-adds a foreign key.
 

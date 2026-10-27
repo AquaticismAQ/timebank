@@ -174,7 +174,7 @@ class StudentPrivacyIT extends AbstractIntegrationTest {
      * {@code guardianContact} and recorded {@code student.viewSensitive} whenever
      * they were shown. V26 dropped those columns, and issue 085 removed the flag
      * and the event — a plain read of non-sensitive fields is not an auditable
-     * event, and on the original server that one action had grown to half of
+     * event, and on the shared test server that one action had grown to half of
      * every audit row, mostly students reading their own profile.
      *
      * This asserts the absence, because the failure mode being guarded against is

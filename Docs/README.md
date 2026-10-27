@@ -227,17 +227,6 @@ new ones: `tb.example.com` for the shared test server's hostname,
 `Teacher Wei Chen` for a staff contact, and `example-township-school.edu` for
 email domains.
 
-**Two hostname placeholders, because there have been two servers.** Writing up
-anything that happened before the move needs to distinguish them, and collapsing
-both onto one placeholder turns a sentence that contrasts them into nonsense:
-
-| Placeholder | Means |
-| :--- | :--- |
-| `tb.example.com` | the **original** shared test server, retired as the active box on 2026-09-16 |
-| `timebank.example.com` | the server that has been active since then |
-
-Pick by which box the sentence is about, not by which reads better.
-
 **The school placeholders are not interchangeable — which one you pick says
 which organisation you mean:**
 

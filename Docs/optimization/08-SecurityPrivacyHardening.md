@@ -362,7 +362,7 @@ These are not style preferences; each one has bitten this project.
 | D-1 | Watermark content, appearance, and whether students see it on their own evidence (§2.1) | **Resolved 2026-09-16 — staff views only** |
 | D-2 | Accept the Apache PDFBox dependency; overlay vs rasterize (§2.2) | **Resolved 2026-09-16 — PDFBox accepted, content-stream overlay** |
 | D-3 | Log retention target (§2.3) | **Resolved 2026-09-16 — 180 days**, subject to a disk check first |
-| D-4 | Whether `student.email` needs an export before being dropped (§2.4) | **Resolved 2026-09-16 — no export needed**, settled by checking both servers |
+| D-4 | Whether `student.email` needs an export before being dropped (§2.4) | **Resolved 2026-09-16 — no export needed**, settled by checking the test server |
 | D-5 | CSP style policy, pending browser verification (§2.5) | Open |
 
 ---

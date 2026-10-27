@@ -19,14 +19,13 @@ re-exercised the create path.
 | 3 | `400` `sourceType EXTERNAL is historical data only` | issue 03 §3/§7.3, 2026-08-10 |
 | 4 | `404` `Student not found` on `POST /cases` | pre-existing — wrong id kind sent, never exercised |
 
-None of these are new-server-specific: all four would have failed
-identically on `tb.example.com` had its schema ever been reset.
+None of these are specific to the server: all four would have failed on any
+schema that had been reset.
 
 ## How it surfaced
 
-While standing up the new alternative dev/test server `timebank.example.com`
-(a second, independent box — see `Docs/operations/DeploymentEnv.md`), the
-first real seed run against its empty schema failed:
+The first real seed run against an empty `timebank` schema on the shared test
+server failed:
 
 ```
 == Phase 3: API — projects ==
@@ -48,15 +47,11 @@ the failure is specific to the project-creation payload.
 `integration-test/mock-data.ts` and `seed.ts` were never updated to send it.
 
 This went unnoticed for over a month because **the seeder has not been run
-since 2026-08-07** — the existing dataset on `tb.example.com` predates the
-field, and every later fixture change was applied to that live database
-directly (see `integration-test/STATUS.md`) rather than by re-seeding. The
-defect is therefore invisible on the old server and only appears the moment
-anyone seeds a genuinely fresh schema, which is exactly what a second
-server requires.
-
-Note this is *not* a new-server-specific problem: it would have failed
-identically on `tb.example.com` had its schema ever been reset.
+since 2026-08-07** — the dataset it last produced predates the field, and
+every later fixture change was applied to the live database directly (see
+`integration-test/STATUS.md`) rather than by re-seeding. The defect is
+therefore invisible on an already-seeded database and only appears the moment
+anyone seeds a genuinely fresh schema.
 
 ## Fix
 
@@ -141,7 +136,7 @@ being identified instead of two.
 
 ## Test plan
 
-1. Drop and recreate the `timebank` schema on `timebank.example.com`, restart
+1. Drop and recreate the `timebank` schema on the test server, restart
    the backend so Flyway re-migrates from zero. — done (four times, once per
    defect; the seeder is a first-run tool, so every retry needs a clean schema)
 2. `npm run seed` completes all six phases without error. — done
@@ -156,7 +151,7 @@ being identified instead of two.
 4. Confirm all three `deliveryScope` values are present. — done
    (`ON_CAMPUS` ×3, `OFF_CAMPUS` ×2, `HYBRID` ×1).
 5. Confirm the dataset renders in the real UI. — done: logged into
-   `https://timebank.example.com` as `admin001` via Playwright, Project
+   `https://tb.example.com` as `admin001` via Playwright, Project
    Management shows all 7 projects with correct status badges and real
    registrant counts (3/30, 2/8, 2/12, 2/15), and the sidebar carries live
    queue badges (Audit 2, Cases 2, Proposals 1, Notifications 1).
@@ -171,7 +166,7 @@ but worth knowing before trusting a green seed run.
 
 ## Not changed
 
-The old server `tb.example.com` is left exactly as it is. Its existing project
-rows already carry a `deliveryScope` (backfilled by `V18` to `HYBRID` for
+Existing data on an already-seeded database is left exactly as it is. Its
+project rows already carry a `deliveryScope` (backfilled by `V18` to `HYBRID` for
 pre-existing rows), so nothing there is broken and no live write is needed —
 this fix only affects what a *future* seed run produces.

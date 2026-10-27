@@ -17,26 +17,13 @@ untracked `test-server-credits.md` at the repo root (see that file if you
 don't have a copy) — this doc describes the *shape* of `~/.timebank.env`,
 not the secrets themselves.
 
-## Two servers, one active at a time
+## One server, one block
 
-Since 2026-09-16 there are **two** test servers:
-
-| Host | Role |
-| --- | --- |
-| `timebank.example.com` | the alternative server, used for daily development and testing — **currently active** |
-| `tb.example.com` | the original server, still running and serving; deploy to it only when explicitly asked |
-
-`~/.timebank.env` holds a profile for each, with exactly one uncommented.
-Switching means swapping the **whole block**, not just the hostnames: each
-server has its own `timebank_app` database password, its own
-`TIMEBANK_FILE_TOKEN_SECRET`, and its own seeded accounts (see
-`Docs/TestAccounts.md`, which lists both sets separately). Only
-`tb.example.com` has the maintenance-mode gate installed, so
-`TIMEBANK_MAINTENANCE_BYPASS_KEY` belongs to that profile alone.
-
-Nothing enforces the choice — every script simply targets whatever the
-active profile names, so confirm which one is live before deploying or
-running a destructive database step.
+The file describes the single shared test server: one `export` per variable,
+no alternatives commented out beside them. Each value is specific to that
+server — its `timebank_app` database password, its
+`TIMEBANK_FILE_TOKEN_SECRET`, and the maintenance bypass key for its gate
+(`Docs/operations/MaintenanceMode.md`).
 
 ## File structure
 

@@ -129,7 +129,7 @@
 │   HKTZ4-9QP2M                                               │
 │                                                             │
 │   请核对地址栏显示的网址是                                     │
-│   https://timebank.example.com                              │
+│   https://tb.example.com                                    │
 │                                                             │
 │   签发人：Teacher Wei Chen  签发时间：2026-09-17 08:15 UTC     │
 │   有效期至：2026-09-24 08:15 UTC                             │

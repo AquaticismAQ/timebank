@@ -11,7 +11,7 @@ where students outnumber staff by roughly 200 to 1.
 
 ## Finding
 
-Measured on the original server, which has weeks of real browsing on it:
+Measured on the shared test server, which has weeks of real browsing on it:
 
 | Action | Rows | Share |
 | :--- | ---: | ---: |
@@ -90,7 +90,7 @@ The 708 historical rows stay; the event simply stops being produced.
 
 ## Effect
 
-On the original server's data this removes 708 of 1420 rows — the log halves,
+On the test server's data this removes 708 of 1420 rows — the log halves,
 and mutations become the majority of its content rather than a minority buried
 under reads.
 
