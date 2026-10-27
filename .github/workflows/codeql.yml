@@ -1,10 +1,5 @@
 name: CodeQL
 
-# NOTE: CodeQL analysis on private repos requires GitHub Advanced Security
-# to be enabled for the repo/org. This will run cleanly once the repo is
-# public (CodeQL is free for public repos); until then these runs may be
-# skipped/blocked by GitHub rather than by anything in this workflow.
-
 on:
   pull_request:
     branches: [main]
@@ -14,8 +9,9 @@ on:
     - cron: "17 3 * * 1" # weekly, Monday
 
 permissions:
+  actions: read          # the analyze step reads its own workflow run; without it: "Resource not accessible by integration"
   contents: read
-  security-events: write
+  security-events: write # upload results to code scanning
 
 jobs:
   analyze:
