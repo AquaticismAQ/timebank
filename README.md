@@ -14,6 +14,40 @@
 
 ---
 
+## Repository Structure · 仓库结构
+
+```
+.
+├── Design/                 Phase 1 institutional design · 第一阶段制度设计
+│   ├── chinese/            authoritative originals · 中文原文（权威来源）
+│   └── english/            same-named English mirrors · 同名英文镜像
+├── Docs/                   Phase 2 online-system docs · 第二阶段线上系统文档（规则见 Docs/README.md）
+│   ├── frontend/           page and flow spec · 前端页面与流程规格
+│   ├── backend/            backend architecture · 后端架构设计
+│   ├── integration/        REST API contract · REST 接口契约
+│   ├── implementation/     build plan and status tracker · 实施计划与进度（00-Status.md）
+│   ├── optimization/       subsystem redesigns · 子系统优化设计
+│   ├── issues/             one write-up per defect · 每个缺陷一份记录
+│   ├── backlog/            specified but not built · 已规格化、尚未实现
+│   ├── operations/         deployment, config, Docker, maintenance · 部署、配置、Docker、维护
+│   └── cost-estimation/    hosting cost and tiers · 部署成本与方案分档
+├── frontend/               React + Vite web app (student and admin portals) · 前端（学生端与管理端）
+├── backend/                Spring Boot / Java 21 / MySQL API · 后端服务
+├── integration-test/       seeds a fictional dataset, logs live-testing results · 测试数据填充与联调记录
+├── e2e/                    whole workflows in a real browser: demo and regression check · 端到端演示与回归验证
+├── snapshots/              screens from the three key workflows · 三条核心流程的截图
+├── ops/maintenance/        site-wide maintenance mode · 全站维护模式
+├── docker/                 local development image · 本地开发镜像
+├── docker-compose.yml      MySQL + backend on one machine, for development · 本地开发环境
+├── .github/                PR and issue templates, labels, CI · PR/Issue 模板、标签与持续集成
+├── .cursor/ .devin/ .codex/  agent tool settings, all pointing to AGENTS.md · AI 工具配置（统一指向 AGENTS.md）
+├── AGENTS.md               rules for every contributor and AI agent · 贡献者与 AI 代理的项目规则
+├── CLAUDE.md               the same rules for Claude Code · 供 Claude Code 使用的同一套规则
+└── CONTRIBUTING.md         how to contribute, incl. your first code change · 贡献指南（含第一次改代码）
+```
+
+---
+
 ## Documentation · 文档
 
 The Phase 1 institutional design documentation is available in **Chinese
