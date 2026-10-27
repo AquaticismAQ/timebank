@@ -173,7 +173,7 @@ export async function tap(locator: Locator, whatZh: string): Promise<void> {
     // within it; give it a moment before deciding nothing changed.
     for (let i = 0; i < 10; i++) {
       if ((await screenIdentity(page)) !== before) {
-        snapshots!.save(held.frame, held.title || whatZh);
+        snapshots!.save(held.frame, held.title || whatZh, held.view);
         break;
       }
       await page.waitForTimeout(200);

@@ -18,14 +18,18 @@ const DIALOG = 'div.fixed.inset-0.z-50 >> visible=true';
  *   opened or closed a dialog);
  * - the screen each phase ends on, where that step's result is visible.
  *
- * A picture identical to the one before it is skipped, and login pages are never
- * kept: neither tells a reader anything. A flow's folder is emptied when the flow
+ * A picture that repeats the one before it is skipped — byte-identical, or the
+ * same name over the same view (same dialogs, page, heading and visible text;
+ * pixels alone are not enough, anti-aliasing differs between two frames of an
+ * unchanged screen) — and login pages are never kept: neither tells a reader
+ * anything. A flow's folder is emptied when the flow
  * starts, so it always holds one coherent run.
  */
 export class Snapshots {
   private dir: string | null = null;
   private count = 0;
   private lastHash = '';
+  private lastView = '';
 
   constructor(private readonly root: string | undefined) {}
 
@@ -40,6 +44,7 @@ export class Snapshots {
     mkdirSync(this.dir, { recursive: true });
     this.count = 0;
     this.lastHash = '';
+    this.lastView = '';
   }
 
   /** Waits for the page to settle, then saves it. Never fatal. */
@@ -49,24 +54,26 @@ export class Snapshots {
     // spinner documents nothing.
     await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
     const frame = await page.screenshot({ fullPage: false }).catch(() => null);
-    if (frame) this.save(frame, label);
+    if (frame) this.save(frame, label, await viewFingerprint(page));
   }
 
   /** A frame held in memory, for a moment that may or may not turn out worth keeping. */
-  async grab(page: Page): Promise<{ frame: Buffer; title: string } | null> {
+  async grab(page: Page): Promise<{ frame: Buffer; title: string; view: string } | null> {
     if (!this.dir || isLogin(page)) return null;
     const frame = await page.screenshot({ fullPage: false }).catch(() => null);
     if (!frame) return null;
     const title = await page.locator(DIALOG).last().locator('h2, h3').first()
       .innerText({ timeout: 500 }).catch(() => '');
-    return { frame, title: title.trim() };
+    return { frame, title: title.trim(), view: await viewFingerprint(page) };
   }
 
-  save(frame: Buffer, label: string): void {
+  save(frame: Buffer, label: string, view = ''): void {
     if (!this.dir) return;
     const hash = createHash('sha256').update(frame).digest('hex');
-    if (hash === this.lastHash) return;
+    const sameView = view !== '' && `${label}|${view}` === this.lastView;
+    if (hash === this.lastHash || sameView) return;
     this.lastHash = hash;
+    this.lastView = `${label}|${view}`;
     this.count += 1;
     writeFileSync(join(this.dir, `${String(this.count).padStart(2, '0')}-${safe(label)}.png`), frame);
   }
@@ -83,6 +90,12 @@ export async function screenIdentity(page: Page): Promise<string> {
   let path = '';
   try { path = new URL(page.url()).pathname; } catch { /* about:blank */ }
   return `${dialogs}|${path}|${heading.trim()}`;
+}
+
+/** The screen plus everything it says, hashed: equal means a reader sees the same thing. */
+async function viewFingerprint(page: Page): Promise<string> {
+  const text = await page.locator('body').innerText({ timeout: 1_000 }).catch(() => '');
+  return `${await screenIdentity(page)}|${createHash('sha256').update(text).digest('hex')}`;
 }
 
 function isLogin(page: Page): boolean {
