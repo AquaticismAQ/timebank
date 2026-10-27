@@ -137,6 +137,51 @@ There is no mock mode — the frontend always talks to a real backend. To run th
 
 ---
 
+## End-to-End Workflows & Snapshots · 端到端流程与截图
+
+**English** — [`e2e/`](e2e/README.md) drives complete workflows through a real
+browser against the deployed system. The same phases serve two purposes: a
+narrated, paced **demonstration** for school staff, and an unattended
+**verification** run that also covers the return and reject branches and the
+audit trail. Three flows are covered — a school-run project, a student's
+activity proposal, and a student's case.
+
+```bash
+cd e2e
+pnpm install
+pnpm e2e --list                            # flows, profiles, gates
+pnpm e2e --profile verify --headless       # regression check
+pnpm e2e --snapshots ../snapshots          # also save a picture of each screen
+```
+
+[`snapshots/`](snapshots/README.md) holds pictures from one such run, one
+folder per workflow and numbered in the order a person sees them: every page
+opened, every form and dialog as it is submitted, and the screen each step
+ends on. All data shown is fictional.
+
+| Workflow | Snapshots |
+| :--- | :--- |
+| Project: create → register → record → approve → coins credited | [`snapshots/project-workflow/`](snapshots/project-workflow/) |
+| Proposal: propose → changes requested → revise → approve → publish | [`snapshots/proposal-workflow/`](snapshots/proposal-workflow/) |
+| Case: file → more information requested → answer → resolved | [`snapshots/case-workflow/`](snapshots/case-workflow/) |
+
+**中文** — [`e2e/`](e2e/README.md) 通过真实浏览器在已部署的系统上完整执行业务
+流程。同一组步骤服务两种用途：面向学校老师的带旁白、按节奏播放的**演示**，以及
+无人值守的**回归验证**（额外覆盖退回、驳回分支与审计日志）。目前覆盖三条流程：
+学校组织的项目、学生发起的活动提案、学生提交的申诉。命令见上方英文代码块。
+
+[`snapshots/`](snapshots/README.md) 保存了一次完整运行的截图，每条流程一个目录，
+按使用者看到的先后顺序编号：打开的每个页面、每个表单与对话框提交前的状态，以及
+每一步结束时的画面。截图中的数据均为虚构。
+
+| 流程 | 截图 |
+| :--- | :--- |
+| 项目：创建 → 报名 → 填写记录 → 审核通过 → 时间币入账 | [`snapshots/project-workflow/`](snapshots/project-workflow/) |
+| 提案：发起 → 要求修改 → 修改后重新提交 → 通过 → 发布 | [`snapshots/proposal-workflow/`](snapshots/proposal-workflow/) |
+| 申诉：提交 → 要求补充信息 → 补充回复 → 解决 | [`snapshots/case-workflow/`](snapshots/case-workflow/) |
+
+---
+
 ## Deployment · 部署
 
 **English** — The frontend and backend are currently deployed together on a
@@ -152,7 +197,7 @@ untracked `test-server-credits.md`.
 frontend/scripts/deploy.sh [user@host]   # builds locally, rsyncs dist/ to nginx, reloads nginx
 
 # Backend: sync source, then run on the server itself (needs the target JVM)
-rsync -az --delete --exclude 'target/' --exclude '.git/' backend/ <user@host>:/opt/timebank-backend/
+rsync -az --delete --exclude 'target/' --exclude '.git/' --exclude 'data/' backend/ <user@host>:/opt/timebank-backend/   # keep data/: it holds uploaded evidence
 ssh <user@host>
 cd /opt/timebank-backend && ./scripts/verify.sh && ./scripts/deploy.sh
 ```
