@@ -252,6 +252,6 @@ cd /opt/timebank-backend && ./scripts/verify.sh && ./scripts/deploy.sh
 
 ## License · 许可证
 
-This project's documentation is shared for educational and reference purposes. For licensing details, please contact the project maintainers.
+This project — code and documentation — is licensed under the **GNU General Public License v3.0**; see [`LICENSE`](LICENSE). The one exception is the bundled Noto Sans SC font in `backend/src/main/resources/fonts/`, which keeps its own **SIL Open Font License 1.1** ([`NotoSansSC-OFL.txt`](backend/src/main/resources/fonts/NotoSansSC-OFL.txt)).
 
-本项目文档以教育参考为目的共享。许可证详情请联系项目维护者。
+本项目（代码与文档）采用 **GNU 通用公共许可证第 3 版（GPL v3.0）**，全文见 [`LICENSE`](LICENSE)。唯一例外是 `backend/src/main/resources/fonts/` 中随附的 Noto Sans SC 字体，沿用其自身的 **SIL 开源字体许可证 1.1**（见 [`NotoSansSC-OFL.txt`](backend/src/main/resources/fonts/NotoSansSC-OFL.txt)）。
