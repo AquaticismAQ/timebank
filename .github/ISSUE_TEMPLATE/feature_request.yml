@@ -1,41 +1,43 @@
-name: Feature request
-description: Suggest an idea or enhancement for the online system
+name: Idea or feature · 功能建议
+description: Suggest something new or better · 提出新功能或改进
 title: "[Feature]: "
 labels: ["type: feat", "status: needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Phase 3 (POV) and Phase 4 (redemption/borrowing/value-added) are reserved via feature flags and intentionally not implemented yet — see `CLAUDE.md`. If this request is about one of those, say so explicitly rather than proposing a partial build.
+        Every idea is welcome. A few big ones — witnesses confirming volunteer work in a WeChat Mini Program, and spending or lending time coins — are planned for later on purpose. You can still suggest them; just say so.
+        欢迎任何想法。少数大功能（如通过微信小程序由见证人确认服务、时间币的使用或借用）是有意留到后续阶段的，仍然可以提，注明即可。
   - type: dropdown
     id: area
     attributes:
-      label: Area
+      label: Which part? · 涉及哪部分？
       options:
-        - Frontend (Student Portal)
-        - Frontend (Admin/Teacher Portal)
-        - Backend / API
-        - Documentation
-        - Design / institutional (Design/chinese)
-        - Other / not sure
+        - Student pages · 学生端
+        - Teacher / admin pages · 教师/管理端
+        - Server or data · 后台或数据
+        - Documentation · 文档
+        - How the system works (rules, design) · 制度与规则设计
+        - Not sure · 不确定
     validations:
       required: true
   - type: textarea
     id: problem
     attributes:
-      label: What problem does this solve?
-      description: What's missing or awkward today?
+      label: What problem does it solve? · 它解决什么问题？
+      description: What's missing or annoying today, and for whom? · 现在缺了什么、哪里不方便、对谁不方便？
     validations:
       required: true
   - type: textarea
     id: solution
     attributes:
-      label: Proposed solution
+      label: Your idea · 你的想法
+      description: Describe it however you like — words, a sketch, a screenshot. · 用文字、草图或截图描述都可以。
     validations:
       required: true
   - type: textarea
     id: alternatives
     attributes:
-      label: Alternatives considered
+      label: Other ways you thought of (optional) · 想过的其他办法（可选）
     validations:
       required: false

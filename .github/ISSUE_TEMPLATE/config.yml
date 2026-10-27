@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Institutional design questions
-    url: https://github.com/AquaticismAQ/timebank/tree/main/Design/chinese
-    about: Questions about the underlying institutional design (not a bug/feature) should start by reading Design/chinese, per CONTRIBUTING.md.
+  - name: How the system is designed · 制度设计说明
+    url: https://github.com/AquaticismAQ/timebank/tree/main/Design
+    about: The rules behind time coins and volunteer records, in Chinese and English · 时间币与志愿服务记录背后的制度设计（中英文）

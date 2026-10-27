@@ -1,43 +1,37 @@
-name: Documentation issue
-description: Report an error, gap, or out-of-sync translation in Design/Docs
+name: Documentation issue · 文档问题
+description: A mistake, gap, or Chinese/English mismatch in the docs · 文档有误、缺失或中英文不一致
 title: "[Docs]: "
 labels: ["type: documentation", "status: needs-triage"]
 body:
-  - type: dropdown
-    id: docset
+  - type: input
+    id: location
     attributes:
-      label: Which document set?
-      options:
-        - Design/chinese (institutional design)
-        - Docs/frontend/Design.md
-        - Docs/integration/APIContract.md
-        - Docs/implementation (backend build plan / status)
-        - README / CONTRIBUTING
-        - Other
+      label: Which document? · 哪个文档？
+      description: File name or link, and the section if you know it · 文件名或链接，知道的话写上章节
+      placeholder: "e.g. Design/english/10-StudentActivationFlow.md §3"
     validations:
       required: true
   - type: dropdown
     id: issuetype
     attributes:
-      label: Issue type
+      label: What kind of problem? · 什么类型的问题？
       options:
-        - Factual error
-        - Logical gap / inconsistency
-        - Chinese/English (_CN) translation out of sync
-        - Broken cross-reference (see XDoc.md)
-        - Other
+        - Something is wrong · 内容有误
+        - Something is unclear or missing · 不清楚或有缺漏
+        - Chinese and English versions don't match · 中英文版本不一致
+        - Broken link · 链接失效
+        - Other · 其他
     validations:
       required: true
   - type: textarea
     id: description
     attributes:
-      label: Description
-      description: Where exactly (section/line), and what's wrong?
+      label: What's the problem? · 具体是什么问题？
     validations:
       required: true
   - type: textarea
     id: suggestion
     attributes:
-      label: Suggested fix
+      label: How would you fix it? (optional) · 建议怎么改？（可选）
     validations:
       required: false

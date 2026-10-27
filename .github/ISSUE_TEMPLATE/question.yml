@@ -1,0 +1,18 @@
+name: Question · 提问
+description: Ask anything about the project — no question is too small · 关于项目的任何问题都可以问
+title: "[Question]: "
+labels: ["type: question", "status: needs-triage"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question · 你的问题
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: What have you looked at so far? (optional) · 你已经看过哪些内容？（可选）
+      description: Helps us point you to the right place · 方便我们给你指对地方
+    validations:
+      required: false

@@ -1,59 +1,62 @@
-name: Bug report
-description: Something in the app, backend, or docs isn't working as expected
+name: Bug report · 问题反馈
+description: Something doesn't work the way it should · 有功能不正常
 title: "[Bug]: "
 labels: ["type: fix", "status: needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Before filing: check [existing issues](../issues) and, if this might already be a known/fixed live-verified defect, `Docs/issues/` in the repo.
+        Thanks for reporting! Short and clear is perfect — you don't need to know the cause.
+        感谢反馈！简短清楚就好，不需要知道原因。
+
+        **Privacy · 隐私：** before attaching a screenshot, cover any real names, student numbers and passwords.
+        附截图前，请遮住真实姓名、学号和密码。
   - type: dropdown
     id: area
     attributes:
-      label: Area
+      label: Where is the problem? · 问题出在哪里？
       options:
-        - Frontend (Student Portal)
-        - Frontend (Admin/Teacher Portal)
-        - Backend / API
-        - Documentation
-        - Design (Design/chinese)
-        - Other / not sure
+        - Student pages · 学生端
+        - Teacher / admin pages · 教师/管理端
+        - Server or data · 后台或数据
+        - Documentation · 文档
+        - Not sure · 不确定
     validations:
       required: true
   - type: textarea
     id: description
     attributes:
-      label: What happened?
-      description: A clear description of the bug.
+      label: What happened? · 发生了什么？
+      description: What did you see? Screenshots are welcome. · 你看到了什么？欢迎附截图。
     validations:
       required: true
   - type: textarea
     id: repro
     attributes:
-      label: Steps to reproduce
+      label: How can we see it too? · 怎样复现？
       placeholder: |
-        1. Go to ...
-        2. Click on ...
-        3. See error
+        1. Log in as a student · 以学生身份登录
+        2. Open ... · 打开……
+        3. Click ... · 点击……
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior
+      label: What did you expect instead? · 你原本期望看到什么？
     validations:
       required: false
   - type: input
     id: environment
     attributes:
-      label: Environment
-      placeholder: "e.g. Chrome 128 / macOS, or backend commit hash"
+      label: Browser and device · 浏览器和设备
+      placeholder: "e.g. Chrome on a Windows laptop, Safari on iPhone · 例如 Windows 笔记本上的 Chrome"
     validations:
       required: false
   - type: checkboxes
     id: checks
     attributes:
-      label: Checklist
+      label: Before you send · 提交前
       options:
-        - label: I searched existing issues and this isn't a duplicate
+        - label: I looked through the open issues and didn't find this one · 我看过现有 Issue，没有重复
           required: true

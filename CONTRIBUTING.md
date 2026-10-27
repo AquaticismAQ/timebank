@@ -99,9 +99,12 @@ All sub-documents cross-reference each other and link back to `TimeBankDesign.md
 
 4. **Push** your branch and open a **Pull Request** against `main`.
 
-5. Fill out the PR template that's pre-populated when you open the PR
-   (`.github/PULL_REQUEST_TEMPLATE.md`) — Summary, Testing, Security &
-   Privacy Impact, Compatibility, and Rollback sections.
+5. Fill out the short PR template that appears when you open the PR: what
+   you changed and why, how you checked it, and a four-item checklist. If
+   you're unsure about anything, open the PR anyway and ask in it.
+
+   打开 PR 时会自动出现一个简短模板：写明改了什么、为什么、如何验证，并完成四项自查。
+   有不确定的地方，照样提交 PR 并在其中提问即可。
 
 ---
 
@@ -137,6 +140,6 @@ These principles underpin the entire project design and must be upheld in all co
 
 ## Questions?
 
-Open an issue with the label `question` or reach out to the project maintainers directly.
+Open an issue and pick the **Question** template, or reach out to the project maintainers directly. No question is too small.
 
-有疑问？请提交带 `question` 标签的 Issue，或直接联系项目维护者。
+有疑问？新建 Issue 时选择 **提问（Question）** 模板，或直接联系项目维护者。问题再小也欢迎。
