@@ -9,6 +9,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
+  contents: read   # checkout needs it: on a private repo, without it the job cannot read the code
   issues: write
 
 jobs:
